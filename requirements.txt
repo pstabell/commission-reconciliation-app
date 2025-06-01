@@ -1,6 +1,1 @@
-streamlit
-pandas
-openpyxl
-xlrd
-sqlalchemy
-pdfplumber
+streamlit-authenticator
