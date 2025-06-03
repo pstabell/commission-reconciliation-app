@@ -1,6 +1,7 @@
 streamlit
 pandas
 sqlalchemy
-pdfplumber
-git+https://github.com/okld/streamlit-sortables.git
+pdfplumber==0.10.3
+Pillow
 streamlit-authenticator==0.2.3
+git+https://github.com/okld/streamlit-sortables.git
