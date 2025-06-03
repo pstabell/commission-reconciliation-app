@@ -784,6 +784,8 @@ elif page == "Help":
         st.markdown("""
 ### How to Use This App
 
+**For code backup & restore instructions, see the `GIT_GUIDE.md` file in your project folder.**
+
 **1. Dashboard (Home Page)**
 - See total policies and total commissions.
 - Search for a client using a clean dropdown (Filter by Customer).
