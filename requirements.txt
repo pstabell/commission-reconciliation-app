@@ -1,4 +1,1 @@
-streamlit
-pandas
-openpyxl
-xlrd
+git+https://github.com/okld/streamlit-sortables.git
