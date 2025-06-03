@@ -3,3 +3,4 @@ pandas
 sqlalchemy
 pdfplumber
 git+https://github.com/okld/streamlit-sortables.git
+streamlit-authenticator==0.2.3
