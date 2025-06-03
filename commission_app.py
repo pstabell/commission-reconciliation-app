@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(layout="wide")
+
 import pandas as pd
 import pdfplumber
 import os
@@ -9,6 +11,39 @@ import io
 import uuid
 import random
 import string
+
+# --- Aggressive but safe CSS to maximize app/table width ---
+with st.container():
+    st.markdown(
+        """
+        <style>
+        /* Remove default padding and maximize main block width */
+        .main .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+            max-width: 100vw;
+            width: 100vw;
+        }
+        /* Make tables and editors use full width */
+        .stDataFrame, .stDataEditor {
+            width: 100vw !important;
+            min-width: 100vw !important;
+        }
+        /* Reduce sidebar width slightly for more main area */
+        section[data-testid="stSidebar"] {
+            min-width: 220px !important;
+            max-width: 240px !important;
+        }
+        /* Remove extra margin from header/title */
+        .main .block-container h1 {
+            margin-bottom: 0.5rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 def generate_client_id(length=6):
     chars = string.ascii_uppercase + string.digits
@@ -45,33 +80,6 @@ def format_dates_mmddyyyy(df):
             pass
     return df
 
-# --- Custom CSS for larger scrollbars ---
-st.markdown('''
-    <style>
-    /* Make all scrollbars thicker and easier to grab */
-    ::-webkit-scrollbar {
-        width: 22px;
-        height: 22px;
-    }
-    ::-webkit-scrollbar-thumb {
-        background: #a0a0a0;
-        border-radius: 12px;
-        border: 6px solid #f0f0f0;
-    }
-    ::-webkit-scrollbar-track {
-        background: #f0f0f0;
-        border-radius: 12px;
-    }
-    /* For Firefox */
-    html {
-        scrollbar-width: thick;
-        scrollbar-color: #a0a0a0 #f0f0f0;
-    }
-    </style>
-''', unsafe_allow_html=True)
-
-# st.set_page_config(layout="wide")
-
 st.title("Sales Commission Tracker")  # Changed title here
 
 # --- Sidebar Navigation ---
@@ -82,7 +90,7 @@ page = st.sidebar.radio(
         "Dashboard",
         "Reports",
         "All Policies in Database",
-        "Add New Client/Policy",
+        "Add New Policy Transaction",
         "Upload & Reconcile",
         "Edit Policies in Database",
         "Search & Filter",
@@ -328,11 +336,12 @@ elif page == "Reports":
 # --- All Policies in Database ---
 elif page == "All Policies in Database":
     st.subheader("All Policies in Database")
-    st.dataframe(format_dates_mmddyyyy(all_data))
+    st.info("Tip: Use your browser's zoom-out (Ctrl -) to see more columns. Scroll horizontally for wide tables.")
+    st.dataframe(format_dates_mmddyyyy(all_data), use_container_width=True, height=900)
 
-# --- Add New Client/Policy ---
-elif page == "Add New Client/Policy":
-    st.subheader("Add New Client/Policy")
+# --- Add New Policy Transaction ---
+elif page == "Add New Policy Transaction":
+    st.subheader("Add New Policy Transaction")
     with st.form("add_policy_form"):
         customer_name = st.text_input("Customer Name")
         policy_type = st.text_input("Policy Type")
@@ -364,7 +373,7 @@ elif page == "Add New Client/Policy":
         row["Calculated Commission"] = calculate_commission(row)
         new_df = pd.DataFrame([row])
         new_df.to_sql('policies', engine, if_exists='append', index=False)
-        st.success("New client/policy added!")
+        st.success("New policy transaction added!")
 
 # --- Upload & Reconcile ---
 elif page == "Upload & Reconcile":
@@ -801,9 +810,10 @@ elif page == "Help":
 
 **3. All Policies in Database**
 - View the entire database of policies and commissions in a single table.
+- **Tip:** Use your browser's zoom-out (Ctrl -) to see more columns. Scroll horizontally for wide tables.
 
-**4. Add New Client/Policy**
-- Use the form to manually add a new client or policy to your database.
+**4. Add New Policy Transaction**
+- Use the form to manually add a new policy transaction to your database.
 
 **5. Upload & Reconcile**
 - Upload new commission statements or sales reports (Excel, CSV, or PDF).
@@ -832,40 +842,5 @@ elif page == "Help":
 - Use the Admin Panel to update column mappings or rename database columns if your file format changes.
 - For best results, close Excel files before importing to avoid permission errors.
 - Always use the Dashboard for quick client lookup, editing, and adding new transactions.
+- **For maximum table width:** Use your browser's zoom-out (Ctrl -) and scroll horizontally for wide tables. The sidebar will always take up some space.
         """)
-        st.markdown("""
-            <style>
-            /* Make scrollbars thicker and easier to grab */
-            ::-webkit-scrollbar {
-                width: 18px;
-                height: 18px;
-            }
-            ::-webkit-scrollbar-thumb {
-                background: #b0b0b0;
-                border-radius: 9px;
-                border: 4px solid #f0f0f0;
-            }
-            ::-webkit-scrollbar-track {
-                background: #f0f0f0;
-                border-radius: 9px;
-            }
-            /* For Firefox */
-            html {
-                scrollbar-width: thick;
-                scrollbar-color: #b0b0b0 #f0f0f0;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-else:
-    st.warning("No page selected or navigation error. Please select a page from the sidebar.")
-
-# --- Apply date formatting before displaying any DataFrame ---
-# Example usages:
-# st.dataframe(format_dates_mmddyyyy(all_data))
-# st.dataframe(format_dates_mmddyyyy(report_df))
-# st.dataframe(format_dates_mmddyyyy(filtered_data))
-# st.dataframe(format_dates_mmddyyyy(nonzero_df))
-# st.dataframe(format_dates_mmddyyyy(client_df))
-# st.dataframe(format_dates_mmddyyyy(page_df_with_blank))
-# st.dataframe(format_dates_mmddyyyy(edited_page_df))
-# st.dataframe(format_dates_mmddyyyy(df))
