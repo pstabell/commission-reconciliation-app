@@ -12,7 +12,7 @@ import uuid
 import random
 import string
 
-# --- Aggressive but safe CSS to maximize app/table width ---
+# --- Aggressive but safe CSS to maximize app/table width and make scrollbars fatter ---
 with st.container():
     st.markdown(
         """
@@ -39,6 +39,25 @@ with st.container():
         /* Remove extra margin from header/title */
         .main .block-container h1 {
             margin-bottom: 0.5rem;
+        }
+        /* Custom fatter scrollbars for all tables and editors */
+        .stDataFrame ::-webkit-scrollbar, .stDataEditor ::-webkit-scrollbar {
+            height: 18px;
+            width: 18px;
+        }
+        .stDataFrame ::-webkit-scrollbar-thumb, .stDataEditor ::-webkit-scrollbar-thumb {
+            background: #b0b0b0;
+            border-radius: 8px;
+            border: 3px solid #e0e0e0;
+        }
+        .stDataFrame ::-webkit-scrollbar-track, .stDataEditor ::-webkit-scrollbar-track {
+            background: #e0e0e0;
+            border-radius: 8px;
+        }
+        /* For Firefox */
+        .stDataFrame, .stDataEditor {
+            scrollbar-width: thick;
+            scrollbar-color: #b0b0b0 #e0e0e0;
         }
         </style>
         """,
