@@ -121,7 +121,7 @@ rename_dict = {
     "Policy type": "Policy Type",
     "Carrier": "Carrier Name",
     "Policy #": "Policy Number",
-    "Estimated Agent Comm - New 50% Renewal 25%": "New 50% Renewal 25%",
+    "Estimated Agent Comm - New 50% Renewal 25%": "Estimated Agent Comm (New 50% Renewal 25%)",
     "Customer Name": "Customer",
     "Producer Name": "Producer",
     "Lead source": "Lead Source",
@@ -169,12 +169,12 @@ if page == "Dashboard":
         st.write(f"Showing policies for **{selected_client}**:")
 
         # --- Calculate PAST DUE for each row ---
-        if "Paid Amount" in client_df.columns and "New 50% Renewal 25%" in client_df.columns:
+        if "Paid Amount" in client_df.columns and "Estimated Agent Comm (New 50% Renewal 25%)" in client_df.columns:
             paid_amounts = pd.to_numeric(client_df["Paid Amount"], errors="coerce").fillna(0)
-            commission_amounts = pd.to_numeric(client_df["New 50% Renewal 25%"], errors="coerce").fillna(0)
+            commission_amounts = pd.to_numeric(client_df["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
             client_df["PAST DUE"] = commission_amounts - paid_amounts
         else:
-            st.warning("Missing 'Paid Amount' or 'New 50% Renewal 25%' column for PAST DUE calculation.")
+            st.warning("Missing 'Paid Amount' or 'Estimated Agent Comm (New 50% Renewal 25%)' column for PAST DUE calculation.")
 
         # --- Show metrics side by side, spaced in 6 columns, shifted left ---
         col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -192,12 +192,12 @@ if page == "Dashboard":
             if (
                 "Paid Amount" in client_df.columns
                 and "Due Date" in client_df.columns
-                and "New 50% Renewal 25%" in client_df.columns
+                and "Estimated Agent Comm (New 50% Renewal 25%)" in client_df.columns
             ):
                 today = pd.to_datetime(datetime.date.today())
                 due_dates = pd.to_datetime(client_df["Due Date"], errors="coerce")
                 paid_amounts = pd.to_numeric(client_df["Paid Amount"], errors="coerce").fillna(0)
-                commission_amounts = pd.to_numeric(client_df["New 50% Renewal 25%"], errors="coerce").fillna(0)
+                commission_amounts = pd.to_numeric(client_df["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
                 # Only consider rows past due and not fully paid
                 past_due_mask = (due_dates < today) & (paid_amounts < commission_amounts)
                 total_past_due = (commission_amounts - paid_amounts)[past_due_mask].sum()
@@ -290,9 +290,9 @@ elif page == "Reports":
     past_due_options = ["All", "YES", "NO"]
     selected_past_due = st.selectbox("Past Due", past_due_options)
     # Calculate PAST DUE if not present
-    if "PAST DUE" not in report_df.columns and "Paid Amount" in report_df.columns and "New 50% Renewal 25%" in report_df.columns:
+    if "PAST DUE" not in report_df.columns and "Paid Amount" in report_df.columns and "Estimated Agent Comm (New 50% Renewal 25%)" in report_df.columns:
         paid_amounts = pd.to_numeric(report_df["Paid Amount"], errors="coerce").fillna(0)
-        commission_amounts = pd.to_numeric(report_df["New 50% Renewal 25%"], errors="coerce").fillna(0)
+        commission_amounts = pd.to_numeric(report_df["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
         report_df["PAST DUE"] = commission_amounts - paid_amounts
     # Apply Past Due filter
     if selected_past_due != "All" and "PAST DUE" in report_df.columns:
@@ -502,9 +502,9 @@ elif page == "Search & Filter":
         filtered_data = filtered_data[filtered_data[search_column].astype(str).str.contains(search_text, case=False, na=False)]
 
     # Calculate PAST DUE if not present
-    if "PAST DUE" not in filtered_data.columns and "Paid Amount" in filtered_data.columns and "New 50% Renewal 25%" in filtered_data.columns:
+    if "PAST DUE" not in filtered_data.columns and "Paid Amount" in filtered_data.columns and "Estimated Agent Comm (New 50% Renewal 25%)" in filtered_data.columns:
         paid_amounts = pd.to_numeric(filtered_data["Paid Amount"], errors="coerce").fillna(0)
-        commission_amounts = pd.to_numeric(filtered_data["New 50% Renewal 25%"], errors="coerce").fillna(0)
+        commission_amounts = pd.to_numeric(filtered_data["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
         filtered_data["PAST DUE"] = commission_amounts - paid_amounts
 
     # Apply Past Due filter
@@ -760,9 +760,9 @@ elif page == "Accounting":
     """)
 
     # Calculate PAST DUE if not present
-    if "PAST DUE" not in all_data.columns and "Paid Amount" in all_data.columns and "New 50% Renewal 25%" in all_data.columns:
+    if "PAST DUE" not in all_data.columns and "Paid Amount" in all_data.columns and "Estimated Agent Comm (New 50% Renewal 25%)" in all_data.columns:
         paid_amounts = pd.to_numeric(all_data["Paid Amount"], errors="coerce").fillna(0)
-        commission_amounts = pd.to_numeric(all_data["New 50% Renewal 25%"], errors="coerce").fillna(0)
+        commission_amounts = pd.to_numeric(all_data["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
         all_data["PAST DUE"] = commission_amounts - paid_amounts
 
     if "PAST DUE" in all_data.columns:
