@@ -40,52 +40,227 @@ with st.container():
         .main .block-container h1 {
             margin-bottom: 0.5rem;
         }
+        /* Highlight all interactive input fields in Add New Policy Transaction form and Admin Panel rename headers */
+        .stForm input:not([disabled]), .stForm select:not([disabled]), .stForm textarea:not([disabled]),
+        .stTextInput > div > input:not([disabled]), .stNumberInput > div > input:not([disabled]), .stDateInput > div > input:not([disabled]) {
+            background-color: #fff3b0 !important; /* Darker yellow */
+            border: 2px solid #e6a800 !important; /* Darker yellow border */
+            border-radius: 6px !important;
+        }
+        /* Make selectboxes match other fields and remove focus ring */
+        .stSelectbox > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        .stSelectbox > div[data-baseweb="select"]:focus,
+        .stSelectbox > div[data-baseweb="select"]:active,
+        .stSelectbox > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #e6a800 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Add yellow border to the client name search input at the top of Add New Policy Transaction */
+        input[type="text"][aria-label="Type client name to search:"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Premium Sold Calculator inputs */
+        input[type="number"][aria-label="Existing Premium"],
+        input[type="number"][aria-label="New/Revised Premium"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Enter Premium Sold and see Agency Revenue input */
+        input[type="number"][aria-label="Premium Sold"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
         /* Custom fatter scrollbars for all tables and editors */
         .stDataFrame ::-webkit-scrollbar, .stDataEditor ::-webkit-scrollbar {
             height: 18px;
             width: 18px;
         }
         .stDataFrame ::-webkit-scrollbar-thumb, .stDataEditor ::-webkit-scrollbar-thumb {
-            background: #b0b0b0;
+            background: #888888;
             border-radius: 8px;
-            border: 3px solid #e0e0e0;
+            border: 3px solid #b0b0b0;
         }
         .stDataFrame ::-webkit-scrollbar-track, .stDataEditor ::-webkit-scrollbar-track {
-            background: #e0e0e0;
+            background: #b0b0b0;
             border-radius: 8px;
         }
         /* For Firefox */
         .stDataFrame, .stDataEditor {
             scrollbar-width: thick;
-            scrollbar-color: #b0b0b0 #e0e0e0;
+            scrollbar-color: #888888 #b0b0b0;
         }
         /* Highlight all interactive input fields in Add New Policy Transaction form and Admin Panel rename headers */
         .stForm input:not([disabled]), .stForm select:not([disabled]), .stForm textarea:not([disabled]),
         .stTextInput > div > input:not([disabled]), .stNumberInput > div > input:not([disabled]), .stDateInput > div > input:not([disabled]) {
-            background-color: #fffbe6 !important;
-            border: 2px solid #f7b731 !important;
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
         /* Make selectboxes match other fields and remove focus ring */
         .stSelectbox > div[data-baseweb="select"] {
-            background-color: #fffbe6 !important;
-            border: 2px solid #f7b731 !important;
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
         .stSelectbox > div[data-baseweb="select"]:focus,
         .stSelectbox > div[data-baseweb="select"]:active,
         .stSelectbox > div[data-baseweb="select"]:focus-visible {
-            border: 2px solid #f7b731 !important;
+            border: 2px solid #e6a800 !important;
             box-shadow: none !important;
             outline: none !important;
         }
         /* Add yellow border to the client name search input at the top of Add New Policy Transaction */
         input[type="text"][aria-label="Type client name to search:"] {
-            background-color: #fffbe6 !important;
-            border: 2px solid #f7b731 !important;
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
-        /* ...existing code... */
+        /* Add yellow border to Premium Sold Calculator inputs */
+        input[type="number"][aria-label="Existing Premium"],
+        input[type="number"][aria-label="New/Revised Premium"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Enter Premium Sold and see Agency Revenue input */
+        input[type="number"][aria-label="Premium Sold"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Highlight selectboxes in Admin Panel reorder columns section */
+        [id^="reorder_col_"] > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:active,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #e6a800 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Highlight selectboxes in Admin Panel reorder columns section (force all backgrounds) */
+        [data-testid^="stSelectbox"][id^="reorder_col_"] > div[data-baseweb="select"],
+        [id^="reorder_col_"] [data-baseweb="select"],
+        [id^="reorder_col_"] [class*="css-1wa3eu0-placeholder"],
+        [id^="reorder_col_"] [class*="css-1uccc91-singleValue"],
+        [id^="reorder_col_"] [class*="css-1okebmr-indicatorSeparator"],
+        [id^="reorder_col_"] [class*="css-1pahdxg-control"],
+        [id^="reorder_col_"] [class*="css-1s2u09g-control"],
+        [id^="reorder_col_"] [class*="css-1n7v3ny-option"],
+        [id^="reorder_col_"] [class*="css-9gakcf-option"],
+        [id^="reorder_col_"] [class*="css-1n6sfyn-MenuList"],
+        [id^="reorder_col_"] [class*="css-1n6sfyn-MenuList"] * {
+            background-color: #fff3b0 !important;
+            border-color: #e6a800 !important;
+            color: #222 !important;
+        }
+        [id^="reorder_col_"] > div[data-baseweb="select"] {
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:active,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #e6a800 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Add yellow border to the client name search input at the top of Add New Policy Transaction */
+        input[type="text"][aria-label="Type client name to search:"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Premium Sold Calculator inputs */
+        input[type="number"][aria-label="Existing Premium"],
+        input[type="number"][aria-label="New/Revised Premium"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Enter Premium Sold and see Agency Revenue input */
+        input[type="number"][aria-label="Premium Sold"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Force highlight for all selectboxes labeled 'NEW/RWL' everywhere */
+        label:has(> div[data-baseweb="select"]) {
+            background-color: #fff3b0 !important;
+            border-radius: 6px !important;
+            padding: 2px 4px !important;
+        }
+        /* Also target selectbox input and dropdown for 'NEW/RWL' */
+        [aria-label="NEW/RWL"] > div[data-baseweb="select"],
+        [aria-label="NEW/RWL"] [data-baseweb="select"],
+        [aria-label="NEW/RWL"] [class*="css-1wa3eu0-placeholder"],
+        [aria-label="NEW/RWL"] [class*="css-1uccc91-singleValue"],
+        [aria-label="NEW/RWL"] [class*="css-1okebmr-indicatorSeparator"],
+        [aria-label="NEW/RWL"] [class*="css-1pahdxg-control"],
+        [aria-label="NEW/RWL"] [class*="css-1s2u09g-control"],
+        [aria-label="NEW/RWL"] [class*="css-1n7v3ny-option"],
+        [aria-label="NEW/RWL"] [class*="css-9gakcf-option"],
+        [aria-label="NEW/RWL"] [class*="css-1n6sfyn-MenuList"],
+        [aria-label="NEW/RWL"] [class*="css-1n6sfyn-MenuList"] * {
+            background-color: #fff3b0 !important;
+            border-color: #e6a800 !important;
+            color: #222 !important;
+        }
+        [aria-label="NEW/RWL"] > div[data-baseweb="select"] {
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:focus,
+        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:active,
+        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #e6a800 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Add yellow border to the client name search input at the top of Add New Policy Transaction */
+        input[type="text"][aria-label="Type client name to search:"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Premium Sold Calculator inputs */
+        input[type="number"][aria-label="Existing Premium"],
+        input[type="number"][aria-label="New/Revised Premium"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Add yellow border to Enter Premium Sold and see Agency Revenue input */
+        input[type="number"][aria-label="Premium Sold"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Highlight selectboxes in Admin Panel reorder columns section */
+        [id^="reorder_col_"] > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:active,
+        [id^="reorder_col_"] > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #e6a800 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -356,7 +531,7 @@ elif page == "Reports":
             report_df = report_df[report_df["PAST DUE"] <= 0]
 
     st.markdown("**Report Preview:**")
-    st.dataframe(format_dates_mmddyyyy(report_df))
+    st.dataframe(format_dates_mmddyyyy(report_df), use_container_width=True, height=max(400, 40 + 40 * len(report_df)))
 
     # --- Download button ---
     st.download_button(
@@ -950,12 +1125,9 @@ elif page == "Accounting":
     if "PAST DUE" in all_data.columns:
         past_due_numeric = pd.to_numeric(all_data["PAST DUE"], errors="coerce").fillna(0)
         nonzero_df = all_data[past_due_numeric.abs() > 0.01].copy()
-
-        st.dataframe(format_dates_mmddyyyy(nonzero_df), use_container_width=True)
-
+        st.dataframe(format_dates_mmddyyyy(nonzero_df), use_container_width=True, height=max(400, 40 + 40 * len(nonzero_df)))
         total_past_due = past_due_numeric[past_due_numeric.abs() > 0.01].sum()
         st.metric("Total PAST DUE", f"${total_past_due:,.2f}")
-
         st.info("Only policies with a nonzero PAST DUE balance are shown.")
     else:
         st.warning("No 'PAST DUE' column found or not enough data to calculate it.")
