@@ -824,8 +824,56 @@ elif page == "Search & Filter":
     st.subheader("Search & Filter Policies")
 
     # Dropdown to select which column to search by (all headers)
-    search_column = st.selectbox("Search by column:", all_data.columns.tolist())
-    search_text = st.text_input(f"Search for value in '{search_column}':")
+    columns = all_data.columns.tolist()
+    default_index = columns.index("Customer") if "Customer" in columns else 0
+    st.markdown(
+        """
+        <style>
+        /* Highlight the selectbox for 'Search by column' */
+        div[data-testid="stSelectbox"]:has(label:contains('Search by column')) > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Highlight the selectbox for 'Past Due' */
+        div[data-testid="stSelectbox"]:has(label:contains('Past Due')) > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    search_column = st.selectbox("Search by column:", columns, index=default_index)
+    # --- Highlighted Customer search input ---
+    if search_column == "Customer":
+        # Place the CSS BEFORE the text_input so it is injected before the widget renders
+        st.markdown(
+            """
+            <style>
+            /* Only highlight the border for the Customer search field, no fill */
+            input[type="text"][aria-label^="Search for value in 'Customer'"] {
+                border: 2px solid #e6a800 !important;
+                background-color: white !important;
+                border-radius: 6px !important;
+                color: #222 !important;
+                position: relative;
+                z-index: 1;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        search_text = st.text_input(
+            f"Search for value in '{search_column}':",
+            key="search_customer_highlighted",
+            help="Type a client name to search.",
+            label_visibility="visible",
+            placeholder="Type client name..."
+        )
+    else:
+        search_text = st.text_input(f"Search for value in '{search_column}':")
 
     # Dropdown to filter by Past Due status
     past_due_options = ["All", "YES", "NO"]
