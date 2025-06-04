@@ -59,6 +59,33 @@ with st.container():
             scrollbar-width: thick;
             scrollbar-color: #b0b0b0 #e0e0e0;
         }
+        /* Highlight all interactive input fields in Add New Policy Transaction form and Admin Panel rename headers */
+        .stForm input:not([disabled]), .stForm select:not([disabled]), .stForm textarea:not([disabled]),
+        .stTextInput > div > input:not([disabled]), .stNumberInput > div > input:not([disabled]), .stDateInput > div > input:not([disabled]) {
+            background-color: #fffbe6 !important;
+            border: 2px solid #f7b731 !important;
+            border-radius: 6px !important;
+        }
+        /* Make selectboxes match other fields and remove focus ring */
+        .stSelectbox > div[data-baseweb="select"] {
+            background-color: #fffbe6 !important;
+            border: 2px solid #f7b731 !important;
+            border-radius: 6px !important;
+        }
+        .stSelectbox > div[data-baseweb="select"]:focus,
+        .stSelectbox > div[data-baseweb="select"]:active,
+        .stSelectbox > div[data-baseweb="select"]:focus-visible {
+            border: 2px solid #f7b731 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Add yellow border to the client name search input at the top of Add New Policy Transaction */
+        input[type="text"][aria-label="Type client name to search:"] {
+            background-color: #fffbe6 !important;
+            border: 2px solid #f7b731 !important;
+            border-radius: 6px !important;
+        }
+        /* ...existing code... */
         </style>
         """,
         unsafe_allow_html=True
@@ -178,7 +205,7 @@ if show_debug:
 if page == "Dashboard":
     # --- Dashboard (Home Page) ---
     st.subheader("Dashboard")
-    st.metric("Total Policies", len(all_data))
+    st.metric("Total Transactions", len(all_data))
     if "Calculated Commission" in all_data.columns:
         st.metric("Total Commissions", f"${all_data['Calculated Commission'].sum():,.2f}")
     st.write("Welcome! Use the sidebar to navigate.")
