@@ -361,36 +361,142 @@ elif page == "All Policies in Database":
 # --- Add New Policy Transaction ---
 elif page == "Add New Policy Transaction":
     st.subheader("Add New Policy Transaction")
+    db_columns = all_data.columns.tolist()
+
+    # --- Client Name Search for Existing Client ID ---
+    st.markdown("#### Search for Existing Client ID by Name")
+    client_names = sorted(all_data["Customer"].dropna().unique().tolist()) if "Customer" in all_data.columns else []
+    search_name = st.text_input("Type client name to search:")
+    matched_id = None
+    matched_name = None
+    if search_name:
+        matches = all_data[all_data["Customer"].str.lower().str.contains(search_name.strip().lower(), na=False)]
+        if not matches.empty and "Client ID" in matches.columns:
+            matched_id = matches.iloc[0]["Client ID"]
+            matched_name = matches.iloc[0]["Customer"]
+            st.info(f"Client ID for '{matched_name}': **{matched_id}**")
+            if st.button("Assign This Client ID and Name to Transaction", key="assign_client_id_btn"):
+                st.session_state["assigned_client_id"] = matched_id
+                st.session_state["assigned_client_name"] = matched_name
+        else:
+            st.warning("No matching client found.")
+
+    # --- Premium Sold Calculator ---
+    st.markdown("### Premium Sold Calculator (for Endorsements)")
+    col_calc1, col_calc2, col_calc3 = st.columns([1,1,1])
+    with col_calc1:
+        existing_premium = st.number_input(
+            "Existing Premium",
+            min_value=-1000000.0,
+            max_value=1000000.0,
+            step=0.01,
+            format="%.2f",
+            key="existing_premium_calc"
+        )
+    with col_calc2:
+        new_premium = st.number_input(
+            "New/Revised Premium",
+            min_value=-1000000.0,
+            max_value=1000000.0,
+            step=0.01,
+            format="%.2f",
+            key="new_premium_calc"
+        )
+    with col_calc3:
+        premium_sold_calc = round(new_premium - existing_premium, 2)
+        st.markdown(f"**Premium Sold (New - Existing):** <span style='font-size:1.5em'>{premium_sold_calc:+.2f}</span>", unsafe_allow_html=True)
+        if st.button("Use This Value for Premium Sold"):
+            st.session_state["premium_sold_input_live"] = premium_sold_calc
+
+    # --- Live Premium Sold and Agency Revenue outside the form ---
+    if "premium_sold_input" not in st.session_state:
+        st.session_state["premium_sold_input"] = 0.0
+    st.subheader("Enter Premium Sold and see Agency Revenue:")
+    premium_sold_val = st.number_input(
+        "Premium Sold",
+        min_value=-1000000.0,  # Allow large negative values
+        max_value=1000000.0,
+        step=0.01,
+        format="%.2f",
+        key="premium_sold_input_live"
+    )
+    agency_revenue_val = round(premium_sold_val * 0.10, 2)
+    st.number_input(
+        "Agency Revenue (10% of Premium Sold)",
+        value=agency_revenue_val,
+        disabled=True,
+        format="%.2f",
+        key="agency_revenue_display_live"
+    )
+    # --- The rest of the form ---
     with st.form("add_policy_form"):
-        customer_name = st.text_input("Customer Name")
-        policy_type = st.text_input("Policy Type")
-        carrier_name = st.text_input("Carrier Name")
-        policy_number = st.text_input("Policy Number")
-        new_rwl = st.selectbox("NEW/RWL", ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"])
-        agency_revenue = st.number_input("Agency Revenue", min_value=0.0, step=0.01)
-        # Use MM/DD/YYYY format for date_input display (valid format string)
-        today = datetime.date.today()
-        policy_orig_date = st.date_input("Policy Origination Date", value=today, format="MM/DD/YYYY")
-        effective_date = st.date_input("Effective Date", value=today, format="MM/DD/YYYY")
-        paid = st.selectbox("Paid", ["No", "Yes"])
-        submitted = st.form_submit_button("Add Policy")
+        new_row = {}
+        auto_transaction_id = generate_transaction_id() if "Transaction ID" in db_columns else None
+        assigned_client_id = st.session_state.get("assigned_client_id", None)
+        assigned_client_name = st.session_state.get("assigned_client_name", None)
+        for col in db_columns:
+            if col in [
+                "Lead Source",
+                "Producer",
+                "Agency Gross Paid",
+                "Paid",
+                "Gross Agency Comm %",
+                "Agency Gross Comm",
+                "Statement Date",
+                "STMT DATE",
+                "Items",
+                "Paid Amount",
+                "PAST DUE"
+            ]:
+                continue  # Skip these fields in the form
+            if col == "Premium Sold":
+                new_row[col] = premium_sold_val
+            elif col == "Agency Revenue":
+                new_row[col] = agency_revenue_val
+            elif col == "Transaction ID":
+                val = st.text_input(col, value=auto_transaction_id, disabled=True)
+                new_row[col] = auto_transaction_id
+            elif col == "Client ID":
+                val = st.text_input(col, value=assigned_client_id if assigned_client_id else generate_client_id(), disabled=True)
+                new_row[col] = val
+            elif col == "Customer":
+                val = st.text_input(col, value=assigned_client_name if assigned_client_name else "")
+                new_row[col] = val
+            elif "date" in col.lower() or col.lower() in ["x-date", "xdate", "stmt date", "statement date"]:
+                # Make these date fields optional/blank by default
+                if col in ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]:
+                    val = st.date_input(col, value=None, format="MM/DD/YYYY")
+                    if val is None or (isinstance(val, str) and not val):
+                        new_row[col] = ""
+                    else:
+                        new_row[col] = val.strftime("%m/%d/%Y") if isinstance(val, datetime.date) else str(val)
+                else:
+                    today = datetime.date.today()
+                    val = st.date_input(col, value=today, format="MM/DD/YYYY")
+                    new_row[col] = val.strftime("%m/%d/%Y") if isinstance(val, datetime.date) else str(val)
+            elif col == "Calculated Commission":
+                val = st.number_input(col, min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.2f")
+                new_row[col] = val
+            elif col == "Paid":
+                val = st.selectbox(col, ["No", "Yes"])
+                new_row[col] = val
+            elif col == "NEW/RWL":
+                val = st.selectbox(col, ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"])
+                new_row[col] = val
+            else:
+                val = st.text_input(col)
+                new_row[col] = val
+        submitted = st.form_submit_button("Add Transaction")
     if submitted:
-        row = {
-            "Customer": customer_name,
-            "Policy Type": policy_type,
-            "Carrier Name": carrier_name,
-            "Policy Number": policy_number,
-            "NEW/RWL": new_rwl,
-            "Agency Revenue": agency_revenue,
-            # Format dates as MM/DD/YYYY for database consistency
-            "Policy Origination Date": policy_orig_date.strftime("%m/%d/%Y") if isinstance(policy_orig_date, datetime.date) else str(policy_orig_date),
-            "Effective Date": effective_date.strftime("%m/%d/%Y") if isinstance(effective_date, datetime.date) else str(effective_date),
-            "Paid": paid,
-            "Client ID": generate_client_id(),
-            "Transaction ID": generate_transaction_id()
-        }
-        row["Calculated Commission"] = calculate_commission(row)
-        new_df = pd.DataFrame([row])
+        # Auto-generate IDs if present
+        if "Client ID" in db_columns:
+            new_row["Client ID"] = generate_client_id()
+        if "Transaction ID" in db_columns:
+            new_row["Transaction ID"] = auto_transaction_id
+        # Calculate commission if needed
+        if "Calculated Commission" in db_columns:
+            new_row["Calculated Commission"] = calculate_commission(new_row)
+        new_df = pd.DataFrame([new_row])
         new_df.to_sql('policies', engine, if_exists='append', index=False)
         st.success("New policy transaction added!")
 
