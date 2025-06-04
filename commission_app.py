@@ -109,9 +109,9 @@ page = st.sidebar.radio(
         "Dashboard",
         "Reports",
         "All Policies in Database",
+        "Edit Policies in Database",  # Moved up
         "Add New Policy Transaction",
         "Upload & Reconcile",
-        "Edit Policies in Database",
         "Search & Filter",
         "Admin Panel",
         "Accounting",
@@ -774,26 +774,47 @@ elif page == "Admin Panel":
     with st.form("delete_column_form"):
         col_to_delete = st.selectbox("Select column to delete", db_columns)
         delete_col_submitted = st.form_submit_button("Delete Column")
+
+    # --- Improved robust two-step confirmation for column deletion ---
     if delete_col_submitted and col_to_delete:
-        if st.warning("⚠️ Deleting a column is permanent and cannot be undone. Are you sure you want to continue?"):
-            confirm_del = st.button("Continue", key="confirm_del_col")
-            cancel_del = st.button("Cancel", key="cancel_del_col")
-            if confirm_del:
-                with engine.begin() as conn:
-                    # Get current columns except the one to delete
-                    remaining_cols = [col for col in db_columns if col != col_to_delete]
-                    cols_str = ", ".join([f'"{col}"' for col in remaining_cols])
-                    # Rename old table
-                    conn.execute(sqlalchemy.text('ALTER TABLE policies RENAME TO policies_old'))
-                    # Create new table without the deleted column
-                    df_temp = pd.read_sql('SELECT * FROM policies_old', conn)
-                    df_temp = df_temp[remaining_cols]
-                    df_temp.to_sql('policies', conn, if_exists='replace', index=False)
-                    conn.execute(sqlalchemy.text('DROP TABLE policies_old'))
-                st.success(f"Column '{col_to_delete}' deleted.")
+        st.session_state["pending_delete_col"] = col_to_delete
+        st.session_state["delete_confirmed"] = False
+        st.rerun()
+
+    if "pending_delete_col" in st.session_state:
+        col_name = st.session_state["pending_delete_col"]
+        st.error(f"⚠️ You are about to permanently delete the column: '{col_name}'. This cannot be undone.\n\n**It is strongly recommended to BACK UP your database first!**")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Confirm Delete Column", key="confirm_del_col"):
+                st.session_state["delete_confirmed"] = True
                 st.rerun()
-            elif cancel_del:
+        with col2:
+            if st.button("Cancel", key="cancel_del_col"):
+                st.session_state.pop("pending_delete_col")
+                st.session_state.pop("delete_confirmed", None)
                 st.info("Delete column cancelled.")
+                st.rerun()
+
+    if st.session_state.get("delete_confirmed", False):
+        col_name = st.session_state["pending_delete_col"]
+        remaining_cols = [col for col in db_columns if col != col_name]
+        cols_str = ", ".join([f'"{col}"' for col in remaining_cols])
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text('ALTER TABLE policies RENAME TO policies_old'))
+            pragma = conn.execute(sqlalchemy.text('PRAGMA table_info(policies_old)')).fetchall()
+            col_types = {row[1]: row[2] for row in pragma if row[1] in remaining_cols}
+            create_cols = ", ".join([f'"{col}" {col_types[col]}' for col in remaining_cols])
+            conn.execute(sqlalchemy.text(f'CREATE TABLE policies ({create_cols})'))
+            conn.execute(sqlalchemy.text(f'INSERT INTO policies ({cols_str}) SELECT {cols_str} FROM policies_old'))
+            conn.execute(sqlalchemy.text('DROP TABLE policies_old'))
+        # Run VACUUM to force SQLite to update schema and clear cache
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text('VACUUM'))
+        st.success(f"Column '{col_name}' deleted.")
+        st.session_state.pop("pending_delete_col")
+        st.session_state.pop("delete_confirmed")
+        st.rerun()
 
     # --- Reorder Columns Section ---
     st.subheader("Reorder Database Columns")
@@ -815,7 +836,7 @@ elif page == "Admin Panel":
                 df_temp = pd.read_sql('SELECT * FROM policies', conn)
                 df_temp = df_temp[new_order]
                 conn.execute(sqlalchemy.text('ALTER TABLE policies RENAME TO policies_old'))
-                df_temp.to_sql('policies', conn, if_exists='replace', index=False)
+                df_temp.to_sql('policies', engine, if_exists='replace', index=False)
                 conn.execute(sqlalchemy.text('DROP TABLE policies_old'))
             st.success("Column order updated.")
             st.rerun()
