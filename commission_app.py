@@ -1323,7 +1323,7 @@ elif page == "Accounting":
         if 'Delete' in cols:
             cols.insert(0, cols.pop(cols.index('Delete')))
             df_manual = df_manual[cols]
-        edited_df = st.data_editor(df_manual, use_container_width=True, key="manual_comm_rows_editor")
+        edited_df = st.data_editor(df_manual, use_container_width=True, key="manual_comm_rows_editor", height=max(400, 40 + 40 * max(10, len(df_manual))))
 
         # --- Show totals row at the bottom ---
         if not df_manual.empty:
