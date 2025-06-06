@@ -339,7 +339,6 @@ page = st.sidebar.radio(
         "All Policies in Database",
         "Edit Policies in Database",  # Moved up
         "Add New Policy Transaction",
-        "Upload & Reconcile",
         "Search & Filter",
         "Admin Panel",
         "Accounting",
@@ -731,118 +730,47 @@ elif page == "Add New Policy Transaction":
         # Calculate commission if needed
         if "Calculated Commission" in db_columns:
             new_row["Calculated Commission"] = calculate_commission(new_row)
+        # --- Calculate Agent Estimated Comm $ for new rows ---
+        def parse_money(val):
+            import re
+            if val is None:
+                return 0.0
+            try:
+                return float(re.sub(r'[^0-9.-]', '', str(val)))
+            except Exception:
+                return 0.0
+        def parse_percent(val):
+            import re
+            if val is None:
+                return 0.0
+            try:
+                return float(re.sub(r'[^0-9.-]', '', str(val)))
+            except Exception:
+                return 0.0
+        if "Agent Estimated Comm $" in db_columns:
+            premium = new_row.get("Premium Sold", 0)
+            pct = new_row.get("Policy Gross Comm %", 0)
+            p = parse_money(premium)
+            pc = parse_percent(pct)
+            new_row["Agent Estimated Comm $"] = p * (pc / 100.0)
+        # --- Calculate Balance Due for new rows ---
+        if "Balance Due" in db_columns:
+            def parse_money_bd(val):
+                import re
+                if val is None:
+                    return 0.0
+                try:
+                    return float(re.sub(r'[^0-9.-]', '', str(val)))
+                except Exception:
+                    return 0.0
+            agent_est = new_row.get("Agent Estimated Comm $", 0)
+            paid_amt = new_row.get("Paid Amount", 0)
+            agent_est_val = parse_money_bd(agent_est)
+            paid_amt_val = parse_money_bd(paid_amt)
+            new_row["Balance Due"] = agent_est_val - paid_amt_val
         new_df = pd.DataFrame([new_row])
         new_df.to_sql('policies', engine, if_exists='append', index=False)
         st.success("New policy transaction added!")
-
-# --- Upload & Reconcile ---
-elif page == "Upload & Reconcile":
-    st.subheader("Upload and Reconcile Data")
-    uploaded_file = st.file_uploader(
-        "Upload your sales commission spreadsheet or PDF report",
-        type=["xlsx", "xls", "csv", "pdf"]
-    )
-    pdf_type = None
-    if uploaded_file and uploaded_file.name.endswith(".pdf"):
-        pdf_type = st.radio(
-            "What type of PDF are you uploading?",
-            ("Sales Report (A-I only)", "Commission Statement (all columns)")
-        )
-    if uploaded_file:
-        if uploaded_file.name.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".xls"):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(".pdf"):
-            with pdfplumber.open(uploaded_file) as pdf:
-                all_tables = []
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        temp_df = pd.DataFrame(table[1:], columns=table[0])
-                        all_tables.append(temp_df)
-                if all_tables:
-                    df = pd.concat(all_tables, ignore_index=True)
-                else:
-                    st.error("No tables found in PDF.")
-                    st.stop()
-        df.columns = df.columns.str.strip()
-        if pdf_type == "Sales Report (A-I only)":
-            df = df.iloc[:, :9]
-            df["NEW/RWL"] = "NEW"
-        st.write("Extracted DataFrame preview:", format_dates_mmddyyyy(df.head(5)))
-        header_row = st.number_input(
-            "Which row contains the column headers? (0 = first row)", min_value=0, max_value=min(10, len(df)-1), value=0
-        )
-        df.columns = df.iloc[header_row]
-        df = df[(header_row+1):].reset_index(drop=True)
-        df.columns = df.columns.str.strip()
-        st.write("Columns after header set:", df.columns.tolist())
-        st.write(format_dates_mmddyyyy(df.head()))
-        df.columns = df.columns.str.strip()
-        st.write("Columns found:", df.columns.tolist())
-        mapping_file = "column_mapping.json"
-        default_columns = [
-            "Customer", "Policy Type", "Carrier Name", "Policy Number", "NEW/RWL",
-            "Agency Revenue", "Policy Origination Date", "Effective Date"
-        ]
-        if os.path.exists(mapping_file):
-            with open(mapping_file, "r") as f:
-                column_mapping = json.load(f)
-        else:
-            column_mapping = {}
-        uploaded_columns = df.columns.tolist()
-        mapped_columns = []
-        for col in default_columns:
-            mapped = column_mapping.get(col)
-            if mapped not in uploaded_columns:
-                mapped = st.selectbox(
-                    f"Map '{col}' to uploaded column:",
-                    options=[""] + uploaded_columns,
-                    key=f"map_{col}"
-                )
-            mapped_columns.append(mapped or col)
-        if st.button("Save column mapping for future uploads"):
-            for i, col in enumerate(default_columns):
-                column_mapping[col] = mapped_columns[i]
-            with open(mapping_file, "w") as f:
-                json.dump(column_mapping, f)
-            st.success("Column mapping saved!")
-        df = df.rename(columns={v: k for k, v in column_mapping.items() if v in df.columns})
-        if pdf_type == "Sales Report (A-I only)":
-            for col in ["Agency Revenue", "Policy Origination Date", "Effective Date"]:
-                if col not in df.columns:
-                    df[col] = ""
-        required_columns = ["NEW/RWL", "Agency Revenue", "Policy Origination Date", "Effective Date"]
-        missing = [col for col in required_columns if col not in df.columns]
-        if missing:
-            st.error(f"Missing columns: {missing}")
-            st.stop()
-        df["Calculated Commission"] = df.apply(calculate_commission, axis=1)
-        st.subheader("Edit Data")
-        edited_df = st.data_editor(format_dates_mmddyyyy(df))
-        st.subheader("Download Results")
-        st.download_button(
-            label="Download as CSV",
-            data=edited_df.to_csv(index=False),
-            file_name="reconciled_commissions.csv",
-            mime="text/csv"
-        )
-        # --- Download as Excel ---
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            edited_df.to_excel(writer, index=False, sheet_name='Reconciled Commissions')
-        st.download_button(
-            label="Download Report as Excel",
-            data=output.getvalue(),
-            file_name="reconciled_commissions.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        if st.button("Save to Database"):
-            edited_df.to_sql('policies', engine, if_exists='append', index=False)
-            st.success("Data saved to database!")
 
 # --- Edit Policies in Database ---
 elif page == "Edit Policies in Database":
@@ -1312,11 +1240,22 @@ elif page == "Accounting":
                         # Step 5: Enter Transaction Type, Commission Paid, Agency Commission Received, and Statement Date
                         transaction_types = ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"]
                         transaction_type = st.selectbox("Transaction Type", transaction_types, key="recon_transaction_type_select")
+                        # New field: Agent Comm (New 50% RWL 25%) below Transaction Type
+                        agent_comm_new_rwl = st.number_input(
+                            "Agent Comm (New 50% RWL 25%) (%)",
+                            min_value=0.0,
+                            max_value=100.0,
+                            step=0.01,
+                            format="%.2f",
+                            value=None,
+                            key="recon_agent_comm_new_rwl_input",
+                            help="Enter as a percent (e.g., 50 for 50%). Leave blank if not applicable."
+                        )
+                        # Update label to 'Agency Gross Comm Received'
+                        agency_comm_received = st.number_input("Agency Gross Comm Received", min_value=0.0, step=0.01, format="%.2f", key="recon_agency_comm_received_input")
                         commission_paid = st.number_input("Commission Paid", min_value=0.0, step=0.01, format="%.2f", key="recon_comm_paid_input")
-                        agency_comm_received = st.number_input("Agency Commission Received $", min_value=0.0, step=0.01, format="%.2f", key="recon_agency_comm_received_input")
                         statement_date = st.date_input("Statement Date", value=None, format="MM/DD/YYYY", key="recon_stmt_date_input")
                         if st.button("Add Entry", key="recon_add_entry_btn"):
-                            # Force Statement Date to MM/DD/YYYY string or blank
                             if statement_date is None or statement_date == "":
                                 stmt_date_str = ""
                             elif isinstance(statement_date, datetime.date):
@@ -1326,15 +1265,16 @@ elif page == "Accounting":
                                     stmt_date_str = pd.to_datetime(statement_date).strftime("%m/%d/%Y")
                                 except Exception:
                                     stmt_date_str = ""
-                            # Add entry to session state (now includes Transaction Type)
+                            # Add entry to session state (now includes Transaction Type and Agent Comm (New 50% RWL 25%))
                             st.session_state["manual_commission_rows"].append({
                                 "Customer": selected_customer,
                                 "Policy Type": selected_policy_type,
                                 "Policy Number": selected_policy_number,
                                 "Effective Date": selected_effective_date,
                                 "Transaction Type": transaction_type,
+                                "Agent Comm (New 50% RWL 25%": agent_comm_new_rwl if agent_comm_new_rwl is not None else "",
+                                "Agency Gross Comm Received": agency_comm_received,
                                 "Commission Paid": commission_paid,
-                                "Agency Commission Received $": agency_comm_received,
                                 "Statement Date": stmt_date_str
                             })
                             st.success("Entry added. You can review and edit below.")
@@ -1355,9 +1295,13 @@ elif page == "Accounting":
             display_row = row.copy()
             display_row["Statement Date"] = date_val
             display_row["Delete"] = False  # Add a delete checkbox/button per row
-            # Ensure Agency Commission Received $ is present for all rows
-            if "Agency Commission Received $" not in display_row:
-                display_row["Agency Commission Received $"] = 0.0
+            # Ensure Agency Gross Comm Received is present for all rows
+            if "Agency Gross Comm Received" not in display_row:
+                # If legacy column exists, migrate value
+                if "Agency Commission Received $" in display_row:
+                    display_row["Agency Gross Comm Received"] = display_row.pop("Agency Commission Received $")
+                else:
+                    display_row["Agency Gross Comm Received"] = 0.0
             # Ensure Transaction Type is present for all rows (for legacy rows)
             if "Transaction Type" not in display_row:
                 display_row["Transaction Type"] = ""
@@ -1377,12 +1321,12 @@ elif page == "Accounting":
             if not match.empty:
                 db_row = match.iloc[0].to_dict()
                 existing_comm = parse_money(db_row.get("Commission Paid", 0))
-                existing_agency = parse_money(db_row.get("Agency Commission Received $", 0))
+                existing_agency = parse_money(db_row.get("Agency Gross Comm Received", db_row.get("Agency Commission Received $", 0)))
             else:
                 existing_comm = 0.0
                 existing_agency = 0.0
-            manual_comm = parse_money(row.get("Commission Paid", 0))
-            manual_agency = parse_money(row.get("Agency Commission Received $", 0))
+            manual_comm = parse_money(display_row.get("Commission Paid", 0))
+            manual_agency = parse_money(display_row.get("Agency Gross Comm Received", 0))
             # Transaction Type logic
             tx_type = str(row.get("Transaction Type", "")).upper()
             # Commission Paid math
@@ -1496,7 +1440,7 @@ elif page == "Accounting":
                         "effective_date": row.get("Effective Date", ""),
                         "transaction_type": row.get("Transaction Type", ""),
                         "commission_paid": row.get("Commission Paid", 0.0),
-                        "agency_commission_received": row.get("Agency Commission Received $", 0.0),
+                        "agency_commission_received": row.get("Agency Gross Comm Received", 0.0),
                         "statement_date": row.get("Statement Date", "")
                     })
 
@@ -1526,7 +1470,7 @@ elif page == "Accounting":
                         "effective_date": row.get("Effective Date", ""),
                         "transaction_type": row.get("Transaction Type", ""),
                         "commission_paid": row.get("Commission Paid", 0.0),
-                        "agency_commission_received": row.get("Agency Commission Received $", 0.0),
+                        "agency_commission_received": row.get("Agency Gross Comm Received", 0.0),
                         "statement_date": row.get("Statement Date", "")
                     })
             st.success("Manual entries ready for reconciliation.")
@@ -1556,66 +1500,123 @@ elif page == "Accounting":
 
     # --- Reconcile & Commit manual entries ---
     if st.button("Reconcile & Commit Manual Entries", key="reconcile_commit_btn"):
-        import datetime, json
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        n_committed = 0
-        # Save the full statement as JSON for audit
-        statement_json = json.dumps(st.session_state["manual_commission_rows"])
-        with engine.begin() as conn:
-            for row in st.session_state["manual_commission_rows"]:
-                conn.execute(sqlalchemy.text('''
-                    INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
-                    VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
-                '''), {
-                    "policy_number": row.get("Policy Number", ""),
-                    "customer": row.get("Customer", ""),
-                    "payment_amount": row.get("Commission Paid", 0.0),
-                    "statement_date": row.get("Statement Date", ""),
-                    "payment_timestamp": now_str,
-                    "statement_details": statement_json
-                })
-                n_committed += 1
-        st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
-        st.session_state["manual_commission_rows"] = []
-        with engine.begin() as conn:
-            conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
-
-# --- Help Page ---
-elif page == "Help":
-    st.title("Help & User Guide")
-    st.markdown("""
-    ## Welcome to the Sales Commissions App Help
-    This app helps you manage, reconcile, and audit insurance sales commissions with robust manual entry, reporting, and database tools.
-
-    ### Navigation Overview
-    - **Dashboard**: View high-level metrics and search/edit clients.
-    - **Reports**: Generate custom reports, filter by date, customer, or balance due, and export as CSV/Excel.
-    - **All Policies in Database**: Browse all policy records in a scrollable table.
-    - **Add New Policy Transaction**: Add new sales or endorsements, with calculators for premium and agency revenue.
-    - **Upload & Reconcile**: Upload commission statements (Excel, CSV, PDF), map columns, and save to the database.
-    - **Edit Policies in Database**: Edit, reorder, and update all policy records directly.
-    - **Search & Filter**: Search by any column, filter by balance due, and export filtered results.
-    - **Admin Panel**: Advanced tools for column mapping, adding/removing/renaming columns, and database backup/restore.
-    - **Accounting**: Manual entry and reconciliation workflow, with math previews, audit/history, and persistent pending entries.
-
-    ### Key Features
-    - **Manual Entry & Reconciliation**: Enter commission payments manually, preview math effects, and commit to payment history.
-    - **Audit & History**: All reconciliations are saved with full statement details for review.
-    - **Database Backup/Restore**: Always back up before making schema changes. Use the Admin Panel for one-click backup/restore.
-    - **Column Mapping**: Map uploaded spreadsheet columns to app fields for seamless imports.
-    - **Formulas**: See the Admin Panel for current calculation logic.
-
-    ### Troubleshooting
-    - **Missing Data**: If you don't see recent transactions, check if you are using the correct database (local vs. cloud) and that your data was saved.
-    - **Help Page Empty**: If this page is blank, contact your developer to restore the Help content.
-    - **Database Issues**: Use the Admin Panel to back up and restore. If you encounter errors, restore from the latest backup.
-    - **GitHub Sync**: Pushing code/database to GitHub does NOT affect the cloud app's database.
-
-    ### Support & Contact
-    - For technical support, contact your developer or IT support team.
-    - For feature requests or bug reports, open an issue on GitHub or email your support contact.
-    - For detailed usage or troubleshooting, refer to this Help page or ask Copilot for guidance.
-
-    ---
-    **Tip:** Use the sidebar to navigate between pages. For best results, use Google Chrome and keep your database backed up regularly.
-    """)
+        db_columns = pd.read_sql('SELECT * FROM policies LIMIT 1', engine).columns.tolist()
+        if st.session_state["manual_commission_rows"]:
+            manual_columns = list(st.session_state["manual_commission_rows"][0].keys())
+        else:
+            manual_columns = []
+        unmatched = [col for col in manual_columns if col not in db_columns]
+        mapping_file = "manual_recon_column_mapping.json"
+        # Load previous mapping if it exists
+        if os.path.exists(mapping_file):
+            with open(mapping_file, "r") as f:
+                saved_mapping = json.load(f)
+        else:
+            saved_mapping = {}
+        # Only prompt for new unmatched columns
+        new_unmatched = [col for col in unmatched if col not in saved_mapping]
+        mapping = saved_mapping.copy()
+        if new_unmatched:
+            st.warning("Some columns in your manual entries do not match the database columns. Please map each unmatched column to a database column or choose to skip it. This mapping will be remembered for future reconciliations.")
+            for col in new_unmatched:
+                options = ["(Skip)"] + db_columns
+                selected = st.selectbox(f"Map manual entry column '{col}' to database column:", options, key=f"recon_map_{col}")
+                mapping[col] = selected if selected != "(Skip)" else None
+            if st.button("Confirm Mapping and Commit", key="confirm_mapping_commit_btn"):
+                # Save mapping for future use
+                with open(mapping_file, "w") as f:
+                    json.dump(mapping, f)
+                # Apply mapping to manual entries
+                mapped_entries = []
+                for row in st.session_state["manual_commission_rows"]:
+                    mapped_row = {}
+                    for k, v in row.items():
+                        if k in mapping and mapping[k]:
+                            mapped_row[mapping[k]] = v
+                        elif k in db_columns:
+                            mapped_row[k] = v
+                    mapped_entries.append(mapped_row)
+                # Now commit mapped_entries to the database as before
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                n_committed = 0
+                statement_json = json.dumps(mapped_entries)
+                with engine.begin() as conn:
+                    for row in mapped_entries:
+                        conn.execute(sqlalchemy.text('''
+                            INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
+                            VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
+                        '''), {
+                            "policy_number": row.get("Policy Number", ""),
+                            "customer": row.get("Customer", ""),
+                            "payment_amount": row.get("Commission Paid", 0.0),
+                            "statement_date": row.get("Statement Date", ""),
+                            "payment_timestamp": now_str,
+                            "statement_details": statement_json
+                        })
+                        n_committed += 1
+                st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
+                st.session_state["manual_commission_rows"] = []
+                # --- Clear the mapping file after successful commit
+                if os.path.exists(mapping_file):
+                    os.remove(mapping_file)
+            else:
+                st.stop()
+        else:
+            # If mapping exists, use it
+            if mapping:
+                mapped_entries = []
+                for row in st.session_state["manual_commission_rows"]:
+                    mapped_row = {}
+                    for k, v in row.items():
+                        if k in mapping and mapping[k]:
+                            mapped_row[mapping[k]] = v
+                        elif k in db_columns:
+                            mapped_row[k] = v
+                mapped_entries.append(mapped_row)
+                # ...existing code for commit...
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                n_committed = 0
+                statement_json = json.dumps(mapped_entries)
+                with engine.begin() as conn:
+                    for row in mapped_entries:
+                        conn.execute(sqlalchemy.text('''
+                            INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
+                            VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
+                        '''), {
+                            "policy_number": row.get("Policy Number", ""),
+                            "customer": row.get("Customer", ""),
+                            "payment_amount": row.get("Commission Paid", 0.0),
+                            "statement_date": row.get("Statement Date", ""),
+                            "payment_timestamp": now_str,
+                            "statement_details": statement_json
+                        })
+                        n_committed += 1
+                st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
+                st.session_state["manual_commission_rows"] = []
+                # --- Clear the mapping file after successful commit
+                if os.path.exists(mapping_file):
+                    os.remove(mapping_file)
+            else:
+                # ...existing code for direct commit if all columns match...
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                n_committed = 0
+                statement_json = json.dumps(st.session_state["manual_commission_rows"])
+                with engine.begin() as conn:
+                    for row in st.session_state["manual_commission_rows"]:
+                        conn.execute(sqlalchemy.text('''
+                            INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
+                            VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
+                        '''), {
+                            "policy_number": row.get("Policy Number", ""),
+                            "customer": row.get("Customer", ""),
+                            "payment_amount": row.get("Commission Paid", 0.0),
+                            "statement_date": row.get("Statement Date", ""),
+                            "payment_timestamp": now_str,
+                            "statement_details": statement_json
+                        })
+                        n_committed += 1
+                st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
+                st.session_state["manual_commission_rows"] = []
+                # --- Clear the mapping file after successful commit
+                if os.path.exists(mapping_file):
+                    os.remove(mapping_file)
