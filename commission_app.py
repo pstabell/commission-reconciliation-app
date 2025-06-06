@@ -1414,21 +1414,21 @@ elif page == "Accounting":
 
         # --- Show totals row at the bottom ---
         if not df_manual.empty:
-            # Only sum numeric columns, exclude 'Delete' and math effect columns
-            numeric_cols = [col for col in df_manual.columns if pd.api.types.is_numeric_dtype(df_manual[col]) and col not in ['Delete', 'Math Effect: Commission Paid', 'Math Effect: Agency Commission Received']]
-            totals = {col: df_manual[col].apply(pd.to_numeric, errors='coerce').sum() for col in numeric_cols}
-            # Build a totals row with blank for non-numeric columns
-            totals_row = {col: (totals[col] if col in totals else "") for col in df_manual.columns}
-            # Label the first non-delete, non-math effect column as 'TOTAL'
-            for col in df_manual.columns:
-                if col not in ['Delete', 'Math Effect: Commission Paid', 'Math Effect: Agency Commission Received']:
-                    totals_row[col] = 'TOTAL'
-                    break
-            # --- Add one extra blank row for visual space ---
-            blank_row = {col: "" for col in df_manual.columns}
-            totals_df = pd.DataFrame([totals_row, blank_row])
-            st.markdown("**Totals for all manual entries below:**")
-            st.dataframe(totals_df, use_container_width=True, height=50*2)
+            # Only show totals for 'Commission Paid' and 'Agency Gross Comm Received'
+            total_commission_paid = df_manual['Commission Paid'].apply(pd.to_numeric, errors='coerce').sum() if 'Commission Paid' in df_manual.columns else 0.0
+            total_agency_comm_received = df_manual['Agency Gross Comm Received'].apply(pd.to_numeric, errors='coerce').sum() if 'Agency Gross Comm Received' in df_manual.columns else 0.0
+            totals_row = {col: '' for col in df_manual.columns}
+            if 'Commission Paid' in df_manual.columns:
+                totals_row['Commission Paid'] = total_commission_paid
+            if 'Agency Gross Comm Received' in df_manual.columns:
+                totals_row['Agency Gross Comm Received'] = total_agency_comm_received
+            # Optionally display the totals row below the table
+            st.markdown('**Totals for Manual Entries:**')
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric('Total Commission Paid', f"${total_commission_paid:,.2f}")
+            with col2:
+                st.metric('Total Agency Gross Comm Received', f"${total_agency_comm_received:,.2f}")
 
         # --- Save changes to pending entries ---
         if st.button("Save Changes to Pending Entries", key="save_manual_entries_btn"):
