@@ -786,8 +786,33 @@ elif page == "Edit Policies in Database":
     edited_db_df = st.data_editor(format_currency_columns(format_dates_mmddyyyy(all_data[order].reset_index(drop=True))))
     if st.button("Update Database with Edits and Column Order"):
         edited_db_df = edited_db_df[order]
+        # --- Recalculate Balance Due for all rows before saving ---
+        def parse_money_bd(val):
+            import re
+            if val is None:
+                return 0.0
+            try:
+                return float(re.sub(r'[^0-9.-]', '', str(val)))
+            except Exception:
+                return 0.0
+        # Robust recalculation for both 'Balance Due' and 'BALANCE DUE'
+        balance_due_cols = [col for col in edited_db_df.columns if col.strip().lower() in ["balance due", "balance_due", "balance_due$", "balance due$"]]
+        agent_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() == "agent estimated comm $".lower()), None)
+        paid_amt_col = next((col for col in edited_db_df.columns if col.strip().lower() == "paid amount".lower()), None)
+        if balance_due_cols and agent_comm_col and paid_amt_col:
+            for bd_col in balance_due_cols:
+                edited_db_df[bd_col] = edited_db_df.apply(
+                    lambda row: parse_money_bd(row[agent_comm_col]) - parse_money_bd(row[paid_amt_col]), axis=1
+                )
+            st.info(f"Recalculated '{', '.join(balance_due_cols)}' for all rows.")
+        else:
+            st.warning("Could not find all required columns for Balance Due recalculation.")
         edited_db_df.to_sql('policies', engine, if_exists='replace', index=False)
-        st.success("Database updated with your edits and new column order!")
+        import time
+        time.sleep(0.5)  # Give DB a moment to update
+        all_data = pd.read_sql('SELECT * FROM policies', engine)
+        st.success("Database updated with your edits and new column order! Data reloaded.")
+        st.experimental_rerun()
 
 # --- Search & Filter ---
 elif page == "Search & Filter":
