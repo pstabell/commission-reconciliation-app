@@ -1214,7 +1214,50 @@ elif page == "Accounting":
                 payment_timestamp TEXT
             )
         '''))
+    # --- Ensure manual_commission_entries table exists for persistence ---
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text('''
+            CREATE TABLE IF NOT EXISTS manual_commission_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer TEXT,
+                policy_type TEXT,
+                policy_number TEXT,
+                effective_date TEXT,
+                transaction_type TEXT,
+                commission_paid REAL,
+                agency_commission_received REAL,
+                statement_date TEXT
+            )
+        '''))
+    # --- Ensure statement_details column exists in commission_payments ---
+    with engine.begin() as conn:
+        try:
+            conn.execute(sqlalchemy.text('ALTER TABLE commission_payments ADD COLUMN statement_details TEXT'))
+        except Exception:
+            pass  # Ignore if already exists
 
+    # --- Load manual entries from DB if session state is empty ---
+    if "manual_commission_rows" not in st.session_state or not st.session_state["manual_commission_rows"]:
+        manual_entries_df = pd.read_sql('SELECT * FROM manual_commission_entries', engine)
+        if not manual_entries_df.empty:
+            # Convert DB rows to dicts for session state
+            st.session_state["manual_commission_rows"] = [
+                {
+                    "Customer": row["customer"],
+                    "Policy Type": row["policy_type"],
+                    "Policy Number": row["policy_number"],
+                    "Effective Date": row["effective_date"],
+                    "Transaction Type": row["transaction_type"],
+                    "Commission Paid": row["commission_paid"],
+                    "Agency Commission Received $": row["agency_commission_received"],
+                    "Statement Date": row["statement_date"]
+                }
+                for _, row in manual_entries_df.iterrows()
+            ]
+        else:
+            st.session_state["manual_commission_rows"] = []
+
+    # --- Accounting UI code continues here ---
     st.markdown("## Reconcile Commission Statement")
     entry_mode = st.radio("How would you like to enter your commission statement?", ["Upload File", "Manual Entry"], key="reconcile_entry_mode")
     statement_df = None
@@ -1300,6 +1343,8 @@ elif page == "Accounting":
     if st.session_state["manual_commission_rows"]:
         # Always display Statement Date as MM/DD/YYYY or blank
         display_rows = []
+        # Load current policies from DB for math/effect preview
+        policies_df = pd.read_sql('SELECT * FROM policies', engine)
         for idx, row in enumerate(st.session_state["manual_commission_rows"]):
             date_val = row.get("Statement Date", "")
             if date_val:
@@ -1316,32 +1361,105 @@ elif page == "Accounting":
             # Ensure Transaction Type is present for all rows (for legacy rows)
             if "Transaction Type" not in display_row:
                 display_row["Transaction Type"] = ""
+            # --- Math/Effect column ---
+            match = policies_df[
+                (policies_df["Policy Number"].astype(str).str.strip() == str(row.get("Policy Number", "")).strip()) &
+                (policies_df["Effective Date"].astype(str).str.strip() == str(row.get("Effective Date", "")).strip()) &
+                (policies_df["Customer"].astype(str).str.strip() == str(row.get("Customer", "")).strip())
+            ]
+            def parse_money(val):
+                if isinstance(val, (int, float)):
+                    return float(val)
+                if isinstance(val, str):
+                    return float(val.replace('$', '').replace(',', '').strip() or 0)
+                return 0.0
+            # Commission Paid math
+            if not match.empty:
+                db_row = match.iloc[0].to_dict()
+                existing_comm = parse_money(db_row.get("Commission Paid", 0))
+                existing_agency = parse_money(db_row.get("Agency Commission Received $", 0))
+            else:
+                existing_comm = 0.0
+                existing_agency = 0.0
+            manual_comm = parse_money(row.get("Commission Paid", 0))
+            manual_agency = parse_money(row.get("Agency Commission Received $", 0))
+            # Transaction Type logic
+            tx_type = str(row.get("Transaction Type", "")).upper()
+            # Commission Paid math
+            if tx_type in ["END", "ENDORSEMENT", "ADJ", "ADJUSTMENT"]:
+                result_comm = existing_comm + manual_comm
+                op_comm = "+"
+                result_agency = existing_agency + manual_agency
+                op_agency = "+"
+                op_word_comm = "Add"
+                op_word_agency = "Add"
+            elif tx_type in ["CAN", "CANCEL"]:
+                result_comm = existing_comm - manual_comm
+                op_comm = "-"
+                result_agency = existing_agency - manual_agency
+                op_agency = "-"
+                op_word_comm = "Subtract"
+                op_word_agency = "Subtract"
+            else:
+                # For all other types, do not allow overwrite, just add
+                result_comm = existing_comm + manual_comm
+                op_comm = "+"
+                result_agency = existing_agency + manual_agency
+                op_agency = "+"
+                op_word_comm = "Add"
+                op_word_agency = "Add"
+            math_comm = (
+                f"Existing: ${existing_comm:,.2f}<br>"
+                f"{op_word_comm}: {op_comm}${abs(manual_comm):,.2f}<br>"
+                f"Result: ${result_comm:,.2f}"
+            )
+            math_agency = (
+                f"Existing: ${existing_agency:,.2f}<br>"
+                f"{op_word_agency}: {op_agency}${abs(manual_agency):,.2f}<br>"
+                f"Result: ${result_agency:,.2f}"
+            )
+            display_row["Math Effect: Commission Paid"] = math_comm
+            display_row["Math Effect: Agency Commission Received"] = math_agency
             display_rows.append(display_row)
         df_manual = pd.DataFrame(display_rows)
-        # Move 'Delete' column to the first position
+        # Move 'Delete' column to the first position and math effect columns to the end
         cols = df_manual.columns.tolist()
         if 'Delete' in cols:
             cols.insert(0, cols.pop(cols.index('Delete')))
-            df_manual = df_manual[cols]
-        edited_df = st.data_editor(df_manual, use_container_width=True, key="manual_comm_rows_editor", height=max(400, 40 + 40 * max(10, len(df_manual))))
+        # Move both math effect columns to the end
+        for col in ["Math Effect: Commission Paid", "Math Effect: Agency Commission Received"]:
+            if col in cols:
+                cols.append(cols.pop(cols.index(col)))
+        # Remove the obsolete 'Math/Effect' column if present
+        if 'Math/Effect' in cols:
+            cols.remove('Math/Effect')
+        df_manual = df_manual[cols]
+        # Show the table with math effect columns as non-editable
+        edited_df = st.data_editor(
+            df_manual,
+            use_container_width=True,
+            key="manual_comm_rows_editor",
+            height=max(400, 40 + 40 * max(10, len(df_manual))),
+            disabled=[col for col in df_manual.columns if col.startswith('Math Effect:')]
+        )
 
         # --- Show totals row at the bottom ---
         if not df_manual.empty:
-            # Only sum numeric columns
-            numeric_cols = [col for col in df_manual.columns if df_manual[col].dtype in [float, int] or pd.api.types.is_numeric_dtype(df_manual[col])]
-            # Exclude 'Delete' column from totals
-            numeric_cols = [col for col in numeric_cols if col != 'Delete']
+            # Only sum numeric columns, exclude 'Delete' and math effect columns
+            numeric_cols = [col for col in df_manual.columns if pd.api.types.is_numeric_dtype(df_manual[col]) and col not in ['Delete', 'Math Effect: Commission Paid', 'Math Effect: Agency Commission Received']]
             totals = {col: df_manual[col].apply(pd.to_numeric, errors='coerce').sum() for col in numeric_cols}
             # Build a totals row with blank for non-numeric columns
             totals_row = {col: (totals[col] if col in totals else "") for col in df_manual.columns}
-            # Label the first non-delete column as 'TOTAL'
+            # Label the first non-delete, non-math effect column as 'TOTAL'
             for col in df_manual.columns:
-                if col != 'Delete':
+                if col not in ['Delete', 'Math Effect: Commission Paid', 'Math Effect: Agency Commission Received']:
                     totals_row[col] = 'TOTAL'
                     break
-            # Show totals row below the table
+            # --- Add one extra blank row for visual space ---
+            blank_row = {col: "" for col in df_manual.columns}
+            totals_df = pd.DataFrame([totals_row, blank_row])
             st.markdown("**Totals for all manual entries below:**")
-            st.dataframe(pd.DataFrame([totals_row]), use_container_width=True, height=50)
+            st.dataframe(totals_df, use_container_width=True, height=50*2)
 
         # --- Save changes to pending entries ---
         if st.button("Save Changes to Pending Entries", key="save_manual_entries_btn"):
@@ -1364,15 +1482,53 @@ elif page == "Accounting":
                     new_rows.append(new_row)
             st.session_state["manual_commission_rows"] = new_rows
             st.success("Pending entries updated.")
+            # Also update the DB table to match session state
+            with engine.begin() as conn:
+                conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
+                for row in new_rows:
+                    conn.execute(sqlalchemy.text('''
+                        INSERT INTO manual_commission_entries (customer, policy_type, policy_number, effective_date, transaction_type, commission_paid, agency_commission_received, statement_date)
+                        VALUES (:customer, :policy_type, :policy_number, :effective_date, :transaction_type, :commission_paid, :agency_commission_received, :statement_date)
+                    '''), {
+                        "customer": row.get("Customer", ""),
+                        "policy_type": row.get("Policy Type", ""),
+                        "policy_number": row.get("Policy Number", ""),
+                        "effective_date": row.get("Effective Date", ""),
+                        "transaction_type": row.get("Transaction Type", ""),
+                        "commission_paid": row.get("Commission Paid", 0.0),
+                        "agency_commission_received": row.get("Agency Commission Received $", 0.0),
+                        "statement_date": row.get("Statement Date", "")
+                    })
 
         # --- Clear manual entries ---
         if st.button("Clear Manual Entries", key="clear_manual_entries_btn"):
             st.session_state["manual_commission_rows"] = []
+            # Also clear the DB table
+            with engine.begin() as conn:
+                conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
             st.success("All manual entries cleared.")
 
         # --- Use manual entries for reconciliation ---
         if st.button("Use Manual Entries for Reconciliation", key="use_manual_entries_btn"):
             st.session_state["reconcile_with_manual_entries"] = True
+            # Save all current manual entries to DB (overwrite)
+
+            with engine.begin() as conn:
+                conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
+                for row in st.session_state["manual_commission_rows"]:
+                    conn.execute(sqlalchemy.text('''
+                        INSERT INTO manual_commission_entries (customer, policy_type, policy_number, effective_date, transaction_type, commission_paid, agency_commission_received, statement_date)
+                        VALUES (:customer, :policy_type, :policy_number, :effective_date, :transaction_type, :commission_paid, :agency_commission_received, :statement_date)
+                    '''), {
+                        "customer": row.get("Customer", ""),
+                        "policy_type": row.get("Policy Type", ""),
+                        "policy_number": row.get("Policy Number", ""),
+                        "effective_date": row.get("Effective Date", ""),
+                        "transaction_type": row.get("Transaction Type", ""),
+                        "commission_paid": row.get("Commission Paid", 0.0),
+                        "agency_commission_received": row.get("Agency Commission Received $", 0.0),
+                        "statement_date": row.get("Statement Date", "")
+                    })
             st.success("Manual entries ready for reconciliation.")
 
         # --- Payment/Reconciliation History Viewer ---
@@ -1382,6 +1538,44 @@ elif page == "Accounting":
         if not payment_history.empty:
             payment_history["statement_date"] = pd.to_datetime(payment_history["statement_date"], errors="coerce").dt.strftime("%m/%d/%Y").fillna("")
             payment_history["payment_timestamp"] = pd.to_datetime(payment_history["payment_timestamp"], errors="coerce").dt.strftime("%m/%d/%Y %I:%M %p").fillna("")
-            st.dataframe(payment_history, use_container_width=True, height=250)
+
+            for idx, row in payment_history.iterrows():
+                with st.expander(f"Statement Date: {row['statement_date']} | Customer: {row['customer']} | Amount: ${row['payment_amount']:,.2f} | Time: {row['payment_timestamp']}"):
+                    # Show the full commission statement as a locked table
+                    try:
+                        details = json.loads(row.get('statement_details', '[]'))
+                        if details:
+                            df_details = pd.DataFrame(details)
+                            st.dataframe(df_details, use_container_width=True, height=min(400, 40 + 40 * len(df_details)))
+                        else:
+                            st.info("No statement details available for this record.")
+                    except Exception:
+                        st.info("No statement details available or could not parse.")
         else:
             st.info("No payment/reconciliation history found.")
+
+    # --- Reconcile & Commit manual entries ---
+    if st.button("Reconcile & Commit Manual Entries", key="reconcile_commit_btn"):
+        import datetime, json
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        n_committed = 0
+        # Save the full statement as JSON for audit
+        statement_json = json.dumps(st.session_state["manual_commission_rows"])
+        with engine.begin() as conn:
+            for row in st.session_state["manual_commission_rows"]:
+                conn.execute(sqlalchemy.text('''
+                    INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
+                    VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
+                '''), {
+                    "policy_number": row.get("Policy Number", ""),
+                    "customer": row.get("Customer", ""),
+                    "payment_amount": row.get("Commission Paid", 0.0),
+                    "statement_date": row.get("Statement Date", ""),
+                    "payment_timestamp": now_str,
+                    "statement_details": statement_json
+                })
+                n_committed += 1
+        st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
+        st.session_state["manual_commission_rows"] = []
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
