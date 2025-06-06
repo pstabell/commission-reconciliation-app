@@ -1645,3 +1645,26 @@ elif page == "Accounting":
                 # --- Clear the mapping file after successful commit
                 if os.path.exists(mapping_file):
                     os.remove(mapping_file)
+
+        # --- Show totals for each reconciled statement (history) ---
+        if not df_manual.empty and 'Statement Date' in df_manual.columns:
+            # Group by Statement Date and sum totals
+            summary = (
+                df_manual.groupby('Statement Date', dropna=False)
+                .agg({
+                    'Commission Paid': lambda x: pd.to_numeric(x, errors='coerce').sum(),
+                    'Agency Gross Comm Received': lambda x: pd.to_numeric(x, errors='coerce').sum()
+                })
+                .reset_index()
+            )
+            summary = summary.sort_values('Statement Date', ascending=False)
+            st.markdown('**Reconciled Statement History Totals:**')
+            st.dataframe(
+                summary.rename(columns={
+                    'Statement Date': 'Statement Date',
+                    'Commission Paid': 'Total Commission Paid',
+                    'Agency Gross Comm Received': 'Total Agency Gross Comm Received'
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
