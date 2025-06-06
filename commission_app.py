@@ -1579,3 +1579,43 @@ elif page == "Accounting":
         st.session_state["manual_commission_rows"] = []
         with engine.begin() as conn:
             conn.execute(sqlalchemy.text('DELETE FROM manual_commission_entries'))
+
+# --- Help Page ---
+elif page == "Help":
+    st.title("Help & User Guide")
+    st.markdown("""
+    ## Welcome to the Sales Commissions App Help
+    This app helps you manage, reconcile, and audit insurance sales commissions with robust manual entry, reporting, and database tools.
+
+    ### Navigation Overview
+    - **Dashboard**: View high-level metrics and search/edit clients.
+    - **Reports**: Generate custom reports, filter by date, customer, or balance due, and export as CSV/Excel.
+    - **All Policies in Database**: Browse all policy records in a scrollable table.
+    - **Add New Policy Transaction**: Add new sales or endorsements, with calculators for premium and agency revenue.
+    - **Upload & Reconcile**: Upload commission statements (Excel, CSV, PDF), map columns, and save to the database.
+    - **Edit Policies in Database**: Edit, reorder, and update all policy records directly.
+    - **Search & Filter**: Search by any column, filter by balance due, and export filtered results.
+    - **Admin Panel**: Advanced tools for column mapping, adding/removing/renaming columns, and database backup/restore.
+    - **Accounting**: Manual entry and reconciliation workflow, with math previews, audit/history, and persistent pending entries.
+
+    ### Key Features
+    - **Manual Entry & Reconciliation**: Enter commission payments manually, preview math effects, and commit to payment history.
+    - **Audit & History**: All reconciliations are saved with full statement details for review.
+    - **Database Backup/Restore**: Always back up before making schema changes. Use the Admin Panel for one-click backup/restore.
+    - **Column Mapping**: Map uploaded spreadsheet columns to app fields for seamless imports.
+    - **Formulas**: See the Admin Panel for current calculation logic.
+
+    ### Troubleshooting
+    - **Missing Data**: If you don't see recent transactions, check if you are using the correct database (local vs. cloud) and that your data was saved.
+    - **Help Page Empty**: If this page is blank, contact your developer to restore the Help content.
+    - **Database Issues**: Use the Admin Panel to back up and restore. If you encounter errors, restore from the latest backup.
+    - **GitHub Sync**: Pushing code/database to GitHub does NOT affect the cloud app's database.
+
+    ### Support & Contact
+    - For technical support, contact your developer or IT support team.
+    - For feature requests or bug reports, open an issue on GitHub or email your support contact.
+    - For detailed usage or troubleshooting, refer to this Help page or ask Copilot for guidance.
+
+    ---
+    **Tip:** Use the sidebar to navigate between pages. For best results, use Google Chrome and keep your database backed up regularly.
+    """)
