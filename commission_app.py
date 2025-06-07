@@ -1543,49 +1543,66 @@ elif page == "Accounting":
         mapping = saved_mapping.copy()
         if new_unmatched:
             st.warning("Some columns in your manual entries do not match the database columns. Please map each unmatched column to a database column or choose to skip it. This mapping will be remembered for future reconciliations.")
+            # Use session state to store mapping selections until user confirms
+            if "pending_manual_mapping" not in st.session_state:
+                st.session_state["pending_manual_mapping"] = {}
             for col in new_unmatched:
                 options = ["(Skip)"] + db_columns
-                selected = st.selectbox(f"Map manual entry column '{col}' to database column:", options, key=f"recon_map_{col}")
-                mapping[col] = selected if selected != "(Skip)" else None
-            if st.button("Confirm Mapping and Commit", key="confirm_mapping_commit_btn"):
-                # Save mapping for future use
-                with open(mapping_file, "w") as f:
-                    json.dump(mapping, f)
-                # Apply mapping to manual entries
-                mapped_entries = []
-                for row in st.session_state["manual_commission_rows"]:
-                    mapped_row = {}
-                    for k, v in row.items():
-                        if k in mapping and mapping[k]:
-                            mapped_row[mapping[k]] = v
-                        elif k in db_columns:
-                            mapped_row[k] = v
-                    mapped_entries.append(mapped_row)
-                # Now commit mapped_entries to the database as before
-                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                n_committed = 0
-                statement_json = json.dumps(mapped_entries)
-                with engine.begin() as conn:
-                    for row in mapped_entries:
-                        conn.execute(sqlalchemy.text('''
-                            INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
-                            VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
-                        '''), {
-                            "policy_number": row.get("Policy Number", ""),
-                            "customer": row.get("Customer", ""),
-                            "payment_amount": row.get("Commission Paid", 0.0),
-                            "statement_date": row.get("Statement Date", ""),
-                            "payment_timestamp": now_str,
-                            "statement_details": statement_json
-                        })
-                        n_committed += 1
-                st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
-                st.session_state["manual_commission_rows"] = []
-                # --- Clear the mapping file after successful commit
-                if os.path.exists(mapping_file):
-                    os.remove(mapping_file)
-            else:
-                st.stop()
+                default_val = st.session_state["pending_manual_mapping"].get(col, "(Skip)")
+                selected = st.selectbox(
+                    f"Map manual entry column '{col}' to database column:",
+                    options,
+                    key=f"recon_map_{col}",
+                    index=options.index(default_val) if default_val in options else 0
+                )
+                st.session_state["pending_manual_mapping"][col] = selected
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Confirm Mapping and Commit", key="confirm_mapping_commit_btn"):
+                    # Save mapping for future use
+                    for k, v in st.session_state["pending_manual_mapping"].items():
+                        mapping[k] = v if v != "(Skip)" else None
+                    with open(mapping_file, "w") as f:
+                        json.dump(mapping, f)
+                    # Apply mapping to manual entries
+                    mapped_entries = []
+                    for row in st.session_state["manual_commission_rows"]:
+                        mapped_row = {}
+                        for k, v in row.items():
+                            if k in mapping and mapping[k]:
+                                mapped_row[mapping[k]] = v
+                            elif k in db_columns:
+                                mapped_row[k] = v
+                        mapped_entries.append(mapped_row)
+                    # Now commit mapped_entries to the database as before
+                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    n_committed = 0
+                    statement_json = json.dumps(mapped_entries)
+                    with engine.begin() as conn:
+                        for row in mapped_entries:
+                            conn.execute(sqlalchemy.text('''
+                                INSERT INTO commission_payments (policy_number, customer, payment_amount, statement_date, payment_timestamp, statement_details)
+                                VALUES (:policy_number, :customer, :payment_amount, :statement_date, :payment_timestamp, :statement_details)
+                            '''), {
+                                "policy_number": row.get("Policy Number", ""),
+                                "customer": row.get("Customer", ""),
+                                "payment_amount": row.get("Commission Paid", 0.0),
+                                "statement_date": row.get("Statement Date", ""),
+                                "payment_timestamp": now_str,
+                                "statement_details": statement_json
+                            })
+                            n_committed += 1
+                    st.success(f"Reconciled and committed {n_committed} manual entries to payment history.")
+                    st.session_state["manual_commission_rows"] = []
+                    st.session_state.pop("pending_manual_mapping", None)
+                    if os.path.exists(mapping_file):
+                        os.remove(mapping_file)
+                    st.experimental_rerun()
+            with col2:
+                if st.button("Cancel", key="cancel_mapping_commit_btn"):
+                    st.session_state.pop("pending_manual_mapping", None)
+                    st.info("Mapping cancelled. No changes committed.")
+                    st.experimental_rerun()
         else:
             # If mapping exists, use it
             if mapping:
