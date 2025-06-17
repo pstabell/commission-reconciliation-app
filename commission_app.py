@@ -1656,11 +1656,69 @@ def main():
                                     "agency_commission_received": float(row.get("Agency Comm Received (STMT)", 0)),
                                     "statement_date": statement_date.strftime('%Y-%m-%d')
                                 })
+                          # --- Insert reconciled entries into main policies table ---
+                        # This makes them appear in "All Policies" page
+                        db_columns = all_data.columns.tolist()
+                        entries_added = 0
+                        
+                        for entry in st.session_state["manual_commission_rows"]:
+                            # Create a new policy record with proper field mapping
+                            new_policy = {}
+                            
+                            # Map the reconciled fields to the policies table structure
+                            for col in db_columns:
+                                if col == "Customer":
+                                    new_policy[col] = entry.get("Customer", "")
+                                elif col == "Policy Type":
+                                    new_policy[col] = entry.get("Policy Type", "")
+                                elif col == "Policy Number":
+                                    new_policy[col] = entry.get("Policy Number", "")
+                                elif col == "Effective Date":
+                                    new_policy[col] = entry.get("Effective Date", "")
+                                elif col == "Client ID":
+                                    new_policy[col] = entry.get("Client ID", "")
+                                elif col == "Transaction ID":
+                                    new_policy[col] = entry.get("Transaction ID", "")
+                                elif col == "NEW/RWL":
+                                    # Map Transaction Type to NEW/RWL
+                                    transaction_type = entry.get("Transaction Type", "")
+                                    if transaction_type.upper() in ["NEW", "NBS", "STL", "BOR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"]:
+                                        new_policy[col] = transaction_type.upper()
+                                    else:
+                                        new_policy[col] = "RWL"  # Default
+                                elif col == "Agent Paid Amount (STMT)":
+                                    new_policy[col] = float(entry.get("Amount Paid", 0))
+                                elif col == "Statement Date" or col == "STMT DATE":
+                                    new_policy[col] = statement_date.strftime('%m/%d/%Y')
+                                elif col == "Policy Origination Date":
+                                    # Use effective date if available, otherwise statement date
+                                    eff_date = entry.get("Effective Date", "")
+                                    new_policy[col] = eff_date if eff_date else statement_date.strftime('%m/%d/%Y')
+                                elif col == "Paid":
+                                    # Mark as paid since we're reconciling a payment
+                                    new_policy[col] = "Yes"
+                                elif col in ["Premium Sold", "Agency Revenue", "Calculated Commission", "Agent Estimated Comm $"]:
+                                    # Set monetary fields to 0 or use agency commission received if applicable
+                                    if col == "Agency Revenue" and "Agency Comm Received (STMT)" in entry:
+                                        new_policy[col] = float(entry.get("Agency Comm Received (STMT)", 0))
+                                    else:
+                                        new_policy[col] = 0.0
+                                elif col in ["Policy Gross Comm %", "Agent Comm (New 50% RWL 25%)", "Gross Agency Comm %"]:
+                                    # Set percentage fields to default values
+                                    new_policy[col] = 0.0
+                                else:
+                                    # Set all other fields to empty string
+                                    new_policy[col] = ""
+                            
+                            # Insert into policies table
+                            new_policy_df = pd.DataFrame([new_policy])
+                            new_policy_df.to_sql('policies', engine, if_exists='append', index=False)
+                            entries_added += 1
                         
                         # Clear the manual entries after successful reconciliation
                         st.session_state["manual_commission_rows"] = []
                         
-                        st.success(f"✅ Commission statement reconciled and saved to history! Statement date: {statement_date.strftime('%m/%d/%Y')}")
+                        st.success(f"✅ Commission statement reconciled and saved to history! {entries_added} transactions also added to main database and will appear in 'All Policies' page. Statement date: {statement_date.strftime('%m/%d/%Y')}")
                         st.rerun()
                         
                     except Exception as e:
