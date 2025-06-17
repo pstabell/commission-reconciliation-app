@@ -1679,8 +1679,7 @@ def main():
                                     new_policy[col] = entry.get("Client ID", "")
                                 elif col == "Transaction ID":
                                     new_policy[col] = entry.get("Transaction ID", "")
-                                elif col == "NEW/RWL":
-                                    # Map Transaction Type to NEW/RWL
+                                elif col == "NEW/RWL":                                    # Map Transaction Type to NEW/RWL
                                     transaction_type = entry.get("Transaction Type", "")
                                     if transaction_type.upper() in ["NEW", "NBS", "STL", "BOR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"]:
                                         new_policy[col] = transaction_type.upper()
@@ -1698,8 +1697,11 @@ def main():
                                     # Mark as paid since we're reconciling a payment
                                     new_policy[col] = "Yes"
                                 elif col in ["Premium Sold", "Agency Revenue", "Calculated Commission", "Agent Estimated Comm $"]:
-                                    # Set monetary fields to 0 or use agency commission received if applicable
-                                    if col == "Agency Revenue" and "Agency Comm Received (STMT)" in entry:
+                                    # Set monetary fields to use actual values from reconciliation
+                                    if col == "Agent Estimated Comm $":
+                                        # Use the Amount Paid as the commission amount for reconciled entries
+                                        new_policy[col] = float(entry.get("Amount Paid", 0))
+                                    elif col == "Agency Revenue" and "Agency Comm Received (STMT)" in entry:
                                         new_policy[col] = float(entry.get("Agency Comm Received (STMT)", 0))
                                     else:
                                         new_policy[col] = 0.0
