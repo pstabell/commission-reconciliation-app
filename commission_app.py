@@ -57,15 +57,28 @@ def apply_css():
             margin-left: 240px !important;
             width: calc(100vw - 240px) !important;
         }
-        
-        /* Force all main content to respect sidebar space */
+          /* Force all main content to respect sidebar space */
         section.main {
             margin-left: 240px !important;
             width: calc(100vw - 240px) !important;
         }
+        
+        /* Target the root app container - this is critical! */
+        [data-testid="stAppViewContainer"] {
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+            max-width: calc(100vw - 240px) !important;
+        }
+        
+        /* Also target the main header area */
+        [data-testid="stHeader"] {
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+        }
+        
         /* Make tables and editors use reasonable width */
         .stDataFrame, .stDataEditor {
-        }        /* Force sidebar to be permanently visible and disable all collapse functionality */
+        }/* Force sidebar to be permanently visible and disable all collapse functionality */
         section[data-testid="stSidebar"] {
             min-width: 240px !important;
             max-width: 240px !important;
