@@ -34,12 +34,15 @@ def apply_css():
     with st.container():
         st.markdown(
             """
-            <style>            /* Remove default padding and maximize main block width */
-            .main .block-container {
+            <style>        /* Remove default padding and maximize main block width */
+        .main .block-container {
             padding-top: 1rem;
             padding-bottom: 0rem;
             padding-left: 1.5rem;
             padding-right: 1.5rem;
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+            max-width: calc(100vw - 240px) !important;
         }
         /* Make tables and editors use reasonable width */
         .stDataFrame, .stDataEditor {
