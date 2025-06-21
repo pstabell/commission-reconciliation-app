@@ -11,6 +11,22 @@ import streamlit_sortables
 import os
 import json
 import pdfplumber
+import logging
+from column_mapping_config import (
+    column_mapper, get_mapped_column, get_ui_field_name, 
+    is_calculated_field, safe_column_reference
+)
+
+# Configure logging for database protection system
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('commission_app.log'),
+        logging.StreamHandler()
+    ]
+)
+
 st.write(':green[App started - debug message]')
 
 def apply_css():
@@ -75,7 +91,7 @@ def apply_css():
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
-        /* Add yellow border to Enter Premium Sold and see Agency Revenue input */
+        /* Add yellow border to Enter Premium Sold and see Agency Estimated Comm/Revenue (CRM) input */
         input[type="number"][aria-label="Premium Sold"] {
             background-color: #fff3b0 !important;
             border: 2px solid #e6a800 !important;
@@ -128,36 +144,35 @@ def apply_css():
             background-color: #fff3b0 !important;
             border-color: #e6a800 !important;
             color: #222 !important;
-        }
-        /* Force highlight for all selectboxes labeled 'NEW/RWL' everywhere */
+        }        /* Force highlight for all selectboxes labeled 'Transaction Type' everywhere */
         label:has(> div[data-baseweb="select"]) {
             background-color: #fff3b0 !important;
             border-radius: 6px !important;
             padding: 2px 4px !important;
         }
-        /* Also target selectbox input and dropdown for 'NEW/RWL' */
-        [aria-label="NEW/RWL"] > div[data-baseweb="select"],
-        [aria-label="NEW/RWL"] [data-baseweb="select"],
-        [aria-label="NEW/RWL"] [class*="css-1wa3eu0-placeholder"],
-        [aria-label="NEW/RWL"] [class*="css-1uccc91-singleValue"],
-        [aria-label="NEW/RWL"] [class*="css-1okebmr-indicatorSeparator"],
-        [aria-label="NEW/RWL"] [class*="css-1pahdxg-control"],
-        [aria-label="NEW/RWL"] [class*="css-1s2u09g-control"],
-        [aria-label="NEW/RWL"] [class*="css-1n7v3ny-option"],
-        [aria-label="NEW/RWL"] [class*="css-9gakcf-option"],
-        [aria-label="NEW/RWL"] [class*="css-1n6sfyn-MenuList"],
-        [aria-label="NEW/RWL"] [class*="css-1n6sfyn-MenuList"] * {
+        /* Also target selectbox input and dropdown for 'Transaction Type' */
+        [aria-label="Transaction Type"] > div[data-baseweb="select"],
+        [aria-label="Transaction Type"] [data-baseweb="select"],
+        [aria-label="Transaction Type"] [class*="css-1wa3eu0-placeholder"],
+        [aria-label="Transaction Type"] [class*="css-1uccc91-singleValue"],
+        [aria-label="Transaction Type"] [class*="css-1okebmr-indicatorSeparator"],
+        [aria-label="Transaction Type"] [class*="css-1pahdxg-control"],
+        [aria-label="Transaction Type"] [class*="css-1s2u09g-control"],
+        [aria-label="Transaction Type"] [class*="css-1n7v3ny-option"],
+        [aria-label="Transaction Type"] [class*="css-9gakcf-option"],
+        [aria-label="Transaction Type"] [class*="css-1n6sfyn-MenuList"],
+        [aria-label="Transaction Type"] [class*="css-1n6sfyn-MenuList"] * {
             background-color: #fff3b0 !important;
             border-color: #e6a800 !important;
             color: #222 !important;
         }
-        [aria-label="NEW/RWL"] > div[data-baseweb="select"] {
+        [aria-label="Transaction Type"] > div[data-baseweb="select"] {
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
-        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:focus,
-        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:active,
-        [aria-label="NEW/RWL"] > div[data-baseweb="select"]:focus-visible {
+        [aria-label="Transaction Type"] > div[data-baseweb="select"]:focus,
+        [aria-label="Transaction Type"] > div[data-baseweb="select"]:active,
+        [aria-label="Transaction Type"] > div[data-baseweb="select"]:focus-visible {
             border: 2px solid #e6a800 !important;
             box-shadow: none !important;
             outline: none !important;
@@ -177,12 +192,17 @@ def format_currency(val):
         return val
 
 def format_dates_mmddyyyy(df):
-    """Format date columns in MM/DD/YYYY format."""
-    date_columns = ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]
-    for col in date_columns:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-            df[col] = df[col].dt.strftime("%m/%d/%Y")
+    """Format date columns in MM/DD/YYYY format using mapped column names."""
+    date_field_names = ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]
+    
+    for ui_field in date_field_names:
+        # Try mapped column first, then fallback to exact match
+        mapped_col = get_mapped_column(ui_field)
+        target_col = mapped_col if mapped_col and mapped_col in df.columns else ui_field
+        
+        if target_col in df.columns:
+            df[target_col] = pd.to_datetime(df[target_col], errors="coerce")
+            df[target_col] = df[target_col].dt.strftime("%m/%d/%Y")
     return df
 
 CURRENCY_COLUMNS = [
@@ -192,13 +212,20 @@ CURRENCY_COLUMNS = [
     "Agent Paid Amount (STMT)",
     "Estimated Agent Comm",
     "Estimated Agent Comm (New 50% Renewal 25%)",
-    "Policy Balance Due"  # Updated to use the new calculated column
+    "Policy Balance Due",  # Updated to use the new calculated column
+    "Agent Estimated Comm $",
+    "Agency Estimated Comm/Revenue (CRM)",
+    "Agency Estimated Comm/Revenue (CRM)"
 ]
 
 def format_currency_columns(df):
-    for col in CURRENCY_COLUMNS:
-        if col in df.columns:
-            df[col] = df[col].apply(format_currency)
+    # Use mapped column names for currency formatting
+    for ui_field in CURRENCY_COLUMNS:
+        mapped_col = get_mapped_column(ui_field)
+        if mapped_col and mapped_col in df.columns:
+            df[mapped_col] = df[mapped_col].apply(format_currency)
+        elif ui_field in df.columns:  # Fallback to original name
+            df[ui_field] = df[ui_field].apply(format_currency)
     return df
 
 # --- Helper Functions ---
@@ -213,18 +240,30 @@ def generate_transaction_id(length=7):
 # --- Commission calculation function ---
 def calculate_commission(row):
     try:
-        revenue = float(row["Agency Revenue"])
-    except (ValueError, TypeError):
+        agency_revenue_col = get_mapped_column("Agency Estimated Comm/Revenue (CRM)")
+        revenue = float(row[agency_revenue_col]) if agency_revenue_col else 0.0
+    except (ValueError, TypeError, KeyError):
         revenue = 0.0
-    if row["NEW/RWL"] in ["NEW", "NBS", "STL", "BoR"]:
-        return revenue * 0.50
-    elif row["NEW/RWL"] in ["END", "PCH"]:
-        return revenue * 0.50 if row["Policy Origination Date"] == row["Effective Date"] else revenue * 0.25
-    elif row["NEW/RWL"] in ["RWL", "REWRITE"]:
-        return revenue * 0.25
-    elif row["NEW/RWL"] in ["CAN", "XCL"]:
-        return 0
-    else:
+    
+    transaction_type_col = get_mapped_column("Transaction Type")
+    policy_orig_col = get_mapped_column("Policy Origination Date") 
+    effective_date_col = get_mapped_column("Effective Date")
+    
+    try:
+        transaction_type = row.get(transaction_type_col, "") if transaction_type_col else ""
+        if transaction_type in ["NEW", "NBS", "STL", "BoR"]:
+            return revenue * 0.50
+        elif transaction_type in ["END", "PCH"]:
+            policy_orig = row.get(policy_orig_col, "") if policy_orig_col else ""
+            effective_date = row.get(effective_date_col, "") if effective_date_col else ""
+            return revenue * 0.50 if policy_orig == effective_date else revenue * 0.25
+        elif transaction_type in ["RWL", "REWRITE"]:
+            return revenue * 0.25
+        elif transaction_type in ["CAN", "XCL"]:
+            return 0
+        else:
+            return revenue * 0.25
+    except (KeyError, TypeError):
         return revenue * 0.25
 
 def main():
@@ -262,24 +301,229 @@ def main():
     # --- Database connection ---
     engine = sqlalchemy.create_engine('sqlite:///commissions.db')
 
-    # --- Ensure 'policies' table exists ---
-    with engine.begin() as conn:
-        conn.execute(sqlalchemy.text("""
-            CREATE TABLE IF NOT EXISTS policies (
-                "Customer" TEXT,
-                "Policy Type" TEXT,
-                "Carrier Name" TEXT,
-                "Policy Number" TEXT,
-                "NEW/RWL" TEXT,
-                "Agency Revenue" REAL,
-                "Policy Origination Date" TEXT,
-                "Effective Date" TEXT,
-                "Paid" TEXT,
-                "Calculated Commission" REAL,
-                "Client ID" TEXT,
-                "Transaction ID" TEXT
-            )
-        """))
+    # ============================================================================
+    # PHASE 1: DATABASE PROTECTION FUNCTIONS
+    # Added: June 20, 2025 - Database Protection Implementation
+    # Purpose: Prevent data loss and schema corruption during app operations
+    # ============================================================================
+    
+    def create_automatic_backup():
+        """Create timestamped backup of database before any schema changes."""
+        try:
+            import shutil
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"commissions_AUTO_BACKUP_{timestamp}.db"
+            shutil.copy2("commissions.db", backup_path)
+            logging.info(f"Database backup created: {backup_path}")
+            return backup_path
+        except Exception as e:
+            logging.error(f"Failed to create database backup: {e}")
+            return None
+    
+    def get_current_schema():
+        """Get current table schema from database."""
+        try:
+            with engine.begin() as conn:
+                result = conn.execute(sqlalchemy.text("PRAGMA table_info(policies)")).fetchall()
+                schema = {row[1]: row[2] for row in result}  # column_name: data_type
+                logging.info(f"Current schema retrieved: {len(schema)} columns")
+                return schema
+        except Exception as e:
+            logging.error(f"Failed to get current schema: {e}")
+            return {}
+    
+    def ensure_schema_integrity():
+        """Ensure existing schema is preserved and not overwritten."""
+        try:
+            # Check if table exists
+            with engine.begin() as conn:
+                result = conn.execute(sqlalchemy.text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='policies'"
+                )).fetchone()
+                
+                if result:
+                    # Table exists - preserve its schema
+                    current_schema = get_current_schema()
+                    if current_schema:
+                        logging.info(f"Preserving existing schema with {len(current_schema)} columns")
+                        return True
+                
+                # Table doesn't exist - safe to create
+                logging.info("Table doesn't exist - safe to create new schema")
+                return False
+        except Exception as e:
+            logging.error(f"Schema integrity check failed: {e}")
+            return False
+    
+    def safe_add_column(column_name, column_type="TEXT", default_value=""):
+        """Safely add a column to the policies table."""
+        try:
+            # Create backup first
+            backup_path = create_automatic_backup()
+            if not backup_path:
+                logging.error("Cannot add column - backup failed")
+                return False
+            
+            with engine.begin() as conn:
+                # Check if column already exists
+                existing_schema = get_current_schema()
+                if column_name in existing_schema:
+                    logging.info(f"Column '{column_name}' already exists")
+                    return True
+                
+                # Add the column
+                sql = f'ALTER TABLE policies ADD COLUMN "{column_name}" {column_type} DEFAULT "{default_value}"'
+                conn.execute(sqlalchemy.text(sql))
+                logging.info(f"Column '{column_name}' added successfully")
+                return True
+                
+        except Exception as e:
+            logging.error(f"Failed to add column '{column_name}': {e}")
+            return False
+    
+    def safe_rename_column(old_name, new_name):
+        """Safely rename a column in the policies table."""
+        try:
+            # Create backup first
+            backup_path = create_automatic_backup()
+            if not backup_path:
+                logging.error("Cannot rename column - backup failed")
+                return False
+            
+            with engine.begin() as conn:
+                # Check if old column exists
+                existing_schema = get_current_schema()
+                if old_name not in existing_schema:
+                    logging.error(f"Source column '{old_name}' does not exist")
+                    return False
+                
+                if new_name in existing_schema:
+                    logging.info(f"Target column '{new_name}' already exists")
+                    return True
+                
+                # SQLite doesn't support direct column rename, so we need to recreate the table
+                # Get all data first
+                df = pd.read_sql('SELECT * FROM policies', conn)
+                
+                # Rename column in DataFrame
+                if old_name in df.columns:
+                    df = df.rename(columns={old_name: new_name})
+                    
+                    # Create temporary table with new schema
+                    df.to_sql('policies_temp', conn, if_exists='replace', index=False)
+                    
+                    # Drop old table and rename temp table
+                    conn.execute(sqlalchemy.text('DROP TABLE policies'))
+                    conn.execute(sqlalchemy.text('ALTER TABLE policies_temp RENAME TO policies'))
+                    
+                    logging.info(f"Column renamed from '{old_name}' to '{new_name}' successfully")
+                    return True
+                else:
+                    logging.error(f"Column '{old_name}' not found in data")
+                    return False
+                    
+        except Exception as e:
+            logging.error(f"Failed to rename column '{old_name}' to '{new_name}': {e}")
+            return False
+    
+    def check_schema_consistency():
+        """Check if database schema is consistent and report any issues."""
+        try:
+            issues = []
+            current_schema = get_current_schema()
+            
+            if not current_schema:
+                issues.append("Cannot access table schema")
+                return issues
+            
+            # Check for minimum required columns
+            required_columns = ["Customer", "Policy Type", "Carrier Name", "Policy Number"]
+            for col in required_columns:
+                if col not in current_schema:
+                    issues.append(f"Missing required column: {col}")
+            
+            # Log schema health
+            if issues:
+                logging.warning(f"Schema issues found: {issues}")
+            else:
+                logging.info("Schema consistency check passed")
+            
+            return issues
+            
+        except Exception as e:
+            logging.error(f"Schema consistency check failed: {e}")
+            return [f"Check failed: {e}"]    # ============================================================================
+    # END PHASE 1: DATABASE PROTECTION FUNCTIONS
+    # ============================================================================
+    
+    def monitor_schema_changes():
+        """Monitor and log schema changes for audit trail."""
+        try:
+            current_schema = get_current_schema()
+            schema_hash = str(hash(str(sorted(current_schema.keys()))))
+            
+            # Store schema fingerprint for change detection
+            if "last_schema_hash" not in st.session_state:
+                st.session_state.last_schema_hash = schema_hash
+                logging.info(f"Schema monitoring initialized with {len(current_schema)} columns")
+            elif st.session_state.last_schema_hash != schema_hash:
+                logging.warning(f"Schema change detected! New fingerprint: {schema_hash}")
+                st.session_state.last_schema_hash = schema_hash
+                
+                # Show schema change notification
+                st.info("🔄 Schema change detected - database protection active")
+            
+            return current_schema
+        except Exception as e:
+            logging.error(f"Schema monitoring failed: {e}")
+            return {}
+    
+    # ============================================================================
+    # PHASE 2: PROTECTED DATABASE SCHEMA SETUP  
+    # CRITICAL: This replaces the dangerous schema recreation code
+    # Purpose: Preserve existing schema and prevent data loss
+    # ============================================================================
+    
+    # Check if we need to preserve existing schema
+    preserve_existing = ensure_schema_integrity()
+    
+    if not preserve_existing:
+        # Safe to create new table - no existing schema to preserve
+        logging.info("Creating new policies table with default schema")
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text("""                CREATE TABLE IF NOT EXISTS policies (
+                    "Customer" TEXT,
+                    "Policy Type" TEXT,
+                    "Carrier Name" TEXT,
+                    "Policy Number" TEXT,
+                    "Transaction Type" TEXT,
+                    "Agency Estimated Comm/Revenue (CRM)" REAL,
+                    "Policy Origination Date" TEXT,
+                    "Effective Date" TEXT,
+                    "Paid" TEXT,
+                    "Calculated Commission" REAL,
+                    "Client ID" TEXT,
+                    "Transaction ID" TEXT
+                )
+            """))
+    else:
+        # Existing schema detected - preserve it completely
+        logging.info("Existing schema detected - preserving user modifications")
+        current_schema = get_current_schema()
+        logging.info(f"Preserved schema contains {len(current_schema)} columns: {list(current_schema.keys())}")
+        
+        # Check schema health but don't force changes
+        issues = check_schema_consistency()
+        if issues:
+            logging.warning(f"Schema health check found issues: {issues}")
+            # Note: We don't auto-fix issues to prevent data loss
+            # User can address issues through Admin Panel if needed
+      # ============================================================================
+    # END PHASE 2: PROTECTED DATABASE SCHEMA SETUP
+    # ============================================================================
+      # PHASE 4: Initialize monitoring and protection status
+    # monitor_schema_changes()  # Temporarily disabled to fix startup issue
+    # show_protection_status()  # Temporarily disabled to fix startup issue
 
     all_data = pd.read_sql('SELECT * FROM policies', engine)
 
@@ -324,50 +568,51 @@ def main():
         st.metric("Total Transactions", len(all_data))
         if "Calculated Commission" in all_data.columns:
             st.metric("Total Commissions", f"${all_data['Calculated Commission'].sum():,.2f}")
-        st.write("Welcome! Use the sidebar to navigate.")
-
-        # --- Client Search & Edit (clean selectbox style) ---
+        st.write("Welcome! Use the sidebar to navigate.")        # --- Client Search & Edit (clean selectbox style) ---
         st.markdown("### Search and Edit a Client")
-        if "Customer" in all_data.columns:
-            customers = ["Select a client..."] + sorted(all_data["Customer"].dropna().unique().tolist())
+        customer_col = get_mapped_column("Customer")
+        if customer_col and customer_col in all_data.columns:
+            customers = ["Select a client..."] + sorted(all_data[customer_col].dropna().unique().tolist())
             selected_client = st.selectbox("Filter by Customer:", customers)
         else:
             selected_client = None
 
         if selected_client and selected_client != "Select a client...":
-            client_df = all_data[all_data["Customer"].str.strip().str.lower() == selected_client.strip().lower()].reset_index(drop=True)
+            client_df = all_data[all_data[customer_col].str.strip().str.lower() == selected_client.strip().lower()].reset_index(drop=True)
             st.write(f"Showing policies for **{selected_client}**:")
             
-            # --- Calculate PAST DUE for each row ---
-            if "Agent Paid Amount (STMT)" in client_df.columns and "Estimated Agent Comm (New 50% Renewal 25%)" in client_df.columns:
-                paid_amounts = pd.to_numeric(client_df["Agent Paid Amount (STMT)"], errors="coerce").fillna(0)
-                commission_amounts = pd.to_numeric(client_df["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
+            # --- Calculate PAST DUE for each row using mapped columns ---
+            agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
+            agent_comm_col = get_mapped_column("Agent Estimated Comm $") or get_mapped_column("Estimated Agent Comm (New 50% Renewal 25%)")
+            
+            if agent_paid_col and agent_comm_col and agent_paid_col in client_df.columns and agent_comm_col in client_df.columns:
+                paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce").fillna(0)
+                commission_amounts = pd.to_numeric(client_df[agent_comm_col], errors="coerce").fillna(0)
                 client_df["PAST DUE"] = commission_amounts - paid_amounts
             else:
-                st.warning("Missing 'Agent Paid Amount (STMT)' or 'Estimated Agent Comm (New 50% Renewal 25%)' column for PAST DUE calculation.")
+                st.warning(f"Missing required columns for PAST DUE calculation. Looking for: {agent_paid_col}, {agent_comm_col}")
             
             # --- Show metrics side by side, spaced in 6 columns, shifted left ---
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-            # Move metrics to col2 and col3, leaving col6 open for future data
+            col1, col2, col3, col4, col5, col6 = st.columns(6)            # Move metrics to col2 and col3, leaving col6 open for future data
             with col2:
-                if "Agent Paid Amount (STMT)" in client_df.columns:
-                    paid_amounts = pd.to_numeric(client_df["Agent Paid Amount (STMT)"], errors="coerce")
+                if agent_paid_col and agent_paid_col in client_df.columns:
+                    paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce")
                     total_paid = paid_amounts.sum()
                     st.metric(label="Total Paid Amount", value=f"${total_paid:,.2f}")
                 else:
-                    st.warning("No 'Agent Paid Amount (STMT)' column found for this client.")
+                    st.warning(f"No '{get_ui_field_name('Agent Paid Amount (STMT)')}' column found for this client.")
 
             with col3:
+                due_date_col = get_mapped_column("Due Date")
                 if (
-                    "Agent Paid Amount (STMT)" in client_df.columns
-                    and "Due Date" in client_df.columns
-                    and "Estimated Agent Comm (New 50% Renewal 25%)" in client_df.columns
+                    agent_paid_col and agent_paid_col in client_df.columns
+                    and due_date_col and due_date_col in client_df.columns
+                    and agent_comm_col and agent_comm_col in client_df.columns
                 ):
                     today = pd.to_datetime(datetime.datetime.today())
-                    due_dates = pd.to_datetime(client_df["Due Date"], errors="coerce")
-                    paid_amounts = pd.to_numeric(client_df["Agent Paid Amount (STMT)"], errors="coerce").fillna(0)
-                    commission_amounts = pd.to_numeric(client_df["Estimated Agent Comm (New 50% Renewal 25%)"], errors="coerce").fillna(0)
+                    due_dates = pd.to_datetime(client_df[due_date_col], errors="coerce")
+                    paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce").fillna(0)
+                    commission_amounts = pd.to_numeric(client_df[agent_comm_col], errors="coerce").fillna(0)
                     # Only consider rows past due and not fully paid
                     past_due_mask = (due_dates < today) & (paid_amounts < commission_amounts)
                     total_past_due = (commission_amounts - paid_amounts)[past_due_mask].sum()
@@ -464,12 +709,10 @@ def main():
             premium_sold_calc = round(new_premium - existing_premium, 2)
             st.markdown(f"**Premium Sold (New - Existing):** <span style='font-size:1.5em'>{premium_sold_calc:+.2f}</span>", unsafe_allow_html=True)
             if st.button("Use This Value for Premium Sold"):
-                st.session_state["premium_sold_input_live"] = premium_sold_calc
-
-        # --- Live Premium Sold and Agency Revenue outside the form ---
+                st.session_state["premium_sold_input_live"] = premium_sold_calc        # --- Live Premium Sold and Agency Estimated Comm/Revenue (CRM) outside the form ---
         if "premium_sold_input" not in st.session_state:
             st.session_state["premium_sold_input"] = 0.0
-        st.subheader("Enter Premium Sold and see Agency Revenue:")
+        st.subheader("Enter Premium Sold and see Agency Estimated Comm/Revenue (CRM):")
         premium_sold_val = st.number_input(
             "Premium Sold",
             min_value=-1000000.0,
@@ -480,7 +723,7 @@ def main():
         )
         agency_revenue_val = round(premium_sold_val * 0.10, 2)
         st.number_input(
-            "Agency Revenue (10% of Premium Sold)",
+            "Agency Estimated Comm/Revenue (CRM) (10% of Premium Sold)",
             value=agency_revenue_val,
             disabled=True,
             format="%.2f",
@@ -490,39 +733,60 @@ def main():
         # --- The rest of the form ---
         with st.form("add_policy_form"):
             new_row = {}
-            auto_transaction_id = generate_transaction_id() if "Transaction ID" in db_columns else None
+            transaction_id_col = get_mapped_column("Transaction ID")
+            auto_transaction_id = generate_transaction_id() if transaction_id_col and transaction_id_col in db_columns else None
             assigned_client_id = st.session_state.get("assigned_client_id", None)
             assigned_client_name = st.session_state.get("assigned_client_name", None)
+            
+            # Get mapped column names for form exclusions
+            skip_fields = [
+                get_mapped_column("Lead Source"),
+                get_mapped_column("Producer"), 
+                get_mapped_column("Agency Gross Paid"),
+                get_mapped_column("Paid"),
+                get_mapped_column("Gross Agency Comm %"),
+                get_mapped_column("Agency Gross Comm"),
+                get_mapped_column("Statement Date"),
+                get_mapped_column("STMT DATE"),
+                get_mapped_column("Items"),
+                get_mapped_column("Agent Paid Amount (STMT)"),
+                get_mapped_column("PAST DUE")
+            ]
+            # Remove None values and add original names as fallback
+            skip_fields = [f for f in skip_fields if f] + [
+                "Lead Source", "Producer", "Agency Gross Paid", "Paid",
+                "Gross Agency Comm %", "Agency Gross Comm", "Statement Date",
+                "STMT DATE", "Items", "Agent Paid Amount (STMT)", "PAST DUE"            ]
+            
             for col in db_columns:
-                if col in [
-                    "Lead Source",
-                    "Producer",
-                    "Agency Gross Paid",
-                    "Paid",
-                    "Gross Agency Comm %",
-                    "Agency Gross Comm",
-                    "Statement Date",
-                    "STMT DATE",
-                    "Items",
-                    "Agent Paid Amount (STMT)",
-                    "PAST DUE"
-                ]:
+                if col in skip_fields:
                     continue  # Skip these fields in the form
-                if col == "Premium Sold":
+                
+                premium_sold_col = get_mapped_column("Premium Sold")
+                agency_revenue_col = get_mapped_column("Agency Estimated Comm/Revenue (CRM)")
+                client_id_col = get_mapped_column("Client ID")
+                customer_col = get_mapped_column("Customer")
+                transaction_type_col = get_mapped_column("Transaction Type")
+                
+                if col == premium_sold_col or col == "Premium Sold":
                     new_row[col] = premium_sold_val
-                elif col == "Agency Revenue":
+                elif col == agency_revenue_col or col == "Agency Estimated Comm/Revenue (CRM)":
                     new_row[col] = agency_revenue_val
-                elif col == "Transaction ID":
+                elif col == transaction_id_col or col == "Transaction ID":
                     val = st.text_input(col, value=auto_transaction_id, disabled=True)
                     new_row[col] = auto_transaction_id
-                elif col == "Client ID":
+                elif col == client_id_col or col == "Client ID":
                     val = st.text_input(col, value=assigned_client_id if assigned_client_id else generate_client_id(), disabled=True)
                     new_row[col] = val
-                elif col == "Customer":
+                elif col == customer_col or col == "Customer":
                     val = st.text_input(col, value=assigned_client_name if assigned_client_name else "")
                     new_row[col] = val
                 elif "date" in col.lower() or col.lower() in ["x-date", "xdate", "stmt date", "statement date"]:
-                    if col in ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]:
+                    # Check if this is a known date field using mapping
+                    date_fields = ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]
+                    is_known_date = any(get_mapped_column(df) == col for df in date_fields) or col in date_fields
+                    
+                    if is_known_date:
                         val = st.date_input(col, value=None, format="MM/DD/YYYY")
                         if val is None or (isinstance(val, str) and not val):
                             new_row[col] = ""
@@ -538,25 +802,27 @@ def main():
                 elif col == "Paid":
                     val = st.selectbox(col, ["No", "Yes"])
                     new_row[col] = val
-                elif col == "NEW/RWL":
+                elif col == transaction_type_col or col == "Transaction Type":
                     val = st.selectbox(col, ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"])
                     new_row[col] = val
                 else:
                     val = st.text_input(col)
                     new_row[col] = val
             submitted = st.form_submit_button("Add Transaction")
-
+        
         if submitted:
             # Auto-generate IDs if present
-            if "Client ID" in db_columns:
-                new_row["Client ID"] = generate_client_id()
-            if "Transaction ID" in db_columns:
-                new_row["Transaction ID"] = auto_transaction_id
-            # Calculate commission if needed
-            if "Calculated Commission" in db_columns:
-                new_row["Calculated Commission"] = calculate_commission(new_row)
+            client_id_col = get_mapped_column("Client ID")
+            transaction_id_col = get_mapped_column("Transaction ID")
             
-            # --- Calculate Agent Estimated Comm $ for new rows ---
+            if client_id_col and client_id_col in db_columns:
+                new_row[client_id_col] = generate_client_id()
+            if transaction_id_col and transaction_id_col in db_columns:
+                new_row[transaction_id_col] = auto_transaction_id
+            # Calculate commission if needed
+            if "Calculated Commission" in db_columns:            new_row["Calculated Commission"] = calculate_commission(new_row)
+            
+            # --- Calculate Agent Estimated Comm $ for new rows using mapped columns ---
             def parse_money(val):
                 import re
                 if val is None:
@@ -575,14 +841,21 @@ def main():
                 except Exception:
                     return 0.0
             
-            if "Agent Estimated Comm $" in db_columns:
-                premium = new_row.get("Premium Sold", 0)
-                pct = new_row.get("Policy Gross Comm %", 0)
-                agent_comm_pct = new_row.get("Agent Comm (New 50% RWL 25%)", 0)
+            # Calculate Agent Estimated Comm $ using mapped columns
+            agent_est_comm_col = get_mapped_column("Agent Estimated Comm $")
+            if agent_est_comm_col and agent_est_comm_col in db_columns:
+                premium_col = get_mapped_column("Premium Sold")
+                policy_comm_col = get_mapped_column("Policy Gross Comm %")
+                agent_comm_col = get_mapped_column("Agent Comm (NEW 50% RWL 25%)")
+                
+                premium = new_row.get(premium_col or "Premium Sold", 0)
+                pct = new_row.get(policy_comm_col or "Policy Gross Comm %", 0)
+                agent_comm_pct = new_row.get(agent_comm_col or "Agent Comm (NEW 50% RWL 25%)", 0)
+                
                 p = parse_money(premium)
                 pc = parse_percent(pct)
                 ac = parse_percent(agent_comm_pct)
-                new_row["Agent Estimated Comm $"] = p * (pc / 100.0) * (ac / 100.0)
+                new_row[agent_est_comm_col] = p * (pc / 100.0) * (ac / 100.0)
             
             # Note: Policy Balance Due is now calculated dynamically in reports, 
             # not stored in the database
@@ -590,7 +863,8 @@ def main():
             new_df = pd.DataFrame([new_row])
             new_df.to_sql('policies', engine, if_exists='append', index=False)
             st.success("New policy transaction added!")
-            st.rerun()    # --- Reports ---
+            st.rerun()
+    
     elif page == "Reports":
         st.subheader("Customizable Report")
 
@@ -599,11 +873,19 @@ def main():
         columns = all_data.columns.tolist()
         selected_columns = st.multiselect("Columns", columns, default=columns)
 
-        # --- Date range filter (user can pick which date column) ---
-        date_columns = [col for col in ["Effective Date", "Policy Origination Date", "Due Date", "X-Date", "X-DATE"] if col in all_data.columns]
+        # --- Date range filter (user can pick which date column) using mapped columns ---
+        date_field_names = ["Effective Date", "Policy Origination Date", "Due Date", "X-Date", "X-DATE"]
+        available_date_columns = []
+        for field_name in date_field_names:
+            mapped_col = get_mapped_column(field_name)
+            if mapped_col and mapped_col in all_data.columns:
+                available_date_columns.append(mapped_col)
+            elif field_name in all_data.columns:
+                available_date_columns.append(field_name)
+        
         date_col = None
-        if date_columns:
-            date_col = st.selectbox("Select date column to filter by:", date_columns)
+        if available_date_columns:
+            date_col = st.selectbox("Select date column to filter by:", available_date_columns)
         if date_col:
             min_date = pd.to_datetime(all_data[date_col], errors="coerce").min()
             max_date = pd.to_datetime(all_data[date_col], errors="coerce").max()
@@ -630,36 +912,41 @@ def main():
             else:
                 report_df = all_data[selected_columns]
         else:
-            report_df = all_data[selected_columns]
-
-        # --- Optional: Filter by Customer ---
-        if "Customer" in all_data.columns:
+            report_df = all_data[selected_columns]        # --- Optional: Filter by Customer using mapped column ---
+        customer_col = get_mapped_column("Customer")
+        if customer_col and customer_col in all_data.columns:
             st.markdown("**Filter by Customer:**")
-            customers = ["All"] + sorted(all_data["Customer"].dropna().unique().tolist())
+            customers = ["All"] + sorted(all_data[customer_col].dropna().unique().tolist())
             selected_customer = st.selectbox("Customer", customers)
             if selected_customer != "All":
-                report_df = report_df[report_df["Customer"] == selected_customer]
-
-        # --- Policy Balance Due dropdown filter ---
+                report_df = report_df[report_df[customer_col] == selected_customer]        # --- Policy Balance Due dropdown filter using mapped columns ---
         balance_due_options = ["All", "YES", "NO"]
         selected_balance_due = st.selectbox("Policy Balance Due", balance_due_options)
         
-        # Calculate Policy Balance Due if not present (using correct column names)
-        if "Policy Balance Due" not in report_df.columns and "Agent Paid Amount (STMT)" in report_df.columns and "Agent Estimated Comm $" in report_df.columns:
-            paid_amounts = pd.to_numeric(report_df["Agent Paid Amount (STMT)"], errors="coerce").fillna(0)
-            commission_amounts = pd.to_numeric(report_df["Agent Estimated Comm $"], errors="coerce").fillna(0)
-            report_df["Policy Balance Due"] = commission_amounts - paid_amounts
+        # Calculate Policy Balance Due if not present using mapped column names
+        balance_due_col = get_mapped_column("Policy Balance Due")
+        agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
+        agent_est_comm_col = get_mapped_column("Agent Estimated Comm $")
+        
+        target_balance_col = balance_due_col or "Policy Balance Due"
+        target_paid_col = agent_paid_col or "Agent Paid Amount (STMT)"
+        target_comm_col = agent_est_comm_col or "Agent Estimated Comm $"
+        
+        if target_balance_col not in report_df.columns and target_paid_col in report_df.columns and target_comm_col in report_df.columns:
+            paid_amounts = pd.to_numeric(report_df[target_paid_col], errors="coerce").fillna(0)
+            commission_amounts = pd.to_numeric(report_df[target_comm_col], errors="coerce").fillna(0)
+            report_df[target_balance_col] = commission_amounts - paid_amounts
         
         # Ensure Policy Balance Due is numeric for filtering
-        if "Policy Balance Due" in report_df.columns:
-            report_df["Policy Balance Due"] = pd.to_numeric(report_df["Policy Balance Due"], errors="coerce").fillna(0)
+        if target_balance_col in report_df.columns:
+            report_df[target_balance_col] = pd.to_numeric(report_df[target_balance_col], errors="coerce").fillna(0)
         
         # Apply Balance Due filter
-        if selected_balance_due != "All" and "Policy Balance Due" in report_df.columns:
+        if selected_balance_due != "All" and target_balance_col in report_df.columns:
             if selected_balance_due == "YES":
-                report_df = report_df[report_df["Policy Balance Due"] > 0]
+                report_df = report_df[report_df[target_balance_col] > 0]
             elif selected_balance_due == "NO":
-                report_df = report_df[report_df["Policy Balance Due"] <= 0]
+                report_df = report_df[report_df[target_balance_col] <= 0]
 
         st.markdown("**Report Preview:**")
         st.dataframe(format_currency_columns(format_dates_mmddyyyy(report_df)), use_container_width=True, height=max(400, 40 + 40 * len(report_df)))
@@ -686,10 +973,11 @@ def main():
         st.info("To print or save this report as PDF, use your browser's print feature (Ctrl+P or Cmd+P).")    # --- All Policies in Database ---
     elif page == "All Policies in Database":
         st.subheader("All Policies in Database")
-        st.info("Tip: Use your browser's zoom-out (Ctrl -) to see more columns. Scroll horizontally for wide tables.")
-        # Reduce the height so the table fits better on the page and horizontal scroll bar is visible
-        st.dataframe(format_currency_columns(format_dates_mmddyyyy(all_data)), use_container_width=True, height=350)    # --- Edit Policies in Database ---
+        st.info("Tip: Use your browser's zoom-out (Ctrl -) to see more columns. Scroll horizontally for wide tables.")        # Reduce the height so the table fits better on the page and horizontal scroll bar is visible
+        st.dataframe(format_currency_columns(format_dates_mmddyyyy(all_data)), use_container_width=True, height=350)
+      # --- Edit Policies in Database ---
     elif page == "Edit Policies in Database":
+        st.write("🔍 PAGE REACHED - Edit Policies in Database section is executing!")
         st.subheader("Edit Policies in Database")
         db_columns = all_data.columns.tolist()
         st.markdown("**Reorder columns by dragging the boxes below (no delete):**")
@@ -698,12 +986,20 @@ def main():
             direction="horizontal",
             key="edit_db_col_order_sortable"
         )
-        # --- Lock formula columns in the data editor ---
-        lock_cols = [
-            col for col in db_columns if col.strip().lower() in [
-                "agent estimated comm $", "agency estimated comm/revenue (crm)", "agency estimated comm/revenue (az)"
-            ]
-        ]
+        # --- Lock formula columns in the data editor using mapped columns ---
+        formula_fields = ["Agent Estimated Comm $", "Agency Estimated Comm/Revenue (CRM)", "Agency Estimated Comm/Revenue (AZ)"]
+        lock_cols = []
+        for field in formula_fields:
+            mapped_col = get_mapped_column(field)
+            if mapped_col and mapped_col in db_columns:
+                lock_cols.append(mapped_col)
+            elif field.lower().replace(" ", "").replace("$", "") in [col.lower().replace(" ", "").replace("$", "") for col in db_columns]:
+                # Fallback fuzzy matching
+                for col in db_columns:
+                    if field.lower().replace(" ", "").replace("$", "") == col.lower().replace(" ", "").replace("$", ""):
+                        lock_cols.append(col)
+                        break
+        
         column_config = {}
         for col in lock_cols:
             column_config[col] = {
@@ -728,9 +1024,10 @@ def main():
 - <b>Agent Estimated Comm $</b>: <code>Premium Sold * (Policy Gross Comm % / 100) * Agent Comm (NEW 50% RWL 25%)</code>
 - <b>Agency Estimated Comm/Revenue (CRM)</b>: <code>Premium Sold * (Policy Gross Comm % / 100)</code>
             """, unsafe_allow_html=True)
+        
         if st.button("Update Database with Edits and Column Order"):
             edited_db_df = edited_db_df[order]
-            # --- Recalculate Agent Estimated Comm $ for all rows before saving ---
+            # --- Recalculate formula columns using mapped column names ---
             def parse_money_bd(val):
                 import re
                 if val is None:
@@ -747,10 +1044,27 @@ def main():
                     return float(re.sub(r'[^0-9.-]', '', str(val)))
                 except Exception:
                     return 0.0
+                    
+            # Get mapped column names for calculations
+            agency_est_comm_col = get_mapped_column("Agency Estimated Comm/Revenue (CRM)")
+            premium_col = get_mapped_column("Premium Sold") 
+            gross_comm_col = get_mapped_column("Policy Gross Comm %")
+            agent_est_comm_col = get_mapped_column("Agent Estimated Comm $")
+            agent_comm_pct_col = get_mapped_column("Agent Comm (NEW 50% RWL 25%)")
+            
+            # Fallback to fuzzy matching if mapping not found
+            if not agency_est_comm_col:
+                agency_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() in ["agency estimated comm/revenue (crm)", "agency estimated comm/revenue (az)"]), None)
+            if not premium_col:
+                premium_col = next((col for col in edited_db_df.columns if col.strip().lower() == "premium sold".lower()), None)
+            if not gross_comm_col:
+                gross_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() == "policy gross comm %".lower()), None)
+            if not agent_est_comm_col:
+                agent_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() == "agent estimated comm $".lower()), None)
+            if not agent_comm_pct_col:
+                agent_comm_pct_col = next((col for col in edited_db_df.columns if col.strip().lower() in ["agent comm (new 50% rwl 25%)", "agent comm (new 50% rwl 25%) (%)"]), None)
+            
             # Recalculate Agency Estimated Comm/Revenue (CRM)
-            agency_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() in ["agency estimated comm/revenue (crm)", "agency estimated comm/revenue (az)"]), None)
-            premium_col = next((col for col in edited_db_df.columns if col.strip().lower() == "premium sold".lower()), None)
-            gross_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() == "policy gross comm %".lower()), None)
             if agency_est_comm_col and premium_col and gross_comm_col:
                 edited_db_df[agency_est_comm_col] = edited_db_df.apply(
                     lambda row: parse_money_bd(row[premium_col]) * (parse_percent_bd(row[gross_comm_col]) / 100.0), axis=1
@@ -758,34 +1072,33 @@ def main():
                 st.info(f"Recalculated '{agency_est_comm_col}' for all rows.")
             else:
                 st.warning("Could not find all required columns for Agency Estimated Comm/Revenue (CRM) recalculation.")
+                
             # Recalculate Agent Estimated Comm $
-            agent_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() == "agent estimated comm $".lower()), None)
-            agent_comm_pct_col = next(
-                (col for col in edited_db_df.columns if col.strip().lower() in ["agent comm (new 50% rwl 25%)", "agent comm (new 50% rwl 25%) (%)"]),
-                None
-            )
             if agent_est_comm_col and premium_col and gross_comm_col and agent_comm_pct_col:
                 edited_db_df[agent_est_comm_col] = edited_db_df.apply(
                     lambda row: parse_money_bd(row[premium_col]) * (parse_percent_bd(row[gross_comm_col]) / 100.0) * (parse_percent_bd(row[agent_comm_pct_col]) / 100.0), axis=1
                 )
                 st.info(f"Recalculated '{agent_est_comm_col}' for all rows.")
-            else:                st.warning("Could not find all required columns for Agent Estimated Comm $ recalculation.")
+            else:
+                st.warning("Could not find all required columns for Agent Estimated Comm $ recalculation.")
             
             # Note: Policy Balance Due is now calculated dynamically in reports,
             # not stored in the database, so no recalculation needed here
             
             edited_db_df.to_sql('policies', engine, if_exists='replace', index=False)
             import time
-            time.sleep(0.5)  # Give DB a moment to update
-            all_data = pd.read_sql('SELECT * FROM policies', engine)
+            time.sleep(0.5)  # Give DB a moment to update            all_data = pd.read_sql('SELECT * FROM policies', engine)
             st.success("Database updated with your edits and new column order! Data reloaded.")
-            st.rerun()    # --- Search & Filter ---
+            st.rerun()
+
+    # --- Search & Filter ---    
     elif page == "Search & Filter":
         st.subheader("Search & Filter Policies")
 
         # Dropdown to select which column to search by (all headers)
         columns = all_data.columns.tolist()
-        default_index = columns.index("Customer") if "Customer" in columns else 0
+        customer_col = get_mapped_column("Customer")
+        default_index = columns.index(customer_col) if customer_col and customer_col in columns else (columns.index("Customer") if "Customer" in columns else 0)
         st.markdown(
             """
             <style>
@@ -882,63 +1195,174 @@ def main():
     elif page == "Admin Panel":
         st.warning("⚠️ The Admin Panel is for administrative use only. Changes here can affect your entire database. Proceed with caution!")
         st.header("Admin Panel: Column Mapping & Header Editing")
-        mapping_file = "column_mapping.json"
-        default_columns = [
-            "Customer", "Policy Type", "Carrier Name", "Policy Number", "NEW/RWL",
-            "Agency Revenue", "Policy Origination Date", "Effective Date"
-        ]
-        # Load mapping
-        if os.path.exists(mapping_file):
-            with open(mapping_file, "r") as f:
-                column_mapping = json.load(f)
-        else:
-            column_mapping = {}
+        
+        # Get all available UI fields from the centralized mapper
+        all_ui_fields = list(column_mapper.default_ui_fields.keys())
+        db_columns = all_data.columns.tolist()
+          # Load current mapping from centralized system
+        current_mapping = column_mapper._load_mapping()
 
         st.subheader("Current Column Mapping")
         # Always show current mapping
-        if column_mapping:
-            mapping_df = pd.DataFrame(list(column_mapping.items()), columns=["App Field", "Mapped To"])
+        if current_mapping:
+            mapping_df = pd.DataFrame(list(current_mapping.items()), columns=["App Field", "Mapped To"])
             st.dataframe(mapping_df, use_container_width=True)
         else:
             st.info("No column mapping found yet.")
 
-        # --- One-at-a-time, foolproof mapping editor ---
+        # --- Enhanced Database Columns Display with Mapping Status ---
+        st.subheader("Current Database Columns")
+        st.info("These are the actual column names that exist in your database, with mapping status:")
+        
+        # Create enhanced database columns display using centralized mapping
+        db_column_info = []
+        for i, db_col in enumerate(db_columns, 1):
+            # Check if this database column is mapped to any UI field
+            mapped_ui_fields = []
+            mapping_status = "❌ Not Mapped"
+            
+            # Check current mapping to see which UI fields point to this DB column
+            for ui_field, mapped_db_col in current_mapping.items():
+                if mapped_db_col == db_col:
+                    mapped_ui_fields.append(ui_field)
+            
+            if mapped_ui_fields:
+                mapping_status = f"✅ Mapped to: {', '.join(mapped_ui_fields)}"
+            elif column_mapper.is_calculated_field(db_col):
+                mapping_status = "🔢 Calculated Field"
+            
+            db_column_info.append({
+                "Index": i,
+                "Database Column Name": db_col,
+                "Mapping Status": mapping_status,
+                "Available for Mapping": "No" if mapped_ui_fields else "Yes"
+            })
+        
+        # Display as interactive dataframe
+        db_columns_df = pd.DataFrame(db_column_info)
+        st.dataframe(
+            db_columns_df, 
+            use_container_width=True, 
+            height=min(500, 40 + 40 * len(db_columns_df)),
+            column_config={
+                "Index": st.column_config.NumberColumn("Index", width="small"),
+                "Database Column Name": st.column_config.TextColumn("Database Column Name", width="medium"),
+                "Mapping Status": st.column_config.TextColumn("Mapping Status", width="large"),
+                "Available for Mapping": st.column_config.TextColumn("Available for Mapping", width="small")
+            }
+        )
+        
+        # Summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total DB Columns", len(db_columns))
+        with col2:
+            mapped_count = len([info for info in db_column_info if info["Mapping Status"].startswith("✅")])
+            st.metric("Mapped Columns", mapped_count)
+        with col3:
+            unmapped_count = len([info for info in db_column_info if info["Mapping Status"].startswith("❌")])
+            st.metric("Unmapped Columns", unmapped_count)
+        with col4:
+            calculated_count = len([info for info in db_column_info if info["Mapping Status"].startswith("🔢")])
+            st.metric("Calculated Fields", calculated_count)
+        
+        # Show mapping health
+        mapping_health = (mapped_count / len(db_columns)) * 100 if db_columns else 0
+        if mapping_health >= 80:
+            st.success(f"✅ Mapping Health: {mapping_health:.1f}% - Excellent coverage")
+        elif mapping_health >= 60:
+            st.warning(f"⚠️ Mapping Health: {mapping_health:.1f}% - Good coverage")
+        else:
+            st.error(f"❌ Mapping Health: {mapping_health:.1f}% - Needs improvement")
+        
+        # Quick actions for unmapped columns
+        unmapped_columns = [info["Database Column Name"] for info in db_column_info if info["Mapping Status"].startswith("❌")]
+        if unmapped_columns:
+            with st.expander("🔧 Quick Map Unmapped Columns", expanded=False):
+                st.info(f"Found {len(unmapped_columns)} unmapped database columns. You can quickly map them here:")
+                
+                for unmapped_col in unmapped_columns[:5]:  # Show first 5 unmapped columns
+                    col_map1, col_map2, col_map3 = st.columns([2, 2, 1])
+                    with col_map1:
+                        st.write(f"**{unmapped_col}**")
+                    with col_map2:
+                        # Get available UI fields for quick mapping
+                        available_ui_fields = column_mapper.get_available_ui_fields()
+                        suggested_ui = st.selectbox(
+                            f"Map to UI field:",
+                            ["(Select UI field)"] + available_ui_fields,
+                            key=f"quick_map_{unmapped_col}"
+                        )
+                    with col_map3:
+                        if suggested_ui and suggested_ui != "(Select UI field)":
+                            if st.button("Map", key=f"quick_map_btn_{unmapped_col}"):
+                                # Update mapping using centralized system
+                                new_mapping = current_mapping.copy()
+                                new_mapping[suggested_ui] = unmapped_col
+                                result = column_mapper.save_mapping(new_mapping, db_columns)
+                                if result["success"]:
+                                    st.success(f"✅ Mapped '{suggested_ui}' to '{unmapped_col}'")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Failed to save mapping: {result['errors']}")
+                
+                if len(unmapped_columns) > 5:
+                    st.info(f"Showing first 5 of {len(unmapped_columns)} unmapped columns. Use the main mapping editor below for complete management.")
+        
+        st.markdown("---")
+
+        # --- Enhanced mapping editor with validation ---
         st.subheader("Edit Column Mapping (One at a Time)")
-        db_columns = all_data.columns.tolist()
         mapping_locked_file = "column_mapping.locked"
         mapping_locked = os.path.exists(mapping_locked_file)
         admin_override = st.checkbox("Admin Override (Unlock Mapping)", value=False, key="admin_override_mapping")
+        
         if mapping_locked and not admin_override:
             st.warning("Column mapping is locked after first use. Enable Admin Override to make changes.")
         else:
             # Show mapping table with edit buttons
-            edit_col = st.selectbox("Select UI Field to Edit", [col for col in default_columns], key="edit_mapping_select")
-            current_mapping = column_mapping.get(edit_col, "(Not Mapped)")
-            st.write(f"**Current Mapping for '{edit_col}':** {current_mapping}")
-            # Only allow DB columns not already mapped, or mark as calculated/virtual
-            already_mapped = set(column_mapping.values())
-            available_db_cols = [col for col in db_columns if col not in already_mapped or col == current_mapping]
-            options = ["(Calculated/Virtual)"] + available_db_cols
-            new_mapping = st.selectbox(f"Map '{edit_col}' to:", options, index=options.index(current_mapping) if current_mapping in options else 0, key="edit_mapping_new")
+            edit_col = st.selectbox("Select UI Field to Edit", all_ui_fields, key="edit_mapping_select")
+            current_db_col = column_mapper.get_db_column(edit_col, fallback_to_ui=False)
+            current_display = current_db_col if current_db_col else "(Calculated/Virtual)"
+            st.write(f"**Current Mapping for '{edit_col}':** {current_display}")
+            
+            # Get available database columns (not already mapped)
+            available_db_cols = column_mapper.get_available_db_columns(db_columns)
+            if current_db_col and current_db_col not in available_db_cols:
+                available_db_cols.append(current_db_col)
+            
+            options = ["(Calculated/Virtual)"] + sorted(available_db_cols)
+            current_index = 0
+            if current_display in options:
+                current_index = options.index(current_display)
+                
+            new_mapping = st.selectbox(f"Map '{edit_col}' to:", options, index=current_index, key="edit_mapping_new")
+            
             # Show preview of proposed mapping
-            proposed_mapping = column_mapping.copy()
+            proposed_mapping = current_mapping.copy()
             if new_mapping == "(Calculated/Virtual)":
-                if edit_col in proposed_mapping:
-                    proposed_mapping.pop(edit_col)
+                proposed_mapping[edit_col] = "(Calculated/Virtual)"
             else:
                 proposed_mapping[edit_col] = new_mapping
+                
             st.markdown("**Proposed Mapping:**")
             preview_df = pd.DataFrame(list(proposed_mapping.items()), columns=["App Field", "Mapped To"])
             st.dataframe(preview_df, use_container_width=True)
-            # Check for one-to-one mapping
-            if len(set(proposed_mapping.values())) < len(proposed_mapping.values()):
-                st.error("Duplicate database column mapping detected! Each UI field must map to a unique DB column.")
-            unmapped = [col for col in default_columns if col not in proposed_mapping]
-            if unmapped:
-                st.warning(f"Unmapped UI fields: {', '.join(unmapped)}. Mark as Calculated/Virtual if not needed.")
-            # Backup before save
+            
+            # Validate the proposed mapping
+            validation = column_mapper.validate_mapping(proposed_mapping, db_columns)
+            
+            if validation["errors"]:
+                for error in validation["errors"]:
+                    st.error(error)
+            
+            if validation["warnings"]:
+                for warning in validation["warnings"]:
+                    st.warning(warning)
+              # Backup before save
             backup_path = "commissions_backup.db"
             backup_log_path = "commissions_backup_log.json"
+            
             if st.button("Backup Database Before Mapping Change", key="backup_before_mapping"):
                 import shutil, datetime
                 shutil.copyfile("commissions.db", backup_path)
@@ -947,28 +1371,34 @@ def main():
                 if os.path.exists(backup_log_path):
                     with open(backup_log_path, "r") as f:
                         backup_log = json.load(f)
-                backup_log["last_backup_time"] = now_str
+                    backup_log["last_backup_time"] = now_str
                 with open(backup_log_path, "w") as f:
                     json.dump(backup_log, f)
                 st.success(f"Database backed up to {backup_path} at {now_str}")
+            
             # Confirm and save mapping
             if st.button("Save Mapping Change", key="save_one_at_a_time_mapping"):
-                if len(set(proposed_mapping.values())) < len(proposed_mapping.values()):
-                    st.error("Cannot save: Duplicate database column mapping detected!")
-                elif unmapped:
-                    st.error("Cannot save: All UI fields must be mapped or marked as Calculated/Virtual.")
+                if not validation["errors"]:
+                    # Use centralized mapping to save
+                    result = column_mapper.save_mapping(proposed_mapping, db_columns)
+                    if result["success"]:
+                        st.success("Mapping updated successfully!")
+                        # Lock mapping if not admin override
+                        if not admin_override:
+                            with open(mapping_locked_file, "w") as f:
+                                f.write("locked")                        # Show warnings if any
+                        if result.get("warnings"):
+                            for warning in result["warnings"]:
+                                st.warning(warning)
+                        st.rerun()
+                    else:
+                        for error in result["errors"]:
+                            st.error(error)
                 else:
-                    # Save mapping
-                    with open(mapping_file, "w") as f:
-                        json.dump(proposed_mapping, f)
-                    st.success("Mapping updated!")
-                    # Lock mapping if not admin override
-                    if not admin_override:
-                        with open(mapping_locked_file, "w") as f:
-                            f.write("locked")
-                    st.rerun()
+                    st.error("Cannot save mapping due to validation errors above.")
 
-        # --- Column mapping customization as before ---
+        # --- Enhanced file upload mapping ---
+        st.subheader("Upload File to Auto-Configure Mapping")
         uploaded_file = st.file_uploader("Upload a file to customize mapping", type=["xlsx", "xls", "csv", "pdf"], key="admin_upload")
         if uploaded_file:
             df = None
@@ -995,25 +1425,35 @@ def main():
                 df.columns = df.columns.str.strip()
                 uploaded_columns = df.columns.tolist()
                 new_mapping = {}
-                for col in default_columns:
-                    current_mapping_val = column_mapping.get(col)
-                    if isinstance(current_mapping_val, str) and current_mapping_val is not None and current_mapping_val in uploaded_columns:
-                        idx = uploaded_columns.index(current_mapping_val) + 1
+                current_mapping = column_mapper._load_mapping()
+                
+                for col in all_ui_fields:
+                    current_db_col = current_mapping.get(col)
+                    if isinstance(current_db_col, str) and current_db_col in uploaded_columns:
+                        idx = uploaded_columns.index(current_db_col) + 1
                     else:
                         idx = 0
                     mapped = st.selectbox(
                         f"Map '{col}' to uploaded column:",
                         options=[""] + uploaded_columns,
-                        index=idx,
-                        key=f"admin_map_{col}_panel"
+                        index=idx,                        key=f"admin_map_{col}_panel"
                     )
                     if mapped:
                         new_mapping[col] = mapped
-                if st.button("Save Mapping", key="admin_save_mapping"):
-                    column_mapping.update(new_mapping)
-                    with open(mapping_file, "w") as f:
-                        json.dump(column_mapping, f)
-                    st.success("Mapping saved! Reload or re-upload to apply.")
+                
+                if st.button("Save File-Based Mapping", key="admin_save_mapping"):
+                    # Validate and save the new mapping using centralized system
+                    result = column_mapper.save_mapping(new_mapping, db_columns)
+                    if result["success"]:
+                        st.success("Mapping saved from uploaded file!")
+                        if result.get("warnings"):
+                            for warning in result["warnings"]:
+                                st.warning(warning)
+                        st.rerun()
+                    else:
+                        for error in result["errors"]:
+                            st.error(error)
+                
                 st.subheader("Uploaded File Columns")
                 st.write(uploaded_columns)
                 st.subheader("Database Columns")
@@ -1021,9 +1461,7 @@ def main():
 
         # --- Add/Delete Columns Section ---
         st.subheader("Add or Delete Database Columns")
-        db_columns = all_data.columns.tolist()
-
-        # Add Column
+        db_columns = all_data.columns.tolist()        # Add Column
         with st.form("add_column_form"):
             new_col_name = st.text_input("New column name")
             add_col_submitted = st.form_submit_button("Add Column")
@@ -1036,10 +1474,14 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Continue", key="confirm_add_col"):
-                    with engine.begin() as conn:
-                        conn.execute(sqlalchemy.text(f'ALTER TABLE policies ADD COLUMN "{st.session_state["pending_add_col"]}" TEXT'))
-                    st.success(f"Column '{st.session_state['pending_add_col']}' added.")
+                    # PHASE 3: Use safe_add_column instead of direct SQL
+                    column_name = st.session_state["pending_add_col"]
+                    if safe_add_column(column_name):
+                        st.success(f"Column '{column_name}' added safely with backup protection.")
+                    else:
+                        st.error(f"Failed to add column '{column_name}'. Check logs for details.")
                     st.session_state.pop("pending_add_col")
+                    st.rerun()
                     st.rerun()
             with col2:
                 if st.button("Cancel", key="cancel_add_col"):
@@ -1107,11 +1549,10 @@ def main():
             st.success(f"Column '{col_name}' deleted.")
             st.session_state.pop("pending_delete_col")
             st.session_state.pop("delete_confirmed")
-            st.rerun()
-
-        # --- Header renaming section ---
+            st.rerun()        # --- Header renaming section ---
         st.subheader("Rename Database Column Headers")
         db_columns = all_data.columns.tolist()
+        
         with st.form("rename_single_header_form"):
             col_to_rename = st.selectbox("Select column to rename", [""] + db_columns, index=0, key="rename_col_select")
             suggested_new_name = "Agency Estimated Comm/Revenue (CRM)" if col_to_rename == "Agency Estimated Comm/Revenue (AZ)" else ""
@@ -1120,9 +1561,11 @@ def main():
 
         if rename_submitted:
             if col_to_rename and new_col_name and new_col_name != col_to_rename:
-                with engine.begin() as conn:
-                    conn.execute(sqlalchemy.text(f'ALTER TABLE policies RENAME COLUMN "{col_to_rename}" TO "{new_col_name}"'))
-                st.success(f"Renamed column '{col_to_rename}' to '{new_col_name}'")
+                # PHASE 3: Use safe_rename_column instead of direct SQL
+                if safe_rename_column(col_to_rename, new_col_name):
+                    st.success(f"Renamed column '{col_to_rename}' to '{new_col_name}' safely with backup protection.")
+                else:
+                    st.error(f"Failed to rename column '{col_to_rename}' to '{new_col_name}'. Check logs for details.")
                 st.rerun()
             elif not col_to_rename:
                 st.info("Please select a column to rename.")
@@ -1269,6 +1712,11 @@ def main():
 - Manual Reconcile Table: 'Test Mapping (Preview Manual Reconcile Table)' button shows mapping and preview of manual entries table.
 """)
         st.info("To change a formula, edit the relevant function or calculation in the code. If you need help, ask your developer or Copilot.")
+        
+        # --- DATABASE PROTECTION & RECOVERY CENTER ---
+        st.markdown("---")
+        st.markdown("## 🛡️ Database Protection & Recovery Center")
+        # Note: Recovery options UI is shown in a dedicated section below
 
     # --- Tools ---
     elif page == "Tools":
@@ -1599,9 +2047,9 @@ def main():
                     statement_description = st.text_input(
                         "Statement Description (optional)",
                         placeholder="e.g., Monthly Commission Statement - December 2024",
-                        key="reconcile_description"
-                    )
-                  # Calculate totals for the statement
+                        key="reconcile_description"                    )
+                
+                # Calculate totals for the statement
                 total_commission_paid = sum(float(row.get("Amount Paid", 0)) for row in st.session_state["manual_commission_rows"])
                 total_agency_received = sum(float(row.get("Agency Comm Received (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
                 
@@ -1615,7 +2063,8 @@ def main():
                             statement_details.append({
                                 "Customer": row.get("Customer", ""),
                                 "Policy Type": row.get("Policy Type", ""),
-                                "Policy Number": row.get("Policy Number", ""),                                "Effective Date": row.get("Effective Date", ""),
+                                "Policy Number": row.get("Policy Number", ""),
+                                "Effective Date": row.get("Effective Date", ""),
                                 "Transaction Type": row.get("Transaction Type", ""),
                                 "Commission Paid": row.get("Amount Paid", 0),
                                 "Agency Comm Received (STMT)": row.get("Agency Comm Received (STMT)", 0),
@@ -1623,6 +2072,7 @@ def main():
                                 "Transaction ID": row.get("Transaction ID", "")
                             })
                         
+                        # PHASE 1: Existing audit/history functionality (preserved exactly)
                         # Save to commission_payments table
                         with engine.begin() as conn:
                             conn.execute(sqlalchemy.text('''
@@ -1652,75 +2102,83 @@ def main():
                                     "policy_type": row.get("Policy Type", ""),
                                     "policy_number": row.get("Policy Number", ""),
                                     "effective_date": row.get("Effective Date", ""),
-                                    "transaction_type": row.get("Transaction Type", ""),                                    "commission_paid": float(row.get("Amount Paid", 0)),
+                                    "transaction_type": row.get("Transaction Type", ""),
+                                    "commission_paid": float(row.get("Amount Paid", 0)),
                                     "agency_commission_received": float(row.get("Agency Comm Received (STMT)", 0)),
                                     "statement_date": statement_date.strftime('%Y-%m-%d')
                                 })
-                          # --- Insert reconciled entries into main policies table ---
-                        # This makes them appear in "All Policies" page
-                        db_columns = all_data.columns.tolist()
-                        entries_added = 0
                         
-                        for entry in st.session_state["manual_commission_rows"]:
-                            # Create a new policy record with proper field mapping
-                            new_policy = {}
+                        # PHASE 2: NEW - Add reconciled transactions to main policies database
+                        new_main_db_transactions = []
+                        for row in st.session_state["manual_commission_rows"]:
+                            # Create new transaction record for main policies table using centralized mapping
+                            new_transaction = {}
                             
-                            # Map the reconciled fields to the policies table structure
-                            for col in db_columns:
-                                if col == "Customer":
-                                    new_policy[col] = entry.get("Customer", "")
-                                elif col == "Policy Type":
-                                    new_policy[col] = entry.get("Policy Type", "")
-                                elif col == "Policy Number":
-                                    new_policy[col] = entry.get("Policy Number", "")
-                                elif col == "Effective Date":
-                                    new_policy[col] = entry.get("Effective Date", "")
-                                elif col == "Client ID":
-                                    new_policy[col] = entry.get("Client ID", "")
-                                elif col == "Transaction ID":
-                                    new_policy[col] = entry.get("Transaction ID", "")
-                                elif col == "NEW/RWL":                                    # Map Transaction Type to NEW/RWL
-                                    transaction_type = entry.get("Transaction Type", "")
-                                    if transaction_type.upper() in ["NEW", "NBS", "STL", "BOR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"]:
-                                        new_policy[col] = transaction_type.upper()
-                                    else:
-                                        new_policy[col] = "RWL"  # Default
-                                elif col == "Agent Paid Amount (STMT)":
-                                    new_policy[col] = float(entry.get("Amount Paid", 0))
-                                elif col == "Statement Date" or col == "STMT DATE":
-                                    new_policy[col] = statement_date.strftime('%m/%d/%Y')
-                                elif col == "Policy Origination Date":
-                                    # Use effective date if available, otherwise statement date
-                                    eff_date = entry.get("Effective Date", "")
-                                    new_policy[col] = eff_date if eff_date else statement_date.strftime('%m/%d/%Y')
-                                elif col == "Paid":
-                                    # Mark as paid since we're reconciling a payment
-                                    new_policy[col] = "Yes"
-                                elif col in ["Premium Sold", "Agency Revenue", "Calculated Commission", "Agent Estimated Comm $"]:
-                                    # Set monetary fields to use actual values from reconciliation
-                                    if col == "Agent Estimated Comm $":
-                                        # Use the Amount Paid as the commission amount for reconciled entries
-                                        new_policy[col] = float(entry.get("Amount Paid", 0))
-                                    elif col == "Agency Revenue" and "Agency Comm Received (STMT)" in entry:
-                                        new_policy[col] = float(entry.get("Agency Comm Received (STMT)", 0))
-                                    else:
-                                        new_policy[col] = 0.0
-                                elif col in ["Policy Gross Comm %", "Agent Comm (New 50% RWL 25%)", "Gross Agency Comm %"]:
-                                    # Set percentage fields to default values
-                                    new_policy[col] = 0.0
-                                else:
-                                    # Set all other fields to empty string
-                                    new_policy[col] = ""
+                            # Use centralized mapping to ensure field consistency
+                            transaction_id_col = get_mapped_column("Transaction ID")
+                            customer_col = get_mapped_column("Customer")
+                            policy_type_col = get_mapped_column("Policy Type") 
+                            policy_number_col = get_mapped_column("Policy Number")
+                            effective_date_col = get_mapped_column("Effective Date")
+                            transaction_type_col = get_mapped_column("Transaction Type")
+                            stmt_date_col = get_mapped_column("STMT DATE")
+                            transaction_date_col = get_mapped_column("Transaction Date")
+                            agency_comm_col = get_mapped_column("Agency Comm Received (STMT)")
+                            agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
+                            client_id_col = get_mapped_column("Client ID")
                             
-                            # Insert into policies table
-                            new_policy_df = pd.DataFrame([new_policy])
-                            new_policy_df.to_sql('policies', engine, if_exists='append', index=False)
-                            entries_added += 1
+                            # Populate with reconciliation data using flexible transaction types
+                            if transaction_id_col:
+                                # Generate new unique transaction ID for main DB to avoid conflicts
+                                new_transaction[transaction_id_col] = generate_transaction_id()
+                            if customer_col:
+                                new_transaction[customer_col] = row.get("Customer", "")
+                            if policy_type_col:
+                                new_transaction[policy_type_col] = row.get("Policy Type", "")
+                            if policy_number_col:
+                                new_transaction[policy_number_col] = row.get("Policy Number", "")
+                            if effective_date_col:
+                                new_transaction[effective_date_col] = row.get("Effective Date", "")
+                            if transaction_type_col:
+                                # PRESERVE USER'S TRANSACTION TYPE FLEXIBILITY - use exactly what they entered
+                                new_transaction[transaction_type_col] = row.get("Transaction Type", "")
+                            if stmt_date_col:
+                                new_transaction[stmt_date_col] = statement_date.strftime('%m/%d/%Y')
+                            if transaction_date_col:
+                                new_transaction[transaction_date_col] = statement_date.strftime('%m/%d/%Y')
+                            if agency_comm_col:
+                                new_transaction[agency_comm_col] = float(row.get("Agency Comm Received (STMT)", 0))
+                            if agent_paid_col:
+                                new_transaction[agent_paid_col] = float(row.get("Amount Paid", 0))
+                            if client_id_col:
+                                new_transaction[client_id_col] = row.get("Client ID", "")
+                            
+                            # Add description field to identify reconciled transactions
+                            description_col = get_mapped_column("Description")
+                            if description_col:
+                                new_transaction[description_col] = f"Reconciled Statement - {statement_date.strftime('%m/%d/%Y')}"
+                            
+                            new_main_db_transactions.append(new_transaction)
+                        
+                        # Insert new transactions into main policies table
+                        main_db_added_count = 0
+                        if new_main_db_transactions:
+                            try:
+                                new_df = pd.DataFrame(new_main_db_transactions)
+                                new_df.to_sql("policies", engine, if_exists="append", index=False)
+                                main_db_added_count = len(new_main_db_transactions)
+                            except Exception as e:
+                                st.warning(f"⚠️ Reconciliation saved to history, but could not add to main database: {str(e)}")
                         
                         # Clear the manual entries after successful reconciliation
                         st.session_state["manual_commission_rows"] = []
                         
-                        st.success(f"✅ Commission statement reconciled and saved to history! {entries_added} transactions also added to main database and will appear in 'All Policies' page. Statement date: {statement_date.strftime('%m/%d/%Y')}")
+                        # Enhanced success message showing both operations
+                        success_msg = f"✅ Commission statement reconciled and saved to history! Statement date: {statement_date.strftime('%m/%d/%Y')}"
+                        if main_db_added_count > 0:
+                            success_msg += f"\n💾 Added {main_db_added_count} new transactions to main policies database"
+                            success_msg += f"\n🔍 View in 'All Policies in Database' or 'Policy Revenue Ledger' pages"
+                        st.success(success_msg)
                         st.rerun()
                         
                     except Exception as e:
@@ -1791,39 +2249,42 @@ def main():
                 "Transaction Type"
             ]
 
-            # --- Always include all ledger columns, filling missing with empty values ---
-            import numpy as np
+            # --- Always include all ledger columns, filling missing with empty values ---            import numpy as np
             if not policy_rows.empty:
-                # --- Ledger construction using correct formula columns ---
-                # Always use Agent Estimated Comm $ for Credit (Commission Owed) and Agent Paid Amount (STMT) for Debit (Paid to Agent)
-                # If these columns are missing, fill with blank/zero
-                credit_col = "Agent Estimated Comm $"
-                debit_col = "Agent Paid Amount (STMT)"
+                # --- Ledger construction using mapped column names ---
+                # Get mapped column names for credits and debits
+                credit_col = get_mapped_column("Agent Estimated Comm $") or "Agent Estimated Comm $"
+                debit_col = get_mapped_column("Agent Paid Amount (STMT)") or "Agent Paid Amount (STMT)"
+                transaction_id_col = get_mapped_column("Transaction ID") or "Transaction ID"
+                transaction_date_col = get_mapped_column("Transaction Date") or "Transaction Date"
+                stmt_date_col = get_mapped_column("STMT DATE") or "STMT DATE"
+                description_col = get_mapped_column("Description") or "Description"
+                transaction_type_col = get_mapped_column("Transaction Type") or "Transaction Type"
                 
                 # Build ledger_df with correct mapping
                 ledger_df = pd.DataFrame()
-                ledger_df["Transaction ID"] = policy_rows["Transaction ID"] if "Transaction ID" in policy_rows.columns else ""
+                ledger_df["Transaction ID"] = policy_rows[transaction_id_col] if transaction_id_col in policy_rows.columns else ""
                 # Transaction Date: preserve as-is from DB, including blanks/nulls
-                # Check for both "Transaction Date" and "STMT DATE" columns
-                if "Transaction Date" in policy_rows.columns:
-                    ledger_df["Transaction Date"] = policy_rows["Transaction Date"]
-                elif "STMT DATE" in policy_rows.columns:
-                    ledger_df["Transaction Date"] = policy_rows["STMT DATE"]
+                # Check for both mapped transaction date columns
+                if transaction_date_col in policy_rows.columns:
+                    ledger_df["Transaction Date"] = policy_rows[transaction_date_col]
+                elif stmt_date_col in policy_rows.columns:
+                    ledger_df["Transaction Date"] = policy_rows[stmt_date_col]
                 else:
                     ledger_df["Transaction Date"] = ""
-                ledger_df["Description"] = policy_rows["Description"] if "Description" in policy_rows.columns else ""
+                ledger_df["Description"] = policy_rows[description_col] if description_col in policy_rows.columns else ""
                 
-                # Credit (Commission Owed) from Agent Estimated Comm $
+                # Credit (Commission Owed) from mapped Agent Estimated Comm $
                 if credit_col in policy_rows.columns:
                     ledger_df["Credit (Commission Owed)"] = policy_rows[credit_col]
                 else:
                     ledger_df["Credit (Commission Owed)"] = 0.0
-                # Debit (Paid to Agent) from Agent Paid Amount (STMT)
+                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
                 if debit_col in policy_rows.columns:
                     ledger_df["Debit (Paid to Agent)"] = policy_rows[debit_col]
                 else:
                     ledger_df["Debit (Paid to Agent)"] = 0.0
-                ledger_df["Transaction Type"] = policy_rows["Transaction Type"] if "Transaction Type" in policy_rows.columns else ""
+                ledger_df["Transaction Type"] = policy_rows[transaction_type_col] if transaction_type_col in policy_rows.columns else ""
                 # Ensure correct column order
                 ledger_df = ledger_df[ledger_columns]
                 # Sort by Transaction Date (oldest first), fallback to index order if not present
@@ -1835,18 +2296,23 @@ def main():
                 ledger_df = ledger_df.reset_index(drop=True)
             else:
                 # If no rows, show empty DataFrame with correct columns
-                ledger_df = pd.DataFrame(columns=ledger_columns)
-            
+                ledger_df = pd.DataFrame(columns=ledger_columns)            
             if not ledger_df.empty:
                 st.markdown("### Policy Details (Editable)")
-                # Show policy-level details (single row, editable)
-                policy_detail_cols = [
-                    c for c in [
-                        "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", 
-                        "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
-                        "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
-                    ] if c in policy_rows.columns
+                # Show policy-level details using mapped column names
+                policy_detail_field_names = [
+                    "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name",
+                    "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
+                    "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
                 ]
+                policy_detail_cols = []
+                for field_name in policy_detail_field_names:
+                    mapped_col = get_mapped_column(field_name)
+                    if mapped_col and mapped_col in policy_rows.columns:
+                        policy_detail_cols.append(mapped_col)
+                    elif field_name in policy_rows.columns:
+                        policy_detail_cols.append(field_name)
+                
                 policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
                 edited_details_df = st.data_editor(
                     policy_details_df,
@@ -2084,38 +2550,49 @@ def main():
         #### 🆘 **Need More Help?**
         - Contact your system administrator
         - Check the documentation files in the project folder
-        - Use the debug checkbox in the sidebar for troubleshooting        """)    # --- Policy Revenue Ledger Reports (Simple Implementation) ---
+        - Use the debug checkbox in the sidebar for troubleshooting
+        """)    # --- Policy Revenue Ledger Reports (Simple Implementation) ---
     elif page == "Policy Revenue Ledger Reports":
         st.subheader("Policy Revenue Ledger Reports")
-        st.info("🚧 Customizable reports for policy summaries with Balance Due calculations.")
+        st.success("📊 Generate customizable reports for policy summaries with Balance Due calculations and export capabilities.")
+        
+        # DEBUG: Add diagnostic information
+        st.write(f"DEBUG: all_data shape: {all_data.shape}")
+        st.write(f"DEBUG: all_data columns: {list(all_data.columns)}")
+        st.write(f"DEBUG: all_data empty check: {all_data.empty}")
         
         if all_data.empty:
             st.warning("No policy data loaded. Please check database connection or import data.")
         else:
-            # Simple data processing - AGGREGATE BY POLICY NUMBER
+            # Simple data processing - AGGREGATE BY POLICY NUMBER using mapped columns
             # This ensures one row per policy with totals from all transactions
             working_data = all_data.copy()
             
+            # Get mapped column for Policy Number
+            policy_number_col = get_mapped_column("Policy Number") or "Policy Number"
+            
             # Group by Policy Number and aggregate the data
-            if "Policy Number" in working_data.columns and not working_data.empty:
-                # Define aggregation rules
+            if policy_number_col in working_data.columns and not working_data.empty:
+                # Define aggregation rules using mapped column names
                 agg_dict = {}
                 
                 # For descriptive fields, take the first value (they should be the same for all transactions of the same policy)
-                descriptive_fields = ["Customer", "Policy Type", "Carrier Name", "Effective Date", 
-                                    "Policy Origination Date", "X-DATE", "Client ID"]
-                for field in descriptive_fields:
-                    if field in working_data.columns:
-                        agg_dict[field] = 'first'
-                
-                # For monetary fields, sum all transactions for each policy
-                monetary_fields = ["Agent Estimated Comm $", "Agent Paid Amount (STMT)", 
-                                 "Agency Revenue", "Premium Sold", "Policy Gross Comm %"]
-                for field in monetary_fields:
-                    if field in working_data.columns:
+                descriptive_field_names = ["Customer", "Policy Type", "Carrier Name", "Effective Date", 
+                                         "Policy Origination Date", "X-DATE", "Client ID"]
+                for field_name in descriptive_field_names:
+                    mapped_col = get_mapped_column(field_name)
+                    target_col = mapped_col if mapped_col and mapped_col in working_data.columns else (field_name if field_name in working_data.columns else None)
+                    if target_col:
+                        agg_dict[target_col] = 'first'                  # For monetary fields, sum all transactions for each policy
+                monetary_field_names = ["Agent Estimated Comm $", "Agent Paid Amount (STMT)", 
+                                       "Agency Estimated Comm/Revenue (CRM)", "Premium Sold", "Policy Gross Comm %"]
+                for field_name in monetary_field_names:
+                    mapped_col = get_mapped_column(field_name)
+                    target_col = mapped_col if mapped_col and mapped_col in working_data.columns else (field_name if field_name in working_data.columns else None)
+                    if target_col:
                         # Convert to numeric first, then sum
-                        working_data[field] = pd.to_numeric(working_data[field], errors='coerce').fillna(0)
-                        agg_dict[field] = 'sum'
+                        working_data[target_col] = pd.to_numeric(working_data[target_col], errors='coerce').fillna(0)
+                        agg_dict[target_col] = 'sum'
                 
                 # For percentage fields, take the first value (should be consistent per policy)
                 percentage_fields = ["Agent Comm (NEW 50% RWL 25%)", "Policy Gross Comm %"]
@@ -2232,7 +2709,7 @@ def main():
             with col_selection_col2:
                 st.markdown("**Quick Presets:**")
                 if st.button("💰 Financial Focus"):
-                    financial_cols = ["Customer", "Policy Number", "Agency Revenue", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
+                    financial_cols = ["Customer", "Policy Number", "Agency Estimated Comm/Revenue (CRM)", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
                     st.session_state.prl_selected_columns = [col for col in financial_cols if col in all_columns]
                     st.rerun()
                 
@@ -2365,8 +2842,26 @@ def main():
                         caption_text = f"Showing records {start_idx + 1}-{min(end_idx, len(working_data))} of {len(working_data):,} total records with {len(valid_columns)} columns"
                     
                     st.dataframe(display_data, use_container_width=True)
-                    st.caption(caption_text)
-                      # Enhanced export with custom filename
+                    st.caption(caption_text)                    # Create report metadata for export
+                    export_metadata = {
+                        "Report Generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Report Type": "Policy Revenue Ledger Report",
+                        "Total Records": f"{len(working_data):,}",
+                        "Selected Columns": f"{len(valid_columns)} columns: {', '.join(valid_columns)}",
+                        "Data Aggregation": "Grouped by Policy Number (one row per unique policy)",
+                        "Balance Due Formula": "Agent Estimated Comm $ - Agent Paid Amount (STMT)",
+                        "Page Size": f"{records_per_page} records per page" if records_per_page != "All" else "All records displayed",
+                        "Outstanding Policies": f"{outstanding_policies:,} policies with balance due > $0",
+                        "Total Balance Due": f"${total_balance:,.2f}"
+                    }
+                    
+                    # Show active report parameters
+                    st.markdown("### 📋 Active Report Parameters")
+                    st.markdown("*These parameters will be included in exported files:*")
+                    metadata_df = pd.DataFrame(list(export_metadata.items()), columns=["Parameter", "Value"])
+                    st.dataframe(metadata_df, use_container_width=True, height=min(300, 40 + 40 * len(metadata_df)))
+                    
+                    # Enhanced export with custom filename and metadata
                     export_col1, export_col2, export_col3 = st.columns(3)
                     with export_col1:
                         custom_filename = st.text_input(
@@ -2378,28 +2873,53 @@ def main():
                         filename = custom_filename if custom_filename else f"policy_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
                         csv_filename = filename if filename.endswith('.csv') else filename + '.csv'
                         
+                        # Create CSV with metadata header
+                        csv_lines = ["# Policy Revenue Ledger Report - Export Parameters"]
+                        for param, value in export_metadata.items():
+                            csv_lines.append(f"# {param}: {value}")
+                        csv_lines.append("# " + "="*50)
+                        csv_lines.append("")  # Empty line before data
+                        
+                        # Add the actual data
                         csv_data = working_data[valid_columns].to_csv(index=False)
+                        csv_with_metadata = "\n".join(csv_lines) + "\n" + csv_data
+                        
                         st.download_button(
-                            "📄 Export Selected Columns as CSV",
-                            csv_data,
+                            "📄 Export as CSV (with Parameters)",
+                            csv_with_metadata,
                             csv_filename,
-                            "text/csv"
+                            "text/csv",
+                            help="CSV file includes report parameters in header comments"
                         )
                     
                     with export_col3:
                         excel_filename = filename if filename.endswith('.xlsx') else filename + '.xlsx'
                         
-                        # Create Excel file in memory
+                        # Create Excel file with metadata sheet
                         excel_buffer = io.BytesIO()
                         with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+                            # Write metadata to first sheet
+                            metadata_df.to_excel(writer, sheet_name='Report Parameters', index=False)
+                            
+                            # Write data to second sheet
                             working_data[valid_columns].to_excel(writer, sheet_name='Policy Revenue Report', index=False)
+                            
+                            # Get workbook and format metadata sheet
+                            workbook = writer.book
+                            metadata_sheet = writer.sheets['Report Parameters']                            # Format metadata sheet
+                            header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC'})
+                            metadata_sheet.set_column('A:A', 25)
+                            metadata_sheet.set_column('B:B', 50)
+                            metadata_sheet.write_row(0, 0, ['Parameter', 'Value'], header_format)
+                        
                         excel_buffer.seek(0)
                         
                         st.download_button(
-                            "� Export All Rows as Excel",
+                            "📊 Export as Excel (with Parameters)",
                             excel_buffer.getvalue(),
                             excel_filename,
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            help="Excel file includes report parameters on separate sheet"
                         )
                 else:
                     st.warning("Selected columns are not available in the current data.")
@@ -2409,11 +2929,133 @@ def main():
                 else:
                     st.warning("No data available for report generation.")
             
-            st.success("✅ Enhanced Policy Revenue Ledger Reports with Templates!")
+            # PDF printing instructions
+            st.markdown("### 🖨️ Print to PDF")
+            st.info("💡 **Tip:** To save this report as PDF, use your browser's print feature (Ctrl+P or Cmd+P) and select 'Save as PDF'. The report parameters shown above will be included in the PDF.")
+            
+            st.success("✅ Enhanced Policy Revenue Ledger Reports with Templates & Export Parameters!")
 
-    # --- DEBUG: Fallback UI if page is not handled
-    else:
-        st.warning(f"Page '{page}' is not yet implemented in the refactored version.")
+    # ============================================================================
+    # PHASE 4: RECOVERY SYSTEM & MONITORING
+    # Purpose: Comprehensive monitoring, recovery UI, and health checks
+    # ============================================================================
+    
+    def show_recovery_options():
+        """Show recovery options UI for database restoration."""
+        st.subheader("🏥 Database Recovery & Health Center")
+        
+        # Schema Health Dashboard
+        st.markdown("### 📊 Schema Health Dashboard")
+        issues = check_schema_consistency()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            current_schema = get_current_schema()
+            st.metric("Total Columns", len(current_schema))
+        
+        with col2:
+            if issues:
+                st.metric("Schema Issues", len(issues), delta=f"-{len(issues)} problems")
+            else:
+                st.metric("Schema Health", "✅ Healthy", delta="0 issues")
+        
+        with col3:
+            # Count backup files
+            backup_files = [f for f in os.listdir(".") if f.startswith("commissions_") and f.endswith(".db")]
+            st.metric("Available Backups", len(backup_files))
+        
+        # Display any issues
+        if issues:
+            st.error("⚠️ Schema Issues Detected:")
+            for issue in issues:
+                st.write(f"• {issue}")
+        else:
+            st.success("✅ Schema is healthy and consistent")
+        
+        # Backup Management
+        st.markdown("### 💾 Backup Management")
+        
+        # List available backups
+        if backup_files:
+            st.write("**Available Backup Files:**")
+            backup_info = []
+            for backup_file in sorted(backup_files, reverse=True):
+                try:
+                    # Get file modification time
+                    mod_time = os.path.getmtime(backup_file)
+                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
+                    file_size = os.path.getsize(backup_file) // 1024  # KB
+                    backup_info.append({
+                        "File": backup_file,
+                        "Created": mod_time_str,
+                        "Size (KB)": file_size
+                    })
+                except Exception as e:
+                    logging.warning(f"Could not read backup file info for {backup_file}: {e}")
+            
+            if backup_info:
+                backup_df = pd.DataFrame(backup_info)
+                st.dataframe(backup_df, use_container_width=True)
+                
+                # Restore option
+                selected_backup = st.selectbox("Select backup to restore:", [""] + [info["File"] for info in backup_info])
+                if selected_backup:
+                    st.warning(f"⚠️ You are about to replace the current database with '{selected_backup}'. This cannot be undone!")
+                    if st.button("🔄 Restore Selected Backup", key="restore_backup_btn"):
+                        try:
+                            # Create emergency backup of current state first
+                            current_backup = create_automatic_backup()
+                            if current_backup:
+                                st.info(f"Current database backed up to: {current_backup}")
+                            
+                            # Restore selected backup
+                            import shutil
+                            shutil.copy2(selected_backup, "commissions.db")
+                            st.success(f"✅ Database restored from '{selected_backup}' successfully!")
+                            st.info("Please restart the application to see the restored data.")
+                            logging.info(f"Database restored from backup: {selected_backup}")
+                        except Exception as e:
+                            st.error(f"❌ Failed to restore backup: {e}")
+                            logging.error(f"Backup restoration failed: {e}")
+        else:
+            st.info("No backup files found in current directory")
+          # Manual Backup Creation
+        st.markdown("### 🛡️ Manual Backup Creation")
+        if st.button("Create Manual Backup Now", key="manual_backup_btn"):
+            backup_path = create_automatic_backup()
+            if backup_path:
+                st.success(f"✅ Manual backup created: {backup_path}")
+            else:
+                st.error("❌ Failed to create manual backup")
+    
+    def show_protection_status():
+        """Show current protection system status."""
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 🛡️ Protection Status")
+        
+        # Check if protection is active
+        current_schema = get_current_schema()
+        if current_schema:
+            st.sidebar.success("✅ Database Protected")
+            st.sidebar.write(f"Columns: {len(current_schema)}")
+        else:
+            st.sidebar.error("❌ Protection Error")
+        
+        # Show last backup
+        backup_files = [f for f in os.listdir(".") if f.startswith("commissions_") and f.endswith(".db")]
+        if backup_files:
+            latest_backup = max(backup_files, key=os.path.getmtime)
+            backup_time = os.path.getmtime(latest_backup)
+            backup_time_str = datetime.datetime.fromtimestamp(backup_time).strftime("%m/%d %H:%M")
+            st.sidebar.write(f"Latest backup: {backup_time_str}")
+        else:
+            st.sidebar.write("No backups found")
+      # ============================================================================
+    # END PHASE 4: RECOVERY SYSTEM & MONITORING
+    # ============================================================================
+    
+    # Show the recovery options UI in the sidebar
+    show_protection_status()
 
 # Call main function
 main()
