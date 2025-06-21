@@ -44,6 +44,25 @@ def apply_css():
             width: calc(100vw - 240px) !important;
             max-width: calc(100vw - 240px) !important;
         }
+        
+        /* Ensure main content area starts after sidebar */
+        .main {
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+            max-width: calc(100vw - 240px) !important;
+        }
+        
+        /* Additional targeting for content wrapper */
+        [data-testid="stAppViewContainer"] > .main {
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+        }
+        
+        /* Force all main content to respect sidebar space */
+        section.main {
+            margin-left: 240px !important;
+            width: calc(100vw - 240px) !important;
+        }
         /* Make tables and editors use reasonable width */
         .stDataFrame, .stDataEditor {
         }        /* Force sidebar to be permanently visible and disable all collapse functionality */
