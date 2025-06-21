@@ -43,19 +43,67 @@ def apply_css():
         }
         /* Make tables and editors use reasonable width */
         .stDataFrame, .stDataEditor {
-        }        /* Ensure sidebar is visible and properly positioned */
+        }        /* Force sidebar to be permanently visible and disable all collapse functionality */
         section[data-testid="stSidebar"] {
             min-width: 240px !important;
             max-width: 240px !important;
+            width: 240px !important;
+            display: block !important;
+            visibility: visible !important;
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            height: 100vh !important;
+            z-index: 999 !important;
+            transform: translateX(0px) !important;
+            margin-left: 0px !important;
+        }
+        
+        /* Force sidebar to stay expanded even when marked as collapsed */
+        section[data-testid="stSidebar"][aria-expanded="false"] {
+            transform: translateX(0px) !important;
+            margin-left: 0px !important;
+            left: 0 !important;
+        }
+        
+        /* Hide ALL possible collapse/hide buttons with comprehensive selectors */
+        button[data-testid="collapsedControl"],
+        button[kind="header"],
+        [data-testid="stSidebarNav"] button[kind="header"],
+        [data-testid="stSidebar"] button[kind="header"],
+        [data-testid="stSidebar"] [data-testid="collapsedControl"],
+        [data-testid="stSidebar"] button[title*="collapse"],
+        [data-testid="stSidebar"] button[title*="hide"],
+        [data-testid="stSidebar"] button[aria-label*="collapse"],
+        [data-testid="stSidebar"] button[aria-label*="hide"],
+        .stSidebar button[kind="header"],
+        section[data-testid="stSidebar"] > div > button,
+        section[data-testid="stSidebar"] button:first-child {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        
+        /* Ensure sidebar content is always visible */
+        [data-testid="stSidebar"] > div {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        /* Force sidebar radio buttons to be visible */
+        [data-testid="stSidebar"] .stRadio {
             display: block !important;
             visibility: visible !important;
         }
-        /* Hide the sidebar collapse/hide button */
-        button[data-testid="collapsedControl"],
-        button[kind="header"],
-        [data-testid="stSidebarNav"] button[kind="header"] {
-            display: none !important;
-            visibility: hidden !important;
+        
+        /* Override any CSS that might hide the sidebar */
+        [data-testid="stSidebar"] {
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }
         /* Remove extra margin from header/title */
         .main .block-container h1 {
