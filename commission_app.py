@@ -34,25 +34,21 @@ def apply_css():
     with st.container():
         st.markdown(
             """
-            <style>
-            /* Remove default padding and maximize main block width */
+            <style>            /* Remove default padding and maximize main block width */
             .main .block-container {
             padding-top: 1rem;
             padding-bottom: 0rem;
             padding-left: 1.5rem;
             padding-right: 1.5rem;
-            max-width: 100vw;
-            width: 100vw;
         }
-        /* Make tables and editors use full width */
+        /* Make tables and editors use reasonable width */
         .stDataFrame, .stDataEditor {
-            width: 100vw !important;
-            min-width: 100vw !important;
-        }
-        /* Reduce sidebar width slightly for more main area */
+        }        /* Ensure sidebar is visible and properly positioned */
         section[data-testid="stSidebar"] {
-            min-width: 220px !important;
+            min-width: 240px !important;
             max-width: 240px !important;
+            display: block !important;
+            visibility: visible !important;
         }
         /* Remove extra margin from header/title */
         .main .block-container h1 {
@@ -280,38 +276,7 @@ def main():
     import streamlit_sortables as sortables
     import re    # Apply CSS styling
     apply_css()
-    
-    # Force sidebar to be visible - emergency fix for missing sidebar
-    st.markdown("""
-    <style>
-    /* Force sidebar to be visible and properly sized */
-    section[data-testid="stSidebar"] {
-        display: block !important;
-        visibility: visible !important;
-        width: 240px !important;
-        min-width: 240px !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        height: 100vh !important;
-        z-index: 999999 !important;
-    }
-
-    /* Ensure sidebar content is visible */
-    section[data-testid="stSidebar"] > div {
-        display: block !important;
-        visibility: visible !important;
-    }
-
-    /* Force the sidebar radio buttons to be visible */
-    section[data-testid="stSidebar"] .stRadio {
-        display: block !important;
-        visibility: visible !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # --- Page Selection ---
+      # --- Page Selection ---
     page = st.sidebar.radio(
         "Navigation",        [
             "Dashboard",
