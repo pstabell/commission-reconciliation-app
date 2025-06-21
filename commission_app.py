@@ -50,6 +50,13 @@ def apply_css():
             display: block !important;
             visibility: visible !important;
         }
+        /* Hide the sidebar collapse/hide button */
+        button[data-testid="collapsedControl"],
+        button[kind="header"],
+        [data-testid="stSidebarNav"] button[kind="header"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
         /* Remove extra margin from header/title */
         .main .block-container h1 {
             margin-bottom: 0.5rem;
@@ -436,8 +443,7 @@ def main():
             for col in required_columns:
                 if col not in current_schema:
                     issues.append(f"Missing required column: {col}")
-            
-            # Log schema health
+              # Log schema health
             if issues:
                 logging.warning(f"Schema issues found: {issues}")
             else:
@@ -447,7 +453,97 @@ def main():
             
         except Exception as e:
             logging.error(f"Schema consistency check failed: {e}")
-            return [f"Check failed: {e}"]    # ============================================================================
+            return [f"Check failed: {e}"]
+    
+    def show_recovery_options():
+        """Show recovery options UI for database restoration."""
+        st.subheader("🏥 Database Recovery & Health Center")
+        
+        # Schema Health Dashboard
+        st.markdown("### 📊 Schema Health Dashboard")
+        issues = check_schema_consistency()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            current_schema = get_current_schema()
+            st.metric("Total Columns", len(current_schema))
+        
+        with col2:
+            if issues:
+                st.metric("Schema Issues", len(issues), delta=f"-{len(issues)} problems")
+            else:
+                st.metric("Schema Health", "✅ Healthy", delta="0 issues")
+        
+        with col3:
+            # Count backup files
+            backup_files = [f for f in os.listdir(".") if f.startswith("commissions_") and f.endswith(".db")]
+            st.metric("Available Backups", len(backup_files))
+        
+        # Display any issues
+        if issues:
+            st.error("⚠️ Schema Issues Detected:")
+            for issue in issues:
+                st.write(f"• {issue}")
+        else:
+            st.success("✅ Schema is healthy and consistent")
+        
+        # Backup Management
+        st.markdown("### 💾 Backup Management")
+        
+        # List available backups
+        if backup_files:
+            st.write("**Available Backup Files:**")
+            backup_info = []
+            for backup_file in sorted(backup_files, reverse=True):
+                try:
+                    # Get file modification time
+                    mod_time = os.path.getmtime(backup_file)
+                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
+                    file_size = os.path.getsize(backup_file) // 1024  # KB
+                    backup_info.append({
+                        "File": backup_file,
+                        "Created": mod_time_str,
+                        "Size (KB)": file_size
+                    })
+                except Exception as e:
+                    logging.warning(f"Could not read backup file info for {backup_file}: {e}")
+            
+            if backup_info:
+                backup_df = pd.DataFrame(backup_info)
+                st.dataframe(backup_df, use_container_width=True)
+                  # Restore option
+                selected_backup = st.selectbox("Select backup to restore:", [""] + [info["File"] for info in backup_info], key="recovery_backup_select")
+                if selected_backup:
+                    st.warning(f"⚠️ You are about to replace the current database with '{selected_backup}'. This cannot be undone!")
+                    if st.button("🔄 Restore Selected Backup", key="restore_backup_btn"):
+                        try:
+                            # Create emergency backup of current state first
+                            current_backup = create_automatic_backup()
+                            if current_backup:
+                                st.info(f"Current database backed up to: {current_backup}")
+                            
+                            # Restore selected backup
+                            import shutil
+                            shutil.copy2(selected_backup, "commissions.db")
+                            st.success(f"✅ Database restored from '{selected_backup}' successfully!")
+                            st.info("Please restart the application to see the restored data.")
+                            logging.info(f"Database restored from backup: {selected_backup}")
+                        except Exception as e:
+                            st.error(f"❌ Failed to restore backup: {e}")
+                            logging.error(f"Backup restoration failed: {e}")
+        else:
+            st.info("No backup files found in current directory")
+          
+        # Manual Backup Creation
+        st.markdown("### 🛡️ Manual Backup Creation")
+        if st.button("Create Manual Backup Now", key="manual_backup_btn"):
+            backup_path = create_automatic_backup()
+            if backup_path:
+                st.success(f"✅ Manual backup created: {backup_path}")
+            else:
+                st.error("❌ Failed to create manual backup")
+    
+    # ============================================================================
     # END PHASE 1: DATABASE PROTECTION FUNCTIONS
     # ============================================================================
     
@@ -1565,10 +1661,285 @@ def main():
             elif not col_to_rename:
                 st.info("Please select a column to rename.")
             else:
-                st.info("Please enter a new name different from the current column name.")
+                st.info("Please enter a new name different from the current column name.")        # --- Enhanced Backup/Restore Section ---
+        st.subheader("Enhanced Database Backup & Restore System")
+        st.info("💡 **New Enhanced Backup System:** Creates timestamped backups instead of overwriting, with download/upload functionality and live tracking log.")
+        
+        # Enhanced backup tracking log
+        enhanced_backup_log_path = "enhanced_backup_tracking.json"
+        
+        def load_enhanced_backup_log():
+            """Load enhanced backup tracking log."""
+            if os.path.exists(enhanced_backup_log_path):
+                try:
+                    with open(enhanced_backup_log_path, "r") as f:
+                        return json.load(f)
+                except Exception:
+                    return {"backups": [], "actions": []}
+            return {"backups": [], "actions": []}
+        
+        def save_enhanced_backup_log(log_data):
+            """Save enhanced backup tracking log."""
+            try:
+                with open(enhanced_backup_log_path, "w") as f:
+                    json.dump(log_data, f, indent=2)
+                return True
+            except Exception as e:
+                st.error(f"Failed to save backup log: {e}")
+                return False
+        
+        def log_backup_action(action_type, details):
+            """Log backup action to enhanced tracking log."""
+            log_data = load_enhanced_backup_log()
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            action = {
+                "timestamp": timestamp,
+                "action": action_type,
+                "details": details
+            }
+            log_data["actions"].append(action)
+            # Keep only last 50 actions to prevent file from growing too large
+            log_data["actions"] = log_data["actions"][-50:]
+            save_enhanced_backup_log(log_data)
+        
+        # Enhanced backup creation
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 🛡️ Create Timestamped Backup")
+            backup_description = st.text_input(
+                "Backup Description (optional)", 
+                placeholder="e.g., Before column rename operation",
+                key="backup_description"
+            )
+            
+            if st.button("Create Enhanced Backup", type="primary"):
+                import shutil
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_filename = f"commissions_ENHANCED_BACKUP_{timestamp}.db"
+                
+                try:
+                    # Create timestamped backup
+                    shutil.copy2("commissions.db", backup_filename)
+                    
+                    # Get file size for tracking
+                    file_size = os.path.getsize(backup_filename) // 1024  # KB
+                    
+                    # Update enhanced tracking log
+                    log_data = load_enhanced_backup_log()
+                    backup_info = {
+                        "filename": backup_filename,
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "size_kb": file_size,
+                        "description": backup_description if backup_description else "Manual backup"
+                    }
+                    log_data["backups"].append(backup_info)
+                    
+                    # Log the action
+                    log_backup_action("CREATE_BACKUP", {
+                        "filename": backup_filename,
+                        "size_kb": file_size,
+                        "description": backup_description or "Manual backup"
+                    })
+                    
+                    if save_enhanced_backup_log(log_data):
+                        st.success(f"✅ Enhanced backup created: `{backup_filename}` ({file_size} KB)")
+                        st.info(f"📝 Description: {backup_description or 'Manual backup'}")
+                    else:
+                        st.warning("⚠️ Backup created but tracking log update failed")
+                        
+                except Exception as e:
+                    st.error(f"❌ Failed to create enhanced backup: {e}")
+                    log_backup_action("CREATE_BACKUP_FAILED", {"error": str(e)})
+        
+        with col2:
+            st.markdown("#### 📥 Download Current Database")
+            
+            # Prepare database for download
+            try:
+                with open("commissions.db", "rb") as f:
+                    db_data = f.read()
+                
+                download_filename = f"commissions_download_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                
+                st.download_button(
+                    label="📥 Download Current Database",
+                    data=db_data,
+                    file_name=download_filename,
+                    mime="application/octet-stream",
+                    help="Download the current database file to your computer",
+                    use_container_width=True
+                )
+                
+                db_size = len(db_data) // 1024  # KB
+                st.caption(f"Database size: {db_size} KB")
+                
+            except Exception as e:
+                st.error(f"❌ Failed to prepare database for download: {e}")
 
-        # --- Backup/Restore Section ---
-        st.subheader("Database Backup & Restore (Recommended Before Schema Changes)")
+        # Enhanced backup management and restore
+        st.markdown("---")
+        st.markdown("#### 📋 Enhanced Backup Management & Restore")
+        
+        log_data = load_enhanced_backup_log()
+        
+        # Show enhanced backup list
+        if log_data.get("backups"):
+            st.markdown("**Available Enhanced Backups:**")
+            
+            # Create display dataframe
+            backups_df = pd.DataFrame(log_data["backups"])
+            backups_df = backups_df.sort_values("timestamp", ascending=False)  # Most recent first
+            
+            # Add file existence check
+            backups_df["exists"] = backups_df["filename"].apply(lambda x: "✅" if os.path.exists(x) else "❌")
+            
+            # Display table
+            st.dataframe(
+                backups_df[["timestamp", "filename", "size_kb", "description", "exists"]].rename(columns={
+                    "timestamp": "Created",
+                    "filename": "Filename", 
+                    "size_kb": "Size (KB)",
+                    "description": "Description",
+                    "exists": "Available"
+                }),
+                use_container_width=True,
+                height=200
+            )
+            
+            # Restore functionality
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                available_backups = [b["filename"] for b in log_data["backups"] if os.path.exists(b["filename"])]
+                if available_backups:
+                    selected_backup = st.selectbox(
+                        "Select backup to restore:",
+                        options=[""] + available_backups,
+                        format_func=lambda x: f"{x} ({next((b['description'] for b in log_data['backups'] if b['filename'] == x), '')})" if x else "Select backup...",
+                        key="enhanced_restore_backup"
+                    )
+                    
+                    if selected_backup:
+                        backup_info = next((b for b in log_data["backups"] if b["filename"] == selected_backup), None)
+                        if backup_info:
+                            st.warning(f"⚠️ **Restore '{selected_backup}'?**\n\n"
+                                     f"Created: {backup_info['timestamp']}\n"
+                                     f"Description: {backup_info['description']}\n"
+                                     f"Size: {backup_info['size_kb']} KB\n\n"
+                                     f"This will **replace** the current database and **cannot be undone**!")
+            
+            with col2:
+                if st.button("🔄 Restore Selected Backup", type="secondary", disabled=not selected_backup):
+                    try:
+                        # Create emergency backup of current state
+                        emergency_backup = create_automatic_backup()
+                        if emergency_backup:
+                            st.info(f"Current state backed up to: {emergency_backup}")
+                        
+                        # Restore selected backup
+                        import shutil
+                        shutil.copy2(selected_backup, "commissions.db")
+                        
+                        # Log the restore action
+                        log_backup_action("RESTORE_BACKUP", {
+                            "restored_from": selected_backup,
+                            "description": backup_info['description'] if backup_info else "Unknown"
+                        })
+                        
+                        st.success(f"✅ Database restored from '{selected_backup}' successfully!")
+                        st.info("🔄 **Please refresh the page** to see the restored data.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Failed to restore backup: {e}")
+                        log_backup_action("RESTORE_BACKUP_FAILED", {
+                            "filename": selected_backup,
+                            "error": str(e)
+                        })
+                else:
+                    st.info("Select a backup above to restore")
+        else:
+            st.info("No enhanced backups found. Create your first enhanced backup above!")
+
+        # Upload database functionality
+        st.markdown("---")
+        st.markdown("#### 📤 Upload Database")
+        
+        uploaded_db = st.file_uploader(
+            "Upload a database file to replace the current one",
+            type=["db"],
+            help="Upload a .db file to replace the current database. This will overwrite all current data!",
+            key="upload_database"
+        )
+        
+        if uploaded_db:
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.warning("⚠️ **Upload New Database?**\n\n"
+                          f"Filename: {uploaded_db.name}\n"
+                          f"Size: {len(uploaded_db.getvalue()) // 1024} KB\n\n"
+                          "This will **replace** the current database and **cannot be undone**!")
+            
+            with col2:
+                if st.button("📤 Upload & Replace Database", type="secondary"):
+                    try:
+                        # Create emergency backup of current state
+                        emergency_backup = create_automatic_backup()
+                        if emergency_backup:
+                            st.info(f"Current state backed up to: {emergency_backup}")
+                        
+                        # Save uploaded file
+                        with open("commissions.db", "wb") as f:
+                            f.write(uploaded_db.getvalue())
+                        
+                        # Log the upload action
+                        log_backup_action("UPLOAD_DATABASE", {
+                            "filename": uploaded_db.name,
+                            "size_kb": len(uploaded_db.getvalue()) // 1024
+                        })
+                        
+                        st.success(f"✅ Database uploaded and replaced successfully!")
+                        st.info("🔄 **Please refresh the page** to see the uploaded data.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Failed to upload database: {e}")
+                        log_backup_action("UPLOAD_DATABASE_FAILED", {
+                            "filename": uploaded_db.name,
+                            "error": str(e)
+                        })
+
+        # Live tracking log display
+        st.markdown("---")
+        st.markdown("#### 📊 Live Backup Activity Log")
+        
+        if log_data.get("actions"):
+            st.markdown("**Recent Backup Actions:**")
+            
+            # Show last 10 actions
+            recent_actions = log_data["actions"][-10:]
+            recent_actions.reverse()  # Most recent first
+            
+            for action in recent_actions:
+                action_type = action["action"]
+                timestamp = action["timestamp"]
+                details = action.get("details", {})
+                
+                if action_type == "CREATE_BACKUP":
+                    st.success(f"🛡️ **{timestamp}** - Backup created: `{details.get('filename', 'Unknown')}` ({details.get('size_kb', 0)} KB) - {details.get('description', 'No description')}")
+                elif action_type == "RESTORE_BACKUP":
+                    st.info(f"🔄 **{timestamp}** - Restored from: `{details.get('restored_from', 'Unknown')}` - {details.get('description', 'No description')}")
+                elif action_type == "UPLOAD_DATABASE":
+                    st.info(f"📤 **{timestamp}** - Database uploaded: `{details.get('filename', 'Unknown')}` ({details.get('size_kb', 0)} KB)")
+                elif "FAILED" in action_type:
+                    st.error(f"❌ **{timestamp}** - {action_type}: {details.get('error', 'Unknown error')}")
+                else:
+                    st.write(f"📝 **{timestamp}** - {action_type}: {details}")
+        else:
+            st.info("No backup actions recorded yet.")
+
+        # Legacy backup section (maintained for compatibility)
+        st.markdown("---") 
+        st.markdown("#### 🔄 Legacy Backup System (Compatibility)")
+        st.caption("This is the original backup system, maintained for compatibility with existing workflows.")
+        
         backup_path = "commissions_backup.db"
         backup_log_path = "commissions_backup_log.json"
 
@@ -1583,7 +1954,7 @@ def main():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Backup Database Now"):
+            if st.button("Legacy Backup Database", help="Creates commissions_backup.db (overwrites existing)"):
                 import shutil
                 import datetime
                 try:
@@ -1597,75 +1968,25 @@ def main():
                 backup_log["last_backup_time"] = now_str
                 with open(backup_log_path, "w") as f:
                     json.dump(backup_log, f)
-                st.success(f"Database backed up to {backup_path} at {now_str}")
+                st.success(f"Legacy backup created: {backup_path} at {now_str}")
                 last_backup_time = now_str
         with col2:
-            if st.button("Restore Database from Backup"):
+            if st.button("Restore from Legacy Backup"):
                 import shutil
                 if os.path.exists(backup_path):
                     shutil.copyfile(backup_path, "commissions.db")
-                    st.success("Database restored from backup. Please restart the app.")
+                    st.success("Database restored from legacy backup. Please restart the app.")
                 else:
-                    st.error("No backup file found. Please create a backup first.")
-
-        # Show last backup time
+                    st.error("No legacy backup file found. Please create a backup first.")        # Show last backup time
         if last_backup_time:
-            st.info(f"Last backup: {last_backup_time}")
+            st.info(f"Last legacy backup: {last_backup_time}")
         else:
-            st.info("No backup has been made yet.")
+            st.info("No legacy backup has been made yet.")
 
-        # --- Publish Offline Changes Section ---
+        # --- DATABASE PROTECTION & RECOVERY CENTER ---
         st.markdown("---")
-        st.subheader("Publish Offline Changes")
-        st.info("If you have edited the backup database file (`commissions_backup.db`) offline, click the button below to publish those changes to the live database. This will overwrite all current data in the hosted database (`commissions.db`). **This action cannot be undone!** Make sure you have a backup if needed.")
-
-        # Load last publish time from backup log
-        publish_log_path = "commissions_backup_log.json"
-        last_publish_time = None
-        if os.path.exists(publish_log_path):
-            try:
-                with open(publish_log_path, "r") as f:
-                    publish_log = json.load(f)
-                    last_publish_time = publish_log.get("last_publish_time")
-            except Exception:
-                last_publish_time = None
-
-        col1, col2 = st.columns([2, 3])
-        with col1:
-            if st.button("Publish Offline Changes (Replace Live Database with Backup)", key="publish_offline_changes"):
-                import shutil
-                try:
-                    shutil.copyfile(backup_path, "commissions.db")
-                    # Save publish timestamp in US/Eastern
-                    try:
-                        import pytz
-                        eastern = pytz.timezone("US/Eastern")
-                        now_eastern = datetime.datetime.now(eastern)
-                    except ImportError:
-                        now_eastern = datetime.datetime.now()
-                    now_str = now_eastern.strftime("%m/%d/%Y %I:%M:%S %p %Z")
-                    # Update log file
-                    publish_log = {}
-                    if os.path.exists(publish_log_path):
-                        try:
-                            with open(publish_log_path, "r") as f:
-                                publish_log = json.load(f)
-                        except Exception:
-                            publish_log = {}
-                    publish_log["last_publish_time"] = now_str
-                    with open(publish_log_path, "w") as f:
-                        json.dump(publish_log, f)
-                    st.success("Offline changes published! The live database has been replaced with the backup.")
-                    # Optionally reload data
-                    all_data = pd.read_sql('SELECT * FROM policies', engine)
-                    last_publish_time = now_str
-                except Exception as e:
-                    st.error(f"Failed to publish offline changes: {e}")
-        with col2:
-            if last_publish_time:
-                st.info(f"Last published: {last_publish_time}")
-            else:
-                st.info("No publish action has been performed yet.")
+        st.markdown("## 🛡️ Database Protection & Recovery Center")
+        show_recovery_options()
 
         # --- Formula Documentation Section ---
         st.subheader("Current Formula Logic in App")
@@ -1707,11 +2028,6 @@ def main():
 - Manual Reconcile Table: 'Test Mapping (Preview Manual Reconcile Table)' button shows mapping and preview of manual entries table.
 """)
         st.info("To change a formula, edit the relevant function or calculation in the code. If you need help, ask your developer or Copilot.")
-        
-        # --- DATABASE PROTECTION & RECOVERY CENTER ---
-        st.markdown("---")
-        st.markdown("## 🛡️ Database Protection & Recovery Center")
-        # Note: Recovery options UI is shown in a dedicated section below
 
     # --- Tools ---
     elif page == "Tools":
@@ -2928,100 +3244,10 @@ def main():
             st.markdown("### 🖨️ Print to PDF")
             st.info("💡 **Tip:** To save this report as PDF, use your browser's print feature (Ctrl+P or Cmd+P) and select 'Save as PDF'. The report parameters shown above will be included in the PDF.")
             
-            st.success("✅ Enhanced Policy Revenue Ledger Reports with Templates & Export Parameters!")
-
-    # ============================================================================
+            st.success("✅ Enhanced Policy Revenue Ledger Reports with Templates & Export Parameters!")    # ============================================================================
     # PHASE 4: RECOVERY SYSTEM & MONITORING
     # Purpose: Comprehensive monitoring, recovery UI, and health checks
     # ============================================================================
-    
-    def show_recovery_options():
-        """Show recovery options UI for database restoration."""
-        st.subheader("🏥 Database Recovery & Health Center")
-        
-        # Schema Health Dashboard
-        st.markdown("### 📊 Schema Health Dashboard")
-        issues = check_schema_consistency()
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            current_schema = get_current_schema()
-            st.metric("Total Columns", len(current_schema))
-        
-        with col2:
-            if issues:
-                st.metric("Schema Issues", len(issues), delta=f"-{len(issues)} problems")
-            else:
-                st.metric("Schema Health", "✅ Healthy", delta="0 issues")
-        
-        with col3:
-            # Count backup files
-            backup_files = [f for f in os.listdir(".") if f.startswith("commissions_") and f.endswith(".db")]
-            st.metric("Available Backups", len(backup_files))
-        
-        # Display any issues
-        if issues:
-            st.error("⚠️ Schema Issues Detected:")
-            for issue in issues:
-                st.write(f"• {issue}")
-        else:
-            st.success("✅ Schema is healthy and consistent")
-        
-        # Backup Management
-        st.markdown("### 💾 Backup Management")
-        
-        # List available backups
-        if backup_files:
-            st.write("**Available Backup Files:**")
-            backup_info = []
-            for backup_file in sorted(backup_files, reverse=True):
-                try:
-                    # Get file modification time
-                    mod_time = os.path.getmtime(backup_file)
-                    mod_time_str = datetime.datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M:%S")
-                    file_size = os.path.getsize(backup_file) // 1024  # KB
-                    backup_info.append({
-                        "File": backup_file,
-                        "Created": mod_time_str,
-                        "Size (KB)": file_size
-                    })
-                except Exception as e:
-                    logging.warning(f"Could not read backup file info for {backup_file}: {e}")
-            
-            if backup_info:
-                backup_df = pd.DataFrame(backup_info)
-                st.dataframe(backup_df, use_container_width=True)
-                
-                # Restore option
-                selected_backup = st.selectbox("Select backup to restore:", [""] + [info["File"] for info in backup_info])
-                if selected_backup:
-                    st.warning(f"⚠️ You are about to replace the current database with '{selected_backup}'. This cannot be undone!")
-                    if st.button("🔄 Restore Selected Backup", key="restore_backup_btn"):
-                        try:
-                            # Create emergency backup of current state first
-                            current_backup = create_automatic_backup()
-                            if current_backup:
-                                st.info(f"Current database backed up to: {current_backup}")
-                            
-                            # Restore selected backup
-                            import shutil
-                            shutil.copy2(selected_backup, "commissions.db")
-                            st.success(f"✅ Database restored from '{selected_backup}' successfully!")
-                            st.info("Please restart the application to see the restored data.")
-                            logging.info(f"Database restored from backup: {selected_backup}")
-                        except Exception as e:
-                            st.error(f"❌ Failed to restore backup: {e}")
-                            logging.error(f"Backup restoration failed: {e}")
-        else:
-            st.info("No backup files found in current directory")
-          # Manual Backup Creation
-        st.markdown("### 🛡️ Manual Backup Creation")
-        if st.button("Create Manual Backup Now", key="manual_backup_btn"):
-            backup_path = create_automatic_backup()
-            if backup_path:
-                st.success(f"✅ Manual backup created: {backup_path}")
-            else:
-                st.error("❌ Failed to create manual backup")
     
     def show_protection_status():
         """Show current protection system status."""
