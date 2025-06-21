@@ -278,10 +278,40 @@ def main():
     import random
     import string
     import streamlit_sortables as sortables
-    import re
+    import re    # Apply CSS styling
+    apply_css()
+    
+    # Force sidebar to be visible - emergency fix for missing sidebar
+    st.markdown("""
+    <style>
+    /* Force sidebar to be visible and properly sized */
+    section[data-testid="stSidebar"] {
+        display: block !important;
+        visibility: visible !important;
+        width: 240px !important;
+        min-width: 240px !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        height: 100vh !important;
+        z-index: 999999 !important;
+    }
 
-    # Apply CSS styling
-    apply_css()    # --- Page Selection ---
+    /* Ensure sidebar content is visible */
+    section[data-testid="stSidebar"] > div {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    /* Force the sidebar radio buttons to be visible */
+    section[data-testid="stSidebar"] .stRadio {
+        display: block !important;
+        visibility: visible !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # --- Page Selection ---
     page = st.sidebar.radio(
         "Navigation",        [
             "Dashboard",
