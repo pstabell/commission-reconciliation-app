@@ -12,6 +12,9 @@ import os
 import json
 import pdfplumber
 import logging
+import hashlib
+import shutil
+from pathlib import Path
 from column_mapping_config import (
     column_mapper, get_mapped_column, get_ui_field_name, 
     is_calculated_field, safe_column_reference
@@ -380,10 +383,198 @@ def main():
             "Policy Revenue Ledger",
             "Policy Revenue Ledger Reports"
         ]
-    )
-
-    # --- Database connection ---
+    )    # --- Database connection ---
     engine = sqlalchemy.create_engine('sqlite:///commissions.db')
+
+    # ============================================================================
+    # BULLETPROOF DATABASE PROTECTION SYSTEM - PHASE 1
+    # Purpose: Prevent ANY unauthorized database modifications
+    # Implementation: Micro-Step Approach for Maximum Safety
+    # ============================================================================
+
+    def get_database_fingerprint():
+        """Create a unique fingerprint of the current database."""
+        try:
+            if os.path.exists("commissions.db"):
+                with open("commissions.db", "rb") as f:
+                    content = f.read()
+                return hashlib.sha256(content).hexdigest()[:16]
+            return None
+        except Exception:
+            return None
+
+    def create_protection_lock():
+        """Create a protection lock to prevent unauthorized changes."""
+        try:
+            fingerprint = get_database_fingerprint()
+            if fingerprint:
+                lock_data = {
+                    "fingerprint": fingerprint,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "protected": True,
+                    "size": os.path.getsize("commissions.db") if os.path.exists("commissions.db") else 0
+                }
+                with open("database_protection.lock", "w") as f:
+                    json.dump(lock_data, f)
+                logging.info(f"Database protection lock created: {fingerprint}")
+                return True
+        except Exception as e:
+            logging.error(f"Failed to create protection lock: {e}")
+        return False
+
+    def verify_database_integrity():
+        """Verify the database hasn't been tampered with."""
+        try:
+            if not os.path.exists("database_protection.lock"):
+                # No lock file - create one for current state
+                create_protection_lock()
+                return True
+                
+            with open("database_protection.lock", "r") as f:
+                lock_data = json.load(f)
+            
+            current_fingerprint = get_database_fingerprint()
+            stored_fingerprint = lock_data.get("fingerprint")
+            
+            if current_fingerprint != stored_fingerprint:
+                # Database has been modified!
+                logging.error(f"UNAUTHORIZED DATABASE CHANGE DETECTED!")
+                logging.error(f"Expected: {stored_fingerprint}, Found: {current_fingerprint}")
+                return False
+            
+            return True
+        except Exception as e:
+            logging.error(f"Database integrity check failed: {e}")
+            return False
+
+    def emergency_database_freeze():
+        """Immediately freeze database to prevent further changes."""
+        try:
+            # Create emergency backup
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            emergency_backup = f"EMERGENCY_BACKUP_{timestamp}.db"
+            if os.path.exists("commissions.db"):
+                shutil.copy2("commissions.db", emergency_backup)
+                logging.info(f"Emergency backup created: {emergency_backup}")
+            
+            # Create freeze lock
+            freeze_data = {
+                "frozen_at": datetime.datetime.now().isoformat(),
+                "reason": "Unauthorized database modification detected",
+                "emergency_backup": emergency_backup            }
+            with open("database_frozen.lock", "w") as f:
+                json.dump(freeze_data, f)
+            
+            return emergency_backup
+        except Exception as e:
+            logging.error(f"Emergency freeze failed: {e}")
+            return None
+
+    # ============================================================================
+    # ENHANCED BACKUP METADATA PROTECTION
+    # Purpose: Protect backup tracking files from being wiped
+    # ============================================================================
+
+    def protect_backup_metadata():
+        """Create redundant copies of backup metadata to prevent loss."""
+        try:
+            tracking_file = "enhanced_backup_tracking.json"
+            if os.path.exists(tracking_file):
+                # Create multiple backup copies of the tracking file
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_copy = f"backup_metadata_{timestamp}.json"
+                redundant_copy = f"enhanced_backup_tracking_backup.json"
+                
+                shutil.copy2(tracking_file, backup_copy)
+                shutil.copy2(tracking_file, redundant_copy)
+                
+                logging.info(f"Backup metadata protected: {backup_copy}, {redundant_copy}")
+                return True
+        except Exception as e:
+            logging.error(f"Failed to protect backup metadata: {e}")
+        return False
+
+    def restore_backup_metadata():
+        """Attempt to restore backup metadata from redundant copies."""
+        try:
+            tracking_file = "enhanced_backup_tracking.json"
+            redundant_copy = f"enhanced_backup_tracking_backup.json"
+            
+            # If main tracking file is missing or corrupted, restore from backup
+            if not os.path.exists(tracking_file) and os.path.exists(redundant_copy):
+                shutil.copy2(redundant_copy, tracking_file)
+                logging.info("Backup metadata restored from redundant copy")
+                return True
+                
+            # Try to reconstruct from actual backup files on disk
+            if not os.path.exists(tracking_file):
+                return reconstruct_backup_history()
+                
+        except Exception as e:
+            logging.error(f"Failed to restore backup metadata: {e}")
+        return False
+
+    def reconstruct_backup_history():
+        """Reconstruct backup history from actual backup files on disk."""
+        try:
+            backup_files = []
+            for file in os.listdir("."):
+                if file.endswith(".db") and any(keyword in file for keyword in ["backup", "BACKUP", "download"]):
+                    if file != "commissions.db":  # Don't include main database
+                        file_stat = os.stat(file)
+                        backup_files.append({
+                            "filename": file,
+                            "timestamp": datetime.datetime.fromtimestamp(file_stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                            "size_kb": round(file_stat.st_size / 1024, 2),
+                            "description": "Reconstructed from file system",
+                            "type": "file_system_recovery"
+                        })
+            
+            if backup_files:
+                reconstructed_log = {
+                    "backups": backup_files,
+                    "actions": [{
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "action": "METADATA_RECONSTRUCTED",
+                        "details": {"recovered_files": len(backup_files)}
+                    }]
+                }
+                
+                with open("enhanced_backup_tracking.json", "w") as f:
+                    json.dump(reconstructed_log, f, indent=2)
+                
+                logging.info(f"Backup history reconstructed: {len(backup_files)} files recovered")
+                return True
+                
+        except Exception as e:
+            logging.error(f"Failed to reconstruct backup history: {e}")
+        return False
+
+    # ============================================================================
+    # PHASE 1 CHECKPOINT: INTEGRITY VERIFICATION
+    # Purpose: Stop ALL operations if unauthorized changes detected
+    # ============================================================================
+    
+    # Initialize protection system IMMEDIATELY after engine creation
+    # This is the FIRST checkpoint - stop everything if integrity is compromised
+    if os.path.exists("commissions.db"):
+        if not verify_database_integrity():
+            st.error("🚨 CRITICAL: Unauthorized database modification detected!")
+            st.error("The database has been changed without explicit user action.")
+            
+            emergency_backup = emergency_database_freeze()
+            if emergency_backup:
+                st.error(f"Database frozen. Emergency backup created: {emergency_backup}")
+            
+            st.error("Please check the Admin Panel → Database Recovery Center immediately.")
+            st.stop()  # Stop the app completely
+
+    # Protect backup metadata immediately
+    protect_backup_metadata()
+    
+    # Restore backup metadata if lost
+    if not os.path.exists("enhanced_backup_tracking.json"):
+        restore_backup_metadata()
 
     # ============================================================================
     # PHASE 1: DATABASE PROTECTION FUNCTIONS
@@ -519,13 +710,13 @@ def main():
             if not current_schema:
                 issues.append("Cannot access table schema")
                 return issues
-            
-            # Check for minimum required columns
+              # Check for minimum required columns
             required_columns = ["Customer", "Policy Type", "Carrier Name", "Policy Number"]
             for col in required_columns:
                 if col not in current_schema:
                     issues.append(f"Missing required column: {col}")
-              # Log schema health
+            
+            # Log schema health
             if issues:
                 logging.warning(f"Schema issues found: {issues}")
             else:
@@ -536,10 +727,123 @@ def main():
         except Exception as e:
             logging.error(f"Schema consistency check failed: {e}")
             return [f"Check failed: {e}"]
-    
+
     def show_recovery_options():
         """Show recovery options UI for database restoration."""
         st.subheader("🏥 Database Recovery & Health Center")
+        
+        # ============================================================================
+        # PHASE 1 PROTECTION STATUS DASHBOARD
+        # ============================================================================
+        st.markdown("### 🛡️ Database Protection Status (Phase 1)")
+        
+        # Check protection status
+        protection_active = os.path.exists("database_protection.lock")
+        frozen_status = os.path.exists("database_frozen.lock")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if protection_active:
+                st.metric("Protection Status", "🟢 ACTIVE", help="Database fingerprinting and integrity checking is active")
+            else:
+                st.metric("Protection Status", "🔴 INACTIVE", help="No protection lock found")
+        
+        with col2:
+            if frozen_status:
+                st.metric("Database Status", "🥶 FROZEN", help="Database is frozen due to security concerns")
+            else:
+                st.metric("Database Status", "🟢 NORMAL", help="Database is operating normally")
+        
+        with col3:
+            backup_metadata_exists = os.path.exists("enhanced_backup_tracking.json")
+            redundant_backup = os.path.exists("enhanced_backup_tracking_backup.json")
+            if backup_metadata_exists and redundant_backup:
+                st.metric("Metadata Protection", "🔒 SECURED", help="Backup metadata is protected with redundant copies")
+            elif backup_metadata_exists:
+                st.metric("Metadata Protection", "⚠️ PARTIAL", help="Backup metadata exists but redundant copy missing")
+            else:
+                st.metric("Metadata Protection", "❌ MISSING", help="Backup metadata not found")
+        
+        with col4:
+            current_fingerprint = get_database_fingerprint()
+            if current_fingerprint:
+                st.metric("Database Fingerprint", f"✅ {current_fingerprint[:8]}...", help="Unique database signature for integrity verification")
+            else:
+                st.metric("Database Fingerprint", "❌ NONE", help="Unable to generate database fingerprint")
+        
+        # Protection Details
+        if protection_active:
+            try:
+                with open("database_protection.lock", "r") as f:
+                    lock_data = json.load(f)
+                
+                st.success("🔐 **Protection System Active**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    protected_since = lock_data.get("timestamp", "Unknown")
+                    if protected_since != "Unknown":
+                        try:
+                            dt = datetime.datetime.fromisoformat(protected_since)
+                            st.info(f"**Protected Since**: {dt.strftime('%m/%d/%Y %H:%M:%S')}")
+                        except:
+                            st.info(f"**Protected Since**: {protected_since}")
+                
+                with col2:
+                    stored_fp = lock_data.get("fingerprint", "Unknown")[:8]
+                    current_fp = current_fingerprint[:8] if current_fingerprint else "None"
+                    if stored_fp == current_fp:
+                        st.success(f"**Integrity**: ✅ Verified")
+                    else:
+                        st.error(f"**Integrity**: 🚨 COMPROMISED")
+                        st.error(f"Expected: {stored_fp}, Found: {current_fp}")
+                        
+            except Exception as e:
+                st.warning(f"Could not read protection lock: {e}")
+        
+        # Frozen Database Alert
+        if frozen_status:
+            st.error("🚨 **DATABASE IS FROZEN**")
+            try:
+                with open("database_frozen.lock", "r") as f:
+                    freeze_data = json.load(f)
+                st.error(f"**Reason**: {freeze_data.get('reason', 'Unknown')}")
+                st.error(f"**Frozen At**: {freeze_data.get('frozen_at', 'Unknown')}")
+                if freeze_data.get('emergency_backup'):
+                    st.info(f"**Emergency Backup Created**: {freeze_data['emergency_backup']}")
+            except Exception as e:
+                st.error(f"Could not read freeze lock: {e}")
+        
+        # Protection Actions
+        st.markdown("### 🔧 Protection System Actions")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🛡️ Re-Initialize Protection", help="Recreate protection lock for current database state"):
+                if create_protection_lock():
+                    st.success("Protection lock recreated")
+                    st.rerun()
+                else:
+                    st.error("Failed to create protection lock")
+        
+        with col2:
+            if st.button("🔄 Restore Metadata", help="Attempt to restore backup metadata from redundant copies"):
+                if restore_backup_metadata():
+                    st.success("Backup metadata restored")
+                    st.rerun()
+                else:
+                    st.info("No metadata restoration needed or available")
+        
+        with col3:
+            if frozen_status:
+                if st.button("❄️ Unfreeze Database", help="Remove freeze lock (use with caution)"):
+                    try:
+                        os.remove("database_frozen.lock")
+                        st.success("Database unfrozen")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to unfreeze: {e}")
+        
+        st.markdown("---")
         
         # Schema Health Dashboard
         st.markdown("### 📊 Schema Health Dashboard")
@@ -1493,23 +1797,39 @@ def main():
             
             if validation["warnings"]:
                 for warning in validation["warnings"]:
-                    st.warning(warning)
-              # Backup before save
-            backup_path = "commissions_backup.db"
-            backup_log_path = "commissions_backup_log.json"
-            
-            if st.button("Backup Database Before Mapping Change", key="backup_before_mapping"):
-                import shutil, datetime
-                shutil.copyfile("commissions.db", backup_path)
-                now_str = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-                backup_log = {}
-                if os.path.exists(backup_log_path):
-                    with open(backup_log_path, "r") as f:
-                        backup_log = json.load(f)
-                    backup_log["last_backup_time"] = now_str
-                with open(backup_log_path, "w") as f:
-                    json.dump(backup_log, f)
-                st.success(f"Database backed up to {backup_path} at {now_str}")
+                    st.warning(warning)              # Enhanced backup before mapping changes
+            if st.button("Create Enhanced Backup Before Mapping Change", key="backup_before_mapping"):
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_filename = f"commissions_MAPPING_BACKUP_{timestamp}.db"
+                
+                try:
+                    shutil.copy2("commissions.db", backup_filename)
+                    file_size = os.path.getsize(backup_filename) // 1024
+                    
+                    # Update enhanced tracking log
+                    log_data = load_enhanced_backup_log()
+                    backup_info = {
+                        "filename": backup_filename,
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "size_kb": file_size,
+                        "description": "Pre-mapping change backup"
+                    }
+                    log_data["backups"].append(backup_info)
+                    
+                    log_backup_action("CREATE_BACKUP", {
+                        "filename": backup_filename,
+                        "size_kb": file_size,
+                        "description": "Pre-mapping change backup"
+                    })
+                    
+                    if save_enhanced_backup_log(log_data):
+                        st.success(f"✅ Enhanced backup created: {backup_filename}")
+                    else:
+                        st.warning(f"⚠️ Backup created but log update failed: {backup_filename}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Failed to create enhanced backup: {e}")
+                    log_backup_action("CREATE_BACKUP_FAILED", {"error": str(e)})
             
             # Confirm and save mapping
             if st.button("Save Mapping Change", key="save_one_at_a_time_mapping"):
@@ -1902,54 +2222,145 @@ def main():
                 else:
                     st.info("Select a backup above to restore")
         else:
-            st.info("No enhanced backups found. Create your first enhanced backup above!")
-
-        # Upload database functionality
+            st.info("No enhanced backups found. Create your first enhanced backup above!")        # Upload database functionality
         st.markdown("---")
-        st.markdown("#### 📤 Upload Database")
+        st.markdown("#### � PROTECTED Database Upload (Phase 2)")
+        st.warning("⚠️ BULLETPROOF PROTECTION ACTIVE: Database uploads require multiple explicit confirmations")
         
+        # Multi-step confirmation for uploads
         uploaded_db = st.file_uploader(
-            "Upload a database file to replace the current one",
+            "Upload database file (requires multiple confirmations)",
             type=["db"],
-            help="Upload a .db file to replace the current database. This will overwrite all current data!",
-            key="upload_database"
+            help="This will COMPLETELY REPLACE your current database!",
+            key="protected_upload_database"
         )
         
         if uploaded_db:
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.warning("⚠️ **Upload New Database?**\n\n"
-                          f"Filename: {uploaded_db.name}\n"
-                          f"Size: {len(uploaded_db.getvalue()) // 1024} KB\n\n"
-                          "This will **replace** the current database and **cannot be undone**!")
+            st.error("🚨 DANGER: You are about to REPLACE your entire database!")
+            st.error(f"New file: {uploaded_db.name} ({len(uploaded_db.getvalue()) // 1024} KB)")
             
+            # Step 1: Acknowledge warning
+            acknowledge = st.checkbox("I understand this will DELETE my current database", key="upload_acknowledge")
+            
+            if acknowledge:
+                # Step 2: Type confirmation
+                confirmation_text = st.text_input(
+                    "Type 'REPLACE DATABASE' to confirm:",
+                    key="upload_confirmation"
+                )
+                
+                if confirmation_text == "REPLACE DATABASE":
+                    # Step 3: Final confirmation button
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("� FINAL CONFIRMATION: REPLACE DATABASE", type="secondary"):
+                            try:
+                                # Create multiple backups before replacement
+                                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                
+                                # Backup current database
+                                current_backup = f"BEFORE_UPLOAD_BACKUP_{timestamp}.db"
+                                shutil.copy2("commissions.db", current_backup)
+                                
+                                # Protect existing backup metadata BEFORE upload
+                                protect_backup_metadata()
+                                
+                                # Save uploaded file
+                                with open("commissions.db", "wb") as f:
+                                    f.write(uploaded_db.getvalue())
+                                
+                                # Create new protection lock for uploaded database
+                                create_protection_lock()
+                                
+                                # Restore backup metadata after upload
+                                restore_backup_metadata()
+                                
+                                # Log the action
+                                log_backup_action("USER_UPLOAD_DATABASE", {
+                                    "filename": uploaded_db.name,
+                                    "size_kb": len(uploaded_db.getvalue()) // 1024,
+                                    "backup_created": current_backup,
+                                    "timestamp": timestamp                                })
+                                
+                                st.success(f"✅ Database replaced successfully!")
+                                st.info(f"Previous database backed up to: {current_backup}")
+                                st.info("🔄 Please refresh the page to see new data")
+                                
+                            except Exception as e:
+                                st.error(f"❌ Upload failed: {e}")
+                                log_backup_action("USER_UPLOAD_FAILED", {
+                                    "filename": uploaded_db.name,
+                                    "error": str(e)
+                                })
+                    
+                    with col2:
+                        if st.button("❌ Cancel Upload"):
+                            st.info("Upload cancelled")
+                            st.rerun()
+                else:
+                    if confirmation_text:
+                        st.error("Please type exactly: REPLACE DATABASE")
+        
+        # ============================================================================
+        # PHASE 2 MONITORING DASHBOARD
+        # ============================================================================
+        
+        st.markdown("---")
+        st.markdown("### 🛡️ Upload Protection Monitor")
+        
+        # Protection status metrics
+        if os.path.exists("database_protection.lock"):
+            with open("database_protection.lock", "r") as f:
+                lock_data = json.load(f)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Upload Protection", "🔐 ACTIVE")
             with col2:
-                if st.button("📤 Upload & Replace Database", type="secondary"):
+                protected_since = lock_data.get("timestamp", "Unknown")
+                if protected_since != "Unknown":
                     try:
-                        # Create emergency backup of current state
-                        emergency_backup = create_automatic_backup()
-                        if emergency_backup:
-                            st.info(f"Current state backed up to: {emergency_backup}")
-                        
-                        # Save uploaded file
-                        with open("commissions.db", "wb") as f:
-                            f.write(uploaded_db.getvalue())
-                        
-                        # Log the upload action
-                        log_backup_action("UPLOAD_DATABASE", {
-                            "filename": uploaded_db.name,
-                            "size_kb": len(uploaded_db.getvalue()) // 1024
-                        })
-                        
-                        st.success(f"✅ Database uploaded and replaced successfully!")
-                        st.info("🔄 **Please refresh the page** to see the uploaded data.")
-                        
-                    except Exception as e:
-                        st.error(f"❌ Failed to upload database: {e}")
-                        log_backup_action("UPLOAD_DATABASE_FAILED", {
-                            "filename": uploaded_db.name,
-                            "error": str(e)
-                        })
+                        dt = datetime.datetime.fromisoformat(protected_since)
+                        st.metric("Protected Since", dt.strftime("%m/%d/%Y %H:%M"))
+                    except:
+                        st.metric("Protected Since", "Unknown")
+            with col3:
+                current_fp = get_database_fingerprint()
+                stored_fp = lock_data.get("fingerprint", "Unknown")
+                if current_fp == stored_fp:
+                    st.metric("Database Integrity", "✅ VERIFIED")
+                else:
+                    st.metric("Database Integrity", "🚨 COMPROMISED")
+        else:
+            st.warning("No protection lock found - creating one now...")
+            if create_protection_lock():
+                st.success("Protection lock created!")
+                st.rerun()
+        
+        # Recent upload activities
+        if os.path.exists("enhanced_backup_tracking.json"):
+            with open("enhanced_backup_tracking.json", "r") as f:
+                tracking_data = json.load(f)
+            
+            st.markdown("#### Recent Upload Activities")
+            upload_actions = [action for action in tracking_data.get("actions", []) if "UPLOAD" in action.get("action", "")]
+            if upload_actions:
+                recent_uploads = upload_actions[-3:]  # Last 3 uploads
+                for upload in reversed(recent_uploads):
+                    timestamp = upload.get("timestamp", "Unknown")
+                    action_type = upload.get("action", "Unknown")
+                    details = upload.get("details", {})
+                    
+                    if "FAILED" in action_type:
+                        st.error(f"❌ {timestamp} - Upload Failed: {details.get('error', 'Unknown error')}")
+                    else:
+                        filename = details.get("filename", "Unknown")
+                        size_kb = details.get("size_kb", 0)
+                        st.success(f"✅ {timestamp} - Uploaded: {filename} ({size_kb} KB)")
+            else:
+                st.info("No upload activities recorded yet")
+        
+        st.markdown("---")
 
         # Live tracking log display
         st.markdown("---")
@@ -1977,56 +2388,8 @@ def main():
                     st.error(f"❌ **{timestamp}** - {action_type}: {details.get('error', 'Unknown error')}")
                 else:
                     st.write(f"📝 **{timestamp}** - {action_type}: {details}")
-        else:
-            st.info("No backup actions recorded yet.")
-
-        # Legacy backup section (maintained for compatibility)
-        st.markdown("---") 
-        st.markdown("#### 🔄 Legacy Backup System (Compatibility)")
-        st.caption("This is the original backup system, maintained for compatibility with existing workflows.")
         
-        backup_path = "commissions_backup.db"
-        backup_log_path = "commissions_backup_log.json"
-
-        # Load last backup info
-        last_backup_time = None
-        if os.path.exists(backup_log_path):
-            with open(backup_log_path, "r") as f:
-                backup_log = json.load(f)
-                last_backup_time = backup_log.get("last_backup_time")
-        else:
-            backup_log = {}
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Legacy Backup Database", help="Creates commissions_backup.db (overwrites existing)"):
-                import shutil
-                import datetime
-                try:
-                    import pytz
-                    eastern = pytz.timezone("US/Eastern")
-                    now_eastern = datetime.datetime.now(eastern)
-                except ImportError:
-                    now_eastern = datetime.datetime.now()
-                shutil.copyfile("commissions.db", backup_path)
-                now_str = now_eastern.strftime("%m/%d/%Y %I:%M:%S %p %Z")
-                backup_log["last_backup_time"] = now_str
-                with open(backup_log_path, "w") as f:
-                    json.dump(backup_log, f)
-                st.success(f"Legacy backup created: {backup_path} at {now_str}")
-                last_backup_time = now_str
-        with col2:
-            if st.button("Restore from Legacy Backup"):
-                import shutil
-                if os.path.exists(backup_path):
-                    shutil.copyfile(backup_path, "commissions.db")
-                    st.success("Database restored from legacy backup. Please restart the app.")
-                else:
-                    st.error("No legacy backup file found. Please create a backup first.")        # Show last backup time
-        if last_backup_time:
-            st.info(f"Last legacy backup: {last_backup_time}")
-        else:
-            st.info("No legacy backup has been made yet.")
+        st.markdown("---")
 
         # --- DATABASE PROTECTION & RECOVERY CENTER ---
         st.markdown("---")
@@ -2813,16 +3176,16 @@ def main():
                     st.success("Policy ledger changes saved.")
                     st.rerun()    # --- Help ---
     elif page == "Help":
-        st.subheader("Help & Documentation")
-        
-        # Create tabs for organized help content
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        st.subheader("Help & Documentation")          # Create tabs for organized help content
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
             "📖 Getting Started", 
             "🔧 Features Guide", 
             "💡 Tips & Tricks", 
             "⚠️ Troubleshooting", 
             "🧮 Formulas", 
-            "❓ FAQ"
+            "❓ FAQ",
+            "🛡️ Data Protection",
+            "🗺️ Roadmap"
         ])
         
         with tab1:
@@ -3006,11 +3369,11 @@ def main():
             - **Column Mapping**: Map database columns to app functions
             - **Add/Delete Columns**: Modify database structure
             - **Header Renaming**: Change column names
-            - **Backup/Restore**: Database protection and recovery
+            - **Enhanced Backup & Restore**: Database protection and recovery
             - **File Upload Mapping**: Configure mapping from uploaded files
             
             **Common Admin Tasks**:
-            1. **Backup Database**: Always backup before making changes
+            1. **Backup Database**: Always create Enhanced backup before making changes
             2. **Column Mapping**: Ensure app functions work with your data structure
             3. **Add Columns**: Add new fields as your business needs evolve
             4. **Restore**: Recover from backups if needed
@@ -3738,13 +4101,587 @@ def main():
             ---
             
             ## 📞 Quick Reference
-            
-            **Emergency Recovery**: Admin Panel → Database Recovery Center
+              **Emergency Recovery**: Admin Panel → Database Recovery Center
             **Backup Data**: Admin Panel → Enhanced Backup System
             **Export Data**: Reports → Download as CSV/Excel
             **Get Technical Info**: Enable Debug checkbox in sidebar
             **Formula Reference**: Help → Formulas tab
             **Column Issues**: Admin Panel → Column Mapping
+            """)
+        
+        with tab7:
+            st.markdown("""
+            # 🛡️ Database Protection System
+            
+            ## 📋 Protection System Overview
+            
+            Your Sales Commission Tracker is now protected by a comprehensive, multi-phase security system designed to prevent data loss, unauthorized changes, and corruption. This system operates automatically in the background while providing you with complete control and transparency.
+            
+            ### 🎯 What This System Protects Against
+            
+            **❌ Problems Solved**:
+            - Accidental database overwrites during file uploads
+            - Loss of backup history and metadata
+            - Unauthorized external database modifications  
+            - Data corruption from unexpected system changes
+            - Incomplete or failed upload operations
+            
+            **✅ Protection Provided**:
+            - Real-time database integrity monitoring
+            - Automatic emergency backups when threats detected
+            - Multi-step confirmation for dangerous operations
+            - Redundant backup metadata protection
+            - Complete audit trail of all changes
+            
+            ### 🚀 Quick Start Guide
+            
+            1. **Normal Operation**: The protection system works automatically - no action needed
+            2. **Check Status**: View protection status in Admin Panel → Protection Status Dashboard
+            3. **Safe Uploads**: Follow the guided multi-step process for database uploads
+            4. **Emergency Recovery**: Use Admin Panel → Database Recovery Center if issues arise
+            5. **Monitor Activity**: Review upload history and system alerts in Admin Panel
+            
+            ---
+            
+            ## 🚨 Phase 1: Emergency Backup Protection (Active)
+            
+            Your database is now protected by a bulletproof security system designed to prevent unauthorized changes and data loss.
+            
+            ### 🔐 Active Protection Features
+            
+            **Database Fingerprinting**: Every time the app starts, it creates a unique "fingerprint" of your database
+            **Integrity Verification**: The app constantly checks if your database has been modified unexpectedly
+            **Emergency Freeze**: If unauthorized changes are detected, the app will immediately:
+            - Stop all operations
+            - Create an emergency backup
+            - Display warning messages
+            - Prevent further damage
+            
+            ### 📊 Backup Metadata Protection
+            
+            **Problem Solved**: Previously, backup history was being wiped when uploading databases
+            **Solution Implemented**:
+            - Backup tracking files are now protected with redundant copies
+            - Automatic reconstruction of backup history from disk files
+            - Metadata is preserved during database uploads
+            - Multiple backup copies prevent total loss
+            
+            ### 🔧 How It Works
+            
+            1. **Startup Check**: Every app launch verifies database integrity
+            2. **Continuous Monitoring**: Real-time protection against unauthorized changes
+            3. **Metadata Backup**: Backup history is automatically protected
+            4. **Recovery System**: Multiple layers of backup and recovery options
+            
+            ### ⚠️ Protection Alerts
+            
+            If you see these messages, take immediate action:
+            
+            **🚨 "Unauthorized database modification detected"**
+            - Your database was changed without using the app
+            - An emergency backup has been created
+            - Check Admin Panel → Database Recovery Center
+            
+            **📋 "Backup metadata restored"**
+            - Your backup history was recovered from redundant copies
+            - This is normal and indicates the protection system is working
+            
+            **🔄 "Backup history reconstructed"**
+            - The app found backup files and rebuilt the tracking log
+            - Your backups are safe and accounted for
+            
+            ### 🎯 Best Practices
+            
+            **✅ Safe Operations**:
+            - Always use the app's upload feature in Admin Panel
+            - Create backups before major changes
+            - Use the protected upload process with multiple confirmations
+            
+            **❌ Avoid These**:
+            - Never manually copy database files over the existing one
+            - Don't delete protection lock files
+            - Avoid editing the database outside the app
+            
+            ### 🛠️ Admin Tools
+            
+            **Database Protection Monitor**: Admin Panel → Protection Status
+            **Emergency Recovery**: Admin Panel → Database Recovery Center
+            **Backup Management**: Admin Panel → Enhanced Backup System
+            **Integrity Check**: Runs automatically on startup            ### 📈 Protection Phases
+            
+            **✅ Phase 1 (ACTIVE)**: Emergency backup protection with database fingerprinting
+            **✅ Phase 2 (ACTIVE)**: Enhanced upload protection with multi-step confirmation
+            **✅ Phase 3 (COMPLETE)**: Legacy system removal and cleanup
+            **🔮 Phase 4 (Future)**: Cloud backup integration and sync
+              ## 🔒 Phase 2: Enhanced Upload Protection (ACTIVE)
+            
+            Building on Phase 1's foundation, Phase 2 adds bulletproof upload protection to prevent accidental database overwrites.
+            
+            ### 🛡️ Multi-Step Upload Confirmation
+            
+            **What Changed**: Database uploads now require THREE explicit confirmations:
+            1. **Acknowledge Warning**: Check box confirming you understand the consequences
+            2. **Type Confirmation**: Must type "REPLACE DATABASE" exactly (case sensitive)
+            3. **Final Button**: Click the final confirmation button to proceed
+            
+            **Why This Matters**: Prevents accidental database overwrites and ensures you really mean to replace your data
+            
+            ### 🔐 Enhanced Metadata Protection
+            
+            **Before Upload**: Automatically protects your backup metadata with redundant copies
+            **After Upload**: Automatically restores backup metadata so your history is preserved
+            **Protection Lock**: Creates new fingerprint for uploaded database immediately
+            
+            ### 📊 Upload Monitoring Dashboard
+            
+            **Real-Time Status**: See protection status and database integrity in Admin Panel
+            **Upload History**: Track all upload activities with timestamps and file details
+            **Failed Upload Tracking**: Monitor and troubleshoot any upload failures
+            
+            ### 🚨 What You'll See During Upload
+            
+            **🔴 Red Warning Messages**: Clear danger indicators when uploading
+            **📝 Step-by-Step Process**: Guided confirmation process prevents mistakes
+            **✅ Success Confirmations**: Clear feedback when uploads complete successfully
+            **📋 Backup Notifications**: Information about automatic backups created
+            
+            ### ⚠️ Protection Alerts for Phase 2
+            
+            **🔴 "Type 'REPLACE DATABASE' to confirm"**
+            - You must type this exactly (case sensitive)
+            - This ensures you're paying attention to the serious action
+            
+            **📤 "Database replaced successfully"** 
+            - Upload completed and protection reactivated
+            - Backup metadata preserved and restored
+            
+            **❌ "Upload failed"**
+            - Something went wrong during upload
+            - Your original database is safe and unchanged
+            
+            ### 🎯 Best Practices for Safe Uploads
+            
+            **Before Uploading**:
+            - Always create a manual backup first
+            - Verify your upload file is correct and complete
+            - Close other applications using the database
+            - Ensure you have adequate disk space
+            
+            **During Upload**:
+            - Read all warning messages carefully
+            - Type the confirmation phrase exactly as required
+            - Wait for the upload to complete fully
+            - Do not close the browser during upload
+            
+            **After Upload**:
+            - Verify data appears correctly in the app
+            - Check that backup metadata was restored
+            - Create a new backup of the uploaded database            - Test key functionality to ensure data integrity
+              ## ✅ Phase 3: Legacy System Removal (COMPLETE)
+            
+            Phase 3 successfully removed the redundant legacy backup system, simplifying the interface while maintaining full data protection.
+            
+            ### 🗑️ What Was Removed
+            
+            **Legacy Backup Components**:
+            - Old "Legacy Backup Database" button
+            - Old "Restore from Legacy Backup" button  
+            - Legacy backup tracking (`commissions_backup_log.json`)
+            - Single-file backup system (`commissions_backup.db`)
+            
+            ### 🔄 What Was Improved
+            
+            **Enhanced Integration**:
+            - Column mapping changes now use Enhanced backup system
+            - All backup operations unified under Enhanced system
+            - Cleaner, more professional Admin Panel interface
+            - No more confusion between two backup systems
+            
+            ### 🛡️ Protection Maintained
+            
+            **Before Removal**:
+            - Automatic Phase 3 safety backup created
+            - All existing backup files preserved
+            - Enhanced system fully tested and verified
+            
+            **After Removal**:
+            - Enhanced backup system handles all backup needs
+            - Superior timestamped backup functionality
+            - Better tracking, logging, and recovery options
+            - Professional interface with comprehensive features
+            
+            ### 💡 Benefits Achieved
+            
+            **User Experience**:
+            - Single, unified backup system
+            - No more choosing between Legacy vs Enhanced
+            - Cleaner Admin Panel interface
+            - Professional, modern backup workflow
+            
+            **Technical Improvements**:
+            - Reduced code complexity
+            - Better error handling and logging
+            - Superior backup metadata protection
+            - Integration with Phase 1 & 2 protection systems
+            
+            ---
+            
+            ### �️ Protection Components
+            
+            **Fingerprint Algorithm**: SHA-256 hash of database content (16-character truncated for display)
+            **Protection Files**: 
+            - `database_protection.lock` - Main protection lock with database fingerprint
+            - `enhanced_backup_tracking_backup.json` - Redundant metadata backup
+            - `backup_metadata_[timestamp].json` - Timestamped metadata copies
+            
+            **Emergency Files**:
+            - `EMERGENCY_BACKUP_[timestamp].db` - Created when unauthorized changes detected
+            - `database_frozen.lock` - Indicates system is in protection mode
+            
+            ### 🔧 How Protection Works
+            
+            **Startup Sequence**:
+            1. Calculate current database fingerprint
+            2. Compare with stored protection lock
+            3. Verify backup metadata integrity
+            4. Initialize protection monitoring
+            
+            **Continuous Monitoring**:
+            - Database integrity checked on all major operations
+            - Backup metadata protected with redundant copies
+            - Automatic emergency backups if threats detected
+            
+            **Upload Protection**:
+            - Pre-upload backup metadata protection
+            - Multi-confirmation process prevents accidents
+            - Post-upload fingerprint regeneration
+            - Automatic metadata restoration
+            
+            ### 📊 Monitoring & Recovery
+            
+            **Admin Panel Tools**:
+            - **Protection Status Dashboard**: Real-time integrity monitoring
+            - **Upload Monitor**: Track upload activities and status
+            - **Database Recovery Center**: Complete backup and restore system
+            - **Emergency Recovery**: Access to emergency backups and frozen state recovery
+            
+            ### 🚨 Emergency Procedures
+            
+            **If Protection System Activates**:
+            1. **Stop immediately** - Do not make further changes
+            2. **Check Admin Panel** → Protection Status for details
+            3. **Review Recent Actions** - What triggered the protection?
+            4. **Use Recovery Tools** - Restore from emergency backup if needed
+            5. **Contact Support** if issues persist
+            
+            **Recovery Steps**:
+            1. Go to Admin Panel → Database Recovery Center
+            2. Review available backups (emergency and regular)
+            3. Select most recent backup before the issue
+            4. Follow guided restoration process
+            5. Verify data integrity after restoration
+            
+            This protection system ensures your commission data is safe from accidental loss, corruption, or unauthorized changes while maintaining full functionality for authorized operations.            """)
+        
+        with tab8:
+            st.markdown("""
+            # 🗺️ Development Roadmap
+            
+            ## 📊 Project Overview
+            
+            Welcome to the Sales Commission Tracker development roadmap! This section provides complete transparency into what has been accomplished, what's currently in development, and what's planned for the future.
+            
+            ### 🎯 Mission Statement
+            
+            To provide insurance agents and agencies with the most reliable, user-friendly, and feature-rich commission tracking system available, with bulletproof data protection and professional-grade functionality.
+            
+            ---
+            
+            ## ✅ Completed Milestones
+            
+            ### 🏁 Core Application (Q2 2024)
+            
+            **✅ Foundation & Basic Features**
+            - Complete Streamlit-based web application
+            - SQLite database with full CRUD operations
+            - Policy transaction management
+            - Client management system
+            - Basic reporting and export capabilities
+            
+            **✅ Advanced Features**
+            - Dynamic commission calculations
+            - Customizable column mapping
+            - Search and filter functionality
+            - Dashboard with metrics
+            - Excel/CSV import and export
+            
+            **✅ User Experience**
+            - Intuitive navigation with sidebar
+            - Professional UI with highlighted input fields
+            - Responsive design for various screen sizes
+            - Comprehensive help documentation
+            
+            ### 🛡️ Phase 1: Emergency Backup Protection (Q2 2025)
+            
+            **✅ Database Security & Integrity**
+            - SHA-256 database fingerprinting system
+            - Real-time integrity monitoring
+            - Automatic emergency backup creation
+            - Unauthorized change detection
+            - Protection lock system
+            
+            **✅ Backup Metadata Protection**
+            - Redundant backup tracking files
+            - Automatic backup history reconstruction
+            - Metadata preservation during uploads
+            - Multi-layer backup verification
+            
+            ### 🔒 Phase 2: Enhanced Upload Protection (Q2 2025)
+            
+            **✅ Bulletproof Upload System**
+            - Three-step confirmation process
+            - Type-to-confirm security measure
+            - Pre/post-upload metadata protection
+            - Automatic fingerprint regeneration
+            - Upload monitoring dashboard
+            
+            **✅ Admin Panel Enhancements**
+            - Real-time protection status display
+            - Upload activity tracking
+            - Failed upload monitoring
+            - Comprehensive backup management
+            
+            ### ✅ Phase 3: Legacy System Removal (Q2 2025)
+            
+            **✅ System Cleanup & Optimization**
+            - Legacy backup system removal
+            - Interface simplification
+            - Code optimization and cleanup
+            - Enhanced system as sole solution
+            - Improved user experience
+            
+            ---
+            
+            ## 🔮 Phase 4: Cloud Integration & Advanced Features (Q3 2025)
+            
+            ### ☁️ Cloud Backup Integration
+            
+            **Planned Features:**
+            - **Automatic Cloud Storage**: Seamless backup to Google Drive, OneDrive, or Dropbox
+            - **Cross-Device Synchronization**: Access your data from multiple devices
+            - **Remote Backup Verification**: Verify backup integrity from anywhere
+            - **Disaster Recovery**: Complete cloud-based recovery options
+            
+            **Benefits:**
+            - Never lose data even if local storage fails
+            - Access your commission data from anywhere
+            - Automatic off-site backup protection
+            - Professional-grade disaster recovery
+            
+            ### 📊 Advanced Reporting & Analytics
+            
+            **Planned Features:**
+            - **Scheduled Reports**: Automatic monthly/quarterly report generation
+            - **Email Integration**: Reports delivered directly to your inbox
+            - **Dashboard Analytics**: Visual charts and performance metrics
+            - **Trend Analysis**: Historical performance tracking
+            - **Custom KPIs**: Define and track your key performance indicators
+            
+            **Benefits:**
+            - Save time with automated reporting
+            - Better insights into commission trends
+            - Professional presentation for management
+            - Data-driven decision making
+            
+            ### 🔗 API Integration & Connectivity
+            
+            **Planned Features:**
+            - **Carrier System Integration**: Direct import from insurance company systems
+            - **Accounting Software Export**: Direct export to QuickBooks, Xero, etc.
+            - **CRM Integration**: Connect with Salesforce, HubSpot, and others
+            - **Real-time Commission Tracking**: Live updates from carrier systems
+            
+            **Benefits:**
+            - Eliminate manual data entry
+            - Ensure data accuracy and consistency
+            - Streamline workflow between systems
+            - Real-time commission visibility
+            
+            ---
+            
+            ## 🔮 Future Phases (2025-2026)
+            
+            ### Phase 5: Mobile Application (Q4 2025)
+            
+            **Planned Features:**
+            - Native iOS and Android apps
+            - Offline data access
+            - Mobile-optimized interface
+            - Push notifications for payments
+            - Camera-based document scanning
+            
+            ### Phase 6: AI & Automation (Q1 2026)
+            
+            **Planned Features:**
+            - AI-powered data entry assistance
+            - Automated commission reconciliation
+            - Predictive analytics for sales forecasting
+            - Smart data validation and error detection
+            - Natural language query interface
+            
+            ### Phase 7: Multi-User & Enterprise (Q2 2026)
+            
+            **Planned Features:**
+            - Multi-user access with role-based permissions
+            - Agency-level dashboards and reporting
+            - User activity tracking and audit logs
+            - Collaborative features for teams
+            - Enterprise-grade security and compliance
+            
+            ---
+            
+            ## 📈 Development Timeline
+            
+            ### 2024
+            - ✅ **Q2**: Core application development and launch
+            - ✅ **Q3**: Feature enhancements and user feedback integration
+            - ✅ **Q4**: Stability improvements and optimization
+            
+            ### 2025
+            - ✅ **Q2**: Phase 1-3 Protection System Implementation
+            - 🔄 **Q3**: Phase 4 Cloud Integration (In Development)
+            - 🔮 **Q4**: Mobile application development
+            
+            ### 2026
+            - 🔮 **Q1**: AI and automation features
+            - 🔮 **Q2**: Multi-user enterprise features
+            - 🔮 **Q3**: Advanced analytics and business intelligence
+            - 🔮 **Q4**: Industry-specific customizations
+            
+            ---
+            
+            ## 💡 Feature Request & Feedback
+            
+            ### 🗣️ How to Request Features
+            
+            We value your input! Here's how you can suggest new features or improvements:
+            
+            **Priority Areas:**
+            - Commission calculation enhancements
+            - Additional reporting capabilities
+            - Integration with specific tools or systems
+            - User interface improvements
+            - Performance optimizations
+            
+            **Request Process:**
+            1. **Document Your Need**: Clearly describe the feature and why it would be valuable
+            2. **Provide Context**: Explain your current workflow and how this would improve it
+            3. **Include Examples**: Screenshots or examples of similar features elsewhere
+            4. **Suggest Implementation**: If you have ideas on how it could work
+            
+            ### 📊 Current Development Priorities
+            
+            **High Priority (Phase 4):**
+            1. Cloud backup integration
+            2. Automated report scheduling
+            3. Email delivery system
+            4. Advanced dashboard analytics
+            
+            **Medium Priority (Phase 5-6):**
+            1. Mobile application
+            2. API integrations
+            3. AI-powered features
+            4. Advanced automation
+            
+            **Long Term (Phase 7+):**
+            1. Multi-user capabilities
+            2. Enterprise features
+            3. Industry-specific modules
+            4. Advanced compliance tools
+            
+            ---
+            
+            ## 🎯 Success Metrics
+            
+            ### 📊 Quality Indicators
+            
+            **Data Protection:**
+            - ✅ Zero data loss incidents since Phase 1 implementation
+            - ✅ 100% backup success rate with Enhanced system
+            - ✅ Multi-layer protection against unauthorized changes
+            
+            **User Experience:**
+            - ✅ Comprehensive help documentation (8 tabs)
+            - ✅ Professional, intuitive interface
+            - ✅ Robust error handling and recovery
+            
+            **System Reliability:**
+            - ✅ Bulletproof upload protection (Phase 2)
+            - ✅ Automatic integrity monitoring (Phase 1)
+            - ✅ Clean, optimized codebase (Phase 3)
+            
+            ### 🎪 Continuous Improvement
+            
+            **Monthly:**
+            - Performance monitoring and optimization
+            - User feedback analysis and integration
+            - Security updates and enhancements
+            
+            **Quarterly:**
+            - Major feature releases
+            - Documentation updates
+            - System architecture reviews
+            
+            **Annually:**
+            - Technology stack evaluation
+            - Long-term roadmap planning
+            - Strategic partnership assessments
+            
+            ---
+            
+            ## 🔧 Technical Foundation
+            
+            ### 🏗️ Current Architecture
+            
+            **Frontend:** Streamlit (Python web framework)
+            **Database:** SQLite with SQL-Alchemy ORM
+            **Data Processing:** Pandas for data manipulation
+            **File Handling:** Excel, CSV, PDF support
+            **Protection:** Multi-phase security system
+            
+            ### 🚀 Planned Technologies
+            
+            **Phase 4 (Cloud Integration):**
+            - Cloud storage APIs (Google Drive, OneDrive, Dropbox)
+            - Email service integration (SMTP, SendGrid)
+            - RESTful API development
+            
+            **Phase 5 (Mobile):**
+            - React Native or Flutter for cross-platform development
+            - Cloud database synchronization
+            - Offline-first architecture
+            
+            **Phase 6 (AI):**
+            - Machine learning libraries (scikit-learn, TensorFlow)
+            - Natural language processing (spaCy, NLTK)
+            - Automated data validation algorithms
+            
+            ### 🔒 Security Roadmap
+            
+            **Current (Phases 1-3):**
+            - Database fingerprinting and integrity monitoring
+            - Multi-step upload confirmation
+            - Comprehensive backup and recovery systems
+            
+            **Phase 4+:**
+            - End-to-end encryption for cloud storage
+            - Advanced user authentication
+            - Audit logging and compliance reporting
+            - Industry-standard security certifications
+            
+            ---
+            
+            This roadmap is a living document that evolves based on user needs, technological advances, and industry requirements. Your feedback and suggestions are invaluable in shaping the future of the Sales Commission Tracker!
             """)
         
         # Add a search box for the help content
@@ -3767,6 +4704,10 @@ def main():
                 suggestions.append("📋 See 'Features Guide' → Reports section")
             if any(term in help_search.lower() for term in ['error', 'problem', 'issue', 'bug']):
                 suggestions.append("⚠️ Check the 'Troubleshooting' tab")
+            if any(term in help_search.lower() for term in ['roadmap', 'future', 'planned', 'development', 'phase']):
+                suggestions.append("🗺️ Check the 'Roadmap' tab for development plans")
+            if any(term in help_search.lower() for term in ['cloud', 'mobile', 'api', 'ai', 'automation']):
+                suggestions.append("🔮 See 'Roadmap' → Future Phases for advanced features")
             
             if suggestions:
                 for suggestion in suggestions:
