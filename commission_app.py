@@ -468,15 +468,14 @@ def main():
             return emergency_backup
         except Exception as e:
             logging.error(f"Emergency freeze failed: {e}")
-            return None
-
-    # ============================================================================
+            return None    # ============================================================================
     # ENHANCED BACKUP METADATA PROTECTION
     # Purpose: Protect backup tracking files from being wiped
     # ============================================================================
 
     def protect_backup_metadata():
         """Create redundant copies of backup metadata to prevent loss."""
+        import shutil
         try:
             tracking_file = "enhanced_backup_tracking.json"
             if os.path.exists(tracking_file):
@@ -496,6 +495,7 @@ def main():
 
     def restore_backup_metadata():
         """Attempt to restore backup metadata from redundant copies."""
+        import shutil
         try:
             tracking_file = "enhanced_backup_tracking.json"
             redundant_copy = f"enhanced_backup_tracking_backup.json"
@@ -2255,6 +2255,9 @@ def main():
                     with col1:
                         if st.button("� FINAL CONFIRMATION: REPLACE DATABASE", type="secondary"):
                             try:
+                                # Ensure shutil is available in local scope
+                                import shutil
+                                
                                 # Create multiple backups before replacement
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                                 
