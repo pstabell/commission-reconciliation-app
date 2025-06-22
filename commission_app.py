@@ -297,7 +297,6 @@ CURRENCY_COLUMNS = [
     "Agency Gross Comm",
     "Agent Paid Amount (STMT)",
     "Estimated Agent Comm",
-    "Estimated Agent Comm (New 50% Renewal 25%)",
     "Policy Balance Due",  # Updated to use the new calculated column
     "Agent Estimated Comm $",
     "Agency Estimated Comm/Revenue (CRM)",
@@ -674,7 +673,6 @@ def main():
                     "Agency Estimated Comm/Revenue (CRM)" REAL,
                     "Policy Origination Date" TEXT,
                     "Effective Date" TEXT,
-                    "Paid" TEXT,
                     "Calculated Commission" REAL,
                     "Client ID" TEXT,
                     "Transaction ID" TEXT
@@ -705,20 +703,15 @@ def main():
     rename_dict = {
         "Policy type": "Policy Type",
         "Carrier": "Carrier Name",
-        "Policy #": "Policy Number",
-        "Estimated Agent Comm - New 50% Renewal 25%": "Estimated Agent Comm (New 50% Renewal 25%)",
+        "Policy #": "Policy Number",        "Estimated Agent Comm - New 50% Renewal 25%": "Agent Estimated Comm $",
         "Customer Name": "Customer",
-        "Producer Name": "Producer",
-        "Lead source": "Lead Source",
         "Premium Sold": "Premium Sold",
         "Agency Gross Paid": "Agency Gross Paid",
         "Gross Agency Comm %": "Gross Agency Comm %",
         "NEW BIZ CHECKLIST COMPLETE": "NEW BIZ CHECKLIST COMPLETE",
         "X-DATE": "X-DATE",
-        "STMT DATE": "STMT DATE",
-        "Agency Gross Comm": "Agency Gross Comm",
+        "STMT DATE": "STMT DATE",        "Agency Gross Comm": "Agency Gross Comm",
         "Agent Paid Amount (STMT)": "Agent Paid Amount (STMT)",
-        "PAST DUE": "PAST DUE",
         "FULL OR MONTHLY PMTS": "FULL OR MONTHLY PMTS",
         "NOTES": "NOTES"
     }
@@ -742,59 +735,39 @@ def main():
         st.metric("Total Transactions", len(all_data))
         if "Calculated Commission" in all_data.columns:
             st.metric("Total Commissions", f"${all_data['Calculated Commission'].sum():,.2f}")
-        st.write("Welcome! Use the sidebar to navigate.")        # --- Client Search & Edit (clean selectbox style) ---
-        st.markdown("### Search and Edit a Client")
+        st.write("Welcome! Use the sidebar to navigate.")
+        
+        # --- Client Search & Edit (clean selectbox style) ---        st.markdown("### Search and Edit a Client")
         customer_col = get_mapped_column("Customer")
         if customer_col and customer_col in all_data.columns:
             customers = ["Select a client..."] + sorted(all_data[customer_col].dropna().unique().tolist())
             selected_client = st.selectbox("Filter by Customer:", customers)
         else:
             selected_client = None
-
+        
         if selected_client and selected_client != "Select a client...":
             client_df = all_data[all_data[customer_col].str.strip().str.lower() == selected_client.strip().lower()].reset_index(drop=True)
             st.write(f"Showing policies for **{selected_client}**:")
             
-            # --- Calculate PAST DUE for each row using mapped columns ---
-            agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
-            agent_comm_col = get_mapped_column("Agent Estimated Comm $") or get_mapped_column("Estimated Agent Comm (New 50% Renewal 25%)")
-            
-            if agent_paid_col and agent_comm_col and agent_paid_col in client_df.columns and agent_comm_col in client_df.columns:
-                paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce").fillna(0)
-                commission_amounts = pd.to_numeric(client_df[agent_comm_col], errors="coerce").fillna(0)
-                client_df["PAST DUE"] = commission_amounts - paid_amounts
-            else:
-                st.warning(f"Missing required columns for PAST DUE calculation. Looking for: {agent_paid_col}, {agent_comm_col}")
-            
             # --- Show metrics side by side, spaced in 6 columns, shifted left ---
             col1, col2, col3, col4, col5, col6 = st.columns(6)            # Move metrics to col2 and col3, leaving col6 open for future data
             with col2:
+                agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
                 if agent_paid_col and agent_paid_col in client_df.columns:
                     paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce")
                     total_paid = paid_amounts.sum()
                     st.metric(label="Total Paid Amount", value=f"${total_paid:,.2f}")
                 else:
                     st.warning(f"No '{get_ui_field_name('Agent Paid Amount (STMT)')}' column found for this client.")
-
+            
             with col3:
-                due_date_col = get_mapped_column("Due Date")
-                if (
-                    agent_paid_col and agent_paid_col in client_df.columns
-                    and due_date_col and due_date_col in client_df.columns
-                    and agent_comm_col and agent_comm_col in client_df.columns
-                ):
-                    today = pd.to_datetime(datetime.datetime.today())
-                    due_dates = pd.to_datetime(client_df[due_date_col], errors="coerce")
-                    paid_amounts = pd.to_numeric(client_df[agent_paid_col], errors="coerce").fillna(0)
-                    commission_amounts = pd.to_numeric(client_df[agent_comm_col], errors="coerce").fillna(0)
-                    # Only consider rows past due and not fully paid
-                    past_due_mask = (due_dates < today) & (paid_amounts < commission_amounts)
-                    total_past_due = (commission_amounts - paid_amounts)[past_due_mask].sum()
-                    if pd.isna(total_past_due):
-                        total_past_due = 0.0
-                    st.metric(label="Total Past Due", value=f"${total_past_due:,.2f}")
+                # Calculate total estimated commissions for this client
+                agent_comm_col = get_mapped_column("Agent Estimated Comm $")
+                if agent_comm_col and agent_comm_col in client_df.columns:
+                    total_estimated_comm = pd.to_numeric(client_df[agent_comm_col], errors="coerce").fillna(0).sum()
+                    st.metric(label="Total Est. Commission", value=f"${total_estimated_comm:,.2f}")
                 else:
-                    st.metric(label="Total Past Due", value="$0.00")
+                    st.metric(label="Total Est. Commission", value="$0.00")
 
             # --- Pagination controls ---
             page_size = 10
@@ -911,26 +884,22 @@ def main():
             auto_transaction_id = generate_transaction_id() if transaction_id_col and transaction_id_col in db_columns else None
             assigned_client_id = st.session_state.get("assigned_client_id", None)
             assigned_client_name = st.session_state.get("assigned_client_name", None)
-            
-            # Get mapped column names for form exclusions
+              # Get mapped column names for form exclusions
             skip_fields = [
-                get_mapped_column("Lead Source"),
-                get_mapped_column("Producer"), 
                 get_mapped_column("Agency Gross Paid"),
-                get_mapped_column("Paid"),
                 get_mapped_column("Gross Agency Comm %"),
                 get_mapped_column("Agency Gross Comm"),
                 get_mapped_column("Statement Date"),
                 get_mapped_column("STMT DATE"),
                 get_mapped_column("Items"),
-                get_mapped_column("Agent Paid Amount (STMT)"),
-                get_mapped_column("PAST DUE")
+                get_mapped_column("Agent Paid Amount (STMT)")
             ]
             # Remove None values and add original names as fallback
             skip_fields = [f for f in skip_fields if f] + [
-                "Lead Source", "Producer", "Agency Gross Paid", "Paid",
+                "Agency Gross Paid",
                 "Gross Agency Comm %", "Agency Gross Comm", "Statement Date",
-                "STMT DATE", "Items", "Agent Paid Amount (STMT)", "PAST DUE"            ]
+                "STMT DATE", "Items", "Agent Paid Amount (STMT)"
+            ]
             
             for col in db_columns:
                 if col in skip_fields:
@@ -972,9 +941,6 @@ def main():
                         new_row[col] = val.strftime("%m/%d/%Y") if isinstance(val, datetime.date) else str(val)
                 elif col == "Calculated Commission":
                     val = st.number_input(col, min_value=-1000000.0, max_value=1000000.0, step=0.01, format="%.2f")
-                    new_row[col] = val
-                elif col == "Paid":
-                    val = st.selectbox(col, ["No", "Yes"])
                     new_row[col] = val
                 elif col == transaction_type_col or col == "Transaction Type":
                     val = st.selectbox(col, ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"])
@@ -1045,10 +1011,8 @@ def main():
         # --- Column selection ---
         st.markdown("**Select columns to include in your report:**")
         columns = all_data.columns.tolist()
-        selected_columns = st.multiselect("Columns", columns, default=columns)
-
-        # --- Date range filter (user can pick which date column) using mapped columns ---
-        date_field_names = ["Effective Date", "Policy Origination Date", "Due Date", "X-Date", "X-DATE"]
+        selected_columns = st.multiselect("Columns", columns, default=columns)        # --- Date range filter (user can pick which date column) using mapped columns ---
+        date_field_names = ["Effective Date", "Policy Origination Date", "X-Date", "X-DATE"]
         available_date_columns = []
         for field_name in date_field_names:
             mapped_col = get_mapped_column(field_name)
@@ -1114,8 +1078,7 @@ def main():
         # Ensure Policy Balance Due is numeric for filtering
         if target_balance_col in report_df.columns:
             report_df[target_balance_col] = pd.to_numeric(report_df[target_balance_col], errors="coerce").fillna(0)
-        
-        # Apply Balance Due filter
+          # Apply Balance Due filter
         if selected_balance_due != "All" and target_balance_col in report_df.columns:
             if selected_balance_due == "YES":
                 report_df = report_df[report_df[target_balance_col] > 0]
@@ -1123,7 +1086,7 @@ def main():
                 report_df = report_df[report_df[target_balance_col] <= 0]
 
         st.markdown("**Report Preview:**")
-        st.dataframe(format_currency_columns(format_dates_mmddyyyy(report_df)), use_container_width=True, height=max(400, 40 + 40 * len(report_df)))
+        st.dataframe(format_currency_columns(format_dates_mmddyyyy(report_df)), use_container_width=True, height=max(300, 35 + 35 * len(report_df)))
 
         # --- Download button ---
         st.download_button(
@@ -1159,9 +1122,8 @@ def main():
             items=db_columns,
             direction="horizontal",
             key="edit_db_col_order_sortable"
-        )
-        # --- Lock formula columns in the data editor using mapped columns ---
-        formula_fields = ["Agent Estimated Comm $", "Agency Estimated Comm/Revenue (CRM)", "Agency Estimated Comm/Revenue (AZ)"]
+        )        # --- Lock formula columns in the data editor using mapped columns ---
+        formula_fields = ["Agent Estimated Comm $", "Agency Estimated Comm/Revenue (CRM)"]
         lock_cols = []
         for field in formula_fields:
             mapped_col = get_mapped_column(field)
@@ -1225,10 +1187,9 @@ def main():
             gross_comm_col = get_mapped_column("Policy Gross Comm %")
             agent_est_comm_col = get_mapped_column("Agent Estimated Comm $")
             agent_comm_pct_col = get_mapped_column("Agent Comm (NEW 50% RWL 25%)")
-            
-            # Fallback to fuzzy matching if mapping not found
+              # Fallback to fuzzy matching if mapping not found
             if not agency_est_comm_col:
-                agency_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() in ["agency estimated comm/revenue (crm)", "agency estimated comm/revenue (az)"]), None)
+                agency_est_comm_col = next((col for col in edited_db_df.columns if col.strip().lower() in ["agency estimated comm/revenue (crm)"]), None)
             if not premium_col:
                 premium_col = next((col for col in edited_db_df.columns if col.strip().lower() == "premium sold".lower()), None)
             if not gross_comm_col:
@@ -1723,14 +1684,15 @@ def main():
             st.success(f"Column '{col_name}' deleted.")
             st.session_state.pop("pending_delete_col")
             st.session_state.pop("delete_confirmed")
-            st.rerun()        # --- Header renaming section ---
+            st.rerun()
+        
+        # --- Header renaming section ---
         st.subheader("Rename Database Column Headers")
         db_columns = all_data.columns.tolist()
         
         with st.form("rename_single_header_form"):
             col_to_rename = st.selectbox("Select column to rename", [""] + db_columns, index=0, key="rename_col_select")
-            suggested_new_name = "Agency Estimated Comm/Revenue (CRM)" if col_to_rename == "Agency Estimated Comm/Revenue (AZ)" else ""
-            new_col_name = st.text_input("New column name", value=suggested_new_name, key="rename_col_new_name")
+            new_col_name = st.text_input("New column name", value="", key="rename_col_new_name")
             rename_submitted = st.form_submit_button("Rename Column")
 
         if rename_submitted:
@@ -2332,24 +2294,22 @@ def main():
                 st.session_state["manual_commission_rows"].append(entry)
                 st.success("Entry added (non-destructive, unique 7-character Transaction ID). You can review and edit below.")        # Show manual entries for editing/management if any exist        if st.session_state.get("manual_commission_rows"):
             st.markdown("### Manual Commission Entries")
-            
-            # Show persistent deletion success message
+              # Show persistent deletion success message
             if "deletion_success_msg" in st.session_state:
                 st.success(st.session_state["deletion_success_msg"])
                 del st.session_state["deletion_success_msg"]  # Clear after showing
             
             st.info("Manual entries are non-destructive and saved to database. Use controls below to manage entries.")
-            
-            # Display summary of entries
+              # Display summary of entries
             total_entries = len(st.session_state["manual_commission_rows"])
-            total_paid = sum(float(row.get("Amount Paid", 0)) for row in st.session_state["manual_commission_rows"])
+            total_paid = sum(float(row.get("Commission Paid", 0) or row.get("Amount Paid", 0)) for row in st.session_state["manual_commission_rows"])
             total_received = sum(float(row.get("Agency Comm Received (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
             
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Entries", total_entries)
             with col2:
-                st.metric("Total Amount Paid", f"${total_paid:,.2f}")
+                st.metric("Total Agent Comm Paid", f"${total_paid:,.2f}")
             with col3:
                 st.metric("Total Agency Comm", f"${total_received:,.2f}")
             
@@ -2425,8 +2385,7 @@ def main():
                     st.info(f"📋 {len(selected_indices)} row(s) selected for deletion")
             else:
                 st.info("💡 Tip: Check the 'Select' boxes next to entries you want to delete, then click the delete button.")
-            
-            # --- Reconcile Button to Save Statement to History ---
+              # --- Reconcile Button to Save Statement to History ---
             st.markdown("---")
             if st.session_state["manual_commission_rows"]:
                 st.markdown("#### Reconcile Commission Statement")
@@ -2435,16 +2394,16 @@ def main():
                     statement_date = st.date_input(
                         "Statement Date",
                         value=datetime.date.today(),
-                        key="reconcile_statement_date"
+                        format="MM/DD/YYYY",
+                        key="reconcile_statement_date_v2"
                     )
                 with col2:
                     statement_description = st.text_input(
                         "Statement Description (optional)",
                         placeholder="e.g., Monthly Commission Statement - December 2024",
                         key="reconcile_description"                    )
-                
-                # Calculate totals for the statement
-                total_commission_paid = sum(float(row.get("Amount Paid", 0)) for row in st.session_state["manual_commission_rows"])
+                  # Calculate totals for the statement
+                total_commission_paid = sum(float(row.get("Commission Paid", 0) or row.get("Amount Paid", 0)) for row in st.session_state["manual_commission_rows"])
                 total_agency_received = sum(float(row.get("Agency Comm Received (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
                 
                 st.markdown(f"**Statement Summary:** {len(st.session_state['manual_commission_rows'])} entries | Amount Paid: ${total_commission_paid:,.2f} | Agency Received: ${total_agency_received:,.2f}")
@@ -2508,22 +2467,19 @@ def main():
                             # Create new transaction record for main policies table using centralized mapping
                             new_transaction = {}
                             
-                            # Use centralized mapping to ensure field consistency
-                            transaction_id_col = get_mapped_column("Transaction ID")
+                            # Use centralized mapping to ensure field consistency                            transaction_id_col = get_mapped_column("Transaction ID")
                             customer_col = get_mapped_column("Customer")
                             policy_type_col = get_mapped_column("Policy Type") 
                             policy_number_col = get_mapped_column("Policy Number")
                             effective_date_col = get_mapped_column("Effective Date")
                             transaction_type_col = get_mapped_column("Transaction Type")
                             stmt_date_col = get_mapped_column("STMT DATE")
-                            transaction_date_col = get_mapped_column("Transaction Date")
                             agency_comm_col = get_mapped_column("Agency Comm Received (STMT)")
                             agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
                             client_id_col = get_mapped_column("Client ID")
                             
                             # Populate with reconciliation data using flexible transaction types
-                            if transaction_id_col:
-                                # Generate new unique transaction ID for main DB to avoid conflicts
+                            if transaction_id_col:                                # Generate new unique transaction ID for main DB to avoid conflicts
                                 new_transaction[transaction_id_col] = generate_transaction_id()
                             if customer_col:
                                 new_transaction[customer_col] = row.get("Customer", "")
@@ -2538,8 +2494,6 @@ def main():
                                 new_transaction[transaction_type_col] = row.get("Transaction Type", "")
                             if stmt_date_col:
                                 new_transaction[stmt_date_col] = statement_date.strftime('%m/%d/%Y')
-                            if transaction_date_col:
-                                new_transaction[transaction_date_col] = statement_date.strftime('%m/%d/%Y')
                             if agency_comm_col:
                                 new_transaction[agency_comm_col] = float(row.get("Agency Comm Received (STMT)", 0))
                             if agent_paid_col:
@@ -2630,27 +2584,25 @@ def main():
         if selected_customer != "Select..." and selected_policy_type != "Select..." and selected_effective_date != "Select...":
             selected_policy = st.selectbox("Select Policy Number:", ["Select..."] + sorted(policy_numbers), key="ledger_policy_select")
 
-        if selected_policy and selected_policy != "Select...":
-            # Get all rows for this policy, using only real database data
+        if selected_policy and selected_policy != "Select...":            # Get all rows for this policy, using only real database data
             policy_rows = all_data[all_data["Policy Number"] == selected_policy].copy()
             # Define the original ledger columns
             ledger_columns = [
                 "Transaction ID",
-                "Transaction Date",
                 "Description",
                 "Credit (Commission Owed)",
                 "Debit (Paid to Agent)",
                 "Transaction Type"
             ]
 
-            # --- Always include all ledger columns, filling missing with empty values ---            import numpy as np
+            # --- Always include all ledger columns, filling missing with empty values ---
+            import numpy as np
             if not policy_rows.empty:
                 # --- Ledger construction using mapped column names ---
                 # Get mapped column names for credits and debits
                 credit_col = get_mapped_column("Agent Estimated Comm $") or "Agent Estimated Comm $"
                 debit_col = get_mapped_column("Agent Paid Amount (STMT)") or "Agent Paid Amount (STMT)"
                 transaction_id_col = get_mapped_column("Transaction ID") or "Transaction ID"
-                transaction_date_col = get_mapped_column("Transaction Date") or "Transaction Date"
                 stmt_date_col = get_mapped_column("STMT DATE") or "STMT DATE"
                 description_col = get_mapped_column("Description") or "Description"
                 transaction_type_col = get_mapped_column("Transaction Type") or "Transaction Type"
@@ -2658,22 +2610,13 @@ def main():
                 # Build ledger_df with correct mapping
                 ledger_df = pd.DataFrame()
                 ledger_df["Transaction ID"] = policy_rows[transaction_id_col] if transaction_id_col in policy_rows.columns else ""
-                # Transaction Date: preserve as-is from DB, including blanks/nulls
-                # Check for both mapped transaction date columns
-                if transaction_date_col in policy_rows.columns:
-                    ledger_df["Transaction Date"] = policy_rows[transaction_date_col]
-                elif stmt_date_col in policy_rows.columns:
-                    ledger_df["Transaction Date"] = policy_rows[stmt_date_col]
-                else:
-                    ledger_df["Transaction Date"] = ""
                 ledger_df["Description"] = policy_rows[description_col] if description_col in policy_rows.columns else ""
                 
                 # Credit (Commission Owed) from mapped Agent Estimated Comm $
                 if credit_col in policy_rows.columns:
                     ledger_df["Credit (Commission Owed)"] = policy_rows[credit_col]
                 else:
-                    ledger_df["Credit (Commission Owed)"] = 0.0
-                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
+                    ledger_df["Credit (Commission Owed)"] = 0.0                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
                 if debit_col in policy_rows.columns:
                     ledger_df["Debit (Paid to Agent)"] = policy_rows[debit_col]
                 else:
@@ -2681,12 +2624,7 @@ def main():
                 ledger_df["Transaction Type"] = policy_rows[transaction_type_col] if transaction_type_col in policy_rows.columns else ""
                 # Ensure correct column order
                 ledger_df = ledger_df[ledger_columns]
-                # Sort by Transaction Date (oldest first), fallback to index order if not present
-                if "Transaction Date" in ledger_df.columns:
-                    try:
-                        ledger_df = ledger_df.sort_values("Transaction Date", ascending=True)
-                    except Exception:
-                        ledger_df = ledger_df.copy()
+                # Reset index for clean display
                 ledger_df = ledger_df.reset_index(drop=True)
             else:
                 # If no rows, show empty DataFrame with correct columns
@@ -2753,14 +2691,7 @@ def main():
                     st.success("Policy details updated.")
                     st.rerun()
 
-                st.markdown("### Policy Ledger (Editable)")
-
-                # --- Ensure Transaction Date is present for all rows, especially the first row ---
-                # Only fill with placeholder if the column is missing entirely
-                if "Transaction Date" not in ledger_df.columns:
-                    ledger_df["Transaction Date"] = ""
-
-                # Ensure Credit and Debit columns are numeric
+                st.markdown("### Policy Ledger (Editable)")                # Ensure Credit and Debit columns are numeric
                 if "Credit (Commission Owed)" in ledger_df.columns:
                     ledger_df["Credit (Commission Owed)"] = pd.to_numeric(ledger_df["Credit (Commission Owed)"], errors="coerce").fillna(0.0)
                 if "Debit (Paid to Agent)" in ledger_df.columns:
@@ -2833,15 +2764,12 @@ def main():
                 # Remove the Delete column before saving (no row deletion allowed)
                 edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
                 # Only keep the original ledger columns (no extra columns)
-                edited_ledger_df = edited_ledger_df[ledger_columns]
-
-                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
+                edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
                 if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
                     st.session_state["show_policy_ledger_mapping_preview"] = True
                     def get_policy_ledger_column_mapping(col, val):
                         mapping = {
                             "Transaction ID": "transaction_id",
-                            "Transaction Date": "STMT DATE",  # Maps to STMT DATE in database
                             "Description": "description",
                             "Credit (Commission Owed)": "agent_estimated_comm",
                             "Debit (Paid to Agent)": "Agent Paid Amount (STMT)",
@@ -2883,69 +2811,970 @@ def main():
                         with engine.begin() as conn:
                             conn.execute(sqlalchemy.text(update_sql), update_params)
                     st.success("Policy ledger changes saved.")
-                    st.rerun()
-
-    # --- Help ---
+                    st.rerun()    # --- Help ---
     elif page == "Help":
         st.subheader("Help & Documentation")
-        st.markdown("""
-        ### Welcome to the Sales Commission Tracker!
         
-        This application helps you manage and track sales commissions for insurance policies. Below is a guide to help you navigate the system:
+        # Create tabs for organized help content
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📖 Getting Started", 
+            "🔧 Features Guide", 
+            "💡 Tips & Tricks", 
+            "⚠️ Troubleshooting", 
+            "🧮 Formulas", 
+            "❓ FAQ"
+        ])
         
-        #### 📊 **Dashboard**
-        - View overall metrics and summary statistics
-        - Quick client search and edit functionality
-        - Total transactions and commission calculations
+        with tab1:
+            st.markdown("""
+            # 🚀 Getting Started Guide
+            
+            ## Welcome to the Sales Commission Tracker!
+            
+            This application is designed to help insurance agents and agencies track sales commissions, manage policy data, and reconcile commission statements. Here's how to get started:
+            
+            ### 🎯 First Time Setup
+            
+            1. **Start with Dashboard**: Navigate using the sidebar to see your current data
+            2. **Add Your First Policy**: Go to "Add New Policy Transaction" to enter your first policy
+            3. **Explore Your Data**: Use "All Policies in Database" to see what you've entered
+            4. **Generate Reports**: Create custom reports to analyze your commission data
+            
+            ### 🗂️ Understanding the Interface
+            
+            **Sidebar Navigation**: Use the radio buttons on the left to switch between different sections
+            **Main Content Area**: This is where all the action happens - forms, tables, and reports
+            **Yellow Highlighted Fields**: These are input fields where you can enter or edit data
+            **Locked/Disabled Fields**: These are automatically calculated and cannot be edited directly
+            
+            ### 📊 Key Concepts
+            
+            **Client ID**: A unique identifier for each client (auto-generated)
+            **Transaction ID**: A unique identifier for each policy transaction (auto-generated)
+            **Policy Balance Due**: Calculated as Commission Owed minus Amount Paid
+            **Statement Reconciliation**: Matching your commission statement to database records
+            
+            ### 🎯 Quick Start Checklist
+            
+            - [ ] Review the Dashboard to understand current data
+            - [ ] Add a new policy transaction to test the system
+            - [ ] Generate your first report
+            - [ ] Explore the search and filter capabilities
+            - [ ] Set up your first commission statement reconciliation
+            
+            ### 🔒 Data Safety
+            
+            Your data is automatically protected with:
+            - **Automatic backups** before major changes
+            - **Schema protection** to prevent data loss
+            - **Audit trails** for all transactions
+            - **Recovery options** in the Admin Panel
+            """)
         
-        #### 📝 **Add New Policy Transaction**
-        - Add new insurance policies to the database
-        - Automatic commission calculation based on policy type and revenue
-        - Auto-generated Client ID and Transaction ID
+        with tab2:
+            st.markdown("""
+            # 🔧 Complete Features Guide
+            
+            ## 📊 Dashboard
+            
+            **What it does**: Provides an overview of your commission data and quick access to client information
+            
+            **Key Features**:
+            - **Metrics Display**: See total transactions and commission amounts at a glance
+            - **Client Search**: Quickly find and edit specific client data
+            - **Pagination**: Browse through client policies 10 at a time
+            - **Quick Edit**: Add new transactions for existing clients directly from the dashboard
+            
+            **How to use**:
+            1. Select a client from the dropdown to see their policies
+            2. Use the page navigation to browse through multiple policies
+            3. Edit data directly in the table and click "Update This Client's Data"
+            4. Add new transactions by filling the blank row at the bottom
+            
+            ---
+            
+            ## 📝 Add New Policy Transaction
+            
+            **What it does**: Adds new insurance policies and transactions to your database
+            
+            **Key Features**:
+            - **Client ID Lookup**: Search existing clients by name to auto-fill Client ID
+            - **Premium Calculator**: Calculate premium sold for endorsements (New - Existing)
+            - **Live Commission Preview**: See estimated commission as you type
+            - **Auto-Generated IDs**: Automatic Client ID and Transaction ID creation
+            - **Date Fields**: Easy date entry with MM/DD/YYYY format
+            
+            **Step-by-step process**:
+            1. **Search for existing client** (optional): Type client name to find existing Client ID
+            2. **Use Premium Calculator** (for endorsements): Enter existing and new premiums
+            3. **Enter Premium Sold**: This auto-calculates Agency Estimated Commission
+            4. **Fill out the form**: All yellow highlighted fields are editable
+            5. **Submit**: Click "Add Transaction" to save
+            
+            **Pro Tips**:
+            - The Transaction Type determines commission calculations
+            - Date fields use MM/DD/YYYY format automatically
+            - Client ID and Transaction ID are auto-generated for uniqueness
+            
+            ---
+            
+            ## 📋 Reports
+            
+            **What it does**: Creates customizable reports with filtering and export capabilities
+            
+            **Key Features**:
+            - **Column Selection**: Choose exactly which fields to include
+            - **Date Range Filtering**: Filter by any date field in your data
+            - **Customer Filtering**: Focus on specific clients
+            - **Balance Due Filtering**: Find policies with outstanding balances
+            - **Export Options**: Download as CSV or Excel
+            
+            **How to create a report**:
+            1. **Select Columns**: Choose which data fields to include
+            2. **Set Date Range**: Pick a date column and specify the range
+            3. **Apply Filters**: Optionally filter by customer or balance due status
+            4. **Preview**: Review the report in the preview section
+            5. **Export**: Download as CSV or Excel for further analysis
+            
+            ---
+            
+            ## 📁 All Policies in Database
+            
+            **What it does**: Displays all policy data in a comprehensive table view
+            
+            **Key Features**:
+            - **Complete Data View**: See all policies and transactions at once
+            - **Horizontal Scrolling**: Use browser zoom-out (Ctrl -) to see more columns
+            - **Formatted Display**: Currency and date fields are properly formatted
+            - **Responsive Height**: Table adjusts to show data efficiently
+            
+            **Best Practices**:
+            - Use browser zoom-out to see more columns
+            - Scroll horizontally for wide tables
+            - Use this view to get a complete picture of your data
+            
+            ---
+            
+            ## ✏️ Edit Policies in Database
+            
+            **What it does**: Allows bulk editing of existing policy data with column reordering
+            
+            **Key Features**:
+            - **Column Reordering**: Drag and drop to rearrange columns
+            - **Bulk Editing**: Edit multiple policies at once
+            - **Formula Protection**: Some columns are locked to prevent calculation errors
+            - **Real-time Updates**: Changes are saved immediately to the database
+            
+            **How to edit**:
+            1. **Reorder Columns**: Drag the column boxes to arrange them as needed
+            2. **Edit Data**: Click in any unlocked cell to modify values
+            3. **Review Changes**: Check your edits before saving
+            4. **Save**: Click "Update Database" to commit all changes
+            
+            **Important Notes**:
+            - Some columns are locked because they contain calculated values
+            - The app automatically recalculates formulas when you save
+            - Column order is preserved for future sessions
+            
+            ---
+            
+            ## 🔍 Search & Filter
+            
+            **What it does**: Advanced search and filtering capabilities for finding specific policies
+            
+            **Key Features**:
+            - **Column-Specific Search**: Search within any database column
+            - **Text Matching**: Find partial matches (case-insensitive)
+            - **Balance Due Filtering**: Show only policies with/without outstanding balances
+            - **Export Filtered Results**: Download search results as CSV or Excel
+            
+            **Search Strategies**:
+            - **By Customer**: Find all policies for a specific client
+            - **By Policy Number**: Locate a specific policy
+            - **By Carrier**: See all policies with a particular insurance company
+            - **By Date Range**: Use effective date or other date fields
+            
+            ---
+            
+            ## ⚙️ Admin Panel
+            
+            **What it does**: Advanced administrative functions for managing the database structure
+            
+            **⚠️ Warning**: This section can affect your entire database. Use with caution!
+            
+            **Key Features**:
+            - **Column Mapping**: Map database columns to app functions
+            - **Add/Delete Columns**: Modify database structure
+            - **Header Renaming**: Change column names
+            - **Backup/Restore**: Database protection and recovery
+            - **File Upload Mapping**: Configure mapping from uploaded files
+            
+            **Common Admin Tasks**:
+            1. **Backup Database**: Always backup before making changes
+            2. **Column Mapping**: Ensure app functions work with your data structure
+            3. **Add Columns**: Add new fields as your business needs evolve
+            4. **Restore**: Recover from backups if needed
+            
+            ---
+            
+            ## 💰 Accounting
+            
+            **What it does**: Comprehensive commission reconciliation and accounting tools
+            
+            **Key Features**:
+            - **Statement Reconciliation**: Match commission statements to database
+            - **Manual Entry**: Add commission entries individually
+            - **File Upload**: Import commission statements from files
+            - **Payment History**: Track all payments and reconciliations
+            - **Audit Trail**: Complete history of all accounting activities
+            
+            **Reconciliation Process**:
+            1. **Choose Entry Method**: Manual entry or file upload
+            2. **Enter Statement Data**: Add each commission entry
+            3. **Review Entries**: Check totals and details
+            4. **Reconcile**: Save to history and mark as complete
+            5. **View History**: Review past reconciliations
+            
+            ---
+            
+            ## 📑 Policy Revenue Ledger
+            
+            **What it does**: Detailed transaction-level view of individual policies
+            
+            **Key Features**:
+            - **Granular Search**: Find policies by customer, type, date, and number
+            - **Transaction History**: See all transactions for a specific policy
+            - **Editable Ledger**: Modify individual transactions
+            - **Running Totals**: See credits, debits, and balance due
+            - **Audit Protection**: Critical fields are protected from accidental changes
+            
+            **How to use**:
+            1. **Search for Policy**: Use the dropdown filters to locate a specific policy
+            2. **Review Transactions**: See all related transactions in ledger format
+            3. **Edit Details**: Modify policy-level information
+            4. **Update Ledger**: Make transaction-level changes as needed
+            5. **Save Changes**: Commit all modifications
+            
+            ---
+            
+            ## 📊 Policy Revenue Ledger Reports
+            
+            **What it does**: Advanced reporting with templates and customization
+            
+            **Key Features**:
+            - **Policy Aggregation**: One row per policy with totals
+            - **Template System**: Save and reuse report configurations
+            - **Column Selection**: Choose exactly what to display
+            - **Pagination**: Handle large datasets efficiently
+            - **Enhanced Export**: Include report parameters in exports
+            
+            **Advanced Features**:
+            1. **Template Management**: Save, load, edit, and delete report templates
+            2. **Quick Presets**: Use predefined column sets (Financial Focus, Basic Info)
+            3. **Column Reordering**: Drag and drop to arrange columns
+            4. **Metadata Export**: Export includes report parameters and timestamps
+            """)
         
-        #### 📋 **Reports**
-        - Generate customizable reports with selected columns
-        - Filter by date ranges and specific criteria
-        - Export capabilities for further analysis
+        with tab3:
+            st.markdown("""
+            # 💡 Tips & Tricks for Power Users
+            
+            ## 🚀 Efficiency Tips
+            
+            ### Dashboard Shortcuts
+            - **Client Search**: Start typing in the client dropdown for instant filtering
+            - **Quick Add**: Use the blank row at the bottom of client data to add new transactions
+            - **Pagination**: Jump directly to page numbers instead of clicking through
+            
+            ### Data Entry Best Practices
+            - **Premium Calculator**: For endorsements, always use the calculator to avoid math errors
+            - **Client ID Lookup**: Search existing clients to maintain data consistency
+            - **Date Consistency**: Use MM/DD/YYYY format consistently for proper sorting
+            
+            ### Report Generation
+            - **Column Strategy**: Start with fewer columns, then add more as needed
+            - **Filter First**: Apply filters before selecting columns for better performance
+            - **Export Naming**: Use descriptive filenames with dates for better organization
+            
+            ### Search & Filter Mastery
+            - **Partial Matching**: Search for partial names or policy numbers
+            - **Case Insensitive**: Don't worry about capitalization when searching
+            - **Balance Due Filter**: Use "YES" to find policies needing payment
+            
+            ## 🎯 Advanced Workflows
+            
+            ### Monthly Commission Reconciliation
+            1. **Prepare**: Gather commission statements and backup database
+            2. **Enter**: Use Accounting section to input statement data
+            3. **Review**: Check totals against your statement
+            4. **Reconcile**: Save to history and mark complete
+            5. **Report**: Generate Policy Revenue Ledger Reports for analysis
+            
+            ### Client Onboarding Process
+            1. **Add First Policy**: Use "Add New Policy Transaction"
+            2. **Note Client ID**: The system generates a unique identifier
+            3. **Add Additional Policies**: Reference the same Client ID
+            4. **Review Setup**: Use Dashboard to verify all client data
+            
+            ### Database Maintenance Routine
+            1. **Weekly Backup**: Use Admin Panel enhanced backup system
+            2. **Monthly Review**: Check data consistency and mapping
+            3. **Quarterly Cleanup**: Remove test data and organize columns
+            4. **Annual Archive**: Export complete data for record keeping
+            
+            ## 🔧 Customization Tips
+            
+            ### Column Management
+            - **Mapping Strategy**: Map columns when first uploading data
+            - **Naming Convention**: Use clear, consistent column names
+            - **Order Logic**: Arrange columns in order of daily use frequency
+            
+            ### Template Strategy
+            - **Report Templates**: Create templates for monthly, quarterly reports
+            - **Column Sets**: Save different column arrangements for different purposes
+            - **Naming**: Use descriptive template names with dates or purposes
+            
+            ### Performance Optimization
+            - **Pagination**: Use smaller page sizes for faster loading
+            - **Column Selection**: Include only necessary columns in large reports
+            - **Filter Early**: Apply filters before generating reports
+            
+            ## 🎨 Display Optimization
+            
+            ### Browser Settings
+            - **Zoom Out**: Use Ctrl/Cmd + "-" to see more columns
+            - **Full Screen**: F11 for maximum screen space
+            - **Tab Management**: Keep app in dedicated browser tab
+            
+            ### Table Navigation
+            - **Horizontal Scroll**: Use mouse wheel with Shift key
+            - **Column Sizing**: Let tables auto-adjust to content
+            - **Row Height**: Fixed heights provide consistent viewing
+            
+            ## 🔄 Workflow Integration
+            
+            ### With External Tools
+            - **Excel Integration**: Export data for advanced calculations
+            - **Email Reports**: Export and attach to monthly summaries
+            - **Calendar Sync**: Use report dates for scheduling reconciliation
+            
+            ### Data Flow
+            1. **Policy Entry** → Add New Policy Transaction
+            2. **Statement Receipt** → Accounting Reconciliation
+            3. **Monthly Review** → Reports and Dashboard
+            4. **Analysis** → Policy Revenue Ledger Reports
+            
+            ## 🎓 Expert-Level Features
+            
+            ### Database Protection
+            - **Automatic Backups**: System creates backups before major changes
+            - **Schema Protection**: Database structure is protected from corruption
+            - **Recovery Options**: Multiple restore points available
+            
+            ### Advanced Reporting
+            - **Template Inheritance**: Build complex reports from simple templates
+            - **Metadata Tracking**: Export includes full report parameters
+            - **Audit Trails**: All changes are tracked for compliance
+            
+            ### Formula Understanding
+            - **Commission Calculations**: Based on transaction type and percentages
+            - **Balance Due Logic**: Always Commission Owed minus Payments Made
+            - **Aggregation Rules**: How data is combined in reports
+            """)
         
-        #### 📁 **All Policies in Database**
-        - View all policies in the system
-        - Pagination for easy browsing
-        - Quick overview of all transactions
+        with tab4:
+            st.markdown("""
+            # ⚠️ Troubleshooting Guide
+            
+            ## 🚨 Common Issues & Solutions
+            
+            ### Data Not Appearing
+            
+            **Problem**: Added data doesn't show up in reports or dashboard
+            
+            **Solutions**:
+            1. **Refresh the page** - Use browser refresh (F5 or Ctrl+R)
+            2. **Check column mapping** - Go to Admin Panel to verify column mapping
+            3. **Verify data entry** - Return to "All Policies in Database" to confirm data was saved
+            4. **Clear browser cache** - Restart browser if issues persist
+            
+            **Prevention**: Always click save buttons and wait for confirmation messages
+            
+            ---
+            
+            ### Calculation Errors
+            
+            **Problem**: Commission calculations seem incorrect
+            
+            **Solutions**:
+            1. **Check Transaction Type** - Verify correct type (NEW=50%, RWL=25%, etc.)
+            2. **Verify Percentages** - Ensure commission percentages are entered correctly
+            3. **Review Formula** - Check Help → Formulas tab for calculation logic
+            4. **Recalculate** - Use "Edit Policies" save function to trigger recalculation
+            
+            **Prevention**: Always double-check transaction types and percentage fields
+            
+            ---
+            
+            ### File Upload Issues
+            
+            **Problem**: Cannot upload or import files
+            
+            **Solutions**:
+            1. **Check File Format** - Use .xlsx, .csv, or .pdf files only
+            2. **File Size** - Ensure file is under 200MB
+            3. **Column Headers** - Verify headers match expected format
+            4. **File Permissions** - Ensure file isn't open in another program
+            
+            **Prevention**: Keep import files in standard formats with clear headers
+            
+            ---
+            
+            ### Search Not Working
+            
+            **Problem**: Search/filter returns no results
+            
+            **Solutions**:
+            1. **Check Spelling** - Verify search terms are spelled correctly
+            2. **Try Partial Search** - Use partial names or numbers
+            3. **Clear Filters** - Reset all filters and try again
+            4. **Check Column Selection** - Ensure searching in the correct column
+            
+            **Prevention**: Use consistent data entry practices
+            
+            ---
+            
+            ### Performance Issues
+            
+            **Problem**: App runs slowly or freezes
+            
+            **Solutions**:
+            1. **Reduce Data Size** - Use pagination or filters to limit displayed data
+            2. **Close Other Tabs** - Free up browser memory
+            3. **Restart Browser** - Clear memory and start fresh
+            4. **Check Internet** - Ensure stable connection
+            
+            **Prevention**: Use filters and pagination for large datasets
+            
+            ## 🔧 Error Messages
+            
+            ### "Column not found" Error
+            
+            **Cause**: Database column names don't match app expectations
+            
+            **Solution**: 
+            1. Go to Admin Panel
+            2. Review column mapping
+            3. Map database columns to app functions
+            4. Save mapping configuration
+            
+            ### "Permission denied" Error
+            
+            **Cause**: File access or database write issues
+            
+            **Solution**:
+            1. Close any Excel files with the same name
+            2. Check file permissions on the database folder
+            3. Run as administrator if necessary
+            4. Contact system administrator
+            
+            ### "Invalid date format" Error
+            
+            **Cause**: Date entered in wrong format
+            
+            **Solution**:
+            1. Use MM/DD/YYYY format only
+            2. Check for typos in date fields
+            3. Use date picker when available
+            4. Clear field and re-enter if needed
+            
+            ## 🆘 Emergency Recovery
+            
+            ### Data Loss Recovery
+            
+            **If data appears to be lost**:
+            1. **Don't panic** - Data is likely recoverable
+            2. **Go to Admin Panel** → Database Recovery Center
+            3. **Check available backups** - System creates automatic backups
+            4. **Restore from backup** - Select most recent backup before issue
+            5. **Contact support** if backups don't resolve the issue
+            
+            ### Database Corruption
+            
+            **If database won't open**:
+            1. **Use Admin Panel** → Enhanced Backup System
+            2. **Try multiple backup files** - Start with most recent
+            3. **Check backup log** - Review when backups were created
+            4. **Restore step-by-step** - Test each backup file
+            
+            ### App Won't Start
+            
+            **If application doesn't load**:
+            1. **Check browser compatibility** - Use Chrome, Firefox, or Edge
+            2. **Clear browser cache** - Delete temporary files
+            3. **Disable browser extensions** - Test in incognito/private mode
+            4. **Try different browser** - Rule out browser-specific issues
+            
+            ## 📞 Getting Additional Help
+            
+            ### Self-Help Resources
+            1. **Debug Checkbox** - Enable in sidebar for technical details
+            2. **Error Messages** - Screenshot and note exact text
+            3. **Browser Console** - Press F12 → Console tab for error details
+            4. **Backup Files** - Check what backup files are available
+            
+            ### Contacting Support
+            
+            **Before contacting support, gather**:
+            - Exact error message or description of issue
+            - Steps that led to the problem
+            - Browser type and version
+            - Screenshot of the issue
+            - Recent changes made to data or settings
+            
+            **Information to provide**:
+            - What you were trying to do
+            - What happened instead
+            - Any error messages displayed
+            - Whether issue is consistent or intermittent
+            
+            ### Preventive Measures
+            
+            **Daily**:
+            - Save work frequently
+            - Check for confirmation messages
+            - Use consistent data entry practices
+            
+            **Weekly**:
+            - Create manual backup
+            - Review data for accuracy
+            - Check available disk space
+            
+            **Monthly**:
+            - Review column mapping
+            - Clean up test data
+            - Update browser if needed
+            """)
         
-        #### ✏️ **Edit Policies in Database**
-        - Search and edit existing policies
-        - Bulk editing capabilities
-        - Real-time updates to the database
+        with tab5:
+            st.markdown("""
+            # 🧮 Formulas & Calculations Reference
+            
+            ## 💰 Commission Calculations
+            
+            ### Agent Commission Percentage
+            **Based on Transaction Type**:
+            
+            | Transaction Type | Commission % | Description |
+            |------------------|--------------|-------------|
+            | NEW | 50% | New business policies |
+            | NBS | 50% | New business (alternative code) |
+            | STL | 50% | New business settlement |
+            | BoR | 50% | Broker of Record changes |
+            | END | 50% or 25% | Endorsements* |
+            | PCH | 50% or 25% | Policy changes* |
+            | RWL | 25% | Renewals |
+            | REWRITE | 25% | Policy rewrites |
+            | CAN | 0% | Cancellations |
+            | XCL | 0% | Cancellations (alternative) |
+            
+            *For END and PCH: 50% if Policy Origination Date = Effective Date, otherwise 25%
+            
+            ### Commission Dollar Calculations
+            
+            **Agent Estimated Comm $**:
+            ```
+            Premium Sold × (Policy Gross Comm % ÷ 100) × (Agent Comm % ÷ 100)
+            ```
+            
+            **Agency Estimated Comm/Revenue (CRM)**:
+            ```
+            Premium Sold × (Policy Gross Comm % ÷ 100)
+            ```
+            
+            **Policy Balance Due**:
+            ```
+            Agent Estimated Comm $ - Agent Paid Amount (STMT)
+            ```
+            
+            ## 📊 Premium Calculations
+            
+            ### Premium Sold (for Endorsements)
+            ```
+            Premium Sold = New/Revised Premium - Existing Premium
+            ```
+            
+            **Example**:
+            - Existing Premium: $1,200
+            - New/Revised Premium: $1,350
+            - Premium Sold: $150
+            
+            ### Revenue Calculation
+            **Agency Revenue (10% default)**:
+            ```
+            Agency Revenue = Premium Sold × 0.10
+            ```
+            
+            ## 🎯 Report Aggregations
+            
+            ### Policy Revenue Ledger Reports
+            **Data is aggregated by Policy Number**:
+            
+            **Descriptive Fields**: First value (should be same for all transactions)
+            - Customer, Policy Type, Carrier Name
+            - Effective Date, Policy Origination Date
+            - Client ID
+            
+            **Monetary Fields**: Sum of all transactions
+            - Agent Estimated Comm $
+            - Agent Paid Amount (STMT)
+            - Agency Estimated Comm/Revenue (CRM)
+            - Premium Sold
+            
+            **Calculated Fields**: Computed after aggregation
+            - Policy Balance Due = Sum(Agent Estimated Comm $) - Sum(Agent Paid Amount)
+            
+            ## 📈 Metrics Calculations
+            
+            ### Dashboard Metrics
+            **Total Transactions**: Count of all database rows
+            
+            **Total Commissions**: Sum of all "Calculated Commission" values
+            
+            **Client Metrics**:
+            - Total Paid Amount: Sum of "Agent Paid Amount (STMT)" for client
+            - Total Est. Commission: Sum of "Agent Estimated Comm $" for client
+            
+            ### Report Metrics
+            **Outstanding Policies**: Count where Policy Balance Due > 0
+            
+            **Total Balance Due**: Sum of all positive Policy Balance Due amounts
+            
+            **Mapping Health**: (Mapped Columns ÷ Total Columns) × 100
+            
+            ## 🔍 Search & Filter Logic
+            
+            ### Text Search
+            - **Case Insensitive**: "SMITH" matches "smith" or "Smith"
+            - **Partial Matching**: "john" matches "Johnson" or "John Doe"
+            - **Special Characters**: Ignored in most searches
+            
+            ### Date Filtering
+            - **Inclusive Range**: Start date ≤ record date ≤ end date
+            - **Format Flexible**: Accepts MM/DD/YYYY, M/D/YYYY, etc.
+            - **Invalid Dates**: Treated as missing/null values
+            
+            ### Balance Due Logic
+            ```
+            YES: Policy Balance Due > 0
+            NO: Policy Balance Due ≤ 0
+            ALL: No filter applied
+            ```
+            
+            ## 🔧 Technical Formulas
+            
+            ### ID Generation
+            **Client ID**: 6 characters, uppercase letters and digits
+            ```
+            Pattern: [A-Z0-9]{6}
+            Example: ABC123, XYZ789
+            ```
+            
+            **Transaction ID**: 7 characters, uppercase letters and digits
+            ```
+            Pattern: [A-Z0-9]{7}
+            Example: ABC1234, XYZ7890
+            ```
+            
+            ### Date Formatting
+            **Input**: Various formats accepted
+            **Storage**: MM/DD/YYYY format
+            **Display**: MM/DD/YYYY format
+            
+            ```
+            Input: "12/25/2024", "12-25-2024", "2024-12-25"
+            Stored: "12/25/2024"
+            ```
+            
+            ### Currency Formatting
+            **Display Format**:
+            ```
+            $1,234.56 (positive amounts)
+            -$1,234.56 (negative amounts)
+            $0.00 (zero amounts)
+            ```
+            
+            ## 📐 Validation Rules
+            
+            ### Required Fields
+            - Customer (client name)
+            - Policy Number
+            - Transaction Type
+            
+            ### Data Types
+            - **Currency Fields**: Numeric, 2 decimal places
+            - **Percentage Fields**: Numeric, typically 0-100
+            - **Date Fields**: MM/DD/YYYY format
+            - **Text Fields**: Alphanumeric, special characters allowed
+            
+            ### Business Rules
+            **Commission Percentages**:
+            - Must be between 0% and 100%
+            - Typically 10-15% for agency commission
+            - Agent commission varies by transaction type
+            
+            **Premium Amounts**:
+            - Can be negative for refunds/cancellations
+            - Zero premiums allowed for certain transaction types
+            - Large amounts (>$100,000) may need verification
+            
+            ## 🔄 Calculation Triggers
+            
+            ### Automatic Recalculation
+            **Triggered when**:
+            - Adding new policy transaction
+            - Editing existing policy data
+            - Saving changes in Edit Policies page
+            - Running report generation
+            
+            **Fields Recalculated**:
+            - Agent Estimated Comm $
+            - Agency Estimated Comm/Revenue (CRM)
+            - Policy Balance Due
+            - Report totals and metrics
+            
+            ### Manual Recalculation
+            **When needed**:
+            - After bulk data import
+            - After column mapping changes
+            - After database restoration
+            
+            **How to trigger**:
+            1. Go to "Edit Policies in Database"
+            2. Click "Update Database with Edits"
+            3. System recalculates all formula fields
+            """)
         
-        #### 🔍 **Search & Filter**
-        - Advanced filtering by multiple criteria
-        - Search by customer, policy type, carrier, etc.
-        - Export filtered results
+        with tab6:
+            st.markdown("""
+            # ❓ Frequently Asked Questions
+            
+            ## 🏁 Getting Started
+            
+            ### Q: I'm new to the system. Where should I start?
+            **A**: Begin with the "📖 Getting Started" tab in this Help section. Then:
+            1. Explore the Dashboard to understand the interface
+            2. Add your first policy in "Add New Policy Transaction"
+            3. Generate a simple report to see how data flows
+            4. Practice searching and filtering your data
+            
+            ### Q: How do I add my existing policies to the system?
+            **A**: You have several options:
+            - **Manual Entry**: Use "Add New Policy Transaction" for each policy
+            - **Bulk Upload**: Use Admin Panel to upload Excel/CSV files
+            - **Copy/Paste**: Use "Edit Policies in Database" to paste data from Excel
+            
+            ### Q: What file formats can I upload?
+            **A**: The system accepts:
+            - Excel files (.xlsx, .xls)
+            - CSV files (.csv)
+            - PDF files (.pdf) - for commission statements
+            
+            ## 💰 Commission Calculations
+            
+            ### Q: How are commissions calculated?
+            **A**: Commission calculations depend on the Transaction Type:
+            - **NEW business**: 50% of agency commission
+            - **Renewals (RWL)**: 25% of agency commission
+            - **Endorsements (END)**: 50% if new policy, 25% if existing
+            - **Cancellations (CAN)**: 0%
+            
+            ### Q: Why can't I edit the commission calculation fields?
+            **A**: These fields are automatically calculated to ensure accuracy:
+            - Agent Estimated Comm $
+            - Agency Estimated Comm/Revenue (CRM)
+            - Policy Balance Due
+            
+            To change these values, modify the underlying data (Premium Sold, Commission %, etc.).
+            
+            ### Q: What does "Policy Balance Due" mean?
+            **A**: Policy Balance Due = Commission Owed - Amount Paid
+            - **Positive amount**: You haven't been paid the full commission yet
+            - **Zero or negative**: You've been paid in full (or overpaid)
+            
+            ## 📊 Reports & Data
+            
+            ### Q: How do I create a monthly commission report?
+            **A**: 
+            1. Go to "Reports" page
+            2. Select relevant columns (Customer, Policy Number, Commission amounts)
+            3. Filter by date range (use Effective Date or Statement Date)
+            4. Add customer filter if needed
+            5. Export as Excel or CSV
+            
+            ### Q: What's the difference between "All Policies" and "Policy Revenue Ledger"?
+            **A**: 
+            - **All Policies**: Shows all transactions as separate rows
+            - **Policy Revenue Ledger**: Shows individual policy details with transaction history
+            - **Policy Revenue Ledger Reports**: Aggregates data (one row per policy)
+            
+            ### Q: Can I save report configurations?
+            **A**: Yes! In "Policy Revenue Ledger Reports":
+            1. Configure your columns and filters
+            2. Enter a template name
+            3. Click "Save Template"
+            4. Load saved templates anytime
+            
+            ## 🔧 Technical Issues
+            
+            ### Q: I added data but it's not showing up. What's wrong?
+            **A**: Try these steps:
+            1. Refresh the page (F5 or Ctrl+R)
+            2. Check "All Policies in Database" to verify data was saved
+            3. Verify column mapping in Admin Panel
+            4. Clear browser cache if issues persist
+            
+            ### Q: Why are some columns highlighted in yellow?
+            **A**: Yellow highlighting indicates editable input fields where you can enter or modify data. Non-highlighted fields are either:
+            - Read-only/display fields
+            - Automatically calculated fields
+            - System-generated fields (like IDs)
+            
+            ### Q: How do I backup my data?
+            **A**: Use the Admin Panel Enhanced Backup System:
+            1. Go to Admin Panel
+            2. Scroll to "Enhanced Database Backup & Restore System"
+            3. Enter a description and click "Create Enhanced Backup"
+            4. Backups are automatically created before major changes
+            
+            ## 💼 Business Workflow
+            
+            ### Q: How do I reconcile my commission statement?
+            **A**: Use the Accounting section:
+            1. Choose "Manual Entry" or "Upload File"
+            2. Enter each commission from your statement
+            3. Review totals to ensure they match your statement
+            4. Click "Reconcile & Save to History"
+            5. This creates an audit trail and updates payment records
+            
+            ### Q: How do I track payments from the insurance company?
+            **A**: 
+            1. Use "Accounting" for commission statement reconciliation
+            2. Enter "Agent Paid Amount (STMT)" for each policy
+            3. The system automatically calculates Policy Balance Due
+            4. Use reports to track outstanding balances
+            
+            ### Q: Can I track multiple agents or producers?
+            **A**: Yes, but you'll need to:
+            1. Add an "Agent" or "Producer" column (Admin Panel)
+            2. Include agent name in policy data entry
+            3. Filter reports by agent name
+            4. Consider separate databases for completely different agents
+            
+            ## 🔒 Data Security
+            
+            ### Q: Is my data safe?
+            **A**: Yes, the system includes multiple protection layers:
+            - Automatic backups before major changes
+            - Database schema protection to prevent corruption
+            - Audit trails for all transactions
+            - Manual backup options
+            - Recovery tools in Admin Panel
+            
+            ### Q: What happens if I accidentally delete data?
+            **A**: 
+            1. Don't panic - data is likely recoverable
+            2. Go to Admin Panel → Database Recovery Center
+            3. Look for automatic backups created before the deletion
+            4. Restore from the most recent backup before the issue
+            
+            ### Q: Can I export all my data?
+            **A**: Yes:
+            1. Go to "All Policies in Database"
+            2. Use browser print function (Ctrl+P) for PDF
+            3. Or use "Reports" to export specific data as CSV/Excel
+            4. For complete backup, use Admin Panel download function
+            
+            ## 🎯 Advanced Features
+            
+            ### Q: What is column mapping and do I need it?
+            **A**: Column mapping tells the app which database columns correspond to which functions:
+            - **Needed when**: Uploading files with different column names
+            - **Access via**: Admin Panel
+            - **Auto-configured**: For standard setups
+            - **Manual setup**: Required for custom data structures
+            
+            ### Q: How do I add custom fields to track additional data?
+            **A**: 
+            1. Go to Admin Panel
+            2. Use "Add Column" section
+            3. Enter new column name
+            4. Confirm addition (this modifies database structure)
+            5. New field appears in all data entry forms
+            
+            ### Q: Can I change the commission calculation formulas?
+            **A**: Formula changes require code modification. The current formulas are:
+            - Built into the application logic
+            - Documented in the "🧮 Formulas" tab
+            - Changes need developer assistance
+            
+            ## 🆘 Still Need Help?
+            
+            ### Q: I can't find the answer to my question. What now?
+            **A**: Try these resources:
+            1. **Debug Mode**: Enable the debug checkbox in the sidebar for technical details
+            2. **Admin Panel**: Check the Database Recovery Center for system health
+            3. **Browser Console**: Press F12 → Console for error messages
+            4. **Contact Support**: Provide specific error messages and steps to reproduce the issue
+            
+            ### Q: How do I report a bug or request a feature?
+            **A**: When reporting issues, please include:
+            - Exact steps that led to the problem
+            - Error messages (screenshot if possible)
+            - Browser type and version
+            - What you expected to happen vs. what actually happened
+            - Whether the issue is consistent or intermittent
+            
+            ---
+            
+            ## 📞 Quick Reference
+            
+            **Emergency Recovery**: Admin Panel → Database Recovery Center
+            **Backup Data**: Admin Panel → Enhanced Backup System
+            **Export Data**: Reports → Download as CSV/Excel
+            **Get Technical Info**: Enable Debug checkbox in sidebar
+            **Formula Reference**: Help → Formulas tab
+            **Column Issues**: Admin Panel → Column Mapping
+            """)
         
-        #### ⚙️ **Admin Panel**
-        - Manage database structure and columns
-        - Backup and restore functionality
-        - Column mapping and customization
-        - Formula documentation
+        # Add a search box for the help content
+        st.markdown("---")
+        st.markdown("### 🔍 Search Help Content")
+        help_search = st.text_input("Search for specific topics or keywords:", placeholder="e.g., commission calculation, backup, export")
         
-        #### 💰 **Accounting**
-        - Reconcile commission statements
-        - Track payments and outstanding balances
-        - Manual entry and file upload options
-        - Payment history and audit trails
-        
-        #### 📑 **Policy Revenue Ledger**
-        - Detailed ledger view of all transactions
-        - Edit individual entries
-        - Calculate totals and balances
-        - Granular search and filtering
-        
-        #### 🆘 **Need More Help?**
-        - Contact your system administrator
-        - Check the documentation files in the project folder
-        - Use the debug checkbox in the sidebar for troubleshooting
-        """)    # --- Policy Revenue Ledger Reports (Simple Implementation) ---
+        if help_search:
+            st.markdown(f"**Search results for '{help_search}':**")
+            # This is a simple implementation - in a real app you might want more sophisticated search
+            search_terms = help_search.lower().split()
+            st.info("💡 **Tip**: Use the tabs above to browse topics, or try these related searches:")
+            
+            suggestions = []
+            if any(term in help_search.lower() for term in ['commission', 'calculate', 'formula']):
+                suggestions.append("📊 Try the 'Formulas' tab for calculation details")
+            if any(term in help_search.lower() for term in ['backup', 'save', 'restore', 'recover']):
+                suggestions.append("🛡️ Check 'Troubleshooting' → Emergency Recovery")
+            if any(term in help_search.lower() for term in ['export', 'download', 'report']):
+                suggestions.append("📋 See 'Features Guide' → Reports section")
+            if any(term in help_search.lower() for term in ['error', 'problem', 'issue', 'bug']):
+                suggestions.append("⚠️ Check the 'Troubleshooting' tab")
+            
+            if suggestions:
+                for suggestion in suggestions:
+                    st.write(f"• {suggestion}")
+            else:
+                st.write("• Try browsing the tabs above for comprehensive coverage")
+                st.write("• Check the 'FAQ' tab for common questions")
+                st.write("• Use the 'Features Guide' for detailed feature explanations")# --- Policy Revenue Ledger Reports (Simple Implementation) ---
     elif page == "Policy Revenue Ledger Reports":
         st.subheader("Policy Revenue Ledger Reports")
         st.success("📊 Generate customizable reports for policy summaries with Balance Due calculations and export capabilities.")
