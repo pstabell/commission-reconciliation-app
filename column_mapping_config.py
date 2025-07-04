@@ -51,7 +51,7 @@ class ColumnMapper:
               # Calculated fields
             "Agent Comm (New 50% RWL 25%)": "Agent Comm (New 50% RWL 25%)",
             "Agent Comm (NEW 50% RWL 25%)": "Agent Comm (NEW 50% RWL 25%)",
-            "Estimated Agent Comm (New 50% Renewal 25%)": "Agent Estimated Comm $",
+            "Agent Estimated Comm $": "Agent Estimated Comm $",
             "Agency Estimated Comm/Revenue (CRM)": "Agency Estimated Comm/Revenue (CRM)",
             
             # Date fields
