@@ -6,3 +6,6 @@ Pillow
 streamlit-authenticator==0.2.3
 streamlit-sortables
 XlsxWriter
+supabase
+psycopg2-binary
+python-dotenv

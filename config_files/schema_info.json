@@ -1,0 +1,332 @@
+{
+  "commission_payments": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "not_null": false,
+      "default": null,
+      "primary_key": true
+    },
+    {
+      "name": "policy_number",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "customer",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "payment_amount",
+      "type": "REAL",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "statement_date",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "payment_timestamp",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "statement_details",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    }
+  ],
+  "manual_commission_entries": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "not_null": false,
+      "default": null,
+      "primary_key": true
+    },
+    {
+      "name": "customer",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "policy_type",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "policy_number",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "effective_date",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "transaction_type",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "commission_paid",
+      "type": "REAL",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "agency_commission_received",
+      "type": "REAL",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "statement_date",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "client_id",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "transaction_id",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    }
+  ],
+  "policies": [
+    {
+      "name": "Client ID",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Transaction ID",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Customer",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Carrier Name",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Policy Type",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Policy Number",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Transaction Type",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Agent Comm (NEW 50% RWL 25%)",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Policy Origination Date",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Effective Date",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "X-DATE",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "NEW BIZ CHECKLIST COMPLETE",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Premium Sold",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Policy Gross Comm %",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "STMT DATE",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Agency Estimated Comm/Revenue (AZ)",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Agency Gross Comm Received",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Agent Estimated Comm $",
+      "type": "FLOAT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "Paid Amount",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "BALANCE DUE",
+      "type": "FLOAT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "FULL OR MONTHLY PMTS",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "NOTES",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    }
+  ],
+  "renewal_history": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "not_null": false,
+      "default": null,
+      "primary_key": true
+    },
+    {
+      "name": "renewal_timestamp",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "renewed_by",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "original_transaction_id",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "new_transaction_id",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    },
+    {
+      "name": "details",
+      "type": "TEXT",
+      "not_null": false,
+      "default": null,
+      "primary_key": false
+    }
+  ]
+}
