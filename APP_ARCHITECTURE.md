@@ -241,7 +241,96 @@ SALES COMMISSIONS APP/
 - **Secure API Calls:** Using Supabase's built-in security
 - **Input Validation:** Prevents SQL injection and data corruption
 - **Access Control:** Ready for Row Level Security implementation
+- **Password Protection:** Application-level authentication implemented
+
+## Business Logic & Formulas
+
+### Core Commission Calculations
+
+#### 1. Agency Commission Formula
+```
+Agency Commission = Premium Sold × Policy Gross Comm %
+```
+- **Example:** $1,000 premium × 10% = $100 agency commission
+- **Used in:** Add New Policy, Edit Policies, Reports
+- **Field:** `Agency Estimated Comm/Revenue (CRM)`
+
+#### 2. Agent Commission Calculation
+```
+Agent Commission = Agency Commission × Agent Rate
+```
+
+**Agent Rates by Transaction Type:**
+| Transaction Type | Description | Agent Rate | Condition |
+|-----------------|-------------|------------|-----------|
+| NEW | New Business | 50% | Always |
+| NBS | New Business (Special) | 50% | Always |
+| STL | Still (Continuing) | 50% | Always |
+| BoR | Book of Renewals | 50% | Always |
+| RWL | Renewal | 25% | Always |
+| REWRITE | Rewrite | 25% | Always |
+| END | Endorsement | 50% or 25% | Based on date check* |
+| PCH | Policy Change | 50% or 25% | Based on date check* |
+| CAN | Cancellation | 0% | No commission |
+| XCL | Excluded | 0% | No commission |
+
+*Date Check: If Policy Origination Date = Effective Date, then NEW (50%), else RENEWAL (25%)
+
+#### 3. Premium Calculator (Endorsements)
+```
+Additional Premium = New Premium - Existing Premium
+```
+- **Used for:** END and PCH transactions
+- **Purpose:** Calculate the additional premium amount for endorsements
+
+#### 4. Balance Due Calculation
+```
+Balance Due = Agent Estimated Comm $ - Agent Paid Amount (STMT)
+```
+- **Used in:** Reports, Dashboard searches
+- **Purpose:** Track unpaid commissions
+
+### Calculated Fields Reference
+
+| Field | Calculation | Update Trigger | Used In |
+|-------|-------------|----------------|----------|
+| Agency Estimated Comm | Premium × Comm % | Data entry | All views |
+| Agent Estimated Comm | Agency Comm × Rate | Data entry | All views |
+| Balance Due | Estimated - Paid | Report generation | Reports |
+| Commission Difference | Estimated - Received | Report generation | Reconciliation |
+| YTD Totals | SUM(current year) | Report generation | Dashboard |
+| Monthly Summaries | SUM(by month) | Report generation | Reports |
+
+### Special Business Rules
+
+1. **Transaction Type Hierarchy:**
+   - NEW takes precedence over RWL when dates match
+   - END/PCH rates depend on whether it's a new or renewal policy
+   - CAN/XCL always result in zero commission
+
+2. **Commission Override Capability:**
+   - Manual adjustment allowed in Add New Policy
+   - Reconciliation can override calculated amounts
+   - Audit trail maintains original calculations
+
+3. **Reconciliation Logic:**
+   - Creates new transactions (double-entry accounting)
+   - Original = Credit (owed), Reconciliation = Debit (paid)
+   - Never modifies original transaction records
+
+### Formula Testing & Verification
+
+The Admin Panel includes a "Formulas & Calculations" tab with:
+- Live formula testing interface
+- Commission rate matrix display
+- Calculated fields reference
+- Interactive calculator for verification
+
+This ensures transparency and allows users to:
+- Understand how commissions are calculated
+- Verify calculations manually
+- Test edge cases and special scenarios
 
 ---
 
-*Last Updated: July 3, 2025*
+*Last Updated: July 4, 2025*

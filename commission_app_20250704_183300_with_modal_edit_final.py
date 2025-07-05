@@ -41,8 +41,7 @@ def check_password():
         # You should change this password and consider using environment variables
         correct_password = os.getenv("APP_PASSWORD", "CommissionApp2025!")  # Change this!
         
-        # Check if password key exists before accessing it
-        if "password" in st.session_state and st.session_state["password"] == correct_password:
+        if st.session_state["password"] == correct_password:
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Don't store password
         else:
@@ -1865,15 +1864,8 @@ def main():
                             # Handle form submission
                             if save_modal:
                                 try:
-                                    # Build complete update dictionary with ALL fields
+                                    # Update the record in the database
                                     update_dict = {}
-                                    
-                                    # First, include ALL original fields from modal_data (except Select and ID)
-                                    for field, original_value in modal_data.items():
-                                        if field != transaction_id_col and field != 'Select':
-                                            update_dict[field] = original_value
-                                    
-                                    # Then override with any fields that were updated in the form
                                     for field, value in updated_data.items():
                                         # Convert date objects to strings
                                         if isinstance(value, datetime.date):
@@ -1884,32 +1876,10 @@ def main():
                                         else:
                                             update_dict[field] = value
                                     
-                                    # Debug: Show what we're updating
-                                    st.write(f"DEBUG: Updating {len(update_dict)} fields for transaction {transaction_id}")
-                                    st.write("DEBUG: Sample fields being updated:", list(update_dict.keys())[:5])
+                                    # Update in database
+                                    supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
                                     
-                                    # Update in database with ALL fields
-                                    result = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
-                                    
-                                    # Check if update actually happened
-                                    if result.data:
-                                        st.success(f"✅ Transaction updated successfully! Updated {len(update_dict)} fields.")
-                                        
-                                        # Verify the update by reading back
-                                        verify = supabase.table('policies').select("*").eq(transaction_id_col, transaction_id).execute()
-                                        if verify.data and len(verify.data) > 0:
-                                            # Check a sample field
-                                            sample_field = list(updated_data.keys())[0] if updated_data else None
-                                            if sample_field and sample_field in verify.data[0]:
-                                                st.write(f"DEBUG: Verified - {sample_field} is now: {verify.data[0][sample_field]}")
-                                        
-                                        # Force clear the session state for the editor
-                                        if 'edit_policies_editor' in st.session_state:
-                                            del st.session_state['edit_policies_editor']
-                                        if 'last_search_edit_policies_editor' in st.session_state:
-                                            del st.session_state['last_search_edit_policies_editor']
-                                    else:
-                                        st.error("❌ Update may have failed - no data returned")
+                                    st.success("✅ Transaction updated successfully!")
                                     
                                     # Clear modal state
                                     st.session_state['show_edit_modal'] = False
@@ -2484,7 +2454,7 @@ def main():
     elif page == "Admin Panel":
         st.title("⚙️ Admin Panel")
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs"])
         
         with tab1:
             st.subheader("Database Information")
@@ -2810,198 +2780,6 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                     )
             else:
                 st.info("No debug logs yet. Logs will appear here as you use the application.")
-        
-        with tab7:
-            st.subheader("📊 Formulas & Calculations")
-            st.info("This section displays all active formulas and calculations used throughout the application.")
-            
-            # Formula tabs
-            formula_tab1, formula_tab2, formula_tab3, formula_tab4 = st.tabs(["Commission Formulas", "Rate Matrix", "Calculated Fields", "Formula Testing"])
-            
-            with formula_tab1:
-                st.markdown("### 💰 Commission Calculation Formulas")
-                
-                # Agency Commission Formula
-                st.markdown("#### 1. Agency Commission (Estimated)")
-                st.code("""
-Formula: Premium Sold × Policy Gross Comm %
-Example: $1,000 × 10% = $100
-
-Used in: Add New Policy, Edit Policies
-                """, language="text")
-                
-                # Agent Commission Formula
-                st.markdown("#### 2. Agent Commission Calculation")
-                st.code("""
-Base Formula: Agency Commission × Agent Rate
-
-Agent Rates by Transaction Type:
-- NEW, NBS, STL, BoR: 50% of Agency Commission
-- RWL, REWRITE: 25% of Agency Commission
-- END, PCH: 
-  - If Policy Origination Date = Effective Date: 50% (New Business)
-  - Otherwise: 25% (Renewal)
-- CAN, XCL: 0% (No commission on cancellations)
-
-Example (NEW): $100 Agency Comm × 50% = $50 Agent Comm
-Example (RWL): $100 Agency Comm × 25% = $25 Agent Comm
-                """, language="text")
-                
-                # Premium Calculator
-                st.markdown("#### 3. Premium Calculator (Endorsements)")
-                st.code("""
-Formula: New Premium - Existing Premium = Additional Premium
-Example: $1,200 - $1,000 = $200 Additional Premium
-
-Used in: Add New Policy (for END/PCH transactions)
-                """, language="text")
-                
-                # Balance Due
-                st.markdown("#### 4. Balance Due Calculation")
-                st.code("""
-Formula: Agent Estimated Comm $ - Agent Paid Amount (STMT)
-Example: $50 Estimated - $45 Paid = $5 Balance Due
-
-Used in: Reports, Dashboard searches
-                """, language="text")
-                
-            with formula_tab2:
-                st.markdown("### 📋 Commission Rate Matrix")
-                
-                # Create rate matrix dataframe
-                rate_data = {
-                    "Transaction Type": ["NEW", "NBS", "STL", "BoR", "RWL", "REWRITE", "END (New)", "END (Renewal)", "PCH (New)", "PCH (Renewal)", "CAN", "XCL"],
-                    "Full Name": [
-                        "New Business", "New Business (Special)", "Still (Continuing)", "Book of Renewals",
-                        "Renewal", "Rewrite", "Endorsement (New)", "Endorsement (Renewal)",
-                        "Policy Change (New)", "Policy Change (Renewal)", "Cancellation", "Excluded"
-                    ],
-                    "Agent Rate": ["50%", "50%", "50%", "50%", "25%", "25%", "50%", "25%", "50%", "25%", "0%", "0%"],
-                    "Condition": [
-                        "Always", "Always", "Always", "Always", "Always", "Always",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "No commission", "No commission"
-                    ]
-                }
-                
-                rate_df = pd.DataFrame(rate_data)
-                st.dataframe(rate_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("#### Special Rules")
-                st.markdown("""
-                - **NEW vs RWL Detection**: Based on Policy Origination Date vs Effective Date
-                - **Endorsements/Changes**: Commission rate depends on whether it's on a new or renewal policy
-                - **Cancellations**: No agent commission paid on CAN or XCL transactions
-                - **Override Capability**: Admin users can manually adjust commission amounts if needed
-                """)
-                
-            with formula_tab3:
-                st.markdown("### 🔢 Calculated Fields Reference")
-                
-                calculated_fields = {
-                    "Field Name": [
-                        "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Estimated Comm $",
-                        "Balance Due",
-                        "Commission Difference",
-                        "Year-to-Date Totals",
-                        "Monthly Summaries"
-                    ],
-                    "Calculation": [
-                        "Premium Sold × Policy Gross Comm %",
-                        "Agency Commission × Agent Rate (varies by type)",
-                        "Agent Estimated - Agent Paid",
-                        "Agency Estimated - Agency Received",
-                        "SUM of commissions for current year",
-                        "SUM grouped by month"
-                    ],
-                    "Update Frequency": [
-                        "On data entry",
-                        "On data entry",
-                        "Real-time in reports",
-                        "Real-time in reports",
-                        "On report generation",
-                        "On report generation"
-                    ],
-                    "Used In": [
-                        "All policy views",
-                        "All policy views",
-                        "Reports, Search filters",
-                        "Reconciliation reports",
-                        "Dashboard, Reports",
-                        "Monthly reports"
-                    ]
-                }
-                
-                calc_df = pd.DataFrame(calculated_fields)
-                st.dataframe(calc_df, use_container_width=True, hide_index=True)
-                
-            with formula_tab4:
-                st.markdown("### 🧪 Formula Testing & Verification")
-                
-                st.markdown("#### Test Commission Calculations")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    test_premium = st.number_input("Test Premium Amount", value=1000.0, format="%.2f", key="test_premium")
-                    test_comm_rate = st.number_input("Commission Rate (%)", value=10.0, format="%.2f", key="test_comm_rate")
-                    test_trans_type = st.selectbox("Transaction Type", 
-                        ["NEW", "RWL", "END", "PCH", "CAN", "NBS", "STL", "BoR", "REWRITE", "XCL"],
-                        key="test_trans_type"
-                    )
-                    
-                    if test_trans_type in ["END", "PCH"]:
-                        st.markdown("**Date Check for END/PCH**")
-                        col1a, col1b = st.columns(2)
-                        with col1a:
-                            orig_date = st.date_input("Origination Date", key="test_orig_date")
-                        with col1b:
-                            eff_date = st.date_input("Effective Date", key="test_eff_date")
-                        is_new = orig_date == eff_date
-                    else:
-                        is_new = None
-                
-                with col2:
-                    st.markdown("**Calculated Results:**")
-                    
-                    # Calculate agency commission
-                    agency_comm = test_premium * (test_comm_rate / 100)
-                    st.metric("Agency Commission", f"${agency_comm:.2f}")
-                    
-                    # Calculate agent commission based on type
-                    if test_trans_type in ["NEW", "NBS", "STL", "BoR"]:
-                        agent_rate = 0.50
-                        rate_display = "50%"
-                    elif test_trans_type in ["RWL", "REWRITE"]:
-                        agent_rate = 0.25
-                        rate_display = "25%"
-                    elif test_trans_type in ["END", "PCH"]:
-                        if is_new:
-                            agent_rate = 0.50
-                            rate_display = "50% (New)"
-                        else:
-                            agent_rate = 0.25
-                            rate_display = "25% (Renewal)"
-                    else:  # CAN, XCL
-                        agent_rate = 0.0
-                        rate_display = "0%"
-                    
-                    agent_comm = agency_comm * agent_rate
-                    
-                    st.metric("Agent Rate", rate_display)
-                    st.metric("Agent Commission", f"${agent_comm:.2f}")
-                    
-                    # Show calculation breakdown
-                    st.markdown("**Calculation Breakdown:**")
-                    st.text(f"""
-Premium: ${test_premium:.2f}
-Commission Rate: {test_comm_rate}%
-Agency Commission: ${test_premium:.2f} × {test_comm_rate}% = ${agency_comm:.2f}
-Agent Rate: {rate_display}
-Agent Commission: ${agency_comm:.2f} × {agent_rate:.0%} = ${agent_comm:.2f}
-                    """)
     
     # --- Tools ---
     elif page == "Tools":

@@ -5,6 +5,56 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2025-07-04
+
+### Added
+- **Password Protection** - Implemented application-level security
+  - Login screen requires password before accessing any data
+  - Password stored securely in environment variables
+  - Session-based authentication with logout functionality
+  - Prevents unauthorized access to sensitive commission data
+- **Form-Based Transaction Editor** - New reliable editing interface
+  - "Edit Selected Transaction" button next to "Add New Transaction"
+  - Modal-style form for single transaction editing
+  - Organized fields by category (Client, Policy, Dates, Commission, Status)
+  - Proper field types (date pickers, number inputs, checkboxes)
+  - Tab-friendly navigation without screen jumping
+- **Auto-Save Enhancement** - Improved data editor experience
+  - Auto-save toggle in Edit Policies interface
+  - Real-time saving of individual cell changes
+  - Status indicators showing save progress
+  - No page refresh on save (maintains scroll position)
+
+### Fixed
+- **Session State Password Error** - Fixed "KeyError: 'st.session_state has no key password'"
+  - Added check for password key existence before access
+  - Prevents crash when session state is corrupted
+- **Edit Form Save Issues** - Form changes now properly save to database
+  - Fixed partial field updates by including all fields in update
+  - Added verification step to confirm saves
+  - Improved error handling and debug messages
+- **UI Elements Disappearing** - Fixed missing buttons and editing tips
+  - Resolved Streamlit form variable scope issues
+  - Fixed conditional rendering logic
+  - Restored proper page structure
+
+### Enhanced
+- **Editing Tips Updated** - Clear guidance on two editing methods
+  - Explains table editing with auto-save (quick but can be interrupted)
+  - Recommends form editing for reliability
+  - Notes about full-screen mode benefits
+- **Security Documentation** - Updated SECURITY_IMPLEMENTATION.md
+  - Marked Phase 1 (password protection) as complete
+  - Updated security status and vulnerabilities
+  - Added deployment instructions for secure environments
+
+### Technical
+- **Environment Variables** - Added APP_PASSWORD to .env configuration
+- **Streamlit Cloud Deployment** - Successfully deployed with:
+  - openpyxl dependency added to requirements.txt
+  - Environment secrets configured in TOML format
+  - Production app running with full security
+
 ## [3.0.2] - 2025-07-03
 
 ### Fixed

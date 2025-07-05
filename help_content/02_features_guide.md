@@ -1,5 +1,22 @@
 # 🔧 Complete Features Guide
 
+## 🔐 Security & Login
+
+**What it does**: Protects your commission data with password authentication
+
+**Key Features**:
+- **Password Protection**: Required login before accessing any data
+- **Session Management**: Stay logged in across different pages
+- **Logout Option**: Secure logout button in sidebar
+
+**How to use**:
+1. Enter your password at the login screen
+2. Access all features after successful login
+3. Click "Logout" in sidebar when finished
+4. Close browser to automatically end session
+
+---
+
 ## 📊 Dashboard
 
 **What it does**: Provides an overview of your commission data and quick access to client information
@@ -82,24 +99,35 @@
 
 ## ✏️ Edit Policies in Database
 
-**What it does**: Allows bulk editing of existing policy data with column reordering
+**What it does**: Search and edit existing policy data with two editing methods
 
 **Key Features**:
-- **Column Reordering**: Drag and drop to rearrange columns
-- **Bulk Editing**: Edit multiple policies at once
-- **Formula Protection**: Some columns are locked to prevent calculation errors
-- **Real-time Updates**: Changes are saved immediately to the database
+- **Search Function**: Find specific policies by customer, ID, or policy number
+- **Two Edit Modes**: Table editing with auto-save OR form-based editing
+- **Auto-Save Toggle**: Enable/disable automatic saving of changes
+- **Form Editor**: Reliable single-transaction editing without interruptions
+- **Add New Transactions**: Button to add new rows for existing clients
 
-**How to edit**:
-1. **Reorder Columns**: Drag the column boxes to arrange them as needed
-2. **Edit Data**: Click in any unlocked cell to modify values
-3. **Review Changes**: Check your edits before saving
-4. **Save**: Click "Update Database" to commit all changes
+**Two Ways to Edit**:
 
-**Important Notes**:
-- Some columns are locked because they contain calculated values
-- The app automatically recalculates formulas when you save
-- Column order is preserved for future sessions
+### Method 1: Quick Table Edits (with Auto-Save)
+1. **Search**: Enter search term and click "Find Records"
+2. **Edit Directly**: Click in any cell to modify
+3. **Auto-Save**: Changes save automatically as you type
+4. **Warning**: App may refresh frequently, interrupting your work
+
+### Method 2: Form-Based Editing (Recommended)
+1. **Search**: Find the transaction you want to edit
+2. **Select**: Check ONE transaction's checkbox
+3. **Click**: "Edit Selected Transaction" button
+4. **Edit**: Use the form with proper field types
+5. **Save**: Click "Save Changes" when done
+
+**Pro Tips**:
+- Use form editing for anything beyond simple number changes
+- Auto-save shows status messages as it saves
+- Export to Excel for bulk edits, then import back
+- The form method prevents data loss from page refreshes
 
 ---
 

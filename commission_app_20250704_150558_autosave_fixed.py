@@ -41,8 +41,7 @@ def check_password():
         # You should change this password and consider using environment variables
         correct_password = os.getenv("APP_PASSWORD", "CommissionApp2025!")  # Change this!
         
-        # Check if password key exists before accessing it
-        if "password" in st.session_state and st.session_state["password"] == correct_password:
+        if st.session_state["password"] == correct_password:
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Don't store password
         else:
@@ -1438,13 +1437,9 @@ def main():
                         # Show editing tips
                         with st.expander("💡 Editing Tips", expanded=False):
                             st.markdown("""
-                            **Best editing experience:**
-                            - 🖥️ **Use Full Screen mode** (expand icon in top-right of table) to prevent screen jumping
-                            - Auto-save is enabled by default - changes save automatically
-                            - Full screen maintains your position while editing
-                            
-                            **To minimize data loss:**
-                            - Edit in Full Screen mode for best stability
+                            **To minimize data loss from page refreshes:**
+                            - Edit one row at a time and save frequently
+                            - Use Save Changes button after each row
                             - For bulk edits: Export to Excel → Edit → Import back
                             
                             **Keyboard shortcuts:**
@@ -1529,47 +1524,30 @@ def main():
                         else:
                             st.info("💡 New rows will receive unique Transaction IDs and Client IDs when you save.")
                         
-                        # Add buttons for adding new row and editing selected row
-                        button_col1, button_col2 = st.columns(2)
-                        
-                        with button_col1:
-                            if st.button("➕ Add New Transaction for This Client", type="secondary", use_container_width=True):
-                                # Ensure session state exists
-                                if editor_key in st.session_state:
-                                    # Create a new empty row with generated IDs
-                                    new_row = pd.Series(dtype='object')
-                                    for col in edit_results_with_selection.columns:
-                                        new_row[col] = None
-                                    
-                                    # Set default values
-                                    new_row['Select'] = False
-                                    if transaction_id_col:
-                                        new_row[transaction_id_col] = generate_transaction_id()
-                                    if client_id_col and existing_client_id:
-                                        new_row[client_id_col] = existing_client_id
-                                    elif client_id_col:
-                                        new_row[client_id_col] = generate_client_id()
-                                    
-                                    # Add the new row to session state
-                                    new_df = pd.concat([st.session_state[editor_key], pd.DataFrame([new_row])], ignore_index=True)
-                                    st.session_state[editor_key] = new_df
-                                    st.rerun()
-                                else:
-                                    st.error("Session state not initialized. Please try searching again.")
-                        
-                        with button_col2:
-                            # Check for selected rows for edit button
-                            selected_rows = edited_data[edited_data['Select'] == True].copy()
-                            selected_count = len(selected_rows)
-                            
-                            if selected_count == 1:
-                                if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
-                                    st.session_state['show_edit_modal'] = True
-                                    st.session_state['edit_modal_data'] = selected_rows.iloc[0].to_dict()
-                            elif selected_count == 0:
-                                st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
+                        # Add a button to manually add a new row
+                        if st.button("➕ Add New Transaction for This Client", type="secondary"):
+                            # Ensure session state exists
+                            if editor_key in st.session_state:
+                                # Create a new empty row with generated IDs
+                                new_row = pd.Series(dtype='object')
+                                for col in edit_results_with_selection.columns:
+                                    new_row[col] = None
+                                
+                                # Set default values
+                                new_row['Select'] = False
+                                if transaction_id_col:
+                                    new_row[transaction_id_col] = generate_transaction_id()
+                                if client_id_col and existing_client_id:
+                                    new_row[client_id_col] = existing_client_id
+                                elif client_id_col:
+                                    new_row[client_id_col] = generate_client_id()
+                                
+                                # Add the new row to session state
+                                new_df = pd.concat([st.session_state[editor_key], pd.DataFrame([new_row])], ignore_index=True)
+                                st.session_state[editor_key] = new_df
+                                st.rerun()
                             else:
-                                st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help=f"{selected_count} selected - please select only ONE transaction")
+                                st.error("Session state not initialized. Please try searching again.")
                         
                         # Save and Delete buttons with status
                         st.markdown("---")
@@ -1694,252 +1672,17 @@ def main():
                                     del st.session_state[unsaved_changes_key]
                                 st.rerun()
                         
-                        # Modal Form Implementation for Edit
-                        if st.session_state.get('show_edit_modal', False):
-                            # Create a modal-like overlay
-                            st.markdown("---")
-                            st.markdown("### 📝 Edit Transaction")
-                            
-                            modal_data = st.session_state.get('edit_modal_data', {})
-                            
-                            # Remove the Select column from modal data
-                            if 'Select' in modal_data:
-                                del modal_data['Select']
-                            
-                            # Get transaction ID and customer name for header
-                            transaction_id = modal_data.get(transaction_id_col, 'Unknown')
-                            customer_name = modal_data.get('Customer', 'Unknown')
-                            
-                            st.info(f"**Transaction ID:** {transaction_id} | **Customer:** {customer_name}")
-                            
-                            # Create form
-                            with st.form("edit_transaction_form"):
-                                # Group fields logically
-                                st.markdown("#### Client Information")
-                                col1, col2 = st.columns(2)
-                                
-                                # Track updated values
-                                updated_data = {}
-                                
-                                # Define field groups for better organization
-                                client_fields = ['Client ID (CRM)', 'Customer', 'Client Name', 'Agent Name']
-                                policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier']
-                                date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date']
-                                commission_fields = [
-                                    'Premium Sold', 'Agency Estimated Comm/Revenue (CRM)', 
-                                    'Policy Gross Comm %', 'Agent Estimated Comm $',
-                                    'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)'
-                                ]
-                                status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
-                                
-                                # Client Information
-                                field_counter = 0
-                                for field in modal_data.keys():
-                                    if field in client_fields:
-                                        with col1 if field_counter % 2 == 0 else col2:
-                                            updated_data[field] = st.text_input(
-                                                field, 
-                                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                key=f"modal_{field}"
-                                            )
-                                        field_counter += 1
-                                
-                                # Policy Information
-                                st.markdown("#### Policy Information")
-                                col3, col4 = st.columns(2)
-                                field_counter = 0
-                                for field in modal_data.keys():
-                                    if field in policy_fields:
-                                        with col3 if field_counter % 2 == 0 else col4:
-                                            updated_data[field] = st.text_input(
-                                                field, 
-                                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                key=f"modal_{field}"
-                                            )
-                                        field_counter += 1
-                                
-                                # Date Fields
-                                st.markdown("#### Dates")
-                                col5, col6 = st.columns(2)
-                                field_counter = 0
-                                for field in modal_data.keys():
-                                    if field in date_fields:
-                                        with col5 if field_counter % 2 == 0 else col6:
-                                            # For date fields, try to parse existing value
-                                            date_value = modal_data.get(field)
-                                            if date_value and pd.notna(date_value):
-                                                try:
-                                                    # Try to parse the date
-                                                    parsed_date = pd.to_datetime(date_value)
-                                                    updated_data[field] = st.date_input(
-                                                        field,
-                                                        value=parsed_date.date(),
-                                                        key=f"modal_{field}"
-                                                    )
-                                                except:
-                                                    updated_data[field] = st.text_input(
-                                                        field,
-                                                        value=str(date_value),
-                                                        key=f"modal_{field}"
-                                                    )
-                                            else:
-                                                updated_data[field] = st.date_input(
-                                                    field,
-                                                    value=None,
-                                                    key=f"modal_{field}"
-                                                )
-                                        field_counter += 1
-                                
-                                # Commission Fields
-                                st.markdown("#### Commission Details")
-                                col7, col8 = st.columns(2)
-                                field_counter = 0
-                                for field in modal_data.keys():
-                                    if field in commission_fields:
-                                        with col7 if field_counter % 2 == 0 else col8:
-                                            # Use number input for commission fields
-                                            current_value = modal_data.get(field, 0)
-                                            if pd.isna(current_value):
-                                                current_value = 0.0
-                                            updated_data[field] = st.number_input(
-                                                field,
-                                                value=float(current_value),
-                                                format="%.2f",
-                                                key=f"modal_{field}"
-                                            )
-                                        field_counter += 1
-                                
-                                # Status Fields
-                                st.markdown("#### Status & Notes")
-                                for field in modal_data.keys():
-                                    if field in status_fields:
-                                        if field == 'Reconciled?':
-                                            current_val = str(modal_data.get(field, 'No')).upper() == 'YES'
-                                            updated_data[field] = 'Yes' if st.checkbox(
-                                                "Reconciled?",
-                                                value=current_val,
-                                                key=f"modal_{field}"
-                                            ) else 'No'
-                                        elif field == 'Reconciliation Notes':
-                                            updated_data[field] = st.text_area(
-                                                field,
-                                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                key=f"modal_{field}",
-                                                height=100
-                                            )
-                                        else:
-                                            updated_data[field] = st.text_input(
-                                                field,
-                                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                key=f"modal_{field}"
-                                            )
-                                
-                                # Any remaining fields not in our categories
-                                st.markdown("#### Other Fields")
-                                remaining_fields = [f for f in modal_data.keys() if f not in 
-                                                  client_fields + policy_fields + date_fields + 
-                                                  commission_fields + status_fields + [transaction_id_col]]
-                                
-                                if remaining_fields:
-                                    col9, col10 = st.columns(2)
-                                    field_counter = 0
-                                    for field in remaining_fields:
-                                        with col9 if field_counter % 2 == 0 else col10:
-                                            updated_data[field] = st.text_input(
-                                                field,
-                                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                key=f"modal_{field}"
-                                            )
-                                        field_counter += 1
-                                
-                                # Form buttons
-                                st.markdown("---")
-                                col_save, col_cancel = st.columns(2)
-                                
-                                with col_save:
-                                    save_modal = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
-                                
-                                with col_cancel:
-                                    cancel_modal = st.form_submit_button("❌ Cancel", use_container_width=True)
-                            
-                            # Handle form submission
-                            if save_modal:
-                                try:
-                                    # Build complete update dictionary with ALL fields
-                                    update_dict = {}
-                                    
-                                    # First, include ALL original fields from modal_data (except Select and ID)
-                                    for field, original_value in modal_data.items():
-                                        if field != transaction_id_col and field != 'Select':
-                                            update_dict[field] = original_value
-                                    
-                                    # Then override with any fields that were updated in the form
-                                    for field, value in updated_data.items():
-                                        # Convert date objects to strings
-                                        if isinstance(value, datetime.date):
-                                            update_dict[field] = value.isoformat()
-                                        # Handle empty strings as None
-                                        elif value == '':
-                                            update_dict[field] = None
-                                        else:
-                                            update_dict[field] = value
-                                    
-                                    # Debug: Show what we're updating
-                                    st.write(f"DEBUG: Updating {len(update_dict)} fields for transaction {transaction_id}")
-                                    st.write("DEBUG: Sample fields being updated:", list(update_dict.keys())[:5])
-                                    
-                                    # Update in database with ALL fields
-                                    result = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
-                                    
-                                    # Check if update actually happened
-                                    if result.data:
-                                        st.success(f"✅ Transaction updated successfully! Updated {len(update_dict)} fields.")
-                                        
-                                        # Verify the update by reading back
-                                        verify = supabase.table('policies').select("*").eq(transaction_id_col, transaction_id).execute()
-                                        if verify.data and len(verify.data) > 0:
-                                            # Check a sample field
-                                            sample_field = list(updated_data.keys())[0] if updated_data else None
-                                            if sample_field and sample_field in verify.data[0]:
-                                                st.write(f"DEBUG: Verified - {sample_field} is now: {verify.data[0][sample_field]}")
-                                        
-                                        # Force clear the session state for the editor
-                                        if 'edit_policies_editor' in st.session_state:
-                                            del st.session_state['edit_policies_editor']
-                                        if 'last_search_edit_policies_editor' in st.session_state:
-                                            del st.session_state['last_search_edit_policies_editor']
-                                    else:
-                                        st.error("❌ Update may have failed - no data returned")
-                                    
-                                    # Clear modal state
-                                    st.session_state['show_edit_modal'] = False
-                                    st.session_state['edit_modal_data'] = None
-                                    
-                                    # Clear cache and refresh
-                                    clear_policies_cache()
-                                    time.sleep(1)
-                                    st.rerun()
-                                    
-                                except Exception as e:
-                                    st.error(f"Error updating transaction: {str(e)}")
-                            
-                            if cancel_modal:
-                                # Clear modal state
-                                st.session_state['show_edit_modal'] = False
-                                st.session_state['edit_modal_data'] = None
-                                st.rerun()
-                        
-                        # Delete functionality moved to bottom
+                        # Delete functionality
                         st.divider()
                         st.subheader("🗑️ Delete Selected Records")
                         
-                        # Re-check selected rows for delete functionality
-                        selected_rows_for_delete = edited_data[edited_data['Select'] == True].copy()
+                        # Find rows where Select checkbox is True
+                        selected_rows = edited_data[edited_data['Select'] == True].copy()
                         
                         # Collect transaction IDs to delete BEFORE any modifications
                         transaction_ids_to_delete = []
-                        if not selected_rows_for_delete.empty and transaction_id_col:
-                            for idx, row in selected_rows_for_delete.iterrows():
+                        if not selected_rows.empty and transaction_id_col:
+                            for idx, row in selected_rows.iterrows():
                                 tid = row[transaction_id_col]
                                 if tid and pd.notna(tid):
                                     transaction_ids_to_delete.append(str(tid))
@@ -2019,7 +1762,7 @@ def main():
                             with col2:
                                 st.info("Click 'Confirm Delete' to permanently remove the selected records.")
                         else:
-                            if not selected_rows_for_delete.empty:
+                            if not selected_rows.empty:
                                 st.error("Could not identify transaction IDs for selected rows. Make sure the Transaction ID column is properly identified.")
                             else:
                                 st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
@@ -2484,7 +2227,7 @@ def main():
     elif page == "Admin Panel":
         st.title("⚙️ Admin Panel")
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs"])
         
         with tab1:
             st.subheader("Database Information")
@@ -2810,198 +2553,6 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                     )
             else:
                 st.info("No debug logs yet. Logs will appear here as you use the application.")
-        
-        with tab7:
-            st.subheader("📊 Formulas & Calculations")
-            st.info("This section displays all active formulas and calculations used throughout the application.")
-            
-            # Formula tabs
-            formula_tab1, formula_tab2, formula_tab3, formula_tab4 = st.tabs(["Commission Formulas", "Rate Matrix", "Calculated Fields", "Formula Testing"])
-            
-            with formula_tab1:
-                st.markdown("### 💰 Commission Calculation Formulas")
-                
-                # Agency Commission Formula
-                st.markdown("#### 1. Agency Commission (Estimated)")
-                st.code("""
-Formula: Premium Sold × Policy Gross Comm %
-Example: $1,000 × 10% = $100
-
-Used in: Add New Policy, Edit Policies
-                """, language="text")
-                
-                # Agent Commission Formula
-                st.markdown("#### 2. Agent Commission Calculation")
-                st.code("""
-Base Formula: Agency Commission × Agent Rate
-
-Agent Rates by Transaction Type:
-- NEW, NBS, STL, BoR: 50% of Agency Commission
-- RWL, REWRITE: 25% of Agency Commission
-- END, PCH: 
-  - If Policy Origination Date = Effective Date: 50% (New Business)
-  - Otherwise: 25% (Renewal)
-- CAN, XCL: 0% (No commission on cancellations)
-
-Example (NEW): $100 Agency Comm × 50% = $50 Agent Comm
-Example (RWL): $100 Agency Comm × 25% = $25 Agent Comm
-                """, language="text")
-                
-                # Premium Calculator
-                st.markdown("#### 3. Premium Calculator (Endorsements)")
-                st.code("""
-Formula: New Premium - Existing Premium = Additional Premium
-Example: $1,200 - $1,000 = $200 Additional Premium
-
-Used in: Add New Policy (for END/PCH transactions)
-                """, language="text")
-                
-                # Balance Due
-                st.markdown("#### 4. Balance Due Calculation")
-                st.code("""
-Formula: Agent Estimated Comm $ - Agent Paid Amount (STMT)
-Example: $50 Estimated - $45 Paid = $5 Balance Due
-
-Used in: Reports, Dashboard searches
-                """, language="text")
-                
-            with formula_tab2:
-                st.markdown("### 📋 Commission Rate Matrix")
-                
-                # Create rate matrix dataframe
-                rate_data = {
-                    "Transaction Type": ["NEW", "NBS", "STL", "BoR", "RWL", "REWRITE", "END (New)", "END (Renewal)", "PCH (New)", "PCH (Renewal)", "CAN", "XCL"],
-                    "Full Name": [
-                        "New Business", "New Business (Special)", "Still (Continuing)", "Book of Renewals",
-                        "Renewal", "Rewrite", "Endorsement (New)", "Endorsement (Renewal)",
-                        "Policy Change (New)", "Policy Change (Renewal)", "Cancellation", "Excluded"
-                    ],
-                    "Agent Rate": ["50%", "50%", "50%", "50%", "25%", "25%", "50%", "25%", "50%", "25%", "0%", "0%"],
-                    "Condition": [
-                        "Always", "Always", "Always", "Always", "Always", "Always",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "No commission", "No commission"
-                    ]
-                }
-                
-                rate_df = pd.DataFrame(rate_data)
-                st.dataframe(rate_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("#### Special Rules")
-                st.markdown("""
-                - **NEW vs RWL Detection**: Based on Policy Origination Date vs Effective Date
-                - **Endorsements/Changes**: Commission rate depends on whether it's on a new or renewal policy
-                - **Cancellations**: No agent commission paid on CAN or XCL transactions
-                - **Override Capability**: Admin users can manually adjust commission amounts if needed
-                """)
-                
-            with formula_tab3:
-                st.markdown("### 🔢 Calculated Fields Reference")
-                
-                calculated_fields = {
-                    "Field Name": [
-                        "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Estimated Comm $",
-                        "Balance Due",
-                        "Commission Difference",
-                        "Year-to-Date Totals",
-                        "Monthly Summaries"
-                    ],
-                    "Calculation": [
-                        "Premium Sold × Policy Gross Comm %",
-                        "Agency Commission × Agent Rate (varies by type)",
-                        "Agent Estimated - Agent Paid",
-                        "Agency Estimated - Agency Received",
-                        "SUM of commissions for current year",
-                        "SUM grouped by month"
-                    ],
-                    "Update Frequency": [
-                        "On data entry",
-                        "On data entry",
-                        "Real-time in reports",
-                        "Real-time in reports",
-                        "On report generation",
-                        "On report generation"
-                    ],
-                    "Used In": [
-                        "All policy views",
-                        "All policy views",
-                        "Reports, Search filters",
-                        "Reconciliation reports",
-                        "Dashboard, Reports",
-                        "Monthly reports"
-                    ]
-                }
-                
-                calc_df = pd.DataFrame(calculated_fields)
-                st.dataframe(calc_df, use_container_width=True, hide_index=True)
-                
-            with formula_tab4:
-                st.markdown("### 🧪 Formula Testing & Verification")
-                
-                st.markdown("#### Test Commission Calculations")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    test_premium = st.number_input("Test Premium Amount", value=1000.0, format="%.2f", key="test_premium")
-                    test_comm_rate = st.number_input("Commission Rate (%)", value=10.0, format="%.2f", key="test_comm_rate")
-                    test_trans_type = st.selectbox("Transaction Type", 
-                        ["NEW", "RWL", "END", "PCH", "CAN", "NBS", "STL", "BoR", "REWRITE", "XCL"],
-                        key="test_trans_type"
-                    )
-                    
-                    if test_trans_type in ["END", "PCH"]:
-                        st.markdown("**Date Check for END/PCH**")
-                        col1a, col1b = st.columns(2)
-                        with col1a:
-                            orig_date = st.date_input("Origination Date", key="test_orig_date")
-                        with col1b:
-                            eff_date = st.date_input("Effective Date", key="test_eff_date")
-                        is_new = orig_date == eff_date
-                    else:
-                        is_new = None
-                
-                with col2:
-                    st.markdown("**Calculated Results:**")
-                    
-                    # Calculate agency commission
-                    agency_comm = test_premium * (test_comm_rate / 100)
-                    st.metric("Agency Commission", f"${agency_comm:.2f}")
-                    
-                    # Calculate agent commission based on type
-                    if test_trans_type in ["NEW", "NBS", "STL", "BoR"]:
-                        agent_rate = 0.50
-                        rate_display = "50%"
-                    elif test_trans_type in ["RWL", "REWRITE"]:
-                        agent_rate = 0.25
-                        rate_display = "25%"
-                    elif test_trans_type in ["END", "PCH"]:
-                        if is_new:
-                            agent_rate = 0.50
-                            rate_display = "50% (New)"
-                        else:
-                            agent_rate = 0.25
-                            rate_display = "25% (Renewal)"
-                    else:  # CAN, XCL
-                        agent_rate = 0.0
-                        rate_display = "0%"
-                    
-                    agent_comm = agency_comm * agent_rate
-                    
-                    st.metric("Agent Rate", rate_display)
-                    st.metric("Agent Commission", f"${agent_comm:.2f}")
-                    
-                    # Show calculation breakdown
-                    st.markdown("**Calculation Breakdown:**")
-                    st.text(f"""
-Premium: ${test_premium:.2f}
-Commission Rate: {test_comm_rate}%
-Agency Commission: ${test_premium:.2f} × {test_comm_rate}% = ${agency_comm:.2f}
-Agent Rate: {rate_display}
-Agent Commission: ${agency_comm:.2f} × {agent_rate:.0%} = ${agent_comm:.2f}
-                    """)
     
     # --- Tools ---
     elif page == "Tools":
