@@ -5,6 +5,79 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2025-07-05 (Evening Update)
+
+### Added
+- **Statement Import Enhancements** - Major improvements to reconciliation workflow
+  - **Column Mapping Persistence** - Save and load column mappings for repeated imports
+    - Named mappings (e.g., "ABC Insurance Statement")
+    - Validation when loading to ensure columns exist
+    - Delete unwanted mappings
+  - **Statement Total Verification** - Check-and-balance feature
+    - Automatically detects and uses totals row from statements
+    - Shows statement total vs reconciliation total
+    - Visual indicators for perfect balance or discrepancies
+  - **Enhanced Name Matching** - Handles real-world variations
+    - First word matching: "Barboun" → "Barboun, Thomas"
+    - Business name normalization: "RCM Construction" → "RCM Construction of SWFL LLC"
+    - Interactive selection when multiple matches exist
+
+### Changed
+- **Dual-Purpose Reconciliation Clarification** - Fundamental shift in understanding
+  - PRIMARY: Reconcile agent's commission payments (what YOU receive)
+  - SECONDARY: Track agency's gross commission (for audit verification)
+  - Agent Paid Amount (STMT) now primary required field
+  - Agency Comm Received (STMT) now required for audit trail
+  - All totals and displays updated to show agent amounts primarily
+- **Totals Row Handling** - Skip matching but use for verification
+  - Automatically skips rows with "total", "subtotal", etc. in customer name
+  - Extracts total value for check-and-balance display
+  - Prevents false matches on summary rows
+
+### Fixed
+- **Transaction Lookup in Import** - Resolved critical matching issue
+  - Import now uses same balance calculation as Unreconciled Transactions tab
+  - Eliminated stale data and lookup mismatches
+  - Fixed "can't find transaction even with exact match" problem
+- **Import Display** - Removed duplicate field descriptions
+- **Session State Cleanup** - Clear statement totals after import
+
+### Technical Notes
+- Created `calculate_transaction_balances()` shared function for consistency
+- Added `find_potential_customer_matches()` for intelligent name matching
+- Implemented `normalize_business_name()` for business entity handling
+
+## [3.5.0] - 2025-07-05
+
+### Added
+- **Reconciliation System - Complete Implementation** - Double-entry accounting for commission tracking
+  - Balance-based transaction visibility (shows until fully reconciled to $0)
+  - Drill-down selection: Customer → Policy Type → Policy Number → Effective Date
+  - Batch reconciliation requiring exact statement total match
+  - Special transaction IDs with suffixes (-STMT-, -VOID-, -ADJ-)
+  - Void functionality to reverse entire reconciliation batches
+  - Adjustment entries for error corrections
+  - Full transaction history with payment tracking
+  - Batch integrity checks and validation
+- **Formulas & Calculations Tab** - New Admin Panel feature
+  - Documents all calculated fields and their formulas
+  - Shows relationships between fields
+  - Provides transparency for commission calculations
+- **Row Level Security (RLS)** - Enhanced database security
+  - Enabled on all tables: policies, deleted_policies, manual_commission_entries
+  - Restricts data access at database level
+  - Works alongside application-level password protection
+
+### Changed
+- **Date Format Standardization** - All dates now display as MM/DD/YYYY
+- **Removed Carrier Field** - Simplified reconciliation interface
+- **Enhanced Reconciliation Display** - Shows full transaction details including all original fields
+
+### Fixed
+- **Transaction ID Generation** - Properly generates mixed alphanumeric IDs
+- **Reconciliation Entry Creation** - Fixed transaction ID length validation
+- **Batch Total Calculations** - Accurate decimal handling for statement matching
+
 ## [3.0.3] - 2025-07-04
 
 ### Added

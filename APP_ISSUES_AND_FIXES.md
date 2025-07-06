@@ -672,4 +672,164 @@ def log_debug(message, level="INFO", error_obj=None):
 
 ---
 
-*Last Updated: July 4, 2025*
+## Statement Import Transaction Lookup Fix
+
+### Issue (July 5, 2025)
+User reported: "I can't select the customer to see what transactions they have for RCM Construction"
+- Even with 100% customer name match, import showed "No transactions with balance"
+- Transaction EFI6155 with $57.19 balance was visible in Unreconciled Transactions tab
+- But import matching couldn't find it
+
+### Root Cause
+The import matching built its own `existing_lookup` dictionary which had:
+1. Potentially stale/cached data from before user edits
+2. Customer key formatting mismatches
+3. Different balance calculation logic than the Unreconciled Transactions tab
+
+### Solution
+Created a shared function that both tabs use:
+```python
+def calculate_transaction_balances(all_data):
+    """
+    Calculate outstanding balances for all transactions.
+    Reuses the exact logic from Unreconciled Transactions tab.
+    """
+    # [Same balance calculation logic]
+    return outstanding_df
+```
+
+### Technical Details
+- **Consistency**: One source of truth for balance calculations
+- **Real-time**: Always uses current data, not cached lookups
+- **Proven Logic**: Reuses the tab that users trust and verify against
+
+---
+
+## Dual-Purpose Reconciliation Understanding
+
+### Issue (July 5, 2025)
+Fundamental misunderstanding about reconciliation purpose:
+- System was built to reconcile agency's gross commissions
+- User needed to reconcile agent's actual payments
+- User quote: "the app's main reconciling feature... is tracking what the agent gets"
+
+### Root Cause
+We approached the problem from the agency's perspective, not the agent's perspective.
+
+### Solution
+Implemented dual-purpose reconciliation:
+1. **Primary**: Agent Paid Amount (STMT) - what YOU received
+2. **Secondary**: Agency Comm Received (STMT) - for audit verification
+
+### Implementation Changes
+```python
+# Before
+amount = float(row[column_mapping['Agency Comm Received (STMT)']])
+
+# After  
+amount = float(row[column_mapping['Agent Paid Amount (STMT)']])  # Primary
+agency_amount = float(row[column_mapping['Agency Comm Received (STMT)']])  # Audit
+```
+
+### Why This Matters
+Example scenario:
+- Agency receives $100 from carrier
+- Should pay agent $50 (50% split)
+- Actually pays agent $45
+- Dual tracking catches the $5 discrepancy
+
+---
+
+## Statement Totals Row Handling
+
+### Issue (July 5, 2025)
+User: "Please don't try and match the 'Totals' row on the commission statement"
+- Statements include summary rows that shouldn't be matched
+- But total is needed for verification
+
+### Solution
+1. Skip totals rows during matching:
+```python
+customer_lower = customer.lower()
+if any(total_word in customer_lower for total_word in 
+       ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
+    continue
+```
+
+2. Extract total for verification:
+```python
+totals_mask = df[customer_col].str.lower().str.contains('total|sum', na=False)
+if totals_mask.any():
+    statement_total_amount = all_amounts[totals_mask].max()
+```
+
+3. Display verification check:
+- Statement Total (from file)
+- Ready to Reconcile (matched + to create)
+- Difference with visual indicators
+
+### User Insight
+"Checks and balances might be the best way to describe it"
+
+---
+
+## Column Mapping Persistence
+
+### Issue (July 5, 2025)
+User: "Where am I saving my mapping inputs so they populate by default next time?"
+- Had to re-map columns for every import
+- No save functionality existed
+
+### Solution
+Added save/load functionality:
+1. Save current mapping with custom name
+2. Load saved mappings with validation
+3. Delete unwanted mappings
+4. Show saved mappings with metadata
+
+### Implementation
+```python
+# Save
+st.session_state.saved_column_mappings[mapping_name] = {
+    'mapping': st.session_state.column_mapping.copy(),
+    'created': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+    'field_count': len(st.session_state.column_mapping)
+}
+
+# Load with validation
+for sys_field, stmt_col in saved_map.items():
+    if stmt_col in df.columns:
+        valid_mapping[sys_field] = stmt_col
+```
+
+---
+
+## Enhanced Name Matching Implementation
+
+### Issue (July 5, 2025)
+Real-world name variations prevented matching:
+1. "Barboun" in statement vs "Barboun, Thomas" in database
+2. "RCM Construction" vs "RCM Construction of SWFL LLC"
+
+### Solution
+Multiple matching strategies:
+1. **First Word Match**: For personal names
+2. **Business Name Normalization**: Remove LLC, Inc, etc.
+3. **Contains Match**: Find substring matches
+4. **Interactive Selection**: When multiple matches exist
+
+### Code Implementation
+```python
+def normalize_business_name(name):
+    """Remove common business suffixes"""
+    suffixes = ['LLC', 'L.L.C.', 'Inc', 'Inc.', 'Corp', ...]
+    # Remove suffixes and clean up
+    
+def find_potential_customer_matches(search_name, all_customers):
+    """Find matches using multiple strategies"""
+    # First word, normalized, contains, fuzzy
+```
+
+---
+
+*Last Updated: July 5, 2025*

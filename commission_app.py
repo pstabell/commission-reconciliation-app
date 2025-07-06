@@ -8,6 +8,7 @@ import numpy as np
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import hashlib
+import re
 
 # Set pandas display options to avoid scientific notation and show 2 decimal places
 pd.options.display.float_format = '{:.2f}'.format
@@ -504,6 +505,17 @@ def generate_transaction_id(length=7):
     random.shuffle(result)
     return ''.join(result)
 
+def generate_reconciliation_transaction_id(transaction_type="STMT", date=None):
+    """Generate a reconciliation transaction ID with format: XXXXXXX-TYPE-YYYYMMDD"""
+    base_id = generate_transaction_id()
+    
+    if date is None:
+        date = datetime.datetime.now()
+    
+    date_str = date.strftime("%Y%m%d")
+    
+    return f"{base_id}-{transaction_type}-{date_str}"
+
 # --- Excel Utility Functions ---
 def create_formatted_excel_file(data, sheet_name="Data", filename_prefix="export"):
     """
@@ -785,6 +797,702 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     
     return pending_renewals
 
+def normalize_business_name(name):
+    """
+    Normalize business names by removing common suffixes and punctuation.
+    Helps match "RCM Construction" to "RCM Construction of SWFL LLC"
+    """
+    if not name:
+        return ""
+    
+    # Common business suffixes to remove
+    suffixes = [
+        'LLC', 'L.L.C.', 'L.L.C', 'Inc', 'Inc.', 'Incorporated',
+        'Corp', 'Corp.', 'Corporation', 'Ltd', 'Ltd.', 'Limited',
+        'PA', 'P.A.', 'PC', 'P.C.', 'PLLC', 'P.L.L.C.',
+        'LLP', 'L.L.P.', 'LP', 'L.P.', 'Company', 'Co.', 'Co'
+    ]
+    
+    # Convert to string and strip
+    normalized = str(name).strip()
+    
+    # Remove suffixes (case-insensitive)
+    for suffix in suffixes:
+        # Check both with and without leading comma
+        patterns = [
+            rf',?\s+{re.escape(suffix)}\s*$',
+            rf'\s+{re.escape(suffix)}\s*$'
+        ]
+        for pattern in patterns:
+            normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE)
+    
+    # Remove "of [Location]" patterns
+    normalized = re.sub(r'\s+of\s+[A-Z][A-Za-z\s]+(?:LLC|Inc|Corp)?$', '', normalized, flags=re.IGNORECASE)
+    
+    # Clean up extra whitespace and punctuation
+    normalized = ' '.join(normalized.split())
+    normalized = normalized.strip(' ,.-')
+    
+    return normalized
+
+def find_potential_customer_matches(search_name, existing_customers):
+    """
+    Find potential customer matches using various strategies.
+    Returns list of (customer_name, match_type, score) tuples.
+    """
+    if not search_name:
+        return []
+    
+    search_name_lower = search_name.lower().strip()
+    search_normalized = normalize_business_name(search_name).lower()
+    search_first_word = search_name.split()[0].lower() if search_name else ""
+    
+    matches = {}  # Use dict to avoid duplicates
+    
+    for customer in existing_customers:
+        if not customer:
+            continue
+            
+        customer_lower = customer.lower().strip()
+        customer_normalized = normalize_business_name(customer).lower()
+        customer_first_word = customer.split()[0].lower() if customer else ""
+        
+        # 1. Exact match (highest priority)
+        if search_name_lower == customer_lower:
+            matches[customer] = ('exact', 100)
+            continue
+        
+        # 2. Normalized match (very high priority)
+        if search_normalized and search_normalized == customer_normalized:
+            if customer not in matches or matches[customer][1] < 95:
+                matches[customer] = ('normalized', 95)
+            continue
+        
+        # 3. First word match (e.g., "Barboun" matches "Barboun, Thomas")
+        if search_first_word and customer_first_word == search_first_word:
+            if customer not in matches or matches[customer][1] < 90:
+                matches[customer] = ('first_word', 90)
+            continue
+        
+        # 4. Contains match (e.g., "RCM" in "RCM Construction")
+        if len(search_name) >= 3:
+            if search_name_lower in customer_lower:
+                if customer not in matches or matches[customer][1] < 85:
+                    matches[customer] = ('contains', 85)
+                continue
+            
+            # Check if search is contained in normalized version
+            if search_normalized in customer_normalized:
+                if customer not in matches or matches[customer][1] < 83:
+                    matches[customer] = ('normalized_contains', 83)
+                continue
+        
+        # 5. Customer contains search (e.g., searching "RCM Construction" finds "RCM Construction of SWFL LLC")
+        if customer_lower in search_name_lower and len(customer) >= 3:
+            if customer not in matches or matches[customer][1] < 80:
+                matches[customer] = ('reverse_contains', 80)
+            continue
+        
+        # 6. Starts with match
+        if customer_lower.startswith(search_name_lower[:3]) and len(search_name) >= 3:
+            if customer not in matches or matches[customer][1] < 75:
+                matches[customer] = ('starts_with', 75)
+    
+    # Convert to sorted list
+    result = [(name, match_type, score) for name, (match_type, score) in matches.items()]
+    result.sort(key=lambda x: (-x[2], x[0]))  # Sort by score desc, then name
+    
+    return result
+
+def calculate_transaction_balances(all_data):
+    """
+    Calculate outstanding balances for all transactions.
+    Reuses the exact logic from Unreconciled Transactions tab.
+    Returns DataFrame with _balance column added.
+    """
+    if all_data.empty:
+        return pd.DataFrame()
+    
+    # Get original transactions only (exclude -STMT-, -ADJ-, -VOID-)
+    original_trans = all_data[
+        ~all_data['Transaction ID'].str.contains('-STMT-|-ADJ-|-VOID-', na=False)
+    ].copy()
+    
+    if original_trans.empty:
+        return pd.DataFrame()
+    
+    # Calculate balance for each transaction
+    for idx, row in original_trans.iterrows():
+        # Calculate credits (commission owed)
+        credit = float(row.get('Agent Estimated Comm $', 0) or 0)
+        
+        # Calculate debits (total paid for this policy)
+        policy_num = row['Policy Number']
+        effective_date = row['Effective Date']
+        
+        # Get all STMT entries for this specific policy and date
+        stmt_entries = all_data[
+            (all_data['Policy Number'] == policy_num) &
+            (all_data['Effective Date'] == effective_date) &
+            (all_data['Transaction ID'].str.contains('-STMT-', na=False))
+        ]
+        
+        debit = 0
+        if not stmt_entries.empty:
+            debit = stmt_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+        
+        # Calculate balance
+        balance = credit - debit
+        original_trans.at[idx, '_balance'] = balance
+    
+    # Return only transactions with outstanding balance
+    return original_trans[original_trans['_balance'] > 0.01]
+
+def match_statement_transactions(statement_df, column_mapping, existing_data, statement_date):
+    """
+    Match statement transactions to existing database records.
+    Now uses the same balance calculation as Unreconciled Transactions tab.
+    Returns: (matched_list, unmatched_list, can_create_list)
+    """
+    matched = []
+    unmatched = []
+    can_create = []
+    
+    # Get transactions with outstanding balances using the same logic as Unreconciled tab
+    outstanding_trans = calculate_transaction_balances(existing_data)
+    
+    # Build lookup dictionaries
+    existing_lookup = {}
+    customer_trans_lookup = {}  # Customer -> list of transactions
+    
+    if not outstanding_trans.empty:
+        for idx, trans in outstanding_trans.iterrows():
+            trans_dict = trans.to_dict()
+            trans_dict['balance'] = trans['_balance']
+            
+            # Store by policy key
+            policy_key = f"{trans['Policy Number']}_{trans['Effective Date']}"
+            existing_lookup[policy_key] = trans_dict
+            
+            # Store by customer (for fuzzy matching)
+            customer = trans['Customer']
+            if pd.notna(customer):
+                customer_key = customer.lower().strip()
+                if customer_key not in customer_trans_lookup:
+                    customer_trans_lookup[customer_key] = []
+                customer_trans_lookup[customer_key].append(trans_dict)
+    
+    # Get unique customer list for fuzzy matching
+    all_customers = []
+    if not existing_data.empty:
+        all_customers = existing_data['Customer'].dropna().unique().tolist()
+    
+    # Process each statement row
+    for idx, row in statement_df.iterrows():
+        # Extract mapped values
+        customer = str(row[column_mapping['Customer']]).strip() if 'Customer' in column_mapping else ''
+        policy_num = str(row[column_mapping['Policy Number']]).strip() if 'Policy Number' in column_mapping else ''
+        eff_date = row[column_mapping['Effective Date']] if 'Effective Date' in column_mapping else None
+        
+        # Skip rows that appear to be totals
+        # Check if customer name contains common total indicators
+        customer_lower = customer.lower()
+        if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
+            continue
+        
+        # Also skip if policy number or customer is empty/missing and it looks like a summary row
+        if (not customer or customer.lower() in ['', 'nan', 'none']) and (not policy_num or policy_num.lower() in ['', 'nan', 'none']):
+            continue
+        # Primary reconciliation amount is what the agent was paid
+        amount = float(row[column_mapping['Agent Paid Amount (STMT)']]) if 'Agent Paid Amount (STMT)' in column_mapping else 0
+        # Agency amount is optional for audit purposes
+        agency_amount = float(row[column_mapping['Agency Comm Received (STMT)']]) if 'Agency Comm Received (STMT)' in column_mapping else 0
+        
+        # Convert effective date to string format
+        if pd.notna(eff_date):
+            try:
+                eff_date = pd.to_datetime(eff_date).strftime('%Y-%m-%d')
+            except:
+                eff_date = str(eff_date)
+        
+        match_result = {
+            'row_index': idx,
+            'customer': customer,
+            'policy_number': policy_num,
+            'effective_date': eff_date,
+            'amount': amount,  # Agent Paid Amount (primary)
+            'agency_amount': agency_amount,  # Agency Comm Received (audit)
+            'statement_data': row.to_dict()
+        }
+        
+        # Try to match: Policy Number + Effective Date (highest confidence)
+        policy_key = f"{policy_num}_{eff_date}"
+        if policy_key in existing_lookup:
+            match_result['match'] = existing_lookup[policy_key]
+            match_result['confidence'] = 100
+            match_result['match_type'] = 'Policy + Date'
+            matched.append(match_result)
+            continue
+        
+        # Try enhanced customer matching
+        potential_customers = find_potential_customer_matches(customer, all_customers)
+        
+        if potential_customers:
+            # Check if we have a single high-confidence match
+            if len(potential_customers) == 1 and potential_customers[0][2] >= 90:
+                # Single high-confidence match - try to find transaction
+                matched_customer = potential_customers[0][0]
+                customer_key = matched_customer.lower().strip()
+                
+                if customer_key in customer_trans_lookup:
+                    customer_trans = customer_trans_lookup[customer_key]
+                    # Check for amount match among transactions
+                    amount_matched = False
+                    for trans in customer_trans:
+                        if amount > 0 and abs(trans['balance'] - amount) / amount <= 0.05:  # 5% tolerance
+                            match_result['match'] = trans
+                            match_result['confidence'] = 90
+                            match_result['match_type'] = f'{potential_customers[0][1]} + Amount'
+                            match_result['matched_customer'] = matched_customer
+                            matched.append(match_result)
+                            amount_matched = True
+                            break
+                    
+                    if not amount_matched:
+                        # Multiple transactions but no amount match
+                        if len(customer_trans) == 1:
+                            # Single transaction for this customer
+                            match_result['match'] = customer_trans[0]
+                            match_result['confidence'] = 85
+                            match_result['match_type'] = potential_customers[0][1]
+                            match_result['matched_customer'] = matched_customer
+                            matched.append(match_result)
+                        else:
+                            # Multiple transactions - needs selection
+                            match_result['potential_matches'] = customer_trans
+                            match_result['potential_customers'] = potential_customers
+                            match_result['needs_selection'] = True
+                            unmatched.append(match_result)
+                else:
+                    # Customer found but no transactions with balance
+                    match_result['potential_customers'] = potential_customers
+                    match_result['no_balance'] = True
+                    unmatched.append(match_result)
+            else:
+                # Multiple potential matches or low confidence - needs manual selection
+                match_result['potential_customers'] = potential_customers
+                match_result['needs_selection'] = True
+                
+                # Collect all transactions for all potential customers
+                all_potential_trans = []
+                for potential_customer, match_type, score in potential_customers[:5]:  # Limit to top 5
+                    customer_key = potential_customer.lower().strip()
+                    if customer_key in customer_trans_lookup:
+                        trans_list = customer_trans_lookup[customer_key]
+                        for trans in trans_list:
+                            trans_copy = trans.copy()  # Avoid modifying original
+                            trans_copy['_customer_match'] = potential_customer
+                            trans_copy['_match_type'] = match_type
+                            trans_copy['_match_score'] = score
+                            all_potential_trans.append(trans_copy)
+                
+                if all_potential_trans:
+                    match_result['potential_matches'] = all_potential_trans
+                    
+                unmatched.append(match_result)
+        else:
+            # No fuzzy match found - check if exact customer exists
+            customer_key = customer.lower().strip()
+            if customer_key in customer_trans_lookup:
+                # Exact match exists
+                customer_matches = customer_trans_lookup[customer_key]
+                # Check for amount match
+                amount_matched = False
+                for trans in customer_matches:
+                    if amount > 0 and abs(trans['balance'] - amount) / amount <= 0.05:  # 5% tolerance
+                        match_result['match'] = trans
+                        match_result['confidence'] = 85
+                        match_result['match_type'] = 'Customer + Amount'
+                        matched.append(match_result)
+                        amount_matched = True
+                        break
+                
+                if not amount_matched:
+                    # No amount match - needs selection
+                    match_result['potential_matches'] = customer_matches
+                    match_result['potential_customers'] = [(customer, 'exact', 100)]
+                    match_result['needs_selection'] = True
+                    unmatched.append(match_result)
+            else:
+                # No match found - can create new transaction
+                match_result['can_create'] = True
+                can_create.append(match_result)
+    
+    return matched, unmatched, can_create
+
+def show_import_results(statement_date):
+    """Display import results and allow user to review/confirm"""
+    st.divider()
+    st.markdown("### 📊 Import Preview")
+    
+    # Create tabs for different result types
+    result_tabs = st.tabs([
+        f"✅ Matched ({len(st.session_state.matched_transactions)})",
+        f"❌ Unmatched ({len(st.session_state.unmatched_transactions)})",
+        f"➕ Can Create ({len(st.session_state.transactions_to_create)})"
+    ])
+    
+    with result_tabs[0]:  # Matched transactions
+        if st.session_state.matched_transactions:
+            matched_df = []
+            for item in st.session_state.matched_transactions:
+                # Show matched customer name if different from statement
+                display_customer = item['customer']
+                if 'matched_customer' in item and item['matched_customer'] != item['customer']:
+                    display_customer = f"{item['customer']} → {item['matched_customer']}"
+                
+                matched_df.append({
+                    'Status': '✅',
+                    'Customer': display_customer,
+                    'Policy': item['policy_number'],
+                    'Eff Date': item['effective_date'],
+                    'Statement Amt': item['amount'],
+                    'DB Balance': item['match']['balance'],
+                    'Confidence': f"{item['confidence']}%",
+                    'Match Type': item['match_type']
+                })
+            
+            df = pd.DataFrame(matched_df)
+            st.dataframe(
+                df,
+                column_config={
+                    "Statement Amt": st.column_config.NumberColumn(format="$%.2f"),
+                    "DB Balance": st.column_config.NumberColumn(format="$%.2f")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            total_matched = sum(item['amount'] for item in st.session_state.matched_transactions)
+            st.metric("Total Matched Amount", f"${total_matched:,.2f}")
+        else:
+            st.info("No matched transactions")
+    
+    with result_tabs[1]:  # Unmatched transactions
+        if st.session_state.unmatched_transactions:
+            st.warning("These transactions need manual review")
+            
+            # Create session state for manual matches if not exists
+            if 'manual_matches' not in st.session_state:
+                st.session_state.manual_matches = {}
+            
+            for idx, item in enumerate(st.session_state.unmatched_transactions):
+                with st.expander(f"🔍 {item['customer']} - ${item['amount']:,.2f}", expanded=True):
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.markdown(f"**Statement Details:**")
+                        st.text(f"Policy: {item['policy_number']}")
+                        st.text(f"Effective Date: {item['effective_date']}")
+                        st.text(f"Amount: ${item['amount']:,.2f}")
+                    
+                    with col2:
+                        # Check if we have potential customers
+                        if 'potential_customers' in item:
+                            st.markdown("**Potential Matches Found:**")
+                            
+                            customer_options = []
+                            for cust, match_type, score in item['potential_customers'][:10]:
+                                customer_options.append(f"{cust} ({match_type}: {score}%)")
+                            
+                            selected_customer_idx = st.selectbox(
+                                "Select Customer",
+                                range(len(customer_options)),
+                                format_func=lambda x: customer_options[x],
+                                key=f"customer_select_{idx}"
+                            )
+                            
+                            if selected_customer_idx is not None:
+                                selected_customer = item['potential_customers'][selected_customer_idx][0]
+                                
+                                # Show transactions for selected customer
+                                if 'potential_matches' in item:
+                                    customer_trans = [t for t in item['potential_matches'] 
+                                                    if t.get('_customer_match') == selected_customer]
+                                    
+                                    if customer_trans:
+                                        st.markdown("**Available Transactions:**")
+                                        
+                                        trans_options = []
+                                        for trans in customer_trans:
+                                            trans_desc = f"Policy: {trans['Policy Number']} | "
+                                            trans_desc += f"Eff: {trans['Effective Date']} | "
+                                            trans_desc += f"Balance: ${trans['balance']:,.2f}"
+                                            trans_options.append(trans_desc)
+                                        
+                                        selected_trans_idx = st.selectbox(
+                                            "Select Transaction",
+                                            range(len(trans_options)),
+                                            format_func=lambda x: trans_options[x],
+                                            key=f"trans_select_{idx}"
+                                        )
+                                        
+                                        if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
+                                            # Add to manual matches
+                                            st.session_state.manual_matches[idx] = {
+                                                'statement_item': item,
+                                                'matched_transaction': customer_trans[selected_trans_idx],
+                                                'customer': selected_customer
+                                            }
+                                            st.success("Match confirmed!")
+                                            st.rerun()
+                                    else:
+                                        st.info("No transactions with balance for this customer")
+                        else:
+                            st.info("No potential matches found")
+                    
+                    # Option to create new
+                    if st.checkbox(f"Create as new transaction", key=f"create_new_{idx}"):
+                        st.session_state.manual_matches[idx] = {
+                            'statement_item': item,
+                            'create_new': True
+                        }
+                        st.success("Will create new transaction")
+            
+            # Show confirmed matches
+            if st.session_state.manual_matches:
+                st.divider()
+                st.markdown("### ✅ Confirmed Manual Matches")
+                
+                manual_match_count = len(st.session_state.manual_matches)
+                st.metric("Manual Matches", manual_match_count)
+                
+                if st.button("Apply Manual Matches", type="primary"):
+                    # Move manually matched items to appropriate lists
+                    for idx, match_info in st.session_state.manual_matches.items():
+                        if 'create_new' in match_info and match_info['create_new']:
+                            # Move to create list
+                            st.session_state.transactions_to_create.append(match_info['statement_item'])
+                        else:
+                            # Move to matched list
+                            matched_item = match_info['statement_item'].copy()
+                            matched_item['match'] = match_info['matched_transaction']
+                            matched_item['confidence'] = 100
+                            matched_item['match_type'] = 'Manual'
+                            st.session_state.matched_transactions.append(matched_item)
+                    
+                    # Remove from unmatched
+                    indices_to_remove = list(st.session_state.manual_matches.keys())
+                    st.session_state.unmatched_transactions = [
+                        item for i, item in enumerate(st.session_state.unmatched_transactions) 
+                        if i not in indices_to_remove
+                    ]
+                    
+                    # Clear manual matches
+                    st.session_state.manual_matches = {}
+                    st.success("Manual matches applied!")
+                    st.rerun()
+        else:
+            st.success("All transactions were matched!")
+    
+    with result_tabs[2]:  # Can create
+        if st.session_state.transactions_to_create:
+            st.info("These transactions don't exist in the database but can be created")
+            
+            create_df = []
+            for item in st.session_state.transactions_to_create:
+                create_df.append({
+                    'Create': True,
+                    'Customer': item['customer'],
+                    'Policy': item['policy_number'],
+                    'Eff Date': item['effective_date'],
+                    'Amount': item['amount']
+                })
+            
+            df = pd.DataFrame(create_df)
+            edited_df = st.data_editor(
+                df,
+                column_config={
+                    "Create": st.column_config.CheckboxColumn("Create", help="Check to create this transaction"),
+                    "Amount": st.column_config.NumberColumn(format="$%.2f")
+                },
+                use_container_width=True,
+                hide_index=True,
+                key="create_selector"
+            )
+            
+            # Option to create all or selected
+            col1, col2 = st.columns(2)
+            with col1:
+                create_selected = st.checkbox(
+                    "Create missing transactions before reconciling", 
+                    value=True,
+                    key="create_selected"
+                )
+            with col2:
+                selected_count = edited_df['Create'].sum()
+                st.metric("Selected to Create", selected_count)
+        else:
+            st.info("No new transactions to create")
+    
+    # Import confirmation section
+    st.divider()
+    st.markdown("### 🚀 Import Confirmation")
+    
+    # Get create_selected value from session state or default
+    create_selected = st.session_state.get('create_selected', True)
+    
+    # Calculate totals
+    total_matched = sum(item['amount'] for item in st.session_state.matched_transactions)
+    total_unmatched = sum(item['amount'] for item in st.session_state.unmatched_transactions)
+    total_to_create = sum(item['amount'] for item in st.session_state.transactions_to_create) if create_selected else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Matched", f"${total_matched:,.2f}")
+    with col2:
+        st.metric("Unmatched", f"${total_unmatched:,.2f}")
+    with col3:
+        st.metric("To Create", f"${total_to_create:,.2f}")
+    with col4:
+        st.metric("Total", f"${total_matched + total_to_create:,.2f}")
+    
+    # Show statement total for verification if available
+    if 'statement_file_total' in st.session_state and st.session_state.statement_file_total > 0:
+        st.divider()
+        st.markdown("### ✅ Verification Check")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Statement Total", f"${st.session_state.statement_file_total:,.2f}", 
+                     help="Total from your commission statement file")
+        with col2:
+            reconcile_total = total_matched + total_to_create
+            st.metric("Ready to Reconcile", f"${reconcile_total:,.2f}",
+                     help="Sum of matched + to be created transactions")
+        with col3:
+            difference = st.session_state.statement_file_total - reconcile_total
+            if abs(difference) < 0.01:  # Less than a penny
+                st.metric("Difference", "$0.00", delta_color="off")
+                st.success("✓ Perfectly balanced!")
+            else:
+                st.metric("Difference", f"${abs(difference):,.2f}", 
+                         delta=f"{'Over' if difference < 0 else 'Under'} by ${abs(difference):,.2f}",
+                         delta_color="inverse")
+                if difference > 0:
+                    st.warning(f"⚠️ Missing ${difference:,.2f} from statement")
+                else:
+                    st.error(f"❌ Exceeding statement by ${abs(difference):,.2f}")
+    
+    # Import button
+    if st.button("🔄 Proceed with Import", type="primary", disabled=len(st.session_state.matched_transactions) == 0):
+        with st.spinner("Importing transactions..."):
+            try:
+                # Generate batch ID
+                batch_id = f"IMPORT-{statement_date.strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+                created_count = 0
+                reconciled_count = 0
+                
+                # Step 1: Create missing transactions if selected
+                if create_selected and st.session_state.transactions_to_create:
+                    for idx, item in enumerate(st.session_state.transactions_to_create):
+                        # Check if this transaction should be created (default to True if no edit)
+                        should_create = True
+                        if 'create_selector' in st.session_state:
+                            # Get the dataframe from session state if it exists
+                            create_df = pd.DataFrame([{
+                                'Create': True,
+                                'Customer': t['customer'],
+                                'Policy': t['policy_number'],
+                                'Eff Date': t['effective_date'],
+                                'Amount': t['amount']
+                            } for t in st.session_state.transactions_to_create])
+                            should_create = create_df.loc[idx, 'Create'] if idx < len(create_df) else True
+                        
+                        if should_create:
+                            # Generate new transaction ID
+                            new_trans_id = generate_transaction_id()
+                            
+                            # Create new transaction
+                            new_trans = {
+                                'Transaction ID': new_trans_id,
+                                'Customer': item['customer'],
+                                'Policy Number': item['policy_number'],
+                                'Effective Date': item['effective_date'],
+                                'Transaction Type': item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW'),
+                                'Premium Sold': item['statement_data'].get(st.session_state.column_mapping.get('Premium Sold', ''), 0),
+                                'Agent Estimated Comm $': item['amount'],  # Use statement amount as estimated
+                                'Agency Estimated Comm/Revenue (CRM)': item['amount'],
+                                'NOTES': f"Created from statement import {batch_id}"
+                            }
+                            
+                            # Add other mapped fields
+                            for sys_field, stmt_field in st.session_state.column_mapping.items():
+                                if sys_field not in new_trans and stmt_field in item['statement_data']:
+                                    new_trans[sys_field] = item['statement_data'][stmt_field]
+                            
+                            # Insert to database
+                            result = supabase.table('policies').insert(new_trans).execute()
+                            if result.data:
+                                created_count += 1
+                                # Add to matched transactions for reconciliation
+                                st.session_state.matched_transactions.append({
+                                    'match': result.data[0],
+                                    'amount': item['amount'],
+                                    'customer': item['customer'],
+                                    'policy_number': item['policy_number']
+                                })
+                
+                # Step 2: Create reconciliation entries for all matched transactions
+                for item in st.session_state.matched_transactions:
+                    recon_id = generate_reconciliation_transaction_id("STMT", statement_date)
+                    
+                    # Create reconciliation entry
+                    recon_entry = {
+                        'Transaction ID': recon_id,
+                        'Customer': item['match']['Customer'],
+                        'Policy Number': item['match']['Policy Number'],
+                        'Effective Date': item['match']['Effective Date'],
+                        'Transaction Type': item['match'].get('Transaction Type', ''),
+                        'Premium Sold': 0,
+                        'Agency Comm Received (STMT)': item.get('agency_amount', 0),  # Agency amount for audit
+                        'Agent Paid Amount (STMT)': item['amount'],  # Agent amount (primary)
+                        'STMT DATE': statement_date.strftime('%Y-%m-%d'),
+                        'reconciliation_status': 'reconciled',
+                        'reconciliation_id': batch_id,
+                        'is_reconciliation_entry': True,
+                        'NOTES': f"Import batch {batch_id}"
+                    }
+                    
+                    # Insert reconciliation entry
+                    supabase.table('policies').insert(recon_entry).execute()
+                    reconciled_count += 1
+                
+                # Clear session state
+                st.session_state.import_data = None
+                st.session_state.matched_transactions = []
+                st.session_state.unmatched_transactions = []
+                st.session_state.transactions_to_create = []
+                st.session_state.column_mapping = {}
+                if 'statement_file_total' in st.session_state:
+                    del st.session_state.statement_file_total
+                
+                st.success(f"""
+                ✅ Import completed successfully!
+                - Created {created_count} new transactions
+                - Reconciled {reconciled_count} transactions
+                - Batch ID: {batch_id}
+                """)
+                
+                # Clear cache and refresh
+                st.cache_data.clear()
+                time.sleep(2)
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error during import: {str(e)}")
+                st.exception(e)
+
 def duplicate_for_renewal(df: pd.DataFrame) -> pd.DataFrame:
     """
     Duplicates the given policies and updates their dates for renewal.
@@ -821,6 +1529,7 @@ def main():
             "Edit Policies in Database",
             "Add New Policy Transaction",
             "Search & Filter",
+            "Reconciliation",
             "Admin Panel",
             "Tools",
             "Accounting",
@@ -2479,6 +3188,1255 @@ def main():
                 st.info("Use the form above to search and filter policies")
         else:
             st.info("No data available to search.")
+    
+    # --- Reconciliation ---
+    elif page == "Reconciliation":
+        st.title("💳 Commission Reconciliation")
+        
+        # Create tabs for different reconciliation functions
+        rec_tab1, rec_tab2, rec_tab3, rec_tab4 = st.tabs([
+            "Import Statement", 
+            "Unreconciled Transactions", 
+            "Reconciliation History",
+            "Adjustments & Voids"
+        ])
+        
+        with rec_tab1:
+            st.subheader("📥 Import Commission Statement")
+            
+            # Add custom CSS for yellow border on Statement Date
+            st.markdown("""
+                <style>
+                /* Target the Statement Date input specifically */
+                div.stDateInput > div > div[data-baseweb="input"] {
+                    border: 3px solid #ffd700 !important;
+                    border-radius: 4px !important;
+                }
+                
+                /* Alternative selector for broader compatibility */
+                section[data-testid="stSidebar"] + div div.row-widget.stDateInput:first-of-type input {
+                    border: 3px solid #ffd700 !important;
+                    border-radius: 4px !important;
+                    box-shadow: 0 0 0 2px #ffd700 !important;
+                }
+                
+                /* Target the container div */
+                div.row-widget.stDateInput:first-of-type > div {
+                    border: 3px solid #ffd700 !important;
+                    border-radius: 4px !important;
+                    padding: 2px;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Create a container with yellow background as a visual highlight
+                st.markdown("""
+                    <div style="background-color: #fffacd; border: 3px solid #ffd700; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                        <p style="margin: 0; font-weight: bold; color: #333;">📅 Statement Date</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                statement_date = st.date_input(
+                    "",  # Empty label since we have the custom header above
+                    value=datetime.date.today(),
+                    help="The date on the commission statement",
+                    format="MM/DD/YYYY",
+                    key="statement_date_input"
+                )
+            
+            with col2:
+                reconciliation_date = st.date_input(
+                    "Date Reconciled",
+                    value=datetime.date.today(),
+                    disabled=True,
+                    help="Today's date (when reconciliation is performed)",
+                    format="MM/DD/YYYY"
+                )
+            
+            st.divider()
+            
+            # Method selection
+            import_method = st.radio(
+                "Select Import Method",
+                ["Manual Entry", "Upload CSV/Excel File"],
+                horizontal=True
+            )
+            
+            if import_method == "Manual Entry":
+                st.subheader("Manual Statement Entry")
+                
+                # Initialize batch in session state
+                if 'reconciliation_batch' not in st.session_state:
+                    st.session_state.reconciliation_batch = []
+                if 'statement_total' not in st.session_state:
+                    st.session_state.statement_total = 0.0
+                
+                # Statement total input
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    statement_total = st.number_input(
+                        "Enter Total Commission from Statement",
+                        min_value=0.0,
+                        value=st.session_state.statement_total,
+                        step=0.01,
+                        format="%.2f",
+                        help="Enter the total commission amount shown on your statement"
+                    )
+                    st.session_state.statement_total = statement_total
+                
+                with col2:
+                    batch_total = sum(item['amount'] for item in st.session_state.reconciliation_batch)
+                    if statement_total > 0:
+                        progress = min(batch_total / statement_total, 1.0)
+                        st.metric("Batch Progress", f"${batch_total:,.2f}")
+                        st.progress(progress)
+                        if batch_total == statement_total:
+                            st.success("✓ Ready to reconcile!")
+                        elif batch_total > statement_total:
+                            st.error("Over statement amount!")
+                        else:
+                            st.info(f"${statement_total - batch_total:,.2f} remaining")
+                
+                # Show current batch if any
+                if st.session_state.reconciliation_batch:
+                    st.divider()
+                    st.markdown("### Current Reconciliation Batch")
+                    
+                    # Show batch summary
+                    batch_df = pd.DataFrame(st.session_state.reconciliation_batch)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Items in Batch", len(batch_df))
+                    with col2:
+                        batch_total = batch_df['amount'].sum()
+                        st.metric("Batch Total", f"${batch_total:,.2f}")
+                    with col3:
+                        if statement_total > 0:
+                            variance = batch_total - statement_total
+                            if variance == 0:
+                                st.metric("Variance", "$0.00", delta_color="off")
+                                st.success("✓ Perfectly balanced!")
+                            else:
+                                st.metric("Variance", f"${variance:,.2f}", delta=f"${abs(variance):,.2f}")
+                    
+                    # Enhanced batch display with more details
+                    batch_df['Remove'] = False
+                    
+                    # Add more display columns
+                    display_columns = ['Remove', 'transaction_id', 'customer', 'policy_number', 
+                                     'policy_type', 'effective_date', 'balance', 'amount']
+                    
+                    # Only include columns that exist
+                    available_columns = [col for col in display_columns if col in batch_df.columns]
+                    
+                    edited_batch = st.data_editor(
+                        batch_df[available_columns],
+                        column_config={
+                            "Remove": st.column_config.CheckboxColumn("Remove", help="Check to remove from batch"),
+                            "transaction_id": st.column_config.TextColumn("Transaction ID", disabled=True),
+                            "customer": st.column_config.TextColumn("Customer", disabled=True),
+                            "policy_number": st.column_config.TextColumn("Policy #", disabled=True),
+                            "policy_type": st.column_config.TextColumn("Type", disabled=True),
+                            "effective_date": st.column_config.TextColumn("Effective", disabled=True),
+                            "balance": st.column_config.NumberColumn("Full Balance", disabled=True, format="$%.2f", help="Total outstanding balance"),
+                            "amount": st.column_config.NumberColumn("To Reconcile", disabled=True, format="$%.2f", help="Amount to reconcile in this batch")
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        key="batch_editor"
+                    )
+                    
+                    # Remove checked items
+                    if edited_batch['Remove'].any():
+                        items_to_remove = edited_batch[edited_batch['Remove']]['transaction_id'].tolist()
+                        st.session_state.reconciliation_batch = [
+                            item for item in st.session_state.reconciliation_batch 
+                            if item['transaction_id'] not in items_to_remove
+                        ]
+                        st.rerun()
+                    
+                    # Reconcile batch button
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    
+                    with col1:
+                        # Only enable reconcile button if totals match
+                        can_reconcile = batch_total == statement_total and statement_total > 0 and len(st.session_state.reconciliation_batch) > 0
+                        
+                        if can_reconcile:
+                            if st.button("🔄 Reconcile Batch", type="primary", key="reconcile_batch"):
+                                try:
+                                    # Generate batch reconciliation ID
+                                    batch_id = f"REC-{statement_date.strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+                                    success_count = 0
+                                    
+                                    # Create reconciliation entries for each item in batch
+                                    for item in st.session_state.reconciliation_batch:
+                                        recon_id = generate_reconciliation_transaction_id("STMT", statement_date)
+                                        
+                                        # Create reconciliation entry
+                                        recon_entry = {
+                                            'Transaction ID': recon_id,
+                                            'Client ID': item['client_id'],
+                                            'Customer': item['customer'],
+                                            'Carrier Name': item['carrier_name'],
+                                            'Policy Type': item['policy_type'],
+                                            'Policy Number': item['policy_number'],
+                                            'Transaction Type': item['transaction_type'],
+                                            'Effective Date': item['effective_date'],
+                                            'X-DATE': item['x_date'],
+                                            'Premium Sold': 0,
+                                            'Policy Gross Comm %': 0,
+                                            'Agency Estimated Comm/Revenue (CRM)': 0,
+                                            'Agency Comm Received (STMT)': item['amount'],
+                                            'Agent Estimated Comm $': 0,
+                                            'Agent Paid Amount (STMT)': item['amount'],
+                                            'STMT DATE': statement_date.strftime('%Y-%m-%d'),
+                                            'reconciliation_status': 'reconciled',
+                                            'reconciliation_id': batch_id,
+                                            'reconciled_at': datetime.datetime.now().isoformat(),
+                                            'is_reconciliation_entry': True
+                                        }
+                                        
+                                        # Insert reconciliation entry
+                                        supabase.table('policies').insert(recon_entry).execute()
+                                        
+                                        # Update original transaction
+                                        supabase.table('policies').update({
+                                            'reconciliation_status': 'reconciled',
+                                            'reconciliation_id': batch_id,
+                                            'reconciled_at': datetime.datetime.now().isoformat()
+                                        }).eq('_id', item['_id']).execute()
+                                        
+                                        success_count += 1
+                                    
+                                    # Clear batch
+                                    st.session_state.reconciliation_batch = []
+                                    st.session_state.statement_total = 0.0
+                                    
+                                    st.success(f"✅ Batch reconciled successfully! {success_count} transactions processed. Batch ID: {batch_id}")
+                                    st.cache_data.clear()
+                                    time.sleep(2)
+                                    st.rerun()
+                                    
+                                except Exception as e:
+                                    st.error(f"Error reconciling batch: {str(e)}")
+                        else:
+                            # Show disabled button with explanation
+                            st.button("🔄 Reconcile Batch", type="primary", disabled=True, key="reconcile_batch_disabled")
+                            if batch_total != statement_total:
+                                if batch_total > statement_total:
+                                    st.error(f"Batch exceeds statement by ${batch_total - statement_total:,.2f}")
+                                else:
+                                    st.warning(f"Need ${statement_total - batch_total:,.2f} more to match statement")
+                            elif statement_total == 0:
+                                st.warning("Enter statement total first")
+                            elif len(st.session_state.reconciliation_batch) == 0:
+                                st.info("Add transactions to batch")
+                    
+                    with col2:
+                        if st.button("Clear Batch", type="secondary"):
+                            st.session_state.reconciliation_batch = []
+                            st.rerun()
+                
+                st.divider()
+                
+                # Precise drill-down selection (from Accounting page)
+                st.markdown("### Select Transaction to Add to Batch")
+                
+                # Initialize session state for selections if not exists
+                if 'recon_selected_customer' not in st.session_state:
+                    st.session_state.recon_selected_customer = None
+                if 'recon_selected_policy_type' not in st.session_state:
+                    st.session_state.recon_selected_policy_type = None
+                if 'recon_selected_policy_number' not in st.session_state:
+                    st.session_state.recon_selected_policy_number = None
+                if 'recon_selected_effective_date' not in st.session_state:
+                    st.session_state.recon_selected_effective_date = None
+                
+                # Customer selection
+                customers = sorted(all_data["Customer"].dropna().unique().tolist()) if not all_data.empty else []
+                selected_customer = st.selectbox(
+                    "Select Customer", 
+                    ["Select..."] + customers, 
+                    key="recon_drill_customer",
+                    index=0 if st.session_state.recon_selected_customer is None else (
+                        customers.index(st.session_state.recon_selected_customer) + 1 
+                        if st.session_state.recon_selected_customer in customers else 0
+                    )
+                )
+                
+                # Initialize variables
+                policy_types = []
+                policy_numbers = []
+                effective_dates = []
+                selected_policy_type = None
+                selected_policy_number = None
+                selected_effective_date = None
+                client_id = None
+                transaction_id = None
+                
+                # Policy Type selection
+                if selected_customer and selected_customer != "Select...":
+                    st.session_state.recon_selected_customer = selected_customer
+                    
+                    # Get all original transactions for this customer
+                    customer_data = all_data[
+                        (all_data["Customer"] == selected_customer) &
+                        (~all_data['Transaction ID'].str.contains('-STMT-|-ADJ-|-VOID-', na=False))
+                    ]
+                    
+                    # Calculate balance for each transaction
+                    if not customer_data.empty:
+                        # Get all reconciliation entries for balance calculation
+                        for idx, row in customer_data.iterrows():
+                            trans_id = row['Transaction ID']
+                            policy_num = row['Policy Number']
+                            
+                            # Calculate credits (commission owed)
+                            credit = float(row.get('Agent Estimated Comm $', 0) or 0)
+                            
+                            # Calculate debits (total paid for this transaction)
+                            # Find all -STMT- entries for this original transaction
+                            stmt_entries = all_data[
+                                (all_data['Policy Number'] == policy_num) &
+                                (all_data['Transaction ID'].str.contains('-STMT-', na=False))
+                            ]
+                            
+                            debit = 0
+                            if not stmt_entries.empty:
+                                debit = stmt_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+                            
+                            # Calculate balance
+                            balance = credit - debit
+                            customer_data.at[idx, '_balance'] = balance
+                        
+                        # Filter to show only transactions with outstanding balance
+                        customer_data = customer_data[customer_data['_balance'] > 0.01]  # Small threshold to avoid floating point issues
+                    
+                    if not customer_data.empty:
+                        policy_types = sorted(customer_data["Policy Type"].dropna().unique().tolist())
+                        selected_policy_type = st.selectbox(
+                            "Select Policy Type", 
+                            ["Select..."] + policy_types, 
+                            key="recon_drill_policy_type"
+                        )
+                        
+                        # Policy Number selection
+                        if selected_policy_type and selected_policy_type != "Select...":
+                            st.session_state.recon_selected_policy_type = selected_policy_type
+                            
+                            policy_data = customer_data[customer_data["Policy Type"] == selected_policy_type]
+                            policy_numbers = sorted(policy_data["Policy Number"].dropna().unique().tolist())
+                            selected_policy_number = st.selectbox(
+                                "Select Policy Number", 
+                                ["Select..."] + policy_numbers, 
+                                key="recon_drill_policy_number"
+                            )
+                            
+                            # Effective Date selection
+                            if selected_policy_number and selected_policy_number != "Select...":
+                                st.session_state.recon_selected_policy_number = selected_policy_number
+                                
+                                number_data = policy_data[policy_data["Policy Number"] == selected_policy_number]
+                                effective_dates = sorted(number_data["Effective Date"].dropna().unique().tolist())
+                                selected_effective_date = st.selectbox(
+                                    "Select Effective Date", 
+                                    ["Select..."] + effective_dates, 
+                                    key="recon_drill_effective_date"
+                                )
+                                
+                                # Get exact transaction when all fields are selected
+                                if selected_effective_date and selected_effective_date != "Select...":
+                                    st.session_state.recon_selected_effective_date = selected_effective_date
+                                    
+                                    exact_match = number_data[number_data["Effective Date"] == selected_effective_date]
+                                    
+                                    if not exact_match.empty:
+                                        # Get the specific transaction details
+                                        transaction = exact_match.iloc[0]
+                                        client_id = transaction.get("Client ID", "")
+                                        transaction_id = transaction.get("Transaction ID", "")
+                                        
+                                        # Display transaction details
+                                        st.success(f"✅ Found Transaction: {transaction_id}")
+                                        
+                                        # Calculate outstanding balance
+                                        credit = float(transaction.get('Agent Estimated Comm $', 0) or 0)
+                                        balance = float(transaction.get('_balance', credit))
+                                        
+                                        # Show transaction summary with balance
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("Premium Sold", f"${transaction.get('Premium Sold', 0):,.2f}")
+                                        with col2:
+                                            st.metric("Commission Owed", f"${credit:,.2f}")
+                                        with col3:
+                                            previous_payments = credit - balance
+                                            st.metric("Previous Payments", f"${previous_payments:,.2f}")
+                                        with col4:
+                                            st.metric("Outstanding Balance", f"${balance:,.2f}", 
+                                                     help="Amount still owed for this transaction")
+                                        
+                                        # Show full transaction details
+                                        with st.expander("📋 View Full Transaction Details", expanded=True):
+                                            # Create two columns for organized display
+                                            detail_col1, detail_col2 = st.columns(2)
+                                            
+                                            with detail_col1:
+                                                st.markdown("**Policy Information**")
+                                                details_dict = {
+                                                    "Transaction ID": transaction.get('Transaction ID', ''),
+                                                    "Client ID": transaction.get('Client ID', ''),
+                                                    "Customer": transaction.get('Customer', ''),
+                                                    "Policy Number": transaction.get('Policy Number', ''),
+                                                    "Policy Type": transaction.get('Policy Type', ''),
+                                                    "Carrier Name": transaction.get('Carrier Name', ''),
+                                                    "Transaction Type": transaction.get('Transaction Type', ''),
+                                                }
+                                                for key, value in details_dict.items():
+                                                    st.text(f"{key}: {value}")
+                                            
+                                            with detail_col2:
+                                                st.markdown("**Dates & Amounts**")
+                                                dates_dict = {
+                                                    "Effective Date": transaction.get('Effective Date', ''),
+                                                    "Policy Origination Date": transaction.get('Policy Origination Date', ''),
+                                                    "X-DATE": transaction.get('X-DATE', ''),
+                                                    "Premium Sold": f"${float(transaction.get('Premium Sold', 0) or 0):,.2f}",
+                                                    "Policy Gross Comm %": f"{float(transaction.get('Policy Gross Comm %', 0) or 0):.2f}%",
+                                                    "Agency Est. Comm": f"${float(transaction.get('Agency Estimated Comm/Revenue (CRM)', 0) or 0):,.2f}",
+                                                    "Agent Comm Rate": transaction.get('Agent Comm (NEW 50% RWL 25%)', ''),
+                                                }
+                                                for key, value in dates_dict.items():
+                                                    st.text(f"{key}: {value}")
+                                            
+                                            # Show payment history if any
+                                            if previous_payments > 0:
+                                                st.divider()
+                                                st.markdown("**Payment History**")
+                                                
+                                                # Find all reconciliation entries for this policy
+                                                policy_num = transaction.get('Policy Number', '')
+                                                payment_history = all_data[
+                                                    (all_data['Policy Number'] == policy_num) &
+                                                    (all_data['Transaction ID'].str.contains('-STMT-', na=False))
+                                                ]
+                                                
+                                                if not payment_history.empty:
+                                                    payment_df = payment_history[['Transaction ID', 'STMT DATE', 'Agent Paid Amount (STMT)']].copy()
+                                                    payment_df['STMT DATE'] = pd.to_datetime(payment_df['STMT DATE']).dt.strftime('%m/%d/%Y')
+                                                    payment_df = payment_df.rename(columns={
+                                                        'Transaction ID': 'Reconciliation ID',
+                                                        'STMT DATE': 'Statement Date',
+                                                        'Agent Paid Amount (STMT)': 'Amount Paid'
+                                                    })
+                                                    
+                                                    st.dataframe(
+                                                        payment_df,
+                                                        column_config={
+                                                            "Amount Paid": st.column_config.NumberColumn(format="$%.2f")
+                                                        },
+                                                        use_container_width=True,
+                                                        hide_index=True
+                                                    )
+                                        
+                                        st.divider()
+                                        
+                                        # Add to batch section
+                                        st.markdown("### Add to Reconciliation Batch")
+                                        
+                                        # Amount to reconcile
+                                        amount_to_reconcile = st.number_input(
+                                            "Amount to Reconcile",
+                                            min_value=0.01,
+                                            max_value=balance,
+                                            value=balance,
+                                            step=0.01,
+                                            format="%.2f",
+                                            key="recon_amount",
+                                            help=f"Enter amount from statement for this transaction (max: ${balance:,.2f})"
+                                        )
+                                        
+                                        # Check if already in batch
+                                        already_in_batch = any(
+                                            item['transaction_id'] == transaction_id 
+                                            for item in st.session_state.reconciliation_batch
+                                        )
+                                        
+                                        col1, col2 = st.columns(2)
+                                        
+                                        with col1:
+                                            if already_in_batch:
+                                                st.warning("✓ Already in batch")
+                                            else:
+                                                if st.button("➕ Add to Batch", type="primary", key="add_to_batch"):
+                                                    # Add to reconciliation batch
+                                                    batch_item = {
+                                                        '_id': transaction['_id'],
+                                                        'transaction_id': transaction_id,
+                                                        'client_id': client_id,
+                                                        'customer': selected_customer,
+                                                        'carrier_name': transaction.get('Carrier Name', ''),
+                                                        'policy_type': selected_policy_type,
+                                                        'policy_number': selected_policy_number,
+                                                        'transaction_type': transaction.get('Transaction Type', ''),
+                                                        'effective_date': selected_effective_date,
+                                                        'x_date': transaction.get('X-DATE', ''),
+                                                        'amount': amount_to_reconcile,
+                                                        'balance': balance
+                                                    }
+                                                    
+                                                    st.session_state.reconciliation_batch.append(batch_item)
+                                                    st.success(f"✅ Added ${amount_to_reconcile:,.2f} to batch")
+                                                    
+                                                    # Clear selections
+                                                    st.session_state.recon_selected_customer = None
+                                                    st.session_state.recon_selected_policy_type = None
+                                                    st.session_state.recon_selected_policy_number = None
+                                                    st.session_state.recon_selected_effective_date = None
+                                                    
+                                                    time.sleep(1)
+                                                    st.rerun()
+                                        
+                                        with col2:
+                                            # Show how this affects batch total
+                                            if not already_in_batch and st.session_state.statement_total > 0:
+                                                new_batch_total = sum(item['amount'] for item in st.session_state.reconciliation_batch) + amount_to_reconcile
+                                                if new_batch_total > st.session_state.statement_total:
+                                                    st.error(f"Would exceed statement by ${new_batch_total - st.session_state.statement_total:,.2f}")
+                                                else:
+                                                    remaining = st.session_state.statement_total - new_batch_total
+                                                    st.info(f"Would leave ${remaining:,.2f} to reconcile")
+                                    else:
+                                        st.warning("No transaction found for this selection")
+                    else:
+                        st.info(f"No transactions with outstanding balance found for {selected_customer}")
+            
+            else:  # Upload CSV/Excel File
+                st.subheader("📤 Upload Statement File")
+                
+                # Initialize session state for import
+                if 'import_data' not in st.session_state:
+                    st.session_state.import_data = None
+                if 'column_mapping' not in st.session_state:
+                    st.session_state.column_mapping = {}
+                if 'matched_transactions' not in st.session_state:
+                    st.session_state.matched_transactions = []
+                if 'unmatched_transactions' not in st.session_state:
+                    st.session_state.unmatched_transactions = []
+                if 'transactions_to_create' not in st.session_state:
+                    st.session_state.transactions_to_create = []
+                
+                # Step 1: File Upload
+                uploaded_file = st.file_uploader(
+                    "Choose a CSV or Excel file",
+                    type=['csv', 'xlsx', 'xls'],
+                    help="Upload your commission statement file"
+                )
+                
+                if uploaded_file is not None:
+                    # Parse file
+                    try:
+                        if uploaded_file.name.endswith('.csv'):
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
+                        
+                        st.session_state.import_data = df
+                        st.success(f"✅ Loaded {len(df)} rows from {uploaded_file.name}")
+                        
+                        # Show preview
+                        with st.expander("📊 File Preview", expanded=True):
+                            st.dataframe(df.head(10), use_container_width=True)
+                        
+                        # Step 2: Column Mapping
+                        st.divider()
+                        st.markdown("### 🔗 Map Statement Columns to System Fields")
+                        st.info(f"📅 Statement Date will be set to: {statement_date.strftime('%m/%d/%Y')}")
+                        
+                        # Required fields
+                        required_fields = {
+                            'Customer': 'Customer/Client Name',
+                            'Policy Number': 'Policy Number',
+                            'Effective Date': 'Policy Effective Date',
+                            'Agent Paid Amount (STMT)': 'Agent Payment Amount (Required)',
+                            'Agency Comm Received (STMT)': 'Agency Commission (for Audit)'
+                        }
+                        
+                        # Optional fields
+                        optional_fields = {
+                            'Policy Type': 'Policy Type',
+                            'Transaction Type': 'Transaction Type (NEW/RWL/END/CXL)',
+                            'Premium Sold': 'Premium Amount',
+                            'X-DATE': 'Expiration/Cancellation Date',
+                            'NOTES': 'Notes/Description'
+                        }
+                        
+                        # Create mapping interface
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**Required Fields**")
+                            for sys_field, description in required_fields.items():
+                                selected_col = st.selectbox(
+                                    f"{sys_field} ({description})",
+                                    options=[''] + list(df.columns),
+                                    key=f"map_{sys_field}",
+                                    help=f"Select the column that contains {description}"
+                                )
+                                if selected_col:
+                                    st.session_state.column_mapping[sys_field] = selected_col
+                        
+                        with col2:
+                            st.markdown("**Optional Fields**")
+                            for sys_field, description in optional_fields.items():
+                                selected_col = st.selectbox(
+                                    f"{sys_field} ({description})",
+                                    options=[''] + list(df.columns),
+                                    key=f"map_{sys_field}",
+                                    help=f"Select the column that contains {description}"
+                                )
+                                if selected_col:
+                                    st.session_state.column_mapping[sys_field] = selected_col
+                        
+                        # Column Mapping Management
+                        st.divider()
+                        st.markdown("### 💾 Save/Load Column Mappings")
+                        
+                        # Initialize saved mappings in session state if not exists
+                        if 'saved_column_mappings' not in st.session_state:
+                            st.session_state.saved_column_mappings = {}
+                        
+                        col1, col2, col3 = st.columns([2, 1, 1])
+                        
+                        with col1:
+                            mapping_name = st.text_input(
+                                "Mapping Name",
+                                placeholder="e.g., ABC Insurance Statement",
+                                help="Give this mapping a name to save it for future use"
+                            )
+                        
+                        with col2:
+                            # Save current mapping
+                            if st.button("💾 Save Mapping", type="secondary", disabled=not mapping_name):
+                                if st.session_state.column_mapping:
+                                    st.session_state.saved_column_mappings[mapping_name] = {
+                                        'mapping': st.session_state.column_mapping.copy(),
+                                        'created': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                        'field_count': len(st.session_state.column_mapping)
+                                    }
+                                    st.success(f"✅ Saved mapping: {mapping_name}")
+                                else:
+                                    st.warning("No mapping to save")
+                        
+                        with col3:
+                            # Load saved mapping
+                            if st.session_state.saved_column_mappings:
+                                selected_mapping = st.selectbox(
+                                    "Load Saved Mapping",
+                                    options=[''] + list(st.session_state.saved_column_mappings.keys()),
+                                    format_func=lambda x: 'Select a mapping...' if x == '' else x
+                                )
+                                
+                                if selected_mapping and st.button("📂 Load", type="secondary"):
+                                    saved_map = st.session_state.saved_column_mappings[selected_mapping]['mapping']
+                                    # Verify columns exist in current file
+                                    valid_mapping = {}
+                                    missing_cols = []
+                                    
+                                    for sys_field, stmt_col in saved_map.items():
+                                        if stmt_col in df.columns:
+                                            valid_mapping[sys_field] = stmt_col
+                                        else:
+                                            missing_cols.append(stmt_col)
+                                    
+                                    st.session_state.column_mapping = valid_mapping
+                                    
+                                    if missing_cols:
+                                        st.warning(f"Some columns not found in current file: {', '.join(missing_cols)}")
+                                    else:
+                                        st.success(f"✅ Loaded mapping: {selected_mapping}")
+                                    st.rerun()
+                        
+                        # Show saved mappings
+                        if st.session_state.saved_column_mappings:
+                            with st.expander("📋 Saved Mappings", expanded=False):
+                                for name, info in st.session_state.saved_column_mappings.items():
+                                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                                    with col1:
+                                        st.text(name)
+                                    with col2:
+                                        st.text(f"Created: {info['created']}")
+                                    with col3:
+                                        st.text(f"{info['field_count']} fields")
+                                    with col4:
+                                        if st.button("🗑️", key=f"delete_{name}", help=f"Delete {name}"):
+                                            del st.session_state.saved_column_mappings[name]
+                                            st.rerun()
+                        
+                        # Check if all required fields are mapped
+                        required_mapped = all(
+                            field in st.session_state.column_mapping and st.session_state.column_mapping[field]
+                            for field in required_fields.keys()
+                        )
+                        
+                        if required_mapped:
+                            st.divider()
+                            
+                            # Process and match transactions
+                            if st.button("🔍 Process & Match Transactions", type="primary"):
+                                with st.spinner("Matching transactions..."):
+                                    # Calculate statement total from all rows (including totals row)
+                                    # This gives us the check-and-balance figure
+                                    statement_total_amount = 0
+                                    if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
+                                        agent_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
+                                        try:
+                                            # Sum all rows including any totals
+                                            all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
+                                            # Check if there's a totals row (last row or row with 'total' in customer name)
+                                            customer_col = st.session_state.column_mapping.get('Customer', '')
+                                            if customer_col:
+                                                # Find rows that look like totals
+                                                totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|sum', na=False)
+                                                if totals_mask.any():
+                                                    # Use the totals row value
+                                                    statement_total_amount = all_amounts[totals_mask].max()
+                                                else:
+                                                    # No totals row found, sum all non-total rows
+                                                    statement_total_amount = all_amounts.sum()
+                                            else:
+                                                statement_total_amount = all_amounts.sum()
+                                        except:
+                                            statement_total_amount = 0
+                                    
+                                    st.session_state.statement_file_total = statement_total_amount
+                                    
+                                    matched, unmatched, to_create = match_statement_transactions(
+                                        df, 
+                                        st.session_state.column_mapping,
+                                        all_data,
+                                        statement_date
+                                    )
+                                    
+                                    st.session_state.matched_transactions = matched
+                                    st.session_state.unmatched_transactions = unmatched
+                                    st.session_state.transactions_to_create = to_create
+                                    
+                                    # Show summary
+                                    st.success("✅ Matching complete!")
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Matched", len(matched))
+                                    with col2:
+                                        st.metric("Unmatched", len(unmatched))
+                                    with col3:
+                                        st.metric("Can Create", len(to_create))
+                            
+                            # Show match results
+                            if st.session_state.matched_transactions or st.session_state.unmatched_transactions or st.session_state.transactions_to_create:
+                                show_import_results(statement_date)
+                        
+                        else:
+                            st.warning("⚠️ Please map all required fields before proceeding")
+                            
+                    except Exception as e:
+                        st.error(f"Error reading file: {str(e)}")
+                        st.exception(e)
+        
+        with rec_tab2:
+            st.subheader("📋 Transactions with Outstanding Balance")
+            
+            # Get all transactions with outstanding balances using shared function
+            if not all_data.empty:
+                outstanding = calculate_transaction_balances(all_data)
+                
+                if not outstanding.empty:
+                    # Summary metrics
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Transactions with Balance", len(outstanding))
+                    
+                    with col2:
+                        total_outstanding = outstanding['_balance'].sum()
+                        st.metric("Total Outstanding", f"${total_outstanding:,.2f}")
+                    
+                    with col3:
+                        avg_balance = outstanding['_balance'].mean()
+                        st.metric("Average Balance", f"${avg_balance:,.2f}")
+                    
+                    # Customer filter
+                    st.divider()
+                    
+                    customer_filter = st.selectbox(
+                        "Filter by Customer",
+                        options=['All'] + sorted(outstanding['Customer'].dropna().unique().tolist()),
+                        key="outstanding_customer_filter"
+                    )
+                    
+                    if customer_filter != 'All':
+                        display_df = outstanding[outstanding['Customer'] == customer_filter]
+                    else:
+                        display_df = outstanding
+                
+                    # Display the data with balance
+                    display_df['Outstanding Balance'] = display_df['_balance']
+                    st.dataframe(
+                        display_df[[
+                            'Transaction ID', 'Customer', 'Policy Number', 
+                            'Effective Date', 'Agent Estimated Comm $', 
+                            'Outstanding Balance'
+                        ]],
+                        column_config={
+                            "Agent Estimated Comm $": st.column_config.NumberColumn(format="$%.2f"),
+                            "Outstanding Balance": st.column_config.NumberColumn(format="$%.2f")
+                        },
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.success("✅ All transactions have been fully reconciled!")
+            else:
+                st.warning("No data available")
+        
+        with rec_tab3:
+            st.subheader("📜 Reconciliation History")
+            
+            # Show reconciliation entries
+            if not all_data.empty:
+                recon_entries = all_data[
+                    all_data['Transaction ID'].str.contains('-STMT-', na=False)
+                ]
+                
+                if not recon_entries.empty:
+                    # Date range filter
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        start_date = st.date_input(
+                            "From Date",
+                            value=datetime.date.today() - datetime.timedelta(days=30),
+                            format="MM/DD/YYYY"
+                        )
+                    
+                    with col2:
+                        end_date = st.date_input(
+                            "To Date",
+                            value=datetime.date.today(),
+                            format="MM/DD/YYYY"
+                        )
+                    
+                    # Filter by date range
+                    if 'STMT DATE' in recon_entries.columns:
+                        recon_entries['STMT DATE'] = pd.to_datetime(recon_entries['STMT DATE'])
+                        mask = (recon_entries['STMT DATE'].dt.date >= start_date) & (recon_entries['STMT DATE'].dt.date <= end_date)
+                        filtered_recon = recon_entries[mask]
+                    else:
+                        filtered_recon = recon_entries
+                    
+                    if not filtered_recon.empty:
+                        # Summary metrics
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Total Entries", len(filtered_recon))
+                        with col2:
+                            # Use Agent Paid Amount as primary reconciliation field
+                            if 'Agent Paid Amount (STMT)' in filtered_recon.columns:
+                                total_agent_paid = filtered_recon['Agent Paid Amount (STMT)'].sum()
+                            else:
+                                # Fallback to Agency amount for backward compatibility
+                                total_agent_paid = filtered_recon['Agency Comm Received (STMT)'].sum()
+                            st.metric("Total Agent Payments", f"${total_agent_paid:,.2f}")
+                        with col3:
+                            # Count unique batch IDs
+                            unique_batches = filtered_recon['reconciliation_id'].nunique() if 'reconciliation_id' in filtered_recon.columns else 0
+                            st.metric("Reconciliation Batches", unique_batches)
+                        with col4:
+                            if 'Agent Paid Amount (STMT)' in filtered_recon.columns:
+                                avg_per_batch = filtered_recon['Agent Paid Amount (STMT)'].sum() / unique_batches if unique_batches > 0 else 0
+                            else:
+                                avg_per_batch = filtered_recon['Agency Comm Received (STMT)'].sum() / unique_batches if unique_batches > 0 else 0
+                            st.metric("Avg per Batch", f"${avg_per_batch:,.2f}")
+                        
+                        # Group by reconciliation batch
+                        st.divider()
+                        
+                        view_mode = st.radio(
+                            "View Mode",
+                            ["By Batch", "All Transactions"],
+                            horizontal=True,
+                            key="history_view_mode"
+                        )
+                        
+                        if view_mode == "By Batch" and 'reconciliation_id' in filtered_recon.columns:
+                            # Show batch summary
+                            # Use Agent Paid Amount for batch totals
+                            agg_dict = {
+                                'Transaction ID': 'count',
+                                'STMT DATE': 'first'
+                            }
+                            if 'Agent Paid Amount (STMT)' in filtered_recon.columns:
+                                agg_dict['Agent Paid Amount (STMT)'] = 'sum'
+                            else:
+                                agg_dict['Agency Comm Received (STMT)'] = 'sum'
+                            
+                            batch_summary = filtered_recon.groupby('reconciliation_id').agg(agg_dict).reset_index()
+                            
+                            rename_dict = {
+                                'reconciliation_id': 'Batch ID',
+                                'Transaction ID': 'Transaction Count',
+                                'STMT DATE': 'Statement Date'
+                            }
+                            if 'Agent Paid Amount (STMT)' in batch_summary.columns:
+                                rename_dict['Agent Paid Amount (STMT)'] = 'Agent Payment Total'
+                            else:
+                                rename_dict['Agency Comm Received (STMT)'] = 'Agent Payment Total'
+                            
+                            batch_summary = batch_summary.rename(columns=rename_dict)
+                            
+                            # Format date
+                            batch_summary['Statement Date'] = pd.to_datetime(batch_summary['Statement Date']).dt.strftime('%m/%d/%Y')
+                            
+                            # Display batch summary
+                            selected_batch = st.selectbox(
+                                "Select Batch to View Details",
+                                options=[''] + batch_summary['Batch ID'].tolist(),
+                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} ({batch_summary[batch_summary['Batch ID']==x]['Statement Date'].iloc[0] if x != '' else ''})"
+                            )
+                            
+                            st.dataframe(
+                                batch_summary.sort_values('Statement Date', ascending=False),
+                                column_config={
+                                    "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f")
+                                },
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            # Show batch details if selected
+                            if selected_batch:
+                                st.divider()
+                                st.subheader(f"Batch Details: {selected_batch}")
+                                
+                                batch_details = filtered_recon[filtered_recon['reconciliation_id'] == selected_batch]
+                                
+                                # Format dates
+                                if 'STMT DATE' in batch_details.columns:
+                                    batch_details['STMT DATE'] = pd.to_datetime(batch_details['STMT DATE']).dt.strftime('%m/%d/%Y')
+                                
+                                st.dataframe(
+                                    batch_details[[
+                                        'Transaction ID', 'Customer', 'Policy Number', 
+                                        'STMT DATE', 'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)'
+                                    ]],
+                                    column_config={
+                                        "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                        "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f")
+                                    },
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                        else:
+                            # Show all transactions
+                            # Format dates
+                            if 'STMT DATE' in filtered_recon.columns:
+                                display_recon = filtered_recon.copy()
+                                display_recon['STMT DATE'] = pd.to_datetime(display_recon['STMT DATE']).dt.strftime('%m/%d/%Y')
+                            else:
+                                display_recon = filtered_recon
+                            
+                            # Include both agent and agency amounts
+                            display_columns = ['Transaction ID', 'Customer', 'Policy Number', 'STMT DATE']
+                            if 'Agent Paid Amount (STMT)' in display_recon.columns:
+                                display_columns.append('Agent Paid Amount (STMT)')
+                            if 'Agency Comm Received (STMT)' in display_recon.columns:
+                                display_columns.append('Agency Comm Received (STMT)')
+                            
+                            st.dataframe(
+                                display_recon[display_columns].sort_values('STMT DATE', ascending=False),
+                                column_config={
+                                    "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f")
+                                },
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                    else:
+                        st.info("No reconciliations found in the selected date range")
+                else:
+                    st.info("No reconciliation history found")
+            else:
+                st.warning("No data available")
+        
+        with rec_tab4:
+            st.subheader("🔧 Adjustments & Voids")
+            
+            action = st.radio(
+                "Select Action",
+                ["Create Adjustment", "Void Reconciliation"],
+                horizontal=True
+            )
+            
+            if action == "Create Adjustment":
+                st.info("Adjustments allow you to correct reconciliation errors without modifying original records")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Find transaction to adjust
+                    trans_id = st.text_input(
+                        "Transaction ID to Adjust",
+                        placeholder="Enter the original transaction ID"
+                    )
+                    
+                    adjustment_amount = st.number_input(
+                        "Adjustment Amount",
+                        help="Positive to increase, negative to decrease",
+                        step=0.01
+                    )
+                
+                with col2:
+                    adjustment_reason = st.text_area(
+                        "Reason for Adjustment",
+                        placeholder="Explain why this adjustment is needed"
+                    )
+                
+                if st.button("Create Adjustment", type="primary"):
+                    if trans_id and adjustment_amount != 0 and adjustment_reason:
+                        try:
+                            # Verify the transaction exists
+                            original_trans = all_data[all_data['Transaction ID'] == trans_id]
+                            
+                            if original_trans.empty:
+                                st.error(f"Transaction ID {trans_id} not found")
+                            else:
+                                # Generate adjustment ID
+                                adj_id = generate_reconciliation_transaction_id("ADJ")
+                                adj_date = datetime.datetime.now()
+                                
+                                # Get original transaction details
+                                orig_row = original_trans.iloc[0]
+                                
+                                # Create adjustment entry
+                                adjustment_entry = {
+                                    'Transaction ID': adj_id,
+                                    'Customer': orig_row['Customer'],
+                                    'Policy Number': orig_row.get('Policy Number', ''),
+                                    'Policy Type': orig_row.get('Policy Type', ''),
+                                    'Effective Date': orig_row.get('Effective Date', ''),
+                                    'Transaction Type': 'ADJUSTMENT',
+                                    'Premium Sold': 0,
+                                    'Policy Gross Comm %': 0,
+                                    'Agent Estimated Comm $': adjustment_amount,  # The adjustment amount
+                                    'Agency Estimated Comm/Revenue (CRM)': 0,
+                                    'Agency Comm Received (STMT)': 0,
+                                    'Agent Paid Amount (STMT)': 0,
+                                    'STMT DATE': adj_date.date(),
+                                    'NEW BIZ CHECKLIST COMPLETE': orig_row.get('NEW BIZ CHECKLIST COMPLETE', ''),
+                                    'NOTES': f"ADJUSTMENT for {trans_id}: {adjustment_reason}",
+                                    'reconciliation_status': 'adjustment',
+                                    'reconciliation_id': f"ADJ-{trans_id}",
+                                    'is_reconciliation_entry': True,
+                                    'Client ID': orig_row.get('Client ID', ''),
+                                    'FULL OR MONTHLY PMTS': orig_row.get('FULL OR MONTHLY PMTS', ''),
+                                    'X-DATE': orig_row.get('X-DATE', ''),
+                                    'Description': f"Adjustment: {adjustment_reason}"
+                                }
+                                
+                                # Save to database
+                                result = supabase.table('policies').insert(adjustment_entry).execute()
+                                
+                                if result.data:
+                                    st.success(f"✅ Adjustment {adj_id} created successfully!")
+                                    st.info(f"Adjustment of ${adjustment_amount:,.2f} applied to transaction {trans_id}")
+                                    
+                                    # Clear the form
+                                    if 'trans_id_input' in st.session_state:
+                                        del st.session_state['trans_id_input']
+                                    
+                                    # Refresh data
+                                    st.cache_data.clear()
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to create adjustment entry")
+                                    
+                        except Exception as e:
+                            st.error(f"Error creating adjustment: {str(e)}")
+                            traceback.print_exc()
+                    else:
+                        st.error("Please fill in all fields")
+            
+            else:  # Void Reconciliation
+                st.warning("⚠️ Voiding a reconciliation will reverse the entire statement batch")
+                
+                # Show recent reconciliation batches
+                if not all_data.empty and 'reconciliation_id' in all_data.columns:
+                    # Get unique reconciliation batches
+                    reconciliation_entries = all_data[
+                        (all_data['Transaction ID'].str.contains('-STMT-', na=False)) &
+                        (all_data['reconciliation_id'].notna())
+                    ]
+                    
+                    if not reconciliation_entries.empty:
+                        # Group by batch to show batch summary
+                        batch_summary = reconciliation_entries.groupby('reconciliation_id').agg({
+                            'Transaction ID': 'count',
+                            'Agency Comm Received (STMT)': 'sum',
+                            'STMT DATE': 'first',
+                            'reconciled_at': 'first'
+                        }).reset_index()
+                        
+                        # Sort by date descending
+                        batch_summary = batch_summary.sort_values('reconciled_at', ascending=False).head(20)
+                        
+                        st.subheader("Recent Reconciliation Batches")
+                        
+                        # Select batch to void
+                        batch_options = batch_summary['reconciliation_id'].tolist()
+                        
+                        if batch_options:
+                            selected_batch = st.selectbox(
+                                "Select Batch to Void",
+                                options=[''] + batch_options,
+                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} - ${batch_summary[batch_summary['reconciliation_id']==x]['Agency Comm Received (STMT)'].iloc[0]:,.2f} ({batch_summary[batch_summary['reconciliation_id']==x]['Transaction ID'].iloc[0]} transactions)"
+                            )
+                            
+                            if selected_batch:
+                                # Show batch details
+                                batch_details = reconciliation_entries[reconciliation_entries['reconciliation_id'] == selected_batch]
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Transactions in Batch", len(batch_details))
+                                with col2:
+                                    batch_total = batch_details['Agency Comm Received (STMT)'].sum()
+                                    st.metric("Batch Total", f"${batch_total:,.2f}")
+                                with col3:
+                                    stmt_date = pd.to_datetime(batch_details['STMT DATE'].iloc[0]).strftime('%m/%d/%Y')
+                                    st.metric("Statement Date", stmt_date)
+                                
+                                # Show transactions that will be voided
+                                with st.expander("View Transactions to be Voided", expanded=True):
+                                    display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Agency Comm Received (STMT)']
+                                    st.dataframe(
+                                        batch_details[display_cols],
+                                        column_config={
+                                            "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f")
+                                        },
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
+                                
+                                # Void confirmation
+                                st.divider()
+                                
+                                void_reason = st.text_area(
+                                    "Reason for Voiding (Required)",
+                                    placeholder="Explain why this batch needs to be voided",
+                                    key="void_reason"
+                                )
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    confirm_void = st.checkbox(
+                                        "I understand this will reverse all transactions in this batch",
+                                        key="confirm_void"
+                                    )
+                                
+                                with col2:
+                                    if confirm_void and void_reason:
+                                        if st.button("🗑️ Void Batch", type="secondary"):
+                                            try:
+                                                void_count = 0
+                                                void_date = datetime.datetime.now()
+                                                
+                                                # Create void entries for each transaction in the batch
+                                                for idx, row in batch_details.iterrows():
+                                                    # Generate void transaction ID
+                                                    void_id = generate_reconciliation_transaction_id("VOID", void_date.date())
+                                                    
+                                                    # Create void entry (negative amounts)
+                                                    void_entry = {
+                                                        'Transaction ID': void_id,
+                                                        'Client ID': row.get('Client ID', ''),
+                                                        'Customer': row.get('Customer', ''),
+                                                        'Carrier Name': row.get('Carrier Name', ''),
+                                                        'Policy Type': row.get('Policy Type', ''),
+                                                        'Policy Number': row.get('Policy Number', ''),
+                                                        'Transaction Type': row.get('Transaction Type', ''),
+                                                        'Effective Date': row.get('Effective Date', ''),
+                                                        'X-DATE': row.get('X-DATE', ''),
+                                                        'Premium Sold': 0,
+                                                        'Policy Gross Comm %': 0,
+                                                        'Agency Estimated Comm/Revenue (CRM)': 0,
+                                                        'Agency Comm Received (STMT)': -float(row.get('Agency Comm Received (STMT)', 0)),  # Negative
+                                                        'Agent Estimated Comm $': 0,
+                                                        'Agent Paid Amount (STMT)': -float(row.get('Agent Paid Amount (STMT)', 0)),  # Negative
+                                                        'STMT DATE': void_date.strftime('%Y-%m-%d'),
+                                                        'reconciliation_status': 'void',
+                                                        'reconciliation_id': f"VOID-{selected_batch}",
+                                                        'reconciled_at': void_date.isoformat(),
+                                                        'is_reconciliation_entry': True,
+                                                        'NOTES': f"VOID: {void_reason}"
+                                                    }
+                                                    
+                                                    # Insert void entry
+                                                    supabase.table('policies').insert(void_entry).execute()
+                                                    void_count += 1
+                                                
+                                                # Update original transactions to mark as unreconciled again
+                                                # Find original transactions that were reconciled in this batch
+                                                original_trans = all_data[
+                                                    (all_data['reconciliation_id'] == selected_batch) &
+                                                    (~all_data['Transaction ID'].str.contains('-STMT-|-ADJ-|-VOID-', na=False))
+                                                ]
+                                                
+                                                for idx, orig in original_trans.iterrows():
+                                                    supabase.table('policies').update({
+                                                        'reconciliation_status': 'unreconciled',
+                                                        'reconciliation_id': None,
+                                                        'reconciled_at': None
+                                                    }).eq('_id', orig['_id']).execute()
+                                                
+                                                # Log the void in reconciliations table
+                                                void_log = {
+                                                    'reconciliation_date': void_date.date().isoformat(),
+                                                    'statement_date': batch_details['STMT DATE'].iloc[0],
+                                                    'carrier_name': 'VOID',
+                                                    'total_amount': -batch_total,
+                                                    'transaction_count': void_count,
+                                                    'notes': f"VOIDED Batch {selected_batch}: {void_reason}"
+                                                }
+                                                supabase.table('reconciliations').insert(void_log).execute()
+                                                
+                                                st.success(f"✅ Successfully voided batch {selected_batch}")
+                                                st.info(f"Created {void_count} void entries")
+                                                
+                                                # Clear cache and refresh
+                                                st.cache_data.clear()
+                                                time.sleep(2)
+                                                st.rerun()
+                                                
+                                            except Exception as e:
+                                                st.error(f"Error voiding batch: {str(e)}")
+                                    else:
+                                        if not void_reason:
+                                            st.warning("Please provide a reason for voiding")
+                                        if not confirm_void:
+                                            st.info("Check the confirmation box to proceed")
+                    else:
+                        st.info("No reconciliation batches found to void")
+                else:
+                    st.info("No reconciliation data available")
     
     # --- Admin Panel ---
     elif page == "Admin Panel":

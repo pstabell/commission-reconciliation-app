@@ -60,6 +60,12 @@ class ColumnMapper:
               # Status fields
             "NEW BIZ CHECKLIST COMPLETE": "NEW BIZ CHECKLIST COMPLETE",
             
+            # Reconciliation fields
+            "reconciliation_status": "reconciliation_status",
+            "reconciliation_id": "reconciliation_id",
+            "reconciled_at": "reconciled_at",
+            "is_reconciliation_entry": "is_reconciliation_entry",
+            
             # Other fields
             "Description": "Description",
             "NOTES": "NOTES",

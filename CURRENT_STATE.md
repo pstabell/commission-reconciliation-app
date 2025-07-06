@@ -1,6 +1,6 @@
 # Commission App - Current State
-**Last Updated:** July 4, 2025
-**Version:** 3.0.3
+**Last Updated:** July 5, 2025 (Evening)
+**Version:** 3.6.0
 
 ## ✅ What's Working
 
@@ -19,10 +19,43 @@
 2. **Add New Policy** - With auto-generated IDs
 3. **Edit Policies** - Enhanced with form-based editor and auto-save
 4. **Reports** - All report types functional
-5. **Admin Panel** - Including new Deletion History tab
+5. **Admin Panel** - Including new Deletion History tab and Formulas & Calculations
 6. **File Uploads** - CSV/Excel import working
+7. **Reconciliation System** - Complete double-entry accounting with:
+   - Balance-based transaction tracking
+   - Batch reconciliation matching statement totals
+   - Void operations to reverse entire batches
+   - Adjustment entries for error correction
+   - Transaction IDs: -STMT-, -VOID-, -ADJ- suffixes
+   - **NEW**: Dual-purpose reconciliation (agent payments + agency audit)
+   - **NEW**: Enhanced statement import with smart name matching
+   - **NEW**: Column mapping save/load functionality
+   - **NEW**: Statement totals verification (checks and balances)
 
-### Recent Updates (Version 3.0.3)
+### Recent Updates (Version 3.6.0) - Statement Import Enhancements
+- ✅ Dual-purpose reconciliation clarified:
+  - Agent Paid Amount (STMT) = Primary field for YOUR payments
+  - Agency Comm Received (STMT) = Required for audit trail
+- ✅ Enhanced name matching:
+  - First word matching for personal names
+  - Business name normalization (removes LLC, Inc, etc.)
+  - Interactive selection for multiple matches
+- ✅ Column mapping persistence:
+  - Save mappings with custom names
+  - Load with validation
+  - Delete unwanted mappings
+- ✅ Statement totals handling:
+  - Skip "Totals" rows in matching
+  - Use totals for verification display
+  - Visual check-and-balance indicators
+- ✅ Fixed transaction lookup using shared balance calculation
+
+### Previous Updates (Version 3.5.0) - Reconciliation System
+- ✅ All 5 phases of reconciliation system completed
+- ✅ Batch operations (void, adjustment, integrity checks)
+- ✅ Standardized date formats to MM/DD/YYYY
+
+### Previous Updates (Version 3.0.3)
 - ✅ Password protection implemented
 - ✅ Form-based transaction editor added
 - ✅ Auto-save functionality for table edits
@@ -114,3 +147,5 @@ Multiple timestamped backups created:
 - Before delete functionality changes
 - Security implementation: commission_app_20250704_140615_working_with_security.py
 - Form editor working: commission_app_20250704_193553_working_edit_form_saves.py
+- Before agent paid primary: commission_app_20250705_225949_before_agent_paid_primary.py
+- After implementation: commission_app_20250705_230841_after_agent_paid_primary.py
