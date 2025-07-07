@@ -1,7 +1,44 @@
-# NEXT STEPS - Supabase Migration Progress
+# NEXT STEPS - Development Progress
 # ==========================================
 
-## 🎯 Current Status (Updated July 3, 2025)
+## ✅ CRITICAL BUG FIXED: Phase 0 Protection Working (Fixed July 6, 2025)
+
+### Resolution Summary
+Reconciliation transactions (-STMT-, -VOID-, -ADJ-) are now properly protected!
+
+### Fix Applied:
+- Enhanced column detection with three-method approach
+- Column mapper primary, common variations secondary, normalized search fallback
+- Tested and verified with real data
+
+### Current Status:
+- ✅ Protection working correctly
+- ✅ -STMT- transactions hidden from edit interface
+- ✅ Clear messaging about locked transactions
+- ✅ Search functionality fixed for reconciliation transactions
+
+---
+
+## ✅ COMPLETED: Formula Implementation (Completed July 6, 2025)
+
+### Success Summary
+Users no longer need calculators! Automatic commission calculations are now live.
+
+### Implementation Complete:
+1. **Formula Calculations Working**
+   - ✅ "Agency Estimated Comm/Revenue (CRM)" auto-calculates
+   - ✅ "Agent Estimated Comm $" auto-calculates
+   - ✅ Fields are read-only with helpful tooltips
+   - ✅ Handles decimal (0.50) vs percentage (50%) agent rates
+
+2. **Issues Resolved**:
+   - Fixed NaN error in database updates
+   - Fixed form structure and submit button placement
+   - Added proper validation for all numeric values
+
+---
+
+## 🎯 Supabase Migration Status (Updated July 3, 2025)
 ✅ **Phase 1**: Database analysis and schema conversion - COMPLETE  
 ✅ **Phase 2**: Environment setup and configuration - COMPLETE  
 ✅ **Phase 3**: Schema import and data migration - COMPLETE

@@ -1,5 +1,6 @@
 # Statement Import Design
 **Created**: July 5, 2025  
+**Updated**: July 6, 2025 (Enhanced matching logic)  
 **Purpose**: Enable bulk import of commission statements from Excel files to streamline reconciliation
 
 ## 🎯 Core Concept
@@ -20,11 +21,15 @@ Transform the manual statement entry process into an automated import system tha
 - Save mapping for future use (per agency)
 
 ### 2. Transaction Matching
-- **Primary Match**: Policy Number + Customer Name + Effective Date
-- **Secondary Match**: Customer Name + Effective Date + Commission Amount (within tolerance)
-- **Fuzzy Matching**: Handle name variations (see Enhanced Matching section)
-- **Match Confidence**: Show percentage confidence for each match
-- **Policy Term Validation**: Ensure matching the correct policy term/renewal
+- **Primary Match**: Policy Number + Effective Date (100% confidence)
+  - **Date Normalization**: Handles different date formats (MM/DD/YYYY vs YYYY-MM-DD)
+- **Secondary Match**: Customer Name variations with smart matching
+  - **Name Reversal**: "Last, First" ↔ "First Last" (98% confidence)
+  - **Exact Match**: Case-insensitive exact matches (100% confidence)
+  - **Normalized Match**: Handles business name variations (95% confidence)
+  - **First Word Match**: Matches on first word of name (90% confidence)
+  - **Contains Match**: Partial name matching (85% confidence)
+- **Amount Validation**: Matches amounts within 5% tolerance
 - **Interactive Matching**: Allow manual selection when multiple potential matches exist
 
 ### 3. Review & Adjust
@@ -122,26 +127,35 @@ agency_mappings = {
 }
 ```
 
-### Matching Algorithm
+### Matching Algorithm (Updated July 6, 2025)
 ```python
 def match_statement_row(row, existing_transactions):
     # 1. Exact match: Policy Number + Effective Date
+    # NOW WITH DATE NORMALIZATION
     if row['Policy Number'] and row['Effective Date']:
+        # Normalize both dates to YYYY-MM-DD format
+        normalized_date = normalize_date_format(row['Effective Date'])
         policy_matches = find_by_policy_and_date(
             row['Policy Number'], 
-            row['Effective Date']
+            normalized_date
         )
         if len(policy_matches) == 1:
             return {"match": policy_matches[0], "confidence": 100}
     
     # 2. Enhanced Customer Name Matching
     customer_name = row['Customer']
-    potential_matches = []
     
-    # 2a. First word match (handles "Barboun" → "Barboun, Thomas")
-    first_word = customer_name.split()[0] if customer_name else ""
-    if first_word:
-        first_word_matches = find_customers_starting_with(first_word)
+    # 2a. Handle "Last, First" format
+    if "," in customer_name:
+        # "Barboun, Thomas" → "Thomas Barboun"
+        parts = customer_name.split(",", 1)
+        reversed_name = f"{parts[1].strip()} {parts[0].strip()}"
+        exact_match = find_customer_by_name(reversed_name)
+        if exact_match:
+            return {"match": exact_match, "confidence": 98}
+    
+    # 2b. Fuzzy matching for variations
+    potential_matches = find_potential_customer_matches(customer_name)
         potential_matches.extend(first_word_matches)
     
     # 2b. Contains match (handles "RCM" → "RCM Construction of SWFL LLC")

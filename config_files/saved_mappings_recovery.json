@@ -1,0 +1,24 @@
+{
+  "SWFL Insurance": {
+    "mapping": {
+      "Customer": "Customer Name",
+      "Policy Number": "Policy Number", 
+      "Transaction ID": "Transaction ID",
+      "Policy Type": "Policy Type",
+      "Carrier Name": "Carrier",
+      "Effective Date": "Effective Date",
+      "Policy Origination Date": "Policy Origination Date",
+      "Transaction Type": "Transaction Type",
+      "Premium Sold": "Premium",
+      "Agency Estimated Comm/Revenue (CRM)": "Agency Commission",
+      "Policy Gross Comm %": "Commission Rate",
+      "Agent Estimated Comm $": "Agent Commission",
+      "Agent Paid Amount (STMT)": "Agent Paid",
+      "Agency Comm Received (STMT)": "Agency Received",
+      "STMT DATE": "Statement Date",
+      "NOTES": "Notes"
+    },
+    "created": "2025-01-05 14:00",
+    "field_count": 16
+  }
+}

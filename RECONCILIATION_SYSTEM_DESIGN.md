@@ -1,6 +1,6 @@
 # Reconciliation System Design - Master Recipe
 **Created**: July 4, 2025  
-**Updated**: July 5, 2025 (v4 - Complete Implementation)
+**Updated**: July 6, 2025 (v5 - Enhanced Matching Logic)
 **Purpose**: Implement proper double-entry accounting for commission reconciliation
 
 ## 🎯 Core Concept
@@ -199,10 +199,12 @@ for transaction in batch_to_void:
 - [x] Implement adjustment functionality (-ADJ- transactions)
 
 ### Phase 6: Immutability & Visual Design
-- [ ] Implement field locking for -STMT- transactions
+- [ ] Implement field locking for -STMT- transactions (See FORMULA_DESIGN.md for detailed locking specifications)
 - [ ] Add visual batch grouping
-- [ ] Color code by batch ID
+- [ ] Consistent gray styling for all locked fields (#F5F5F5 background, #666666 text)
 - [ ] Add batch status indicators
+
+**Note**: The technical implementation for locking reconciliation transactions (-STMT-, -VOID-, -ADJ-) is documented in FORMULA_DESIGN.md alongside the formula field locking, as they share the same visual design and locking infrastructure.
 
 ## 🎯 Expected Outcomes
 
@@ -297,22 +299,33 @@ Based on testing feedback, the current exact name matching is too restrictive. N
 - **Interactive selection**: When multiple matches exist, allow user to choose ✅ IMPLEMENTED
 - **Manual override**: Search and select any customer for unmatched items ✅ IMPLEMENTED
 
-### Critical Implementation Issue Discovered (July 2025)
-During testing, found that the import matching logic fails to find transactions even when:
-1. Customer name matches exactly (100% confidence)
-2. Transaction exists with correct balance in "Unreconciled Transactions" tab
-3. Example: RCM Construction of SWFL LLC - Transaction EFI6155 with $57.19 balance
+### Critical Implementation Issues Fixed (July 6, 2025)
 
-**Root Cause**: The import matching builds its own lookup dictionary which:
-- May have stale/cached data
-- Has customer key mismatches
-- Doesn't match the proven logic in "Unreconciled Transactions" tab
+#### Issue 1: Date Format Mismatch
+**Problem**: Transactions weren't matching even with identical policy numbers
+- Database dates: "05/22/2024" (MM/DD/YYYY)
+- Statement dates: "2024-05-22 00:00:00" (YYYY-MM-DD HH:MM:SS)
+- Policy key mismatch: "981548378_05/22/2024" ≠ "981548378_2024-05-22"
 
-**Solution**: Reuse the existing "Unreconciled Transactions" query logic for import matching instead of building a separate lookup system. The Unreconciled Transactions tab already:
-- Correctly calculates balances (Credit - Debit)
-- Filters for balance > $0
-- Handles customer filtering properly
-- Shows the exact data users expect to match
+**Solution**: Normalize all dates to YYYY-MM-DD format before matching
+
+#### Issue 2: Name Format Variations
+**Problem**: Customer names in different formats couldn't match
+- Database: "Thomas Barboun" (First Last)
+- Statement: "Barboun, Thomas" (Last, First)
+- No match found despite being the same person
+
+**Solution**: Enhanced customer matching with:
+- Name reversal detection: "Last, First" → "First Last" (98% confidence)
+- Smart fuzzy matching for business names
+- First word matching for partial names
+
+#### Result
+The system now successfully matches:
+- ✅ Different date formats
+- ✅ Name variations (Last, First vs First Last)
+- ✅ Business name variations (RCM vs RCM Construction of SWFL LLC)
+- ✅ Transactions from the outstanding balance list
 
 See STATEMENT_IMPORT_DESIGN.md for detailed specifications.
 

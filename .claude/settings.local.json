@@ -20,7 +20,11 @@
       "Bash(timeout:*)",
       "Bash(awk:*)",
       "Bash(cat:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(find:*)",
+      "Bash(source:*)",
+      "Bash(.venv/Scripts/python.exe utility_scripts/test_search_reconciliation.py:*)",
+      "Bash(.venv/Scripts/python.exe utility_scripts/verify_search_fix.py:*)"
     ],
     "deny": []
   }
