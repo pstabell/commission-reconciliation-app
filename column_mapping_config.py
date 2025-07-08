@@ -69,13 +69,23 @@ class ColumnMapper:
             # Other fields
             "Description": "Description",
             "NOTES": "NOTES",
-            "FULL OR MONTHLY PMTS": "FULL OR MONTHLY PMTS"
+            "FULL OR MONTHLY PMTS": "FULL OR MONTHLY PMTS",
+            
+            # New broker fee and tax fields
+            "Broker Fee": "Broker Fee",
+            "Policy Taxes & Fees": "Policy Taxes & Fees",
+            "Commissionable Premium": "Commissionable Premium",
+            "Broker Fee Agent Comm": "Broker Fee Agent Comm",
+            "Total Agent Comm": "Total Agent Comm"
         }
           # Fields that are calculated and not stored in database
         self.calculated_fields = {
             "Policy Balance Due",
             "Agent Estimated Comm $",
-            "Agency Estimated Comm/Revenue (CRM)"
+            "Agency Estimated Comm/Revenue (CRM)",
+            "Commissionable Premium",
+            "Broker Fee Agent Comm",
+            "Total Agent Comm"
         }
         
     def _load_mapping(self) -> Dict[str, str]:
@@ -288,8 +298,11 @@ def safe_column_reference(df: pd.DataFrame, ui_field: str,
 def get_formula_columns() -> Dict[str, str]:
     """Get mapping of calculated columns to their formulas."""
     return {
-        "Agent Estimated Comm $": "Premium Sold * (Policy Gross Comm % / 100) * (Agent Comm % / 100)",
-        "Agency Estimated Comm/Revenue (CRM)": "Premium Sold * (Policy Gross Comm % / 100)",
+        "Agent Estimated Comm $": "Agency Estimated Comm/Revenue (CRM) * (Agent Comm % / 100)",
+        "Agency Estimated Comm/Revenue (CRM)": "Commissionable Premium * (Policy Gross Comm % / 100)",
         "Policy Balance Due": "Agent Estimated Comm $ - Agent Paid Amount (STMT)",
-        "Agent Comm (New 50% RWL 25%)": "50% for NEW transactions, 25% for RWL/RENEWAL"
+        "Agent Comm (New 50% RWL 25%)": "50% for NEW transactions, 25% for RWL/RENEWAL",
+        "Commissionable Premium": "Premium Sold - Policy Taxes & Fees",
+        "Broker Fee Agent Comm": "Broker Fee * 0.50",
+        "Total Agent Comm": "Agent Estimated Comm $ + Broker Fee Agent Comm"
     }

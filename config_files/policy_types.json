@@ -1,0 +1,51 @@
+{
+  "policy_types": [
+    {
+      "name": "Auto",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Home",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Life",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Health",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Commercial",
+      "active": true,
+      "default": true
+    },
+    {
+      "name": "Umbrella",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Flood",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "Other",
+      "active": true,
+      "default": false
+    },
+    {
+      "name": "General Liability",
+      "active": true,
+      "default": false
+    }
+  ],
+  "allow_custom": true,
+  "last_updated": "2025-07-08"
+}

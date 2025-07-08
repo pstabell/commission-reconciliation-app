@@ -9,6 +9,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import hashlib
 import re
+import plotly.express as px
 
 # Set pandas display options to avoid scientific notation and show 2 decimal places
 pd.options.display.float_format = '{:.2f}'.format
@@ -95,7 +96,12 @@ def load_policies_data():
                 'Agency Comm Received (STMT)',
                 'Premium Sold',
                 'Agent Paid Amount (STMT)',
-                'Agency Comm Received (STMT)'
+                'Agency Comm Received (STMT)',
+                'Broker Fee',
+                'Policy Taxes & Fees',
+                'Commissionable Premium',
+                'Broker Fee Agent Comm',
+                'Total Agent Comm'
             ]
             
             for col in numeric_cols:
@@ -113,6 +119,69 @@ def load_policies_data():
 def clear_policies_cache():
     """Clear the policies data cache."""
     load_policies_data.clear()
+
+def calculate_dashboard_metrics(df):
+    """Calculate dashboard metrics distinguishing transactions vs policies."""
+    metrics = {
+        # Transaction metrics
+        'total_transactions': len(df),
+        'transactions_this_month': 0,
+        'stmt_transactions': 0,
+        
+        # Policy metrics (unique policy numbers)
+        'unique_policies': 0,
+        'active_policies': 0,
+        'cancelled_policies': 0,
+        
+        # Financial metrics
+        'total_premium': 0.0,
+        'total_agency_comm': 0.0,
+        'total_agent_comm': 0.0
+    }
+    
+    if df.empty:
+        return metrics
+    
+    # Transaction counts
+    metrics['total_transactions'] = len(df)
+    
+    # Current month transactions
+    if 'Effective Date' in df.columns:
+        try:
+            df['Effective Date'] = pd.to_datetime(df['Effective Date'], errors='coerce')
+            current_month = datetime.datetime.now().month
+            current_year = datetime.datetime.now().year
+            metrics['transactions_this_month'] = len(df[(df['Effective Date'].dt.month == current_month) & 
+                                                       (df['Effective Date'].dt.year == current_year)])
+        except:
+            pass
+    
+    # STMT transactions
+    if 'Transaction Type' in df.columns:
+        metrics['stmt_transactions'] = len(df[df['Transaction Type'].str.startswith('-', na=False)])
+    
+    # Unique policy count
+    if 'Policy Number' in df.columns:
+        metrics['unique_policies'] = df['Policy Number'].nunique()
+        
+        # Calculate active vs cancelled policies
+        if not df.empty and 'Transaction Type' in df.columns:
+            # Get latest transaction for each policy
+            latest_trans = df.sort_values('Effective Date').groupby('Policy Number').last()
+            metrics['active_policies'] = len(latest_trans[~latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
+            metrics['cancelled_policies'] = len(latest_trans[latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
+    
+    # Financial metrics
+    if 'Premium Sold' in df.columns:
+        metrics['total_premium'] = df['Premium Sold'].sum()
+    
+    if 'Agency Estimated Comm/Revenue (CRM)' in df.columns:
+        metrics['total_agency_comm'] = df['Agency Estimated Comm/Revenue (CRM)'].sum()
+    
+    if 'Agent Estimated Comm $' in df.columns:
+        metrics['total_agent_comm'] = df['Agent Estimated Comm $'].sum()
+    
+    return metrics
 
 def log_debug(message, level="INFO", error_obj=None):
     """Add a debug log entry to session state."""
@@ -154,6 +223,111 @@ def is_reconciliation_transaction(transaction_id):
     
     return any(suffix in transaction_id_str for suffix in reconciliation_types)
 
+def load_policy_types():
+    """Load policy types from configuration file."""
+    policy_types_file = "config_files/policy_types.json"
+    default_types = [
+        {"name": "Auto", "active": True, "default": False},
+        {"name": "Home", "active": True, "default": False},
+        {"name": "Life", "active": True, "default": False},
+        {"name": "Health", "active": True, "default": False},
+        {"name": "Commercial", "active": True, "default": True},
+        {"name": "Umbrella", "active": True, "default": False},
+        {"name": "Flood", "active": True, "default": False},
+        {"name": "Other", "active": True, "default": False}
+    ]
+    
+    try:
+        with open(policy_types_file, 'r') as f:
+            config = json.load(f)
+            return config.get('policy_types', default_types), config.get('allow_custom', True)
+    except:
+        # If file doesn't exist or is corrupted, return defaults
+        return default_types, True
+
+def load_policy_types_config():
+    """Load the full policy types configuration as a dictionary."""
+    policy_types_file = "config_files/policy_types.json"
+    default_config = {
+        "policy_types": [
+            {"name": "Auto", "active": True, "default": False},
+            {"name": "Home", "active": True, "default": False},
+            {"name": "Life", "active": True, "default": False},
+            {"name": "Health", "active": True, "default": False},
+            {"name": "Commercial", "active": True, "default": True},
+            {"name": "Umbrella", "active": True, "default": False},
+            {"name": "Flood", "active": True, "default": False},
+            {"name": "Other", "active": True, "default": False}
+        ],
+        "allow_custom": True
+    }
+    
+    try:
+        with open(policy_types_file, 'r') as f:
+            config = json.load(f)
+            # Ensure required keys exist
+            if 'policy_types' not in config:
+                config['policy_types'] = default_config['policy_types']
+            if 'allow_custom' not in config:
+                config['allow_custom'] = True
+            return config
+    except:
+        # If file doesn't exist or is corrupted, return defaults
+        return default_config
+
+def save_policy_types(policy_types, allow_custom=True):
+    """Save policy types to configuration file."""
+    policy_types_file = "config_files/policy_types.json"
+    config = {
+        "policy_types": policy_types,
+        "allow_custom": allow_custom,
+        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d")
+    }
+    
+    try:
+        os.makedirs("config_files", exist_ok=True)
+        with open(policy_types_file, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"Error saving policy types: {e}")
+        return False
+
+def get_active_policy_types():
+    """Get list of active policy type names for dropdowns."""
+    policy_types, allow_custom = load_policy_types()
+    active_types = [pt['name'] for pt in policy_types if pt.get('active', True)]
+    return active_types, allow_custom
+
+def get_default_policy_type():
+    """Get the default policy type."""
+    policy_types, _ = load_policy_types()
+    for pt in policy_types:
+        if pt.get('default', False):
+            return pt['name']
+    return policy_types[0]['name'] if policy_types else "Other"
+
+def add_policy_type(new_type_name):
+    """Add a new policy type to the configuration."""
+    policy_types, allow_custom = load_policy_types()
+    
+    # Check if type already exists
+    existing_names = [pt['name'].lower() for pt in policy_types]
+    if new_type_name.lower() in existing_names:
+        return False, "Policy type already exists"
+    
+    # Add new type
+    policy_types.append({
+        "name": new_type_name,
+        "active": True,
+        "default": False
+    })
+    
+    # Save updated list
+    if save_policy_types(policy_types, allow_custom):
+        return True, "Policy type added successfully"
+    return False, "Error saving policy type"
+
 def apply_formula_display(df, show_formulas=True):
     """
     Apply formula calculations to existing columns with indicators.
@@ -169,11 +343,19 @@ def apply_formula_display(df, show_formulas=True):
     df['_original_agent'] = df['Agent Estimated Comm $'].copy()
     
     if show_formulas:
-        # Calculate formula values
+        # Calculate Commissionable Premium (Premium Sold - Policy Taxes & Fees)
+        df['Commissionable Premium'] = df.apply(
+            lambda row: (
+                float(row.get('Premium Sold', 0) or 0) - float(row.get('Policy Taxes & Fees', 0) or 0)
+            ),
+            axis=1
+        )
+        
+        # Calculate formula values using Commissionable Premium
         df['_formula_agency'] = df.apply(
             lambda row: (
-                0.0 if pd.isna(row.get('Premium Sold', 0)) or pd.isna(row.get('Policy Gross Comm %', 0))
-                else float(row.get('Premium Sold', 0) or 0) * float(row.get('Policy Gross Comm %', 0) or 0) / 100
+                0.0 if pd.isna(row.get('Commissionable Premium', 0)) or pd.isna(row.get('Policy Gross Comm %', 0))
+                else float(row.get('Commissionable Premium', 0) or 0) * float(row.get('Policy Gross Comm %', 0) or 0) / 100
             ),
             axis=1
         )
@@ -204,6 +386,22 @@ def apply_formula_display(df, show_formulas=True):
         df['_formula_agent'] = df.apply(
             lambda row: (
                 row['_formula_agency'] * get_agent_rate(row) / 100
+            ),
+            axis=1
+        )
+        
+        # Calculate Broker Fee Agent Commission (always 50%)
+        df['Broker Fee Agent Comm'] = df.apply(
+            lambda row: (
+                float(row.get('Broker Fee', 0) or 0) * 0.50
+            ),
+            axis=1
+        )
+        
+        # Calculate Total Agent Commission
+        df['Total Agent Comm'] = df.apply(
+            lambda row: (
+                row['_formula_agent'] + row['Broker Fee Agent Comm']
             ),
             axis=1
         )
@@ -403,8 +601,21 @@ def get_custom_css():
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
-        /* Add yellow border to Enter Premium Sold and see Agency Estimated Comm/Revenue (CRM) input */
-        input[type="number"][aria-label="Premium Sold"] {
+        /* Add yellow border to New Policy Premium inputs */
+        input[type="number"][aria-label="New Policy Premium"],
+        input[type="number"][aria-label="Policy Gross Comm %"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Ensure Transaction Type and FULL OR MONTHLY PMTS selectboxes have yellow styling */
+        div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Make sure all form selectboxes are styled consistently */
+        .stForm div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
             background-color: #fff3b0 !important;
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
@@ -507,6 +718,7 @@ def apply_css():
     """Apply custom CSS styling to the Streamlit app."""
     with st.container():
         st.markdown(get_custom_css(), unsafe_allow_html=True)
+
 
 def format_currency(val):
     """Format the value as currency for display."""
@@ -1691,8 +1903,8 @@ def main():
         "Navigation",        [
             "Dashboard",
             "Reports",
-            "All Policies in Database",
-            "Edit Policies in Database",
+            "All Policy Transactions",
+            "Edit Policy Transactions",
             "Add New Policy Transaction",
             "Search & Filter",
             "Reconciliation",
@@ -1724,28 +1936,35 @@ def main():
         st.title("📊 Commission Dashboard")
         
         if not all_data.empty:
+            # Calculate metrics
+            metrics = calculate_dashboard_metrics(all_data)
+            
             # --- Dashboard Metrics ---
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2 = st.columns(2)
             
             with col1:
-                total_policies = len(all_data)
-                st.metric("Total Policies", f"{total_policies:,}")
+                st.subheader("📊 TRANSACTIONS")
+                st.metric("Total Transactions", f"{metrics['total_transactions']:,}")
+                st.metric("This Month", f"{metrics['transactions_this_month']:,}")
+                st.metric("Reconciliation (-STMT-)", f"{metrics['stmt_transactions']:,}")
             
             with col2:
-                if 'Commission_Paid' in all_data.columns:
-                    total_commission = all_data['Commission_Paid'].sum()
-                    st.metric("Total Commission", f"${total_commission:,.2f}")
-                else:
-                    st.metric("Total Commission", "N/A")
+                st.subheader("📋 POLICIES")
+                st.metric("Unique Policies", f"{metrics['unique_policies']:,}")
+                st.metric("Active", f"{metrics['active_policies']:,}")
+                st.metric("Cancelled", f"{metrics['cancelled_policies']:,}")
             
+            st.divider()
+            
+            # Financial Summary
+            st.subheader("💰 FINANCIAL SUMMARY")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Premium Sold", f"${metrics['total_premium']:,.2f}")
+            with col2:
+                st.metric("Agency Commission", f"${metrics['total_agency_comm']:,.2f}")
             with col3:
-                if 'Agency_Commission_Received' in all_data.columns:
-                    agency_commission = all_data['Agency_Commission_Received'].sum()
-                    st.metric("Agency Commission", f"${agency_commission:,.2f}")
-                else:
-                    st.metric("Agency Commission", "N/A")
-            
-            # Balance Due column removed - no longer needed
+                st.metric("Agent Commission", f"${metrics['total_agent_comm']:,.2f}")
             
             st.divider()
             
@@ -1876,18 +2095,30 @@ def main():
             stats_col1, stats_col2 = st.columns(2)
             
             with stats_col1:
-                if 'Policy_Type' in all_data.columns:
-                    policy_type_counts = all_data['Policy_Type'].value_counts()
+                if 'Policy Type' in all_data.columns:
+                    policy_type_counts = all_data['Policy Type'].value_counts()
                     st.write("**Policies by Type:**")
                     for policy_type, count in policy_type_counts.items():
                         st.write(f"• {policy_type}: {count}")
                         
             with stats_col2:
-                if 'Transaction_Type' in all_data.columns:
-                    transaction_type_counts = all_data['Transaction_Type'].value_counts()
-                    st.write("**Transactions by Type:**")
-                    for trans_type, count in transaction_type_counts.items():
-                        st.write(f"• {trans_type}: {count}")
+                if 'Transaction Type' in all_data.columns:
+                    # Transaction type distribution pie chart
+                    trans_types = all_data['Transaction Type'].value_counts()
+                    fig = px.pie(values=trans_types.values, names=trans_types.index, 
+                                 title="Transaction Type Distribution",
+                                 color_discrete_map={
+                                     'NEW': '#28a745',
+                                     'RWL': '#007bff', 
+                                     'END': '#ffc107',
+                                     'CAN': '#dc3545',
+                                     'XCL': '#dc3545',
+                                     '-STMT-': '#6c757d',
+                                     '-VOID-': '#6c757d',
+                                     '-ADJ-': '#6c757d'
+                                 })
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig, use_container_width=True)
             
         else:
             st.info("No data available. Please add some policy data to see dashboard metrics.")
@@ -1906,7 +2137,7 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.metric("Total Policies", len(all_data))
+                    st.metric("Total Transactions", len(all_data))
                     if 'Commission_Paid' in all_data.columns:
                         st.metric("Total Commission Paid", f"${all_data['Commission_Paid'].sum():,.2f}")
                     if 'Agency_Commission_Received' in all_data.columns:
@@ -2036,7 +2267,8 @@ def main():
                     reports_data = {
                         "All Policies": all_data,
                         "Summary Stats": pd.DataFrame([
-                            ["Total Policies", len(all_data)],
+                            ["Total Transactions", len(all_data)],
+                            ["Unique Policies", all_data['Policy Number'].nunique() if 'Policy Number' in all_data.columns else 0],
                             ["Total Commission", all_data['Commission_Paid'].sum() if 'Commission_Paid' in all_data.columns else 0],
                             ["Total Balance Due", all_data['Balance_Due'].sum() if 'Balance_Due' in all_data.columns else 0],
                             ["Export Date", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
@@ -2065,12 +2297,14 @@ def main():
         else:
             st.info("No data available for reports.")
     
-    # --- All Policies in Database ---
-    elif page == "All Policies in Database":
-        st.title("📋 All Policies in Database")
+    # --- All Policy Transactions ---
+    elif page == "All Policy Transactions":
+        st.title("📋 All Policy Transactions")
         
         if not all_data.empty:
-            st.write(f"**Total Records: {len(all_data)}**")
+            # Calculate unique policy count
+            unique_policies = all_data['Policy Number'].nunique() if 'Policy Number' in all_data.columns else 0
+            st.write(f"**Total Transactions: {len(all_data):,} | Unique Policies: {unique_policies:,}**")
             
             # Add toggle for formula view
             col_toggle, col_space = st.columns([2, 8])
@@ -2113,6 +2347,11 @@ def main():
                 'Premium Sold',
                 'Agent Paid Amount (STMT)',
                 'Agency Comm Received (STMT)',
+                'Broker Fee',
+                'Policy Taxes & Fees',
+                'Commissionable Premium',
+                'Broker Fee Agent Comm',
+                'Total Agent Comm'
             ]
             
             for col in numeric_cols:
@@ -2202,9 +2441,9 @@ def main():
         else:
             st.info("No policies found in database.")
     
-    # --- Edit Policies in Database ---
-    elif page == "Edit Policies in Database":
-        st.title("✏️ Edit Policies in Database")
+    # --- Edit Policy Transactions ---
+    elif page == "Edit Policy Transactions":
+        st.title("✏️ Edit Policy Transactions")
         
         if not all_data.empty:
             st.warning("⚠️ Be careful when editing data. Changes are saved directly to the database.")
@@ -2329,10 +2568,46 @@ def main():
                                 'Agency Comm Received (STMT)',
                                 'Premium Sold',
                                 'Agent Paid Amount (STMT)',
-                                'Agency Comm Received (STMT)'
+                                'Agency Comm Received (STMT)',
+                                'Policy Taxes & Fees',
+                                'Commissionable Premium',
+                                'Broker Fee',
+                                'Broker Fee Agent Comm',
+                                'Total Agent Comm',
+                                'Policy Balance Due',
+                                'Agent Comm (NEW 50% RWL 25%)'
                             ]
                             
-                            for col in numeric_cols:
+                            # Dollar amount columns (show with $ sign)
+                            dollar_cols = [
+                                'Agent Estimated Comm $',
+                                'Agency Estimated Comm/Revenue (CRM)',
+                                'Agency Comm Received (STMT)',
+                                'Premium Sold',
+                                'Agent Paid Amount (STMT)',
+                                'Policy Taxes & Fees',
+                                'Commissionable Premium',
+                                'Broker Fee',
+                                'Broker Fee Agent Comm',
+                                'Total Agent Comm',
+                                'Policy Balance Due'
+                            ]
+                            
+                            # Percentage columns (show without $ sign)
+                            percent_cols = [
+                                'Policy Gross Comm %',
+                                'Agent Comm (NEW 50% RWL 25%)'
+                            ]
+                            
+                            for col in dollar_cols:
+                                if col in edit_results.columns:
+                                    column_config[col] = st.column_config.NumberColumn(
+                                        col,
+                                        format="$%.2f",
+                                        step=0.01
+                                    )
+                            
+                            for col in percent_cols:
                                 if col in edit_results.columns:
                                     column_config[col] = st.column_config.NumberColumn(
                                         col,
@@ -2709,10 +2984,12 @@ def main():
                                     policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier']
                                     date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date']
                                     commission_fields = [
-                                        'Premium Sold', 'Agency Estimated Comm/Revenue (CRM)', 
+                                        'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
+                                        'Agency Estimated Comm/Revenue (CRM)', 
                                         'Policy Gross Comm %', 'Agent Estimated Comm $',
                                         'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-                                        'Agent Comm (NEW 50% RWL 25%)'
+                                        'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
+                                        'Broker Fee Agent Comm', 'Total Agent Comm'
                                     ]
                                     status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
                                     
@@ -2775,27 +3052,86 @@ def main():
                                                     )
                                             field_counter += 1
                                     
+                                    # Premium Information
+                                    st.markdown("#### Premium Information")
+                                    col_prem = st.columns(1)[0]
+                                    with col_prem:
+                                        # Premium Sold
+                                        premium_sold = modal_data.get('Premium Sold', 0)
+                                        if pd.isna(premium_sold):
+                                            premium_sold = 0.0
+                                        updated_data['Premium Sold'] = st.number_input(
+                                            'Premium ($)',
+                                            value=float(premium_sold),
+                                            format="%.2f",
+                                            key="modal_Premium_Sold",
+                                            help="Enter the premium amount for this transaction"
+                                        )
+                                    
+                                    # Carrier Taxes & Fees
+                                    st.markdown("#### Carrier Taxes & Fees")
+                                    col5 = st.columns(1)[0]
+                                    
+                                    with col5:
+                                        # Policy Taxes & Fees
+                                        policy_taxes_fees = modal_data.get('Policy Taxes & Fees', 0)
+                                        if pd.isna(policy_taxes_fees):
+                                            policy_taxes_fees = 0.0
+                                        updated_data['Policy Taxes & Fees'] = st.number_input(
+                                            'Carrier Taxes & Fees ($)',
+                                            value=float(policy_taxes_fees),
+                                            format="%.2f",
+                                            key="modal_Policy_Taxes_Fees",
+                                            help="Non-commissionable carrier taxes and fees"
+                                        )
+                                        
+                                        # Calculate and display Commissionable Premium
+                                        commissionable_premium = updated_data.get('Premium Sold', 0) - updated_data['Policy Taxes & Fees']
+                                        st.number_input(
+                                            'Commissionable Premium ($)',
+                                            value=commissionable_premium,
+                                            format="%.2f",
+                                            key="modal_Commissionable_Premium",
+                                            disabled=True,
+                                            help="Premium minus Carrier Taxes & Fees"
+                                        )
+                                        updated_data['Commissionable Premium'] = commissionable_premium
+                                    
                                     # Commission Fields
                                     st.markdown("#### Commission Details")
                                     col7, col8 = st.columns(2)
                                     
                                     # Left column fields in specific order
                                     left_commission_fields = [
-                                        'Premium Sold',
                                         'Policy Gross Comm %',
-                                        'Agent Comm (NEW 50% RWL 25%)'
+                                        'Agent Comm (NEW 50% RWL 25%)',
+                                        'Broker Fee'
                                     ]
                                     
                                     # Right column fields in specific order
                                     right_commission_fields = [
                                         'Agency Estimated Comm/Revenue (CRM)',
-                                        'Agent Estimated Comm $'
+                                        'Agent Estimated Comm $',
+                                        'Broker Fee Agent Comm',
+                                        'Total Agent Comm'
                                     ]
                                     
                                     # Display left column fields
                                     with col7:
                                         for field in left_commission_fields:
-                                            if field in modal_data.keys():
+                                            if field == 'Broker Fee':
+                                                # Broker Fee input (editable)
+                                                broker_fee = modal_data.get('Broker Fee', 0)
+                                                if pd.isna(broker_fee):
+                                                    broker_fee = 0.0
+                                                updated_data['Broker Fee'] = st.number_input(
+                                                    'Broker Fee ($)',
+                                                    value=float(broker_fee),
+                                                    format="%.2f",
+                                                    key="modal_Broker_Fee_commission",
+                                                    help="Agency broker fee (you receive 50% commission on this amount)"
+                                                )
+                                            elif field in modal_data.keys():
                                                 current_value = modal_data.get(field, 0)
                                                 if pd.isna(current_value):
                                                     current_value = 0.0
@@ -2808,29 +3144,21 @@ def main():
                                     
                                     # Display right column fields
                                     with col8:
-                                        # Add empty space to align with commission percentages
-                                        # Create an invisible number input to match the height of Premium Sold field
-                                        st.number_input(
-                                            " ",  # Single space as label
-                                            value=0.0,
-                                            format="%.2f",
-                                            key="modal_spacer_commission",
-                                            disabled=True,
-                                            label_visibility="hidden"
-                                        )
-                                        
                                         # Calculate formula values
-                                        premium_sold = updated_data.get('Premium Sold', modal_data.get('Premium Sold', 0))
+                                        commissionable_prem = updated_data.get('Commissionable Premium', 0)
                                         gross_comm_pct = updated_data.get('Policy Gross Comm %', modal_data.get('Policy Gross Comm %', 0))
                                         agent_comm_rate = updated_data.get('Agent Comm (NEW 50% RWL 25%)', modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0))
+                                        # Calculate broker fee agent commission (always 50% of broker fee)
+                                        broker_fee = updated_data.get('Broker Fee', modal_data.get('Broker Fee', 0))
+                                        broker_fee_agent = float(broker_fee) * 0.50 if broker_fee else 0.0
                                         
                                         # Ensure numeric values
                                         try:
-                                            premium_sold = float(premium_sold) if premium_sold else 0.0
+                                            commissionable_prem = float(commissionable_prem) if commissionable_prem else 0.0
                                             gross_comm_pct = float(gross_comm_pct) if gross_comm_pct else 0.0
                                             agent_comm_rate = float(agent_comm_rate) if agent_comm_rate else 0.0
                                         except:
-                                            premium_sold = 0.0
+                                            commissionable_prem = 0.0
                                             gross_comm_pct = 0.0
                                             agent_comm_rate = 0.0
                                         
@@ -2839,11 +3167,14 @@ def main():
                                         if agent_comm_rate > 0 and agent_comm_rate < 1:
                                             agent_comm_rate = agent_comm_rate * 100
                                         
-                                        # Calculate Agency Estimated Comm/Revenue (CRM)
-                                        agency_comm = premium_sold * (gross_comm_pct / 100) if gross_comm_pct else 0.0
+                                        # Calculate Agency Estimated Comm/Revenue (CRM) using Commissionable Premium
+                                        agency_comm = commissionable_prem * (gross_comm_pct / 100) if gross_comm_pct else 0.0
                                         
                                         # Calculate Agent Estimated Comm $
                                         agent_comm = agency_comm * (agent_comm_rate / 100) if agent_comm_rate else 0.0
+                                        
+                                        # Calculate Total Agent Commission
+                                        total_agent_comm = agent_comm + broker_fee_agent
                                         
                                         # Ensure calculated values are valid numbers
                                         if pd.isna(agency_comm) or (isinstance(agency_comm, float) and (agency_comm == float('inf') or agency_comm == float('-inf'))):
@@ -2852,7 +3183,7 @@ def main():
                                             agent_comm = 0.0
                                         
                                         for field in right_commission_fields:
-                                            if field in modal_data.keys():
+                                            if field in modal_data.keys() or field in ['Broker Fee Agent Comm', 'Total Agent Comm']:
                                                 if field == 'Agency Estimated Comm/Revenue (CRM)':
                                                     # Display as read-only calculated field
                                                     st.number_input(
@@ -2861,7 +3192,7 @@ def main():
                                                         format="%.2f",
                                                         key=f"modal_{field}_display",
                                                         disabled=True,
-                                                        help=f"Formula: Premium Sold × Policy Gross Comm % = ${premium_sold:.2f} × {gross_comm_pct:.1f}% = ${agency_comm:.2f}"
+                                                        help=f"Formula: Commissionable Premium × Policy Gross Comm % = ${commissionable_prem:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}"
                                                     )
                                                     # Store the calculated value
                                                     updated_data[field] = agency_comm
@@ -2873,10 +3204,34 @@ def main():
                                                         format="%.2f",
                                                         key=f"modal_{field}_display",
                                                         disabled=True,
-                                                        help=f"Formula: Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_rate:.1f}% = ${agent_comm:.2f}"
+                                                        help=f"Formula: Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_rate:.2f}% = ${agent_comm:.2f}"
                                                     )
                                                     # Store the calculated value
                                                     updated_data[field] = agent_comm
+                                                elif field == 'Broker Fee Agent Comm':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=broker_fee_agent,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help="50% of broker fee"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = broker_fee_agent
+                                                elif field == 'Total Agent Comm':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=total_agent_comm,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help=f"Formula: Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = total_agent_comm
                                                 else:
                                                     # This shouldn't happen but handle it just in case
                                                     current_value = modal_data.get(field, 0)
@@ -2992,11 +3347,45 @@ def main():
                                     with col9:
                                         for field in left_other_fields:
                                             if field in editable_other_fields and field in modal_data.keys():
-                                                updated_data[field] = st.text_input(
-                                                    field,
-                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                    key=f"modal_{field}"
-                                                )
+                                                if field == 'Policy Type':
+                                                    # Load policy types from configuration
+                                                    policy_types_config = load_policy_types_config()
+                                                    active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
+                                                    
+                                                    # Get current value
+                                                    current_policy_type = modal_data.get(field, '')
+                                                    
+                                                    # Ensure current value is in options
+                                                    options = active_types.copy()
+                                                    if current_policy_type and current_policy_type not in options:
+                                                        options.insert(0, current_policy_type)
+                                                    
+                                                    updated_data[field] = st.selectbox(
+                                                        field + " (add in Admin Panel or table above)",
+                                                        options=options,
+                                                        index=options.index(current_policy_type) if current_policy_type in options else 0,
+                                                        key=f"modal_{field}_select",
+                                                        help="To add new types: Admin Panel or use the editable table above"
+                                                    )
+                                                elif field == 'Transaction Type':
+                                                    # Make Transaction Type a dropdown
+                                                    transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
+                                                    current_trans_type = modal_data.get(field, 'NEW')
+                                                    # Ensure current value is in list
+                                                    if current_trans_type not in transaction_types:
+                                                        transaction_types.insert(0, current_trans_type)
+                                                    updated_data[field] = st.selectbox(
+                                                        field,
+                                                        options=transaction_types,
+                                                        index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
+                                                        key=f"modal_{field}"
+                                                    )
+                                                else:
+                                                    updated_data[field] = st.text_input(
+                                                        field,
+                                                        value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                        key=f"modal_{field}"
+                                                    )
                                     
                                     # Right column
                                     with col10:
@@ -3009,6 +3398,19 @@ def main():
                                                         value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
                                                         key=f"modal_{field}",
                                                         height=80
+                                                    )
+                                                elif field == 'FULL OR MONTHLY PMTS':
+                                                    # Make FULL OR MONTHLY PMTS a dropdown
+                                                    payment_options = ["FULL", "MONTHLY", ""]
+                                                    current_payment = modal_data.get(field, "")
+                                                    # Ensure current value is in list
+                                                    if current_payment and current_payment not in payment_options:
+                                                        payment_options.insert(0, current_payment)
+                                                    updated_data[field] = st.selectbox(
+                                                        field,
+                                                        options=payment_options,
+                                                        index=payment_options.index(current_payment) if current_payment in payment_options else 0,
+                                                        key=f"modal_{field}"
                                                     )
                                                 else:
                                                     updated_data[field] = st.text_input(
@@ -3414,11 +3816,11 @@ def main():
         
         # Agency Revenue Calculator
         st.markdown("---")
-        st.subheader("Enter Premium Sold and see Agency Revenue:")
+        st.subheader("New Policy Premium")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            premium_sold = st.number_input("Premium Sold", value=-1000000.00, format="%.2f", step=100.0, key="premium_sold_input")
+            premium_sold = st.number_input("New Policy Premium", value=-1000000.00, format="%.2f", step=100.0, key="premium_sold_input")
         with col2:
             policy_gross_comm_percent = st.number_input("Policy Gross Comm %", value=0.0, format="%.2f", min_value=0.0, max_value=100.0, key="policy_gross_comm_calc")
         with col3:
@@ -3428,74 +3830,115 @@ def main():
         # Main Form
         st.markdown("---")
         with st.form("add_policy_form"):
-            # Row 1: Client ID and Transaction ID
+            # Client Information Section
+            st.subheader("Client Information")
             col1, col2 = st.columns(2)
             with col1:
+                if selected_customer_name:
+                    customer = st.text_input("Customer Name", value=selected_customer_name)
+                else:
+                    customer = st.text_input("Customer Name", placeholder="Enter customer name")
+            with col2:
                 if selected_client_id:
                     client_id = st.text_input("Client ID", value=selected_client_id, disabled=True)
                 else:
                     client_id = st.text_input("Client ID", value=generate_client_id())
-            with col2:
-                transaction_id = st.text_input("Transaction ID", value=generate_transaction_id(), disabled=True)
             
-            # Row 2: Customer
-            if selected_customer_name:
-                customer = st.text_input("Customer", value=selected_customer_name)
-            else:
-                customer = st.text_input("Customer", placeholder="Enter customer name")
+            # Hidden transaction ID
+            transaction_id = generate_transaction_id()
             
-            # Row 3: Carrier Name
-            carrier_name = st.text_input("Carrier Name", placeholder="Enter carrier name")
-            
-            # Row 4: Policy Type
-            policy_type = st.selectbox("Policy Type", ["Auto", "Home", "Life", "Health", "Commercial", "Umbrella", "Flood", "Other"])
-            
-            # Row 5: Policy Number
-            policy_number = st.text_input("Policy Number", placeholder="Enter policy number")
-            
-            # Row 6: Transaction Type
-            transaction_type = st.selectbox("Transaction Type", ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"])
-            
-            # Row 7: Agent Commission
-            agent_comm_label = st.text_input("Agent Comm (NEW 50% RWL 25%)", value="Calculated based on Transaction Type", disabled=True)
-            
-            # Date fields
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                policy_orig_date = st.date_input("Policy Origination Date", value=datetime.date.today(), format="MM/DD/YYYY")
-            with col2:
-                effective_date = st.date_input("Effective Date", value=datetime.date.today(), format="MM/DD/YYYY")
-            with col3:
-                x_date = st.date_input("X-DATE", value=datetime.date.today() + datetime.timedelta(days=180), format="MM/DD/YYYY")
-            
-            # Checklist
-            new_biz_checklist = st.checkbox("NEW BIZ CHECKLIST COMPLETE")
-            
-            # Financial fields
+            # Policy Information Section
+            st.subheader("Policy Information")
             col1, col2 = st.columns(2)
             with col1:
-                agency_est_comm = st.number_input("Agency Estimated Comm/Revenue (CRM)", value=agency_revenue if 'agency_revenue' in locals() else 0.0, format="%.2f")
-                agency_gross_comm = st.number_input("Agency Gross Comm Received", value=0.0, format="%.2f")
+                # Get dynamic policy types
+                active_types, allow_custom = get_active_policy_types()
+                default_type = get_default_policy_type()
+                
+                # Find default index
+                try:
+                    default_index = active_types.index(default_type)
+                except ValueError:
+                    default_index = 0
+                
+                policy_type = st.selectbox(
+                    "Policy Type (add new types in Admin Panel)", 
+                    options=active_types, 
+                    index=default_index,
+                    help="To add new policy types, go to Admin Panel → Manage Policy Types"
+                )
+                
+                carrier_name = st.text_input("Carrier Name", placeholder="Enter carrier name")
+            with col2:
+                policy_number = st.text_input("Policy Number", placeholder="Enter policy number")
+                transaction_type = st.selectbox("Transaction Type", ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"])
+            
+            # Broker Fee / Carrier Taxes & Fees Section
+            st.subheader("Broker Fee / Carrier Taxes & Fees")
+            col1, col2 = st.columns(2)
+            with col1:
+                broker_fee = st.number_input("Broker Fee ($)", value=0.0, format="%.2f", step=10.0, help="Agency broker fee (you receive 50% commission on this amount)")
+            with col2:
+                policy_taxes_fees = st.number_input("Carrier Taxes & Fees ($)", value=0.0, format="%.2f", step=10.0, help="Non-commissionable carrier taxes and fees")
+                # Calculate and display commissionable premium
+                # Use the premium from the calculators above (either endorsement or new policy)
+                if 'premium_sold_calc' in locals() and premium_sold_calc != new_premium - existing_premium:
+                    # Using endorsement calculator
+                    premium_for_calculation = premium_sold_calc
+                else:
+                    # Using new policy premium
+                    premium_for_calculation = premium_sold
+                commissionable_premium = premium_for_calculation - policy_taxes_fees
+                st.text_input("Commissionable Premium ($)", value=f"{commissionable_premium:.2f}", disabled=True, help="Premium minus Carrier Taxes & Fees")
+            
+            # Commission Details Section
+            st.subheader("Commission Details")
+            col1, col2 = st.columns(2)
+            with col1:
+                # Use gross comm from calculator if available
+                policy_gross_comm_value = policy_gross_comm_percent if 'policy_gross_comm_percent' in locals() else 0.0
+                policy_gross_comm_input = st.number_input("Policy Gross Comm %", value=policy_gross_comm_value, format="%.2f", min_value=0.0, max_value=100.0)
+                
+                # Determine agent commission rate based on transaction type
+                if transaction_type in ["NEW", "NBS", "STL", "BoR"]:
+                    agent_comm_rate = 50.0
+                elif transaction_type in ["RWL", "REWRITE"]:
+                    agent_comm_rate = 25.0
+                elif transaction_type in ["CAN", "XCL"]:
+                    agent_comm_rate = 0.0
+                else:  # END, PCH - will check dates after form loads
+                    agent_comm_rate = 50.0  # Default, will be updated based on dates
+                
+                st.text_input("Agent Comm (NEW 50% RWL 25%)", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
+                
+                # Calculate broker fee agent commission
+                broker_fee_agent_comm = broker_fee * 0.50
+                st.text_input("Broker Fee Agent Comm", value=f"${broker_fee_agent_comm:.2f}", disabled=True, help="50% of broker fee")
             
             with col2:
-                # Calculate agent commission based on transaction type
-                if transaction_type in ["NEW", "NBS", "STL", "BoR"]:
-                    agent_comm_rate = 0.50
-                elif transaction_type in ["END", "PCH"]:
-                    agent_comm_rate = 0.50 if policy_orig_date == effective_date else 0.25
-                elif transaction_type in ["RWL", "REWRITE"]:
-                    agent_comm_rate = 0.25
-                else:
-                    agent_comm_rate = 0.0
+                # Calculate agency commission from commissionable premium
+                agency_est_comm = commissionable_premium * (policy_gross_comm_input / 100)
+                st.text_input("Agency Estimated Comm/Revenue (CRM)", value=f"${agency_est_comm:.2f}", disabled=True, help="Calculated from commissionable premium")
                 
-                agent_est_comm = agency_est_comm * agent_comm_rate
-                agent_est_comm_input = st.number_input("Agent Estimated Comm $", value=agent_est_comm, format="%.2f")
+                # Calculate agent commission
+                agent_est_comm = agency_est_comm * (agent_comm_rate / 100)
+                st.text_input("Agent Estimated Comm $", value=f"${agent_est_comm:.2f}", disabled=True, help="Your commission on the policy")
                 
-                # BALANCE DUE field removed - no longer needed
-                full_or_monthly = st.selectbox("FULL OR MONTHLY PMTS", ["FULL", "MONTHLY", ""])
+                # Calculate total agent commission
+                total_agent_comm = agent_est_comm + broker_fee_agent_comm
+                st.text_input("Total Agent Comm", value=f"${total_agent_comm:.2f}", disabled=True, help="Policy commission plus broker fee commission")
             
-            # Notes
-            notes = st.text_area("NOTES", placeholder="Enter any additional notes...")
+            # Other Fields Section
+            st.subheader("Other Fields")
+            col1, col2 = st.columns(2)
+            with col1:
+                effective_date = st.date_input("Effective Date", value=datetime.date.today(), format="MM/DD/YYYY")
+                x_date = st.date_input("X-DATE", value=datetime.date.today() + datetime.timedelta(days=180), format="MM/DD/YYYY", help="Expiration date")
+                new_biz_checklist = st.checkbox("NEW BIZ CHECKLIST COMPLETE")
+            with col2:
+                policy_orig_date = st.date_input("Policy Origination Date", value=datetime.date.today(), format="MM/DD/YYYY")
+                full_or_monthly = st.selectbox("FULL OR MONTHLY PMTS", ["FULL", "MONTHLY", ""])
+                notes = st.text_area("NOTES", placeholder="Enter any additional notes...", height=70)
             
             # Submit button
             submitted = st.form_submit_button("💾 Save Policy Transaction", type="primary", use_container_width=True)
@@ -3503,6 +3946,12 @@ def main():
             if submitted:
                 if customer and policy_number:
                     try:
+                        # Adjust agent rate for END/PCH based on dates
+                        if transaction_type in ["END", "PCH"]:
+                            agent_comm_rate = 50.0 if policy_orig_date == effective_date else 25.0
+                            agent_est_comm = agency_est_comm * (agent_comm_rate / 100)
+                            total_agent_comm = agent_est_comm + broker_fee_agent_comm
+                        
                         # Prepare the new policy record
                         new_policy = {
                             "Client ID": client_id,
@@ -3516,14 +3965,18 @@ def main():
                             "Effective Date": effective_date.strftime('%m/%d/%Y'),
                             "X-DATE": x_date.strftime('%m/%d/%Y'),
                             "NEW BIZ CHECKLIST COMPLETE": "Yes" if new_biz_checklist else "No",
-                            "Policy Gross Comm %": f"{policy_gross_comm_percent}%" if 'policy_gross_comm_percent' in locals() and policy_gross_comm_percent else None,
+                            "Premium Sold": clean_numeric_value(premium_for_calculation),
+                            "Policy Taxes & Fees": clean_numeric_value(policy_taxes_fees),
+                            "Commissionable Premium": clean_numeric_value(commissionable_premium),
+                            "Broker Fee": clean_numeric_value(broker_fee),
+                            "Policy Gross Comm %": clean_numeric_value(policy_gross_comm_input),
                             "Agency Estimated Comm/Revenue (CRM)": clean_numeric_value(agency_est_comm),
-                            "Agency Gross Comm Received": clean_numeric_value(agency_gross_comm),
-                            "Agent Estimated Comm $": clean_numeric_value(agent_est_comm_input),
-                            # "BALANCE DUE" field removed - no longer needed
+                            "Agent Comm (NEW 50% RWL 25%)": clean_numeric_value(agent_comm_rate),
+                            "Agent Estimated Comm $": clean_numeric_value(agent_est_comm),
+                            "Broker Fee Agent Comm": clean_numeric_value(broker_fee_agent_comm),
+                            "Total Agent Comm": clean_numeric_value(total_agent_comm),
                             "FULL OR MONTHLY PMTS": full_or_monthly,
-                            "NOTES": notes,
-                            "Premium Sold": f"${premium_sold:,.2f}" if 'premium_sold' in locals() else None
+                            "NOTES": notes
                         }
                         
                         # Remove None values to avoid database issues
@@ -4984,7 +5437,7 @@ def main():
     elif page == "Admin Panel":
         st.title("⚙️ Admin Panel")
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types"])
         
         with tab1:
             st.subheader("Database Information")
@@ -5312,57 +5765,141 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                 st.info("No debug logs yet. Logs will appear here as you use the application.")
         
         with tab7:
-            st.subheader("📊 Formulas & Calculations")
-            st.info("This section displays all active formulas and calculations used throughout the application.")
+            st.subheader("📊 Formulas & Calculations - Complete Documentation")
+            st.info("⚠️ CRITICAL: This section contains ALL formulas used throughout the application. Review carefully to understand the complete calculation matrix.")
             
             # Formula tabs
-            formula_tab1, formula_tab2, formula_tab3, formula_tab4 = st.tabs(["Commission Formulas", "Rate Matrix", "Calculated Fields", "Formula Testing"])
+            formula_tab1, formula_tab2, formula_tab3, formula_tab4, formula_tab5, formula_tab6 = st.tabs(["Core Formulas", "Rate Matrix", "Field Dependencies", "Formula Testing", "Implementation Details", "Formula Issues"])
             
             with formula_tab1:
-                st.markdown("### 💰 Commission Calculation Formulas")
+                st.markdown("### 🎯 CORE FORMULAS - Complete Matrix")
                 
-                # Agency Commission Formula
-                st.markdown("#### 1. Agency Commission (Estimated)")
+                st.warning("These formulas are the foundation of ALL commission calculations in the system.")
+                
+                # Formula 1: Commissionable Premium
+                st.markdown("#### Formula #1: Commissionable Premium")
                 st.code("""
-Formula: Premium Sold × Policy Gross Comm %
-Example: $1,000 × 10% = $100
+Formula: Premium Sold - Policy Taxes & Fees = Commissionable Premium
+Purpose: Calculate the premium amount eligible for commission (excluding non-commissionable taxes/fees)
+Example: $10,000 - $500 = $9,500
 
-Used in: Add New Policy, Edit Policies
+Fields Used:
+- INPUT: Premium Sold (user enters)
+- INPUT: Policy Taxes & Fees (user enters)
+- OUTPUT: Commissionable Premium (calculated)
+
+Where Used:
+- Add New Policy Transaction form
+- Edit Policy Transaction form
+- All commission calculations use this as the base
                 """, language="text")
                 
-                # Agent Commission Formula
-                st.markdown("#### 2. Agent Commission Calculation")
+                # Formula 2: Agency Commission
+                st.markdown("#### Formula #2: Agency Estimated Comm/Revenue (CRM)")
                 st.code("""
-Base Formula: Agency Commission × Agent Rate
+Formula: Commissionable Premium × Policy Gross Comm % = Agency Estimated Comm/Revenue (CRM)
+Purpose: Calculate the gross commission the agency receives from the carrier
+Example: $9,500 × 10% = $950
 
-Agent Rates by Transaction Type:
-- NEW, NBS, STL, BoR: 50% of Agency Commission
-- RWL, REWRITE: 25% of Agency Commission
-- END, PCH: 
-  - If Policy Origination Date = Effective Date: 50% (New Business)
-  - Otherwise: 25% (Renewal)
-- CAN, XCL: 0% (No commission on cancellations)
+Fields Used:
+- INPUT: Commissionable Premium (from Formula #1)
+- INPUT: Policy Gross Comm % (user enters)
+- OUTPUT: Agency Estimated Comm/Revenue (CRM) (calculated)
 
-Example (NEW): $100 Agency Comm × 50% = $50 Agent Comm
-Example (RWL): $100 Agency Comm × 25% = $25 Agent Comm
+Where Used:
+- Add New Policy Transaction form (auto-calculated)
+- Edit Policy Transaction form (auto-calculated)
+- Policy Revenue Ledger Reports
+- Dashboard metrics
                 """, language="text")
                 
-                # Premium Calculator
-                st.markdown("#### 3. Premium Calculator (Endorsements)")
+                # Formula 3: Agent Commission
+                st.markdown("#### Formula #3: Agent Estimated Comm $")
                 st.code("""
-Formula: New Premium - Existing Premium = Additional Premium
-Example: $1,200 - $1,000 = $200 Additional Premium
+Formula: Agency Estimated Comm/Revenue (CRM) × Agent Comm Rate = Agent Estimated Comm $
+Purpose: Calculate the agent's portion of the commission
 
-Used in: Add New Policy (for END/PCH transactions)
+Agent Comm Rate Logic:
+- NEW, NBS, STL, BoR: 50%
+- RWL, REWRITE: 25%
+- END, PCH: 50% if new business (Policy Orig Date = Effective Date), 25% if renewal
+- CAN, XCL: 0%
+
+Example: $950 × 50% = $475
+
+Fields Used:
+- INPUT: Agency Estimated Comm/Revenue (CRM) (from Formula #2)
+- INPUT: Transaction Type (determines rate)
+- INPUT: Policy Origination Date (for END/PCH)
+- INPUT: Effective Date (for END/PCH)
+- OUTPUT: Agent Estimated Comm $ (calculated)
+
+Where Used:
+- Add New Policy Transaction form (auto-calculated)
+- Edit Policy Transaction form (auto-calculated)
+- All reports and dashboard
                 """, language="text")
                 
-                # Balance Due
-                st.markdown("#### 4. Balance Due Calculation")
+                # Formula 4: Broker Fee Commission
+                st.markdown("#### Formula #4: Broker Fee Agent Commission")
                 st.code("""
-Formula: Agent Estimated Comm $ - Agent Paid Amount (STMT)
-Example: $50 Estimated - $45 Paid = $5 Balance Due
+Formula: Broker Fee × 0.50 = Broker Fee Agent Comm
+Purpose: Calculate agent's portion of broker fee (ALWAYS 50% regardless of transaction type)
+Example: $250 × 0.50 = $125
 
-Used in: Reports, Dashboard searches
+Fields Used:
+- INPUT: Broker Fee (user enters)
+- OUTPUT: Broker Fee Agent Comm (calculated)
+
+Special Rule: Broker fee commission is ALWAYS 50%, never affected by transaction type
+                """, language="text")
+                
+                # Formula 5: Total Agent Commission
+                st.markdown("#### Formula #5: Total Agent Commission")
+                st.code("""
+Formula: Agent Estimated Comm $ + Broker Fee Agent Comm = Total Agent Comm
+Purpose: Calculate total commission including broker fee portion
+Example: $475 + $125 = $600
+
+Fields Used:
+- INPUT: Agent Estimated Comm $ (from Formula #3)
+- INPUT: Broker Fee Agent Comm (from Formula #4)
+- OUTPUT: Total Agent Comm (calculated)
+                """, language="text")
+                
+                # Formula 6: Balance Due
+                st.markdown("#### Formula #6: Policy Balance Due")
+                st.code("""
+Formula: Agent Estimated Comm $ - Agent Paid Amount (STMT) = Policy Balance Due
+Purpose: Track outstanding commission owed to agent
+Example: $475 - $200 = $275
+
+Fields Used:
+- INPUT: Agent Estimated Comm $ (from Formula #3)
+- INPUT: Agent Paid Amount (STMT) (from reconciliation)
+- OUTPUT: Policy Balance Due (calculated)
+
+Where Used:
+- Policy Revenue Ledger Reports
+- Dashboard search results
+- Outstanding balance tracking
+                """, language="text")
+                
+                # Formula 7: Premium Sold for Endorsements
+                st.markdown("#### Formula #7: Premium Sold Calculator (Endorsements)")
+                st.code("""
+Formula: New/Revised Premium - Existing Premium = Premium Sold
+Purpose: Calculate the additional premium for endorsements
+Example: $1,350 - $1,200 = $150
+
+Fields Used:
+- INPUT: New/Revised Premium (user enters)
+- INPUT: Existing Premium (user enters)
+- OUTPUT: Premium Sold (calculated)
+
+Where Used:
+- Add New Policy Transaction form (Endorsement Calculator section)
+- Only for END and PCH transaction types
                 """, language="text")
                 
             with formula_tab2:
@@ -5397,45 +5934,126 @@ Used in: Reports, Dashboard searches
                 """)
                 
             with formula_tab3:
-                st.markdown("### 🔢 Calculated Fields Reference")
+                st.markdown("### 🔗 Field Dependencies & Data Flow")
                 
-                calculated_fields = {
-                    "Field Name": [
-                        "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Estimated Comm $",
-                        "Balance Due",
-                        "Commission Difference",
-                        "Year-to-Date Totals",
-                        "Monthly Summaries"
+                st.info("This shows how fields depend on each other and the flow of calculations through the system.")
+                
+                # Dependency Tree
+                st.markdown("#### Calculation Dependency Tree")
+                st.code("""
+1. Premium Sold (USER INPUT)
+   └── Policy Taxes & Fees (USER INPUT)
+       └── Commissionable Premium (CALCULATED)
+           └── Policy Gross Comm % (USER INPUT)
+               └── Agency Estimated Comm/Revenue (CRM) (CALCULATED)
+                   └── Transaction Type (USER INPUT)
+                   └── Policy Origination Date (USER INPUT - for END/PCH)
+                   └── Effective Date (USER INPUT - for END/PCH)
+                       └── Agent Comm Rate (CALCULATED)
+                           └── Agent Estimated Comm $ (CALCULATED)
+                               └── Agent Paid Amount (STMT) (FROM RECONCILIATION)
+                                   └── Policy Balance Due (CALCULATED)
+
+2. Broker Fee (USER INPUT)
+   └── Broker Fee Agent Comm (CALCULATED - always 50%)
+       └── Total Agent Comm (CALCULATED with Agent Est Comm)
+                """, language="text")
+                
+                # Field Impact Matrix
+                st.markdown("#### Field Impact Matrix")
+                impact_data = {
+                    "When This Changes": [
+                        "Premium Sold",
+                        "Policy Taxes & Fees",
+                        "Policy Gross Comm %",
+                        "Transaction Type",
+                        "Broker Fee",
+                        "Policy Orig Date",
+                        "Effective Date",
+                        "Agent Paid Amount"
                     ],
-                    "Calculation": [
-                        "Premium Sold × Policy Gross Comm %",
-                        "Agency Commission × Agent Rate (varies by type)",
-                        "Agent Estimated - Agent Paid",
-                        "Agency Estimated - Agency Received",
-                        "SUM of commissions for current year",
-                        "SUM grouped by month"
+                    "These Fields Update": [
+                        "Commissionable Premium, Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
+                        "Commissionable Premium, Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
+                        "Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
+                        "Agent Comm Rate, Agent Comm, Total Agent Comm, Balance Due",
+                        "Broker Fee Agent Comm, Total Agent Comm",
+                        "Agent Comm Rate (for END/PCH), Agent Comm, Total Agent Comm, Balance Due",
+                        "Agent Comm Rate (for END/PCH), Agent Comm, Total Agent Comm, Balance Due",
+                        "Policy Balance Due"
                     ],
-                    "Update Frequency": [
-                        "On data entry",
-                        "On data entry",
-                        "Real-time in reports",
-                        "Real-time in reports",
-                        "On report generation",
-                        "On report generation"
-                    ],
-                    "Used In": [
-                        "All policy views",
-                        "All policy views",
-                        "Reports, Search filters",
-                        "Reconciliation reports",
-                        "Dashboard, Reports",
-                        "Monthly reports"
+                    "Calculation Type": [
+                        "Cascading",
+                        "Cascading",
+                        "Cascading",
+                        "Rate Determination",
+                        "Direct",
+                        "Conditional",
+                        "Conditional",
+                        "Direct"
                     ]
                 }
                 
-                calc_df = pd.DataFrame(calculated_fields)
-                st.dataframe(calc_df, use_container_width=True, hide_index=True)
+                impact_df = pd.DataFrame(impact_data)
+                st.dataframe(impact_df, use_container_width=True, hide_index=True)
+                
+                # Critical Fields
+                st.markdown("#### 🚨 Critical Fields for Calculations")
+                st.warning("""
+                These fields MUST have values for calculations to work correctly:
+                - Premium Sold (or calculated from Endorsement Calculator)
+                - Policy Gross Comm %
+                - Transaction Type
+                - Policy Origination Date (for END/PCH transactions)
+                - Effective Date (for END/PCH transactions)
+                """)
+                
+                # Locked vs Editable
+                st.markdown("#### 🔒 Formula-Locked vs Editable Fields")
+                field_status = {
+                    "Field Name": [
+                        "Premium Sold",
+                        "Policy Taxes & Fees",
+                        "Commissionable Premium",
+                        "Broker Fee",
+                        "Policy Gross Comm %",
+                        "Agency Estimated Comm/Revenue (CRM)",
+                        "Agent Comm (NEW 50% RWL 25%)",
+                        "Agent Estimated Comm $",
+                        "Broker Fee Agent Comm",
+                        "Total Agent Comm",
+                        "Policy Balance Due"
+                    ],
+                    "Status": [
+                        "✏️ Editable",
+                        "✏️ Editable",
+                        "🔒 Formula-Locked",
+                        "✏️ Editable",
+                        "✏️ Editable",
+                        "🔒 Formula-Locked",
+                        "✏️ Editable (but shows rate)",
+                        "🔒 Formula-Locked",
+                        "🔒 Formula-Locked",
+                        "🔒 Formula-Locked",
+                        "🔒 Formula-Locked"
+                    ],
+                    "Notes": [
+                        "User enters or calculates via Endorsement Calculator",
+                        "User enters carrier taxes/fees",
+                        "Auto-calculated: Premium - Taxes",
+                        "User enters broker fee amount",
+                        "User enters commission percentage",
+                        "Auto-calculated: Commissionable × Rate",
+                        "Shows rate but stored as editable field",
+                        "Auto-calculated: Agency × Agent Rate",
+                        "Auto-calculated: Always 50% of Broker Fee",
+                        "Auto-calculated: Agent + Broker commissions",
+                        "Auto-calculated: Estimated - Paid"
+                    ]
+                }
+                
+                status_df = pd.DataFrame(field_status)
+                st.dataframe(status_df, use_container_width=True, hide_index=True)
                 
             with formula_tab4:
                 st.markdown("### 🧪 Formula Testing & Verification")
@@ -5500,8 +6118,255 @@ Premium: ${test_premium:.2f}
 Commission Rate: {test_comm_rate}%
 Agency Commission: ${test_premium:.2f} × {test_comm_rate}% = ${agency_comm:.2f}
 Agent Rate: {rate_display}
-Agent Commission: ${agency_comm:.2f} × {agent_rate:.0%} = ${agent_comm:.2f}
+Agent Commission: ${agency_comm:.2f} × {agent_rate:.2%} = ${agent_comm:.2f}
                     """)
+            
+            with formula_tab5:
+                st.markdown("### ⚙️ Implementation Details")
+                
+                st.warning("CRITICAL: Understanding where formulas are implemented is essential for troubleshooting")
+                
+                st.markdown("#### Formula Implementation Locations")
+                
+                implementation_data = {
+                    "Formula": [
+                        "Agent Comm Rate Determination",
+                        "Agent Comm Rate Determination",
+                        "Agent Comm Rate Determination",
+                        "Agency Commission Calculation",
+                        "Agency Commission Calculation",
+                        "Agent Commission Calculation",
+                        "Agent Commission Calculation",
+                        "Field Locking/Display",
+                        "Field Locking/Display"
+                    ],
+                    "Location": [
+                        "get_agent_rate() function (lines 370-383)",
+                        "Add New Policy form (lines 3864-3874)",
+                        "Edit Transaction form (lines 3108-3117)",
+                        "Add New Policy form (auto-calc)",
+                        "Edit Transaction form (auto-calc)",
+                        "Add New Policy form (auto-calc)",
+                        "Edit Transaction form (auto-calc)",
+                        "Add New Policy form",
+                        "Edit Transaction form"
+                    ],
+                    "Implementation": [
+                        "✅ Full logic with date checking for END/PCH",
+                        "⚠️ Defaults END/PCH to 50% (no date check)",
+                        "❌ Just displays stored value (no logic)",
+                        "✅ Uses Commissionable Premium",
+                        "✅ Uses Commissionable Premium",
+                        "✅ Full calculation",
+                        "✅ Full calculation",
+                        "✅ Shows as disabled fields",
+                        "✅ Shows as disabled fields"
+                    ],
+                    "Issue": [
+                        "Working correctly",
+                        "Missing date comparison logic",
+                        "No automatic rate determination",
+                        "Working correctly",
+                        "Working correctly",
+                        "Working correctly",
+                        "Working correctly",
+                        "Working correctly",
+                        "Working correctly"
+                    ]
+                }
+                
+                impl_df = pd.DataFrame(implementation_data)
+                st.dataframe(impl_df, use_container_width=True, hide_index=True)
+                
+                st.markdown("#### Key Functions")
+                st.code("""
+1. get_agent_rate(row) - Main logic for determining agent commission rate
+   - Location: Lines 370-383
+   - Used by: Batch calculations, reports
+   - NOT used by: Add/Edit forms (they have their own logic)
+
+2. calculate_agency_commission(premium, rate) - Calculate agency commission
+   - Used by: Forms for real-time calculation
+
+3. calculate_agent_commission(agency_comm, trans_type, is_new) - Calculate agent commission
+   - Used by: Forms for real-time calculation
+
+4. is_reconciliation_transaction(trans_id) - Check if transaction is locked
+   - Prevents editing of -STMT-, -VOID-, -ADJ- transactions
+                """, language="text")
+                
+                st.markdown("#### Formula Execution Flow")
+                st.code("""
+Add New Policy Transaction:
+1. User enters Premium Sold, Taxes, Broker Fee
+2. System calculates Commissionable Premium (real-time)
+3. User enters Policy Gross Comm %
+4. System calculates Agency Commission (real-time)
+5. System determines Agent Rate based on Transaction Type
+6. System calculates Agent Commission (real-time)
+7. System calculates Broker Fee Commission (always 50%)
+8. System calculates Total Agent Commission
+9. Data saved to database
+
+Edit Policy Transaction:
+1. Form loads with existing data
+2. User can edit input fields
+3. System recalculates all formula fields on save
+4. Agent Comm Rate is NOT automatically determined (uses stored value)
+                """, language="text")
+            
+            with formula_tab6:
+                st.markdown("### ⚠️ Known Formula Issues & Inconsistencies")
+                
+                st.error("These issues affect calculation accuracy and user experience")
+                
+                st.markdown("#### 🔴 CRITICAL ISSUE: Agent Comm Rate Inconsistency")
+                st.code("""
+PROBLEM: Agent Commission Rate logic is implemented differently in different places
+
+1. Batch Calculation Function (get_agent_rate):
+   ✅ Correctly checks if Policy Orig Date = Effective Date for END/PCH
+
+2. Add New Policy Form:
+   ⚠️ Always defaults END/PCH to 50% (doesn't check dates)
+   
+3. Edit Transaction Form:
+   ❌ Just shows whatever is in the database (no logic at all)
+   
+IMPACT:
+- END/PCH transactions may have wrong commission rates
+- Users must manually know to check/update the rate
+- No validation that the stored rate matches the business rules
+
+SOLUTION NEEDED:
+- Implement consistent date-checking logic in all forms
+- For Edit form: Look up the NEW transaction for the policy to determine correct rate
+                """, language="text")
+                
+                st.markdown("#### 🟡 Other Known Issues")
+                
+                issues_data = {
+                    "Issue": [
+                        "Edit form doesn't recalculate rates",
+                        "No validation of commission rates",
+                        "Decimal vs percentage confusion",
+                        "No audit trail for formula changes",
+                        "Formula fields can be manually edited in database"
+                    ],
+                    "Impact": [
+                        "Wrong rates stay wrong until manually fixed",
+                        "Users can enter any rate without warning",
+                        "Agent rate stored as 0.50 or 50 inconsistently",
+                        "Can't track when/why calculations changed",
+                        "Database edits bypass all formula logic"
+                    ],
+                    "Severity": [
+                        "High",
+                        "Medium",
+                        "Medium",
+                        "Low",
+                        "High"
+                    ],
+                    "Workaround": [
+                        "Manually verify and update rates",
+                        "User training on correct rates",
+                        "System handles both formats",
+                        "Document changes manually",
+                        "Lock formula fields at database level"
+                    ]
+                }
+                
+                issues_df = pd.DataFrame(issues_data)
+                st.dataframe(issues_df, use_container_width=True, hide_index=True)
+                
+                st.markdown("#### 📊 Formula Validation Checklist")
+                st.info("""
+                When reviewing transactions, check:
+                1. ✓ Is Transaction Type correct?
+                2. ✓ For END/PCH: Does Agent Rate match the Policy Orig Date vs Effective Date rule?
+                3. ✓ Is Agency Commission = Commissionable Premium × Gross Rate?
+                4. ✓ Is Agent Commission = Agency Commission × Agent Rate?
+                5. ✓ Is Broker Fee Commission = Broker Fee × 50%?
+                6. ✓ Is Total Agent Commission = Agent + Broker Fee commissions?
+                7. ✓ Is Balance Due = Agent Estimated - Agent Paid?
+                """)
+        
+        with tab8:
+            st.subheader("📋 Manage Policy Types")
+            
+            # Load current policy types
+            policy_types, allow_custom = load_policy_types()
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.markdown("### Current Policy Types")
+                
+                # Create editable dataframe
+                policy_df = pd.DataFrame(policy_types)
+                
+                # Configure column settings
+                column_config = {
+                    "name": st.column_config.TextColumn("Policy Type Name", help="Name of the policy type"),
+                    "active": st.column_config.CheckboxColumn("Active", help="Whether this type is available for selection"),
+                    "default": st.column_config.CheckboxColumn("Default", help="Set as default selection in forms")
+                }
+                
+                # Edit policy types
+                edited_df = st.data_editor(
+                    policy_df,
+                    column_config=column_config,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    key="policy_types_editor"
+                )
+                
+                # Save changes button
+                if st.button("💾 Save Policy Type Changes", type="primary"):
+                    # Ensure only one default
+                    if edited_df['default'].sum() > 1:
+                        st.error("Only one policy type can be set as default")
+                    else:
+                        # Convert dataframe back to list of dicts
+                        updated_types = edited_df.to_dict('records')
+                        if save_policy_types(updated_types, allow_custom):
+                            st.success("Policy types saved successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Error saving policy types")
+            
+            with col2:
+                st.markdown("### Quick Add New Type")
+                
+                new_type_name = st.text_input("New Policy Type Name")
+                if st.button("➕ Add Policy Type", type="primary", disabled=not new_type_name):
+                    success, message = add_policy_type(new_type_name)
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
+                
+                st.markdown("### Settings")
+                
+                # Allow custom toggle
+                new_allow_custom = st.checkbox(
+                    "Allow Custom Types", 
+                    value=allow_custom,
+                    help="Allow users to add new policy types directly from forms"
+                )
+                
+                if new_allow_custom != allow_custom:
+                    if save_policy_types(policy_types, new_allow_custom):
+                        st.success("Settings updated!")
+                        st.rerun()
+                
+                st.markdown("### Info")
+                st.info(f"""
+                **Active Types**: {sum(1 for pt in policy_types if pt.get('active', True))}  
+                **Total Types**: {len(policy_types)}  
+                **Custom Types Allowed**: {'Yes' if allow_custom else 'No'}
+                """)
     
     # --- Tools ---
     elif page == "Tools":
@@ -6219,7 +7084,7 @@ Agent Commission: ${agency_comm:.2f} × {agent_rate:.0%} = ${agent_comm:.2f}
                         success_msg = f"✅ Commission statement reconciled and saved to history! Statement date: {statement_date.strftime('%m/%d/%Y')}"
                         if main_db_added_count > 0:
                             success_msg += f"\n💾 Added {main_db_added_count} new policy transactions to main policies database"
-                            success_msg += f"\n🔍 View in 'All Policies in Database' or 'Policy Revenue Ledger' pages"
+                            success_msg += f"\n🔍 View in 'All Policy Transactions' or 'Policy Revenue Ledger' pages"
                         st.success(success_msg)
                         
                         # Clear the manual entries ONLY after showing success message
@@ -6608,7 +7473,7 @@ Agent Commission: ${agency_comm:.2f} × {agent_rate:.0%} = ${agent_comm:.2f}
             
             **Quick Start Steps:**
             1. **Add Policy Data**: Use "Add New Policy Transaction" to input your policy information
-            2. **View Data**: Navigate to "All Policies in Database" to see your complete dataset
+            2. **View Data**: Navigate to "All Policy Transactions" to see your complete dataset
             3. **Generate Reports**: Visit the "Reports" section for analytics and summaries
             4. **Manage Accounting**: Use "Accounting" for commission reconciliation and payments
             """)

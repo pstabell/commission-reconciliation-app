@@ -24,17 +24,36 @@
 
 **Agent Estimated Comm $**:
 ```
-Premium Sold × (Policy Gross Comm % ÷ 100) × (Agent Comm % ÷ 100)
+Agency Estimated Comm/Revenue (CRM) × (Agent Comm % ÷ 100)
 ```
 
 **Agency Estimated Comm/Revenue (CRM)**:
 ```
-Premium Sold × (Policy Gross Comm % ÷ 100)
+Commissionable Premium × (Policy Gross Comm % ÷ 100)
 ```
+*Note: Now uses Commissionable Premium (Premium Sold minus taxes/fees) for accurate calculations
 
 **Policy Balance Due**:
 ```
 Agent Estimated Comm $ - Agent Paid Amount (STMT)
+```
+
+### 🆕 Broker Fee & Tax Calculations
+
+**Commissionable Premium**:
+```
+Premium Sold - Policy Taxes & Fees = Commissionable Premium
+```
+
+**Broker Fee Agent Commission**:
+```
+Broker Fee × 0.50 = Broker Fee Agent Comm
+```
+*Note: Broker fee commission is always 50% regardless of transaction type
+
+**Total Agent Commission**:
+```
+Agent Estimated Comm $ + Broker Fee Agent Comm = Total Agent Comm
 ```
 
 ## 📊 Premium Calculations
