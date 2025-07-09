@@ -158,11 +158,81 @@ Identified inconsistency in agent commission rate defaults:
 - Field visibility in different sections
 - Data table display formatting
 
+## Additional Updates (Evening Session)
+
+### 6. Add New Policy Transaction Form Enhancements
+
+#### Success Confirmation
+- **Added** confirmation message that displays for 10 seconds after saving
+- **Implemented** automatic form clearing after successful save
+- **Fixed** fields not clearing: Policy Number, X-DATE, Policy Origination Date
+- **Added** session state keys for proper field reset
+
+#### Form Reorganization
+- **Moved** all fields from "Other Fields" to "Policy Information" section
+- **Reordered** sections: Policy Information now appears before Premium Calculators
+- **Removed** empty "Other Fields" section entirely
+- **Result**: Cleaner, more logical form flow
+
+#### Calculate Button Addition
+- **Added** Calculate button to refresh math before saving
+- **Fixed** Commissionable Premium calculation to work with both calculators
+- **Logic**: Checks which calculator (endorsement or new policy) has non-zero values
+
+#### Field Simplification
+- **Removed** duplicate Policy Gross Comm % from New Policy Premium section
+- **Removed** Agency Revenue from New Policy Premium section
+- **Result**: Eliminated confusion from duplicate fields
+
+### 7. Edit Transaction Form Major Reorganization
+
+#### Field Distribution
+- **Moved** all date fields to "Dates" section:
+  - Effective Date
+  - Policy Origination Date  
+  - X-DATE
+- **Moved** all other fields to "Policy Information" section:
+  - Dividing %
+  - Manual Commission Entry
+  - Notes
+  - Line of Coverage
+- **Removed** empty "Other Fields" section
+
+#### Status & Notes Section
+- **Removed** empty section title when no status fields present
+- **Added** conditional display logic
+
+#### Internal Fields Consolidation
+- **Combined** two separate Internal Fields sections into one
+- **Made** the section collapsible using st.expander
+- **Default**: Collapsed to reduce clutter
+- **Includes**: Both commission internal fields and other read-only fields
+
+#### Date Fields Reorganization
+- **Reordered** date fields for better alignment:
+  - Left column: Effective Date (top), Policy Origination Date (bottom)
+  - Right column: X-DATE (aligned with Effective Date)
+- **Result**: Related dates are visually grouped
+
+#### Additional Improvements
+- **Added** Calculate button to Edit Transaction form
+- **Fixed** date format to MM/DD/YYYY throughout
+- **Added** format="MM/DD/YYYY" to all date inputs
+- **Added** help text for manual date entry
+
+### Backups Created
+- commission_app_20250708_143205_before_add_policy_enhancements.py
+- commission_app_20250708_154020_before_edit_form_reorganization.py
+- commission_app_20250708_231921_edit_form_improvements.py
+
 ## Summary
 
 Today's updates focused on improving user experience through better organization, comprehensive documentation, and consistent formatting. The Formula Documentation tab provides users with complete transparency into calculation logic, while the field reorganization and formatting improvements make data entry and review more intuitive and professional.
 
+The evening session brought significant improvements to both Add New Policy and Edit Transaction forms, including better field organization, success confirmations, calculate buttons, and consistent date formatting.
+
 All changes maintain backward compatibility and data integrity while significantly enhancing the application's usability and professional appearance.
 
 ---
-*Document created: July 8, 2025*
+*Document created: July 8, 2025*  
+*Last updated: July 8, 2025 (Evening)*

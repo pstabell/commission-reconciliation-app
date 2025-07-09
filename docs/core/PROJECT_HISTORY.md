@@ -474,6 +474,31 @@ Major user experience improvements and comprehensive documentation:
 
 ---
 
+### Version 3.2.0 (July 8, 2025 - Evening) - Form Enhancement Update
+Comprehensive improvements to Add New Policy and Edit Transaction forms:
+
+#### Add New Policy Transaction Enhancements
+- Added success confirmation message (10-second display)
+- Implemented automatic form clearing after save
+- Fixed persistent fields (Policy Number, X-DATE, Policy Origination Date)
+- Reorganized form sections for logical flow
+- Added Calculate button for pre-save validation
+- Fixed Commissionable Premium calculation for both calculators
+- Removed duplicate fields causing confusion
+
+#### Edit Transaction Form Overhaul  
+- Reorganized all fields into appropriate sections
+- Consolidated date fields into Dates section
+- Removed empty "Other Fields" and "Status & Notes" sections
+- Combined Internal Fields into collapsible expander
+- Reordered date fields for visual alignment
+- Added Calculate button for formula refresh
+- Standardized date format to MM/DD/YYYY
+
+**Impact**: Forms are now cleaner, more intuitive, and provide better user feedback throughout the data entry process.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 8, 2025*  
-*Current Application Version: 3.1.0*
+*Last Updated: July 8, 2025 (Evening)*  
+*Current Application Version: 3.2.0*

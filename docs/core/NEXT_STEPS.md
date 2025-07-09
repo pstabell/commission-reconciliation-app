@@ -66,6 +66,27 @@ Users no longer need calculators! Automatic commission calculations are now live
    - ✅ Percentage fields show consistent decimal display
    - ✅ Data tables properly formatted for accounting standards
 
+### Evening Session Enhancements (July 8, 2025)
+
+5. **Add New Policy Transaction Form**
+   - ✅ Added success confirmation message (10-second display)
+   - ✅ Implemented automatic form clearing after save
+   - ✅ Fixed persistent fields: Policy Number, X-DATE, Policy Origination Date
+   - ✅ Reorganized sections: Policy Information before Premium Calculators
+   - ✅ Added Calculate button for pre-save validation
+   - ✅ Fixed Commissionable Premium calculation for both calculators
+   - ✅ Removed duplicate Policy Gross Comm % and Agency Revenue fields
+
+6. **Edit Transaction Form Overhaul**
+   - ✅ Moved all date fields to Dates section
+   - ✅ Moved remaining fields to Policy Information section
+   - ✅ Removed empty "Other Fields" section
+   - ✅ Removed empty "Status & Notes" section title
+   - ✅ Combined Internal Fields into single collapsible section
+   - ✅ Reordered date fields: Effective Date and X-DATE aligned
+   - ✅ Added Calculate button for formula refresh
+   - ✅ Standardized date format to MM/DD/YYYY throughout
+
 ---
 
 ## 🎯 Supabase Migration Status (Updated July 3, 2025)
