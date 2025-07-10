@@ -542,6 +542,44 @@ Comprehensive update adding new database fields, improving data accuracy, and en
 
 ---
 
+---
+
+### Version 3.4.0 (July 10, 2025 - Afternoon) - Pending Renewals Enhancement
+Major improvements to the Pending Policy Renewals feature with shared forms and safer workflows:
+
+#### Shared Edit Transaction Form
+- Created reusable `edit_transaction_form()` function used by both pages
+- Single source of truth eliminates duplicate code
+- Consistent editing experience across application
+- Any form changes automatically apply everywhere
+
+#### Renewal Mode Features
+- Transaction Type locked to "RWL" for renewals
+- Policy Origination Date preserved as read-only
+- Effective Date auto-populates from previous expiration
+- X-DATE calculates based on Policy Term
+- Commission fields clear for fresh entry
+- New Transaction ID displayed as grayed-out pending field
+
+#### Safe Edit Workflow
+- Removed confusing dual checkbox columns
+- Single Edit checkbox column with clear purpose
+- "Edit Selected Pending Renewal" button below table
+- Button only enables when exactly one policy selected
+- Clear error messages prevent multiple selections
+- Bulletproof workflow prevents accidental batch renewals
+
+#### Form Reorganization
+- Premium Information section
+- Carrier Taxes & Fees section with calculations
+- Commission Details with logical field grouping
+- Additional Fields section with Policy Checklist Complete
+- All calculated fields show formulas in tooltips
+
+**Impact**: Dramatically improved renewal processing workflow with consistent forms, safer operations, and intelligent field handling. Reduced maintenance burden through code reuse.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 10, 2025*  
-*Current Application Version: 3.3.0*
+*Last Updated: July 10, 2025 (Afternoon)*  
+*Current Application Version: 3.4.0*

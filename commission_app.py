@@ -1948,6 +1948,607 @@ def duplicate_for_renewal(df: pd.DataFrame) -> pd.DataFrame:
     
     return renewed_df
 
+def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=False):
+    """
+    Reusable edit transaction form that can be used from both 
+    Edit Policy Transactions and Pending Policy Renewals pages.
+    
+    Args:
+        modal_data: Dictionary containing the transaction data to edit
+        source_page: String indicating which page called this form
+        is_renewal: Boolean indicating if this is for a renewal
+    
+    Returns:
+        Dict with 'action' and 'data' keys if form was submitted, None otherwise
+    """
+    # Get transaction ID column name
+    transaction_id_col = get_mapped_column("Transaction ID")
+    
+    # Remove the Select column from modal data if present
+    if 'Select' in modal_data:
+        del modal_data['Select']
+    
+    # Get transaction ID and customer name for header
+    transaction_id = modal_data.get(transaction_id_col, 'Unknown')
+    customer_name = modal_data.get('Customer', 'Unknown')
+    
+    # Check if this is a reconciliation transaction (only for non-renewals)
+    if not is_renewal and is_reconciliation_transaction(transaction_id):
+        st.error("🔒 This is a reconciliation transaction and cannot be edited.")
+        st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
+        if st.button("Close", type="primary"):
+            return {"action": "close", "data": None}
+        return None
+    
+    # Form title based on context
+    if is_renewal:
+        st.info(f"**Reviewing renewal for Policy:** {modal_data.get('Policy Number', 'Unknown')} | **Customer:** {customer_name}")
+    else:
+        st.info(f"**Transaction ID:** {transaction_id} | **Customer:** {customer_name}")
+    
+    # Create form
+    with st.form("edit_transaction_form"):
+        # For renewals, show the new Transaction ID at the top
+        if is_renewal:
+            st.text_input(
+                "New Transaction ID (Pending)",
+                value=transaction_id,
+                disabled=True,
+                help="This is the new Transaction ID that will be assigned to the renewal transaction"
+            )
+        # Track updated values
+        updated_data = {}
+        
+        # Define internal system fields that should be read-only
+        internal_fields = [
+            'reconciliation_status', 
+            'reconciliation_id', 
+            'reconciled_at', 
+            'is_reconciliation_entry',
+            '_id',
+            'Client ID',
+            'Client ID (CRM)',
+            'STMT DATE',
+            'Agency Comm Received (STMT)',
+            'Agent Paid Amount (STMT)'
+        ]
+        
+        # Add renewal-specific read-only fields
+        if is_renewal:
+            internal_fields.append('Policy Origination Date')
+        
+        # Define field groups for better organization
+        client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
+        policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+        date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
+        commission_fields = [
+            'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
+            'Agency Estimated Comm/Revenue (CRM)', 
+            'Policy Gross Comm %', 'Agent Estimated Comm $',
+            'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
+            'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
+            'Broker Fee Agent Comm', 'Total Agent Comm'
+        ]
+        status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
+        
+        # Client Information
+        st.markdown("#### Client Information")
+        col1, col2 = st.columns(2)
+        
+        field_counter = 0
+        for field in modal_data.keys():
+            # Skip internal fields - they'll be shown at the bottom
+            if field in client_fields and field not in internal_fields:
+                with col1 if field_counter % 2 == 0 else col2:
+                    updated_data[field] = st.text_input(
+                        field, 
+                        value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                        key=f"modal_{field}"
+                    )
+                field_counter += 1
+        
+        # Policy Information
+        st.markdown("#### Policy Information")
+        col3, col4 = st.columns(2)
+        
+        # Handle Carrier Name and MGA Name first to ensure they're at the top
+        with col3:
+            if 'Carrier Name' in modal_data.keys():
+                updated_data['Carrier Name'] = st.text_input(
+                    'Carrier Name', 
+                    value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
+                    key="modal_Carrier Name"
+                )
+        
+        with col4:
+            if 'MGA Name' in modal_data.keys():
+                updated_data['MGA Name'] = st.text_input(
+                    'MGA Name', 
+                    value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
+                    key="modal_MGA Name"
+                )
+        
+        # Handle Transaction Type and Policy Term together
+        col5, col6 = st.columns(2)
+        with col5:
+            if 'Transaction Type' in modal_data.keys():
+                # Transaction type dropdown
+                transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
+                current_trans_type = modal_data.get('Transaction Type', 'RWL' if is_renewal else 'NEW')
+                
+                # For renewals, lock to RWL
+                if is_renewal:
+                    updated_data['Transaction Type'] = st.selectbox(
+                        'Transaction Type',
+                        options=['RWL'],
+                        index=0,
+                        key="modal_Transaction Type",
+                        disabled=True,
+                        help="Renewal transactions are always RWL"
+                    )
+                else:
+                    updated_data['Transaction Type'] = st.selectbox(
+                        'Transaction Type',
+                        options=transaction_types,
+                        index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
+                        key="modal_Transaction Type"
+                    )
+        
+        with col6:
+            if 'Policy Term' in modal_data.keys():
+                # Policy Term dropdown
+                policy_terms = [3, 6, 9, 12]
+                current_term = modal_data.get('Policy Term', None)
+                # Handle the display
+                if current_term is None or pd.isna(current_term):
+                    selected_index = 0
+                else:
+                    try:
+                        selected_index = policy_terms.index(int(current_term)) + 1
+                    except (ValueError, TypeError):
+                        selected_index = 0
+                
+                updated_data['Policy Term'] = st.selectbox(
+                    'Policy Term',
+                    options=[None] + policy_terms,
+                    format_func=lambda x: "" if x is None else f"{x} months",
+                    index=selected_index,
+                    key="modal_Policy Term",
+                    help="Select policy duration in months"
+                )
+        
+        # Now handle the rest of the policy fields
+        field_counter = 0
+        for field in modal_data.keys():
+            if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+                with col3 if field_counter % 2 == 0 else col4:
+                    if field == 'Policy Type':
+                        # Load policy types from configuration
+                        policy_types_config = load_policy_types_config()
+                        active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
+                        
+                        # Get current value
+                        current_policy_type = modal_data.get(field, '')
+                        
+                        # Ensure current value is in options
+                        options = active_types.copy()
+                        if current_policy_type and current_policy_type not in options:
+                            options.insert(0, current_policy_type)
+                        
+                        updated_data[field] = st.selectbox(
+                            field + " (add in Admin Panel or table above)",
+                            options=options,
+                            index=options.index(current_policy_type) if current_policy_type in options else 0,
+                            key=f"modal_{field}_select",
+                            help="To add new types: Admin Panel or use the editable table above"
+                        )
+                    else:
+                        # Regular text input
+                        updated_data[field] = st.text_input(
+                            field, 
+                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                            key=f"modal_{field}"
+                        )
+                field_counter += 1
+        
+        
+        # Date Fields
+        st.markdown("#### Dates")
+        col5, col6 = st.columns(2)
+        
+        # Left column - Effective Date first, then Policy Origination Date
+        with col5:
+            # Effective Date
+            if 'Effective Date' in modal_data.keys():
+                date_value = modal_data.get('Effective Date')
+                if date_value and pd.notna(date_value):
+                    try:
+                        parsed_date = pd.to_datetime(date_value)
+                        updated_data['Effective Date'] = st.date_input(
+                            'Effective Date',
+                            value=parsed_date.date(),
+                            key="modal_Effective Date",
+                            format="MM/DD/YYYY"
+                        )
+                    except:
+                        updated_data['Effective Date'] = st.text_input(
+                            'Effective Date',
+                            value=str(date_value),
+                            key="modal_Effective Date",
+                            help="Enter date in MM/DD/YYYY format"
+                        )
+                else:
+                    updated_data['Effective Date'] = st.date_input(
+                        'Effective Date',
+                        value=None,
+                        key="modal_Effective Date",
+                        format="MM/DD/YYYY"
+                    )
+            
+            # Policy Origination Date (read-only for renewals)
+            if 'Policy Origination Date' in modal_data.keys():
+                date_value = modal_data.get('Policy Origination Date')
+                if is_renewal:
+                    # For renewals, show as read-only text
+                    st.text_input(
+                        'Policy Origination Date (preserved)',
+                        value=str(date_value) if date_value else '',
+                        key="modal_Policy Origination Date_display",
+                        disabled=True,
+                        help="Original policy date is preserved for renewals"
+                    )
+                    updated_data['Policy Origination Date'] = date_value
+                else:
+                    # For regular edits, allow date input
+                    if date_value and pd.notna(date_value):
+                        try:
+                            parsed_date = pd.to_datetime(date_value)
+                            updated_data['Policy Origination Date'] = st.date_input(
+                                'Policy Origination Date',
+                                value=parsed_date.date(),
+                                key="modal_Policy Origination Date",
+                                format="MM/DD/YYYY"
+                            )
+                        except:
+                            updated_data['Policy Origination Date'] = st.text_input(
+                                'Policy Origination Date',
+                                value=str(date_value),
+                                key="modal_Policy Origination Date",
+                                help="Enter date in MM/DD/YYYY format"
+                            )
+                    else:
+                        updated_data['Policy Origination Date'] = st.date_input(
+                            'Policy Origination Date',
+                            value=None,
+                            key="modal_Policy Origination Date",
+                            format="MM/DD/YYYY"
+                        )
+        
+        # Right column - X-DATE only (aligned with Effective Date)
+        with col6:
+            # X-DATE
+            if 'X-DATE' in modal_data.keys():
+                date_value = modal_data.get('X-DATE')
+                if date_value and pd.notna(date_value):
+                    try:
+                        parsed_date = pd.to_datetime(date_value)
+                        updated_data['X-DATE'] = st.date_input(
+                            'X-DATE (Expiration)',
+                            value=parsed_date.date(),
+                            key="modal_X-DATE",
+                            format="MM/DD/YYYY"
+                        )
+                    except:
+                        updated_data['X-DATE'] = st.text_input(
+                            'X-DATE (Expiration)',
+                            value=str(date_value),
+                            key="modal_X-DATE",
+                            help="Enter date in MM/DD/YYYY format"
+                        )
+                else:
+                    updated_data['X-DATE'] = st.date_input(
+                        'X-DATE (Expiration)',
+                        value=None,
+                        key="modal_X-DATE",
+                        format="MM/DD/YYYY"
+                    )
+        
+        # Premium Information
+        st.markdown("#### Premium Information")
+        if 'Premium Sold' in modal_data.keys():
+            value = modal_data.get('Premium Sold', 0)
+            if is_renewal:
+                value = value if value else 0
+            try:
+                numeric_value = float(value) if pd.notna(value) else 0.0
+                updated_data['Premium Sold'] = st.number_input(
+                    'Premium Sold',
+                    value=numeric_value,
+                    step=0.01,
+                    format="%.2f",
+                    key="modal_Premium Sold"
+                )
+            except:
+                updated_data['Premium Sold'] = st.text_input(
+                    'Premium Sold',
+                    value=str(value),
+                    key="modal_Premium Sold"
+                )
+        
+        # Carrier Taxes & Fees
+        st.markdown("#### Carrier Taxes & Fees")
+        col7, col8 = st.columns(2)
+        
+        with col7:
+            if 'Policy Taxes & Fees' in modal_data.keys():
+                value = modal_data.get('Policy Taxes & Fees', 0)
+                if is_renewal:
+                    value = 0
+                try:
+                    numeric_value = float(value) if pd.notna(value) else 0.0
+                    updated_data['Policy Taxes & Fees'] = st.number_input(
+                        'Policy Taxes & Fees',
+                        value=numeric_value,
+                        step=0.01,
+                        format="%.2f",
+                        key="modal_Policy Taxes & Fees"
+                    )
+                except:
+                    updated_data['Policy Taxes & Fees'] = st.text_input(
+                        'Policy Taxes & Fees',
+                        value=str(value),
+                        key="modal_Policy Taxes & Fees"
+                    )
+        
+        with col8:
+            # Commissionable Premium (calculated field)
+            premium_sold = updated_data.get('Premium Sold', modal_data.get('Premium Sold', 0))
+            taxes_fees = updated_data.get('Policy Taxes & Fees', modal_data.get('Policy Taxes & Fees', 0))
+            try:
+                premium_sold = float(premium_sold) if pd.notna(premium_sold) else 0.0
+                taxes_fees = float(taxes_fees) if pd.notna(taxes_fees) else 0.0
+                commissionable_premium = premium_sold - taxes_fees
+            except:
+                commissionable_premium = 0.0
+            
+            st.number_input(
+                'Commissionable Premium',
+                value=commissionable_premium,
+                format="%.2f",
+                key="modal_Commissionable Premium_display",
+                disabled=True,
+                help=f"Premium Sold - Policy Taxes & Fees = ${premium_sold:.2f} - ${taxes_fees:.2f} = ${commissionable_premium:.2f}"
+            )
+            updated_data['Commissionable Premium'] = commissionable_premium
+        
+        # Commission Details
+        st.markdown("#### Commission Details")
+        
+        # Row 1: Policy Gross Comm % and Agency Estimated Comm/Revenue
+        col9, col10 = st.columns(2)
+        
+        with col9:
+            if 'Policy Gross Comm %' in modal_data.keys():
+                value = modal_data.get('Policy Gross Comm %', 0)
+                if is_renewal:
+                    value = 0
+                try:
+                    numeric_value = float(value) if pd.notna(value) else 0.0
+                    updated_data['Policy Gross Comm %'] = st.number_input(
+                        'Policy Gross Comm %',
+                        value=numeric_value,
+                        step=0.01,
+                        format="%.2f",
+                        key="modal_Policy Gross Comm %"
+                    )
+                except:
+                    updated_data['Policy Gross Comm %'] = st.text_input(
+                        'Policy Gross Comm %',
+                        value=str(value),
+                        key="modal_Policy Gross Comm %"
+                    )
+        
+        with col10:
+            # Agency Estimated Comm/Revenue (calculated)
+            gross_comm_pct = updated_data.get('Policy Gross Comm %', modal_data.get('Policy Gross Comm %', 0))
+            try:
+                gross_comm_pct = float(gross_comm_pct) if pd.notna(gross_comm_pct) else 0.0
+                agency_comm = commissionable_premium * (gross_comm_pct / 100)
+            except:
+                agency_comm = 0.0
+            
+            st.number_input(
+                'Agency Estimated Comm/Revenue (CRM)',
+                value=agency_comm,
+                format="%.2f",
+                key="modal_Agency Estimated Comm_display",
+                disabled=True,
+                help=f"Commissionable Premium × Policy Gross Comm % = ${commissionable_premium:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}"
+            )
+            updated_data['Agency Estimated Comm/Revenue (CRM)'] = agency_comm
+        
+        # Row 2: Agent Comm % and Agent Estimated Comm $
+        col11, col12 = st.columns(2)
+        
+        with col11:
+            if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
+                value = modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0)
+                if is_renewal:
+                    value = 25.0  # Default to 25% for renewals
+                try:
+                    numeric_value = float(value) if pd.notna(value) else 0.0
+                    updated_data['Agent Comm (NEW 50% RWL 25%)'] = st.number_input(
+                        'Agent Comm (NEW 50% RWL 25%)',
+                        value=numeric_value,
+                        step=0.01,
+                        format="%.2f",
+                        key="modal_Agent Comm %"
+                    )
+                except:
+                    updated_data['Agent Comm (NEW 50% RWL 25%)'] = st.text_input(
+                        'Agent Comm (NEW 50% RWL 25%)',
+                        value=str(value),
+                        key="modal_Agent Comm %"
+                    )
+        
+        with col12:
+            # Agent Estimated Comm $ (calculated)
+            agent_comm_pct = updated_data.get('Agent Comm (NEW 50% RWL 25%)', modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0))
+            try:
+                agent_comm_pct = float(agent_comm_pct) if pd.notna(agent_comm_pct) else 0.0
+                agent_comm = agency_comm * (agent_comm_pct / 100)
+            except:
+                agent_comm = 0.0
+            
+            st.number_input(
+                'Agent Estimated Comm $',
+                value=agent_comm,
+                format="%.2f",
+                key="modal_Agent Estimated Comm_display",
+                disabled=True,
+                help=f"Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_pct:.2f}% = ${agent_comm:.2f}"
+            )
+            updated_data['Agent Estimated Comm $'] = agent_comm
+        
+        # Row 3: Broker Fee and Broker Fee Agent Comm
+        col13, col14 = st.columns(2)
+        
+        with col13:
+            if 'Broker Fee' in modal_data.keys():
+                value = modal_data.get('Broker Fee', 0)
+                if is_renewal:
+                    value = 0
+                try:
+                    numeric_value = float(value) if pd.notna(value) else 0.0
+                    updated_data['Broker Fee'] = st.number_input(
+                        'Broker Fee',
+                        value=numeric_value,
+                        step=0.01,
+                        format="%.2f",
+                        key="modal_Broker Fee"
+                    )
+                except:
+                    updated_data['Broker Fee'] = st.text_input(
+                        'Broker Fee',
+                        value=str(value),
+                        key="modal_Broker Fee"
+                    )
+        
+        with col14:
+            # Broker Fee Agent Comm (calculated - 50% of broker fee)
+            broker_fee = updated_data.get('Broker Fee', modal_data.get('Broker Fee', 0))
+            try:
+                broker_fee = float(broker_fee) if pd.notna(broker_fee) else 0.0
+                broker_fee_agent = broker_fee * 0.50
+            except:
+                broker_fee_agent = 0.0
+            
+            st.number_input(
+                'Broker Fee Agent Comm',
+                value=broker_fee_agent,
+                format="%.2f",
+                key="modal_Broker Fee Agent Comm_display",
+                disabled=True,
+                help="50% of broker fee"
+            )
+            updated_data['Broker Fee Agent Comm'] = broker_fee_agent
+        
+        # Total Agent Comm (full width)
+        total_agent_comm = agent_comm + broker_fee_agent
+        st.number_input(
+            'Total Agent Comm',
+            value=total_agent_comm,
+            format="%.2f",
+            key="modal_Total Agent Comm_display",
+            disabled=True,
+            help=f"Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
+        )
+        updated_data['Total Agent Comm'] = total_agent_comm
+        
+        # Additional Fields
+        st.markdown("#### Additional Fields")
+        col15, col16 = st.columns(2)
+        
+        with col15:
+            # Policy Checklist Complete - always show this field
+            current_val = str(modal_data.get('Policy Checklist Complete', 'No')).upper() == 'YES'
+            # For renewals, default to unchecked
+            if is_renewal:
+                current_val = False
+            updated_data['Policy Checklist Complete'] = 'Yes' if st.checkbox(
+                'Policy Checklist Complete',
+                value=current_val,
+                key="modal_Policy Checklist Complete"
+            ) else 'No'
+        
+        with col16:
+            # FULL OR MONTHLY PMTS - always show this field
+            payment_types = ["FULL", "MONTHLY", ""]
+            current_payment = modal_data.get('FULL OR MONTHLY PMTS', '')
+            updated_data['FULL OR MONTHLY PMTS'] = st.selectbox(
+                'FULL OR MONTHLY PMTS',
+                options=payment_types,
+                index=payment_types.index(current_payment) if current_payment in payment_types else 2,
+                key="modal_FULL OR MONTHLY PMTS"
+            )
+        
+        # NOTES - Full width (always show)
+        updated_data['NOTES'] = st.text_area(
+            'NOTES',
+            value=str(modal_data.get('NOTES', '')) if modal_data.get('NOTES') is not None else '',
+            key="modal_NOTES",
+            height=70
+        )
+        
+        # Calculate button
+        if st.form_submit_button("Calculate", type="secondary"):
+            st.info("Calculations will be performed when you save the transaction.")
+        
+        # Internal Fields (collapsed by default)
+        with st.expander("Internal Fields", expanded=False):
+            internal_col1, internal_col2 = st.columns(2)
+            
+            field_counter = 0
+            for field in modal_data.keys():
+                if field in internal_fields or field.startswith('_') or field in ['reconciliation_status', 'reconciliation_id', 'reconciled_at']:
+                    with internal_col1 if field_counter % 2 == 0 else internal_col2:
+                        value = modal_data.get(field, '')
+                        st.text_input(
+                            field,
+                            value=str(value) if value is not None else '',
+                            key=f"modal_{field}_internal",
+                            disabled=True
+                        )
+                        updated_data[field] = value  # Preserve internal field values
+                    field_counter += 1
+        
+        # Form buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            save_button_text = "Renew Policy" if is_renewal else "Save Changes"
+            save_button = st.form_submit_button(save_button_text, type="primary", use_container_width=True)
+        
+        with col2:
+            cancel_button = st.form_submit_button("Cancel", use_container_width=True)
+        
+        if save_button:
+            # Convert date objects to strings
+            for field, value in updated_data.items():
+                if isinstance(value, datetime.date):
+                    updated_data[field] = value.strftime('%m/%d/%Y')
+            
+            # Merge updated data with original data
+            final_data = modal_data.copy()
+            final_data.update(updated_data)
+            
+            return {"action": "save", "data": final_data}
+        
+        if cancel_button:
+            return {"action": "cancel", "data": None}
+    
+    return None
+
 def main():
     # Check password before showing any content
     if not check_password():
@@ -3084,7 +3685,7 @@ def main():
                                     
                                     # Define field groups for better organization
                                     client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-                                    policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'NEW BIZ CHECKLIST COMPLETE', 'FULL OR MONTHLY PMTS', 'NOTES']
+                                    policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
                                     date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
                                     commission_fields = [
                                         'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -3170,7 +3771,7 @@ def main():
                                     # Now handle the rest of the policy fields
                                     field_counter = 0
                                     for field in modal_data.keys():
-                                        if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'NEW BIZ CHECKLIST COMPLETE', 'FULL OR MONTHLY PMTS', 'NOTES']:
+                                        if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
                                             with col3 if field_counter % 2 == 0 else col4:
                                                 if field == 'Policy Type':
                                                     # Load policy types from configuration
@@ -3201,17 +3802,17 @@ def main():
                                                     )
                                             field_counter += 1
                                     
-                                    # Bottom fields - NEW BIZ CHECKLIST COMPLETE, FULL OR MONTHLY PMTS, and NOTES
+                                    # Bottom fields - Policy Checklist Complete, FULL OR MONTHLY PMTS, and NOTES
                                     col7, col8 = st.columns(2)
                                     
                                     with col7:
-                                        # NEW BIZ CHECKLIST COMPLETE
-                                        if 'NEW BIZ CHECKLIST COMPLETE' in modal_data.keys():
-                                            current_val = str(modal_data.get('NEW BIZ CHECKLIST COMPLETE', 'No')).upper() == 'YES'
-                                            updated_data['NEW BIZ CHECKLIST COMPLETE'] = 'Yes' if st.checkbox(
-                                                'NEW BIZ CHECKLIST COMPLETE',
+                                        # Policy Checklist Complete
+                                        if 'Policy Checklist Complete' in modal_data.keys():
+                                            current_val = str(modal_data.get('Policy Checklist Complete', 'No')).upper() == 'YES'
+                                            updated_data['Policy Checklist Complete'] = 'Yes' if st.checkbox(
+                                                'Policy Checklist Complete',
                                                 value=current_val,
-                                                key="modal_NEW BIZ CHECKLIST COMPLETE"
+                                                key="modal_Policy Checklist Complete"
                                             ) else 'No'
                                     
                                     with col8:
@@ -4067,7 +4668,7 @@ def main():
             # Row 5: Checklist and Notes
             col1, col2 = st.columns(2)
             with col1:
-                new_biz_checklist = st.checkbox("NEW BIZ CHECKLIST COMPLETE")
+                policy_checklist = st.checkbox("Policy Checklist Complete")
             with col2:
                 notes = st.text_area("NOTES", placeholder="Enter any additional notes...", height=70)
             
@@ -4195,7 +4796,7 @@ def main():
                             "Policy Origination Date": policy_orig_date.strftime('%m/%d/%Y'),
                             "Effective Date": effective_date.strftime('%m/%d/%Y'),
                             "X-DATE": x_date.strftime('%m/%d/%Y'),
-                            "NEW BIZ CHECKLIST COMPLETE": "Yes" if new_biz_checklist else "No",
+                            "Policy Checklist Complete": "Yes" if policy_checklist else "No",
                             "Premium Sold": clean_numeric_value(premium_for_calculation),
                             "Policy Taxes & Fees": clean_numeric_value(policy_taxes_fees),
                             "Commissionable Premium": clean_numeric_value(commissionable_premium),
@@ -5471,7 +6072,7 @@ def main():
                                     'Agency Comm Received (STMT)': 0,
                                     'Agent Paid Amount (STMT)': 0,
                                     'STMT DATE': adj_date.date(),
-                                    'NEW BIZ CHECKLIST COMPLETE': orig_row.get('NEW BIZ CHECKLIST COMPLETE', ''),
+                                    'Policy Checklist Complete': orig_row.get('Policy Checklist Complete', ''),
                                     'NOTES': f"ADJUSTMENT for {trans_id}: {adjustment_reason}",
                                     'reconciliation_status': 'adjustment',
                                     'reconciliation_id': f"ADJ-{trans_id}",
@@ -8264,8 +8865,13 @@ TO "New Column Name";
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
         
+        # Initialize session state
         if 'deleted_renewals' not in st.session_state:
             st.session_state['deleted_renewals'] = []
+        if 'editing_renewal' not in st.session_state:
+            st.session_state.editing_renewal = False
+        if 'renewal_to_edit' not in st.session_state:
+            st.session_state.renewal_to_edit = None
 
         pending_renewals_df = get_pending_renewals(all_data)
         duplicated_renewals_df = duplicate_for_renewal(pending_renewals_df)
@@ -8277,58 +8883,154 @@ TO "New Column Name";
             display_df = pd.DataFrame()
 
         if not display_df.empty:
-            display_df.insert(0, "Select", False)
-            edited_df = st.data_editor(display_df)
+            # Format dates to MM/DD/YYYY before displaying
+            date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE']
+            for col in date_columns:
+                if col in display_df.columns:
+                    # Convert to datetime, then to string with MM/DD/YYYY format
+                    display_df[col] = pd.to_datetime(display_df[col], errors='coerce').dt.strftime('%m/%d/%Y')
             
-            selected_rows = edited_df[edited_df["Select"]]
+            # Add Edit checkbox column only
+            display_df.insert(0, "Edit", False)
             
-            if st.button("Renew Selected"):
-                renewed_rows = selected_rows.drop(columns=["Select"])
+            # Configure the data editor
+            column_config = {
+                "Edit": st.column_config.CheckboxColumn(
+                    "Edit",
+                    help="Check to select for editing",
+                    default=False
+                )
+            }
+            
+            # Configure numeric columns
+            numeric_cols = [
+                'Premium Sold', 'Agency Estimated Comm/Revenue (CRM)', 
+                'Policy Gross Comm %', 'Agent Estimated Comm $'
+            ]
+            for col in numeric_cols:
+                if col in display_df.columns:
+                    column_config[col] = st.column_config.NumberColumn(
+                        col,
+                        format="$%.2f" if '$' in col else "%.2f",
+                        step=0.01
+                    )
+            
+            edited_df = st.data_editor(
+                display_df,
+                column_config=column_config,
+                hide_index=True,
+                key="pending_renewals_editor"
+            )
+            
+            # Show the edit form if we're in editing mode
+            if st.session_state.editing_renewal and st.session_state.renewal_to_edit:
+                st.divider()
+                st.markdown("### 📝 Edit Renewal Transaction")
                 
-                try:
-                    # Insert renewed policies via Supabase
-                    for _, row in renewed_rows.iterrows():
-                        renewal_data = row.to_dict()
-                        # Handle NaN values
-                        for key, value in renewal_data.items():
-                            if pd.isna(value):
-                                renewal_data[key] = None
+                # Prepare renewal data (pre-populate with calculated values)
+                renewal_data = st.session_state.renewal_to_edit.copy()
+                
+                # Generate new Transaction ID
+                renewal_data['Transaction ID'] = generate_transaction_id()
+                
+                # Clear commission fields for renewal
+                fields_to_clear = [
+                    'Premium Sold', 'Commissionable Premium', 'Commission %', 
+                    'Commission $', 'Producer Commission %', 'Producer Commission $',
+                    'Override %', 'Override Commission', 'Commission Already Earned',
+                    'Commission Already Received', 'Balance Owed', 'Renewal/Bonus Percentage',
+                    'Renewal Amount', 'Not Paid/Paid', 'Agent Paid Amount (STMT)',
+                    'Agency Comm Received (STMT)'
+                ]
+                for field in fields_to_clear:
+                    if field in renewal_data:
+                        renewal_data[field] = None
+                
+                # Use the edit transaction form
+                result = edit_transaction_form(
+                    renewal_data, 
+                    source_page="pending_renewals",
+                    is_renewal=True
+                )
+                
+                if result:
+                    if result["action"] == "save":
                         try:
-                            supabase.table('policies').insert(renewal_data).execute()
-                        except Exception as e:
-                            st.error(f"Error inserting renewal: {e}")
-                    clear_policies_cache()
-                    
-                    # Log the renewal
-                    if renewed_rows is not None and not renewed_rows.empty:
-                        try:
-                            # Get the transaction IDs  
-                            renewed_ids = renewed_rows['Transaction ID'].tolist() if 'Transaction ID' in renewed_rows.columns else []
-                            selected_transaction_ids = selected_rows['Transaction ID'].tolist() if 'Transaction ID' in selected_rows.columns else []
+                            # Insert the new renewal transaction
+                            new_renewal = result["data"]
                             
-                            # Save renewal history to Supabase
-                            renewal_history_data = {
-                                "renewal_timestamp": datetime.datetime.now().isoformat(),
-                                "renewed_by": "User",
-                                "original_transaction_id": ",".join(selected_transaction_ids) if selected_transaction_ids else "",
-                                "new_transaction_id": ",".join(renewed_ids) if renewed_ids else "",
-                                "details": json.dumps({"count": len(renewed_rows), "renewed_ids": renewed_ids})
-                            }
-                            supabase.table('renewal_history').insert(renewal_history_data).execute()
+                            # Handle NaN values
+                            for key, value in new_renewal.items():
+                                if pd.isna(value):
+                                    new_renewal[key] = None
+                            
+                            # Insert to database
+                            supabase.table('policies').insert(new_renewal).execute()
+                            clear_policies_cache()
+                            
+                            # Log the renewal
+                            try:
+                                renewal_history_data = {
+                                    "renewal_timestamp": datetime.datetime.now().isoformat(),
+                                    "renewed_by": "User",
+                                    "original_transaction_id": st.session_state.renewal_to_edit.get('Transaction ID', ''),
+                                    "new_transaction_id": new_renewal.get('Transaction ID', ''),
+                                    "details": json.dumps({
+                                        "count": 1, 
+                                        "renewed_ids": [new_renewal.get('Transaction ID', '')]
+                                    })
+                                }
+                                supabase.table('renewal_history').insert(renewal_history_data).execute()
+                            except Exception as e:
+                                st.warning(f"Renewal saved but history logging failed: {e}")
+                            
+                            st.success("✅ Policy renewed successfully!")
+                            
+                            # Remove from pending list
+                            original_index = None
+                            for idx in display_df.index:
+                                if display_df.loc[idx, 'Policy Number'] == st.session_state.renewal_to_edit.get('Policy Number'):
+                                    original_index = idx
+                                    break
+                            if original_index is not None:
+                                st.session_state['deleted_renewals'].append(original_index)
+                            
+                            # Reset editing state
+                            st.session_state.editing_renewal = False
+                            st.session_state.renewal_to_edit = None
+                            time.sleep(1)
+                            st.rerun()
+                            
                         except Exception as e:
-                            st.error(f"Error saving renewal history: {e}")
+                            st.error(f"Error creating renewal: {e}")
                     
-                    st.success(f"{len(renewed_rows)} policies renewed successfully!")
-                    # Remove renewed items from the pending list
-                    st.session_state['deleted_renewals'].extend(selected_rows.index.tolist())
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"An error occurred during renewal: {e}")
+                    elif result["action"] == "cancel" or result["action"] == "close":
+                        # Reset editing state
+                        st.session_state.editing_renewal = False
+                        st.session_state.renewal_to_edit = None
+                        st.rerun()
             
-            if st.button("Delete Selected"):
-                st.session_state['deleted_renewals'].extend(selected_rows.index.tolist())
-                st.rerun()
+            else:
+                # Edit button below the table
+                st.markdown("---")
+                
+                # Check for Edit selections
+                edit_selected_rows = edited_df[edited_df["Edit"] == True]
+                selected_count = len(edit_selected_rows)
+                
+                if selected_count == 1:
+                    if st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True):
+                        # Get the row where Edit is checked
+                        row_to_edit = edit_selected_rows.iloc[0]
+                        st.session_state.editing_renewal = True
+                        st.session_state.renewal_to_edit = row_to_edit.to_dict()
+                        st.rerun()
+                elif selected_count == 0:
+                    st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True, 
+                             disabled=True, help="Check one Edit checkbox to edit")
+                else:
+                    st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True, 
+                             disabled=True, help=f"{selected_count} selected - please select only ONE renewal to edit")
         else:
             st.info("No policies are pending renewal at this time.")
 # Call main function

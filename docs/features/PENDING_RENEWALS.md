@@ -27,6 +27,10 @@ The Pending Policy Renewals feature is now live with the following capabilities:
 - Added Policy Term field to database and UI
 - Updated renewal calculation to use actual policy terms instead of hardcoded 6 months
 - 98 existing policies automatically assigned terms based on date calculations
+- Implemented shared Edit Transaction form for consistent editing experience
+- Added safe single-edit workflow with "Edit Selected Pending Renewal" button
+- Fixed date format display (MM/DD/YYYY throughout)
+- Changed "New Biz Checklist Complete" to "Policy Checklist Complete" universally
 
 ---
 

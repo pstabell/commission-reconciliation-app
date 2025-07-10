@@ -60,7 +60,7 @@ class ColumnMapper:
             "Statement Date": "STMT DATE",
             "STMT DATE": "STMT DATE",
               # Status fields
-            "NEW BIZ CHECKLIST COMPLETE": "NEW BIZ CHECKLIST COMPLETE",
+            "Policy Checklist Complete": "Policy Checklist Complete",
             
             # Reconciliation fields
             "reconciliation_status": "reconciliation_status",
