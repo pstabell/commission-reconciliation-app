@@ -1998,6 +1998,9 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     # Get transaction ID column name
     transaction_id_col = get_mapped_column("Transaction ID")
     
+    # Track all rendered fields to prevent duplicates
+    rendered_fields = set()
+    
     # Remove the Select column from modal data if present
     if 'Select' in modal_data:
         del modal_data['Select']
@@ -2079,6 +2082,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
                         key=f"modal_{field}"
                     )
+                    rendered_fields.add(field)  # Track rendered field
                 field_counter += 1
         
         # Policy Information
@@ -2093,6 +2097,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
                     key="modal_Carrier Name"
                 )
+                rendered_fields.add('Carrier Name')
         
         with col4:
             if 'MGA Name' in modal_data.keys():
@@ -2101,6 +2106,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
                     key="modal_MGA Name"
                 )
+                rendered_fields.add('MGA Name')
             
             # Policy Type in right column, second position
             if 'Policy Type' in modal_data.keys():
@@ -2123,6 +2129,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     key="modal_Policy Type",
                     help="Go to Admin Panel → Policy Types to add new types"
                 )
+                rendered_fields.add('Policy Type')
         
         # Second row - Transaction Type 
         with col3:
@@ -2148,6 +2155,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
                         key="modal_Transaction Type"
                     )
+                    rendered_fields.add('Transaction Type')
         
         # Now handle the rest of the policy fields
         field_counter = 0
@@ -4204,9 +4212,6 @@ def main():
                                                         key=f"modal_{field}"
                                                     )
                                     
-                                    # Internal Commission Fields (Reconciliation) - will be combined with other internal fields below
-                                    commission_internal_fields = ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)', 'STMT DATE']
-                                    
                                     # Status Fields - only show if there are any
                                     status_fields_present = [f for f in modal_data.keys() if f in status_fields]
                                     if status_fields_present:
@@ -4234,10 +4239,12 @@ def main():
                                                     key=f"modal_{field}"
                                                 )
                                     
-                                    # Handle any uncategorized fields
-                                    uncategorized_fields = [f for f in modal_data.keys() if f not in 
-                                                          client_fields + policy_fields + date_fields + 
-                                                          commission_fields + status_fields + [transaction_id_col] + internal_fields]
+                                    # Internal Commission Fields (defined here to include in exclusion)
+                                    commission_internal_fields = ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)', 'STMT DATE']
+                                    
+                                    # Handle any uncategorized fields (that haven't been rendered yet)
+                                    # Use the actual rendered_fields set that tracks what was actually displayed
+                                    uncategorized_fields = [f for f in modal_data.keys() if f not in rendered_fields]
                                     
                                     if uncategorized_fields:
                                         st.markdown("#### Additional Fields")
