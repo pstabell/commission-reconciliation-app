@@ -2201,6 +2201,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             key="modal_Effective Date",
                             format="MM/DD/YYYY"
                         )
+                        rendered_fields.add('Effective Date')
                     except:
                         updated_data['Effective Date'] = st.text_input(
                             'Effective Date',
@@ -2215,6 +2216,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         key="modal_Effective Date",
                         format="MM/DD/YYYY"
                     )
+                rendered_fields.add('Effective Date')
             
             # Policy Origination Date (read-only for renewals)
             if 'Policy Origination Date' in modal_data.keys():
@@ -3735,687 +3737,58 @@ def main():
                                 
                                 modal_data = st.session_state.get('edit_modal_data', {})
                                 
-                                # Remove the Select column from modal data
-                                if 'Select' in modal_data:
-                                    del modal_data['Select']
+                                # Use the reusable edit transaction form
+                                result = edit_transaction_form(modal_data, source_page="edit_policies")
                                 
-                                # Get transaction ID and customer name for header
-                                transaction_id = modal_data.get(transaction_id_col, 'Unknown')
-                                customer_name = modal_data.get('Customer', 'Unknown')
-                                
-                                # Check if this is a reconciliation transaction
-                                if is_reconciliation_transaction(transaction_id):
-                                    st.error("🔒 This is a reconciliation transaction and cannot be edited.")
-                                    st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
-                                    if st.button("Close", type="primary"):
-                                        st.session_state['show_edit_modal'] = False
-                                        st.session_state['edit_modal_data'] = None
-                                        st.rerun()
-                                    return  # Exit early
-                                
-                                st.info(f"**Transaction ID:** {transaction_id} | **Customer:** {customer_name}")
-                                
-                                # Create form
-                                with st.form("edit_transaction_form"):
-                                    # Group fields logically
-                                    st.markdown("#### Client Information")
-                                    col1, col2 = st.columns(2)
-                                    
-                                    # Track updated values
-                                    updated_data = {}
-                                    
-                                    # Define internal system fields that should be read-only
-                                    internal_fields = [
-                                        'reconciliation_status', 
-                                        'reconciliation_id', 
-                                        'reconciled_at', 
-                                        'is_reconciliation_entry',
-                                        '_id',
-                                        'Client ID',
-                                        'Client ID (CRM)',
-                                        'STMT DATE',
-                                        'Agency Comm Received (STMT)',
-                                        'Agent Paid Amount (STMT)'
-                                    ]
-                                    
-                                    # Define field groups for better organization
-                                    client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-                                    policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
-                                    date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
-                                    commission_fields = [
-                                        'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
-                                        'Agency Estimated Comm/Revenue (CRM)', 
-                                        'Policy Gross Comm %', 'Agent Estimated Comm $',
-                                        'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-                                        'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
-                                        'Broker Fee Agent Comm', 'Total Agent Comm'
-                                    ]
-                                    status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
-                                    
-                                    # Client Information
-                                    field_counter = 0
-                                    for field in modal_data.keys():
-                                        # Skip internal fields - they'll be shown at the bottom
-                                        if field in client_fields and field not in internal_fields:
-                                            with col1 if field_counter % 2 == 0 else col2:
-                                                updated_data[field] = st.text_input(
-                                                    field, 
-                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                    key=f"modal_{field}"
-                                                )
-                                            field_counter += 1
-                                    
-                                    # Policy Information
-                                    st.markdown("#### Policy Information")
-                                    col3, col4 = st.columns(2)
-                                    
-                                    # Handle Carrier Name and MGA Name first to ensure they're at the top
-                                    with col3:
-                                        if 'Carrier Name' in modal_data.keys():
-                                            updated_data['Carrier Name'] = st.text_input(
-                                                'Carrier Name', 
-                                                value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
-                                                key="modal_Carrier Name"
-                                            )
-                                    
-                                    with col4:
-                                        if 'MGA Name' in modal_data.keys():
-                                            updated_data['MGA Name'] = st.text_input(
-                                                'MGA Name', 
-                                                value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
-                                                key="modal_MGA Name"
-                                            )
-                                    
-                                    # Handle Transaction Type and Policy Term together
-                                    col5, col6 = st.columns(2)
-                                    with col5:
-                                        if 'Transaction Type' in modal_data.keys():
-                                            # Transaction type dropdown
-                                            transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
-                                            current_trans_type = modal_data.get('Transaction Type', 'NEW')
-                                            updated_data['Transaction Type'] = st.selectbox(
-                                                'Transaction Type',
-                                                options=transaction_types,
-                                                index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
-                                                key="modal_Transaction Type"
-                                            )
-                                    
-                                    with col6:
-                                        if 'Policy Term' in modal_data.keys():
-                                            # Policy Term dropdown
-                                            policy_terms = [3, 6, 9, 12]
-                                            current_term = modal_data.get('Policy Term', None)
-                                            # Handle the display
-                                            if current_term is None or pd.isna(current_term):
-                                                selected_index = 0
-                                            else:
-                                                try:
-                                                    selected_index = policy_terms.index(int(current_term)) + 1
-                                                except (ValueError, TypeError):
-                                                    selected_index = 0
-                                            
-                                            updated_data['Policy Term'] = st.selectbox(
-                                                'Policy Term',
-                                                options=[None] + policy_terms,
-                                                format_func=lambda x: "" if x is None else f"{x} months",
-                                                index=selected_index,
-                                                key="modal_Policy Term",
-                                                help="Select policy duration in months"
-                                            )
-                                    
-                                    # Now handle the rest of the policy fields
-                                    field_counter = 0
-                                    for field in modal_data.keys():
-                                        if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
-                                            with col3 if field_counter % 2 == 0 else col4:
-                                                if field == 'Policy Type':
-                                                    # Load policy types from configuration
-                                                    policy_types_config = load_policy_types_config()
-                                                    active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
-                                                    
-                                                    # Get current value
-                                                    current_policy_type = modal_data.get(field, '')
-                                                    
-                                                    # Ensure current value is in options
-                                                    options = active_types.copy()
-                                                    if current_policy_type and current_policy_type not in options:
-                                                        options.insert(0, current_policy_type)
-                                                    
-                                                    updated_data[field] = st.selectbox(
-                                                        field + " (add in Admin Panel or table above)",
-                                                        options=options,
-                                                        index=options.index(current_policy_type) if current_policy_type in options else 0,
-                                                        key=f"modal_{field}_select",
-                                                        help="To add new types: Admin Panel or use the editable table above"
-                                                    )
-                                                else:
-                                                    # Regular text input
-                                                    updated_data[field] = st.text_input(
-                                                        field, 
-                                                        value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                        key=f"modal_{field}"
-                                                    )
-                                            field_counter += 1
-                                    
-                                    # Bottom fields - Policy Checklist Complete, FULL OR MONTHLY PMTS, and NOTES
-                                    col7, col8 = st.columns(2)
-                                    
-                                    with col7:
-                                        # Policy Checklist Complete
-                                        if 'Policy Checklist Complete' in modal_data.keys():
-                                            current_val = str(modal_data.get('Policy Checklist Complete', 'No')).upper() == 'YES'
-                                            updated_data['Policy Checklist Complete'] = 'Yes' if st.checkbox(
-                                                'Policy Checklist Complete',
-                                                value=current_val,
-                                                key="modal_Policy Checklist Complete"
-                                            ) else 'No'
-                                    
-                                    with col8:
-                                        # FULL OR MONTHLY PMTS
-                                        if 'FULL OR MONTHLY PMTS' in modal_data.keys():
-                                            payment_types = ["FULL", "MONTHLY", ""]
-                                            current_payment = modal_data.get('FULL OR MONTHLY PMTS', '')
-                                            updated_data['FULL OR MONTHLY PMTS'] = st.selectbox(
-                                                'FULL OR MONTHLY PMTS',
-                                                options=payment_types,
-                                                index=payment_types.index(current_payment) if current_payment in payment_types else 2,
-                                                key="modal_FULL OR MONTHLY PMTS"
-                                            )
-                                    
-                                    # NOTES - Full width at the bottom
-                                    if 'NOTES' in modal_data.keys():
-                                        updated_data['NOTES'] = st.text_area(
-                                            'NOTES',
-                                            value=str(modal_data.get('NOTES', '')) if modal_data.get('NOTES') is not None else '',
-                                            key="modal_NOTES",
-                                            height=70
-                                        )
-                                    
-                                    # Date Fields
-                                    st.markdown("#### Dates")
-                                    col5, col6 = st.columns(2)
-                                    
-                                    # Left column - Effective Date first, then Policy Origination Date
-                                    with col5:
-                                        # Effective Date
-                                        if 'Effective Date' in modal_data.keys():
-                                            date_value = modal_data.get('Effective Date')
-                                            if date_value and pd.notna(date_value):
-                                                try:
-                                                    parsed_date = pd.to_datetime(date_value)
-                                                    updated_data['Effective Date'] = st.date_input(
-                                                        'Effective Date',
-                                                        value=parsed_date.date(),
-                                                        key="modal_Effective Date",
-                                                        format="MM/DD/YYYY"
-                                                    )
-                                                except:
-                                                    updated_data['Effective Date'] = st.text_input(
-                                                        'Effective Date',
-                                                        value=str(date_value),
-                                                        key="modal_Effective Date",
-                                                        help="Enter date in MM/DD/YYYY format"
-                                                    )
-                                            else:
-                                                updated_data['Effective Date'] = st.date_input(
-                                                    'Effective Date',
-                                                    value=None,
-                                                    key="modal_Effective Date",
-                                                    format="MM/DD/YYYY"
-                                                )
-                                        
-                                        # Policy Origination Date
-                                        if 'Policy Origination Date' in modal_data.keys():
-                                            date_value = modal_data.get('Policy Origination Date')
-                                            if date_value and pd.notna(date_value):
-                                                try:
-                                                    parsed_date = pd.to_datetime(date_value)
-                                                    updated_data['Policy Origination Date'] = st.date_input(
-                                                        'Policy Origination Date',
-                                                        value=parsed_date.date(),
-                                                        key="modal_Policy Origination Date",
-                                                        format="MM/DD/YYYY"
-                                                    )
-                                                except:
-                                                    updated_data['Policy Origination Date'] = st.text_input(
-                                                        'Policy Origination Date',
-                                                        value=str(date_value),
-                                                        key="modal_Policy Origination Date",
-                                                        help="Enter date in MM/DD/YYYY format"
-                                                    )
-                                            else:
-                                                updated_data['Policy Origination Date'] = st.date_input(
-                                                    'Policy Origination Date',
-                                                    value=None,
-                                                    key="modal_Policy Origination Date",
-                                                    format="MM/DD/YYYY"
-                                                )
-                                    
-                                    # Right column - X-DATE only (aligned with Effective Date)
-                                    with col6:
-                                        # X-DATE
-                                        if 'X-DATE' in modal_data.keys():
-                                            date_value = modal_data.get('X-DATE')
-                                            if date_value and pd.notna(date_value):
-                                                try:
-                                                    parsed_date = pd.to_datetime(date_value)
-                                                    updated_data['X-DATE'] = st.date_input(
-                                                        'X-DATE',
-                                                        value=parsed_date.date(),
-                                                        key="modal_X-DATE",
-                                                        format="MM/DD/YYYY"
-                                                    )
-                                                except:
-                                                    updated_data['X-DATE'] = st.text_input(
-                                                        'X-DATE',
-                                                        value=str(date_value),
-                                                        key="modal_X-DATE",
-                                                        help="Enter date in MM/DD/YYYY format"
-                                                    )
-                                            else:
-                                                updated_data['X-DATE'] = st.date_input(
-                                                    'X-DATE',
-                                                    value=None,
-                                                    key="modal_X-DATE",
-                                                    format="MM/DD/YYYY"
-                                                )
-                                    
-                                    # Premium Information
-                                    st.markdown("#### Premium Information")
-                                    col_prem = st.columns(1)[0]
-                                    with col_prem:
-                                        # Premium Sold
-                                        premium_sold = modal_data.get('Premium Sold', 0)
-                                        if pd.isna(premium_sold):
-                                            premium_sold = 0.0
-                                        updated_data['Premium Sold'] = st.number_input(
-                                            'Premium ($)',
-                                            value=float(premium_sold),
-                                            format="%.2f",
-                                            key="modal_Premium_Sold",
-                                            help="Enter the premium amount for this transaction"
-                                        )
-                                    
-                                    # Carrier Taxes & Fees
-                                    st.markdown("#### Carrier Taxes & Fees")
-                                    col5 = st.columns(1)[0]
-                                    
-                                    with col5:
-                                        # Policy Taxes & Fees
-                                        policy_taxes_fees = modal_data.get('Policy Taxes & Fees', 0)
-                                        if pd.isna(policy_taxes_fees):
-                                            policy_taxes_fees = 0.0
-                                        updated_data['Policy Taxes & Fees'] = st.number_input(
-                                            'Carrier Taxes & Fees ($)',
-                                            value=float(policy_taxes_fees),
-                                            format="%.2f",
-                                            key="modal_Policy_Taxes_Fees",
-                                            help="Non-commissionable carrier taxes and fees"
-                                        )
-                                        
-                                        # Calculate and display Commissionable Premium
-                                        commissionable_premium = updated_data.get('Premium Sold', 0) - updated_data['Policy Taxes & Fees']
-                                        st.number_input(
-                                            'Commissionable Premium ($)',
-                                            value=commissionable_premium,
-                                            format="%.2f",
-                                            key="modal_Commissionable_Premium",
-                                            disabled=True,
-                                            help="Premium minus Carrier Taxes & Fees"
-                                        )
-                                        updated_data['Commissionable Premium'] = commissionable_premium
-                                    
-                                    # Commission Fields
-                                    st.markdown("#### Commission Details")
-                                    col7, col8 = st.columns(2)
-                                    
-                                    # Left column fields in specific order
-                                    left_commission_fields = [
-                                        'Policy Gross Comm %',
-                                        'Agent Comm (NEW 50% RWL 25%)',
-                                        'Broker Fee'
-                                    ]
-                                    
-                                    # Right column fields in specific order
-                                    right_commission_fields = [
-                                        'Agency Estimated Comm/Revenue (CRM)',
-                                        'Agent Estimated Comm $',
-                                        'Broker Fee Agent Comm',
-                                        'Total Agent Comm'
-                                    ]
-                                    
-                                    # Display left column fields
-                                    with col7:
-                                        for field in left_commission_fields:
-                                            if field == 'Broker Fee':
-                                                # Broker Fee input (editable)
-                                                broker_fee = modal_data.get('Broker Fee', 0)
-                                                if pd.isna(broker_fee):
-                                                    broker_fee = 0.0
-                                                updated_data['Broker Fee'] = st.number_input(
-                                                    'Broker Fee ($)',
-                                                    value=float(broker_fee),
-                                                    format="%.2f",
-                                                    key="modal_Broker_Fee_commission",
-                                                    help="Agency broker fee (you receive 50% commission on this amount)"
-                                                )
-                                            elif field in modal_data.keys():
-                                                current_value = modal_data.get(field, 0)
-                                                if pd.isna(current_value):
-                                                    current_value = 0.0
-                                                updated_data[field] = st.number_input(
-                                                    field,
-                                                    value=float(current_value),
-                                                    format="%.2f",
-                                                    key=f"modal_{field}"
-                                                )
-                                    
-                                    # Display right column fields
-                                    with col8:
-                                        # Calculate formula values
-                                        commissionable_prem = updated_data.get('Commissionable Premium', 0)
-                                        gross_comm_pct = updated_data.get('Policy Gross Comm %', modal_data.get('Policy Gross Comm %', 0))
-                                        agent_comm_rate = updated_data.get('Agent Comm (NEW 50% RWL 25%)', modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0))
-                                        # Calculate broker fee agent commission (always 50% of broker fee)
-                                        broker_fee = updated_data.get('Broker Fee', modal_data.get('Broker Fee', 0))
-                                        broker_fee_agent = float(broker_fee) * 0.50 if broker_fee else 0.0
-                                        
-                                        # Ensure numeric values
+                                if result:
+                                    if result["action"] == "save":
                                         try:
-                                            commissionable_prem = float(commissionable_prem) if commissionable_prem else 0.0
-                                            gross_comm_pct = float(gross_comm_pct) if gross_comm_pct else 0.0
-                                            agent_comm_rate = float(agent_comm_rate) if agent_comm_rate else 0.0
-                                        except:
-                                            commissionable_prem = 0.0
-                                            gross_comm_pct = 0.0
-                                            agent_comm_rate = 0.0
-                                        
-                                        # Handle agent commission rate - it might be stored as decimal (0.50) or percentage (50)
-                                        # If it's less than 1, assume it's a decimal and convert to percentage
-                                        if agent_comm_rate > 0 and agent_comm_rate < 1:
-                                            agent_comm_rate = agent_comm_rate * 100
-                                        
-                                        # Calculate Agency Estimated Comm/Revenue (CRM) using Commissionable Premium
-                                        agency_comm = commissionable_prem * (gross_comm_pct / 100) if gross_comm_pct else 0.0
-                                        
-                                        # Calculate Agent Estimated Comm $
-                                        agent_comm = agency_comm * (agent_comm_rate / 100) if agent_comm_rate else 0.0
-                                        
-                                        # Calculate Total Agent Commission
-                                        total_agent_comm = agent_comm + broker_fee_agent
-                                        
-                                        # Ensure calculated values are valid numbers
-                                        if pd.isna(agency_comm) or (isinstance(agency_comm, float) and (agency_comm == float('inf') or agency_comm == float('-inf'))):
-                                            agency_comm = 0.0
-                                        if pd.isna(agent_comm) or (isinstance(agent_comm, float) and (agent_comm == float('inf') or agent_comm == float('-inf'))):
-                                            agent_comm = 0.0
-                                        
-                                        for field in right_commission_fields:
-                                            if field in modal_data.keys() or field in ['Broker Fee Agent Comm', 'Total Agent Comm']:
-                                                if field == 'Agency Estimated Comm/Revenue (CRM)':
-                                                    # Display as read-only calculated field
-                                                    st.number_input(
-                                                        field,
-                                                        value=agency_comm,
-                                                        format="%.2f",
-                                                        key=f"modal_{field}_display",
-                                                        disabled=True,
-                                                        help=f"Formula: Commissionable Premium × Policy Gross Comm % = ${commissionable_prem:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}"
-                                                    )
-                                                    # Store the calculated value
-                                                    updated_data[field] = agency_comm
-                                                elif field == 'Agent Estimated Comm $':
-                                                    # Display as read-only calculated field
-                                                    st.number_input(
-                                                        field,
-                                                        value=agent_comm,
-                                                        format="%.2f",
-                                                        key=f"modal_{field}_display",
-                                                        disabled=True,
-                                                        help=f"Formula: Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_rate:.2f}% = ${agent_comm:.2f}"
-                                                    )
-                                                    # Store the calculated value
-                                                    updated_data[field] = agent_comm
-                                                elif field == 'Broker Fee Agent Comm':
-                                                    # Display as read-only calculated field
-                                                    st.number_input(
-                                                        field,
-                                                        value=broker_fee_agent,
-                                                        format="%.2f",
-                                                        key=f"modal_{field}_display",
-                                                        disabled=True,
-                                                        help="50% of broker fee"
-                                                    )
-                                                    # Store the calculated value
-                                                    updated_data[field] = broker_fee_agent
-                                                elif field == 'Total Agent Comm':
-                                                    # Display as read-only calculated field
-                                                    st.number_input(
-                                                        field,
-                                                        value=total_agent_comm,
-                                                        format="%.2f",
-                                                        key=f"modal_{field}_display",
-                                                        disabled=True,
-                                                        help=f"Formula: Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
-                                                    )
-                                                    # Store the calculated value
-                                                    updated_data[field] = total_agent_comm
-                                                else:
-                                                    # This shouldn't happen but handle it just in case
-                                                    current_value = modal_data.get(field, 0)
-                                                    if pd.isna(current_value):
-                                                        current_value = 0.0
-                                                    updated_data[field] = st.number_input(
-                                                        field,
-                                                        value=float(current_value),
-                                                        format="%.2f",
-                                                        key=f"modal_{field}"
-                                                    )
-                                    
-                                    # Status Fields - only show if there are any
-                                    status_fields_present = [f for f in modal_data.keys() if f in status_fields]
-                                    if status_fields_present:
-                                        st.markdown("#### Status & Notes")
-                                    for field in modal_data.keys():
-                                        if field in status_fields:
-                                            if field == 'Reconciled?':
-                                                current_val = str(modal_data.get(field, 'No')).upper() == 'YES'
-                                                updated_data[field] = 'Yes' if st.checkbox(
-                                                    "Reconciled?",
-                                                    value=current_val,
-                                                    key=f"modal_{field}"
-                                                ) else 'No'
-                                            elif field == 'Reconciliation Notes':
-                                                updated_data[field] = st.text_area(
-                                                    field,
-                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                    key=f"modal_{field}",
-                                                    height=100
-                                                )
-                                            else:
-                                                updated_data[field] = st.text_input(
-                                                    field,
-                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                    key=f"modal_{field}"
-                                                )
-                                    
-                                    # Internal Commission Fields (defined here to include in exclusion)
-                                    commission_internal_fields = ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)', 'STMT DATE']
-                                    
-                                    # Handle any uncategorized fields (that haven't been rendered yet)
-                                    # Use the actual rendered_fields set that tracks what was actually displayed
-                                    uncategorized_fields = [f for f in modal_data.keys() if f not in rendered_fields]
-                                    
-                                    if uncategorized_fields:
-                                        st.markdown("#### Additional Fields")
-                                        col_add1, col_add2 = st.columns(2)
-                                        field_counter = 0
-                                        for field in sorted(uncategorized_fields):
-                                            with col_add1 if field_counter % 2 == 0 else col_add2:
-                                                updated_data[field] = st.text_input(
-                                                    field,
-                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                    key=f"modal_{field}"
-                                                )
-                                            field_counter += 1
-                                    
-                                    # Display all internal/readonly fields at the bottom
-                                    internal_fields_to_show = [f for f in modal_data.keys() if f in internal_fields]
-                                    # Include commission internal fields in the combined section
-                                    commission_internal_present = [f for f in commission_internal_fields if f in modal_data.keys()]
-                                    all_internal_fields = sorted(set(internal_fields_to_show + commission_internal_present))
-                                    
-                                    if all_internal_fields:
-                                        st.markdown("---")
-                                        with st.expander("Internal Fields (Read-only)", expanded=False):
-                                            col11, col12 = st.columns(2)
-                                            field_counter = 0
-                                            for field in all_internal_fields:
-                                                with col11 if field_counter % 2 == 0 else col12:
-                                                    if field == 'STMT DATE':
-                                                        # STMT DATE is a text/date field
-                                                        st.text_input(
-                                                            field,
-                                                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                            key=f"modal_{field}",
-                                                            disabled=True,
-                                                            help="Statement date - update via Reconciliation page"
-                                                        )
-                                                    elif field in ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)']:
-                                                        # These are number fields
-                                                        current_value = modal_data.get(field, 0)
-                                                        if pd.isna(current_value):
-                                                            current_value = 0.0
-                                                        st.number_input(
-                                                            field,
-                                                            value=float(current_value),
-                                                            format="%.2f",
-                                                            key=f"modal_{field}",
-                                                            disabled=True,
-                                                            help="Reconciliation field - update via Reconciliation page"
-                                                        )
-                                                    else:
-                                                        # Other internal fields
-                                                        st.text_input(
-                                                            field,
-                                                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                            key=f"modal_{field}",
-                                                            disabled=True,
-                                                            help="Internal system field (read-only)"
-                                                        )
-                                                field_counter += 1
-                                    
-                                    # Form buttons
-                                    st.markdown("---")
-                                    col_calc, col_save, col_cancel = st.columns(3)
-                                    
-                                    with col_calc:
-                                        calculate_modal = st.form_submit_button("🧮 Calculate", type="primary", use_container_width=True, help="Click to verify all commission calculations")
-                                    
-                                    with col_save:
-                                        save_modal = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
-                                    
-                                    with col_cancel:
-                                        cancel_modal = st.form_submit_button("❌ Cancel", use_container_width=True)
-                                
-                                # Handle form submission
-                                if calculate_modal:
-                                    # Just refresh the form to recalculate
-                                    st.success("✅ Calculations refreshed!")
-                                    st.rerun()
-                                
-                                if save_modal:
-                                    try:
-                                        # Build complete update dictionary with ALL fields
-                                        update_dict = {}
-                                        
-                                        # First, include ALL original fields from modal_data (except Select and ID)
-                                        for field, original_value in modal_data.items():
-                                            if field != transaction_id_col and field != 'Select':
-                                                # Clean NaN values from original data
-                                                if pd.isna(original_value):
-                                                    update_dict[field] = None
-                                                elif isinstance(original_value, float) and (original_value == float('inf') or original_value == float('-inf')):
-                                                    update_dict[field] = None
-                                                else:
-                                                    update_dict[field] = original_value
-                                        
-                                        # Then override with any fields that were updated in the form
-                                        for field, value in updated_data.items():
-                                            # Convert date objects to strings in MM/DD/YYYY format
-                                            if isinstance(value, datetime.date):
-                                                update_dict[field] = value.strftime('%m/%d/%Y')
-                                            # Handle empty strings as None
-                                            elif value == '':
-                                                update_dict[field] = None
-                                            # Handle NaN and None values
-                                            elif pd.isna(value):
-                                                update_dict[field] = None
-                                            # Handle numeric values
-                                            elif isinstance(value, (int, float)):
-                                                # Check for NaN or infinity
-                                                if pd.isna(value) or (isinstance(value, float) and (value == float('inf') or value == float('-inf'))):
-                                                    update_dict[field] = None
-                                                else:
-                                                    update_dict[field] = value
-                                            else:
-                                                update_dict[field] = value
-                                        
-                                        # Debug: Show what we're updating
-                                        st.write(f"DEBUG: Updating {len(update_dict)} fields for transaction {transaction_id}")
-                                        st.write("DEBUG: Sample fields being updated:", list(update_dict.keys())[:5])
-                                        
-                                        # Check for NaN values before updating
-                                        nan_fields = []
-                                        for field, value in update_dict.items():
-                                            if isinstance(value, float) and pd.isna(value):
-                                                nan_fields.append(f"{field}: {value}")
-                                                update_dict[field] = None  # Replace NaN with None
-                                        
-                                        if nan_fields:
-                                            st.warning(f"Found NaN values in fields: {nan_fields}. Converting to None.")
-                                        
-                                        # Update in database with ALL fields
-                                        result = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
-                                        
-                                        # Check if update actually happened
-                                        if result.data:
-                                            st.success(f"✅ Transaction updated successfully! Updated {len(update_dict)} fields.")
+                                            # Update the database
+                                            transaction_id = result["data"].get(get_transaction_id_column())
                                             
-                                            # Verify the update by reading back
-                                            verify = supabase.table('policies').select("*").eq(transaction_id_col, transaction_id).execute()
-                                            if verify.data and len(verify.data) > 0:
-                                                # Check a sample field
-                                                sample_field = list(updated_data.keys())[0] if updated_data else None
-                                                if sample_field and sample_field in verify.data[0]:
-                                                    st.write(f"DEBUG: Verified - {sample_field} is now: {verify.data[0][sample_field]}")
+                                            # Convert data for database update
+                                            update_data = result["data"].copy()
+                                            update_data = convert_timestamps_for_json(update_data)
                                             
-                                            # Force clear the session state for the editor
-                                            if 'edit_policies_editor' in st.session_state:
-                                                del st.session_state['edit_policies_editor']
-                                            if 'last_search_edit_policies_editor' in st.session_state:
-                                                del st.session_state['last_search_edit_policies_editor']
-                                        else:
-                                            st.error("❌ Update may have failed - no data returned")
+                                            # Handle NaN values
+                                            for key, value in update_data.items():
+                                                if pd.isna(value):
+                                                    update_data[key] = None
+                                            
+                                            # Update the record
+                                            response = supabase.table('policies').update(update_data).eq(
+                                                f'"{get_transaction_id_column()}"', transaction_id
+                                            ).execute()
+                                            
+                                            if response.data:
+                                                st.success("✅ Transaction updated successfully!")
+                                                clear_policies_cache()
+                                                
+                                                # Clear modal state
+                                                st.session_state['show_edit_modal'] = False
+                                                st.session_state['edit_modal_data'] = None
+                                                
+                                                # Force clear the session state for the editor
+                                                if 'edit_policies_editor' in st.session_state:
+                                                    del st.session_state['edit_policies_editor']
+                                                if 'last_search_edit_policies_editor' in st.session_state:
+                                                    del st.session_state['last_search_edit_policies_editor']
+                                                
+                                                time.sleep(1)
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Update may have failed - no data returned")
                                         
+                                        except Exception as e:
+                                            st.error(f"Error updating transaction: {str(e)}")
+                                    
+                                    elif result["action"] == "close" or result["action"] == "cancel":
                                         # Clear modal state
                                         st.session_state['show_edit_modal'] = False
                                         st.session_state['edit_modal_data'] = None
-                                        
-                                        # Clear cache and refresh
-                                        clear_policies_cache()
-                                        time.sleep(1)
                                         st.rerun()
-                                        
-                                    except Exception as e:
-                                        st.error(f"Error updating transaction: {str(e)}")
                                 
-                                if cancel_modal:
-                                    # Clear modal state
-                                    st.session_state['show_edit_modal'] = False
-                                    st.session_state['edit_modal_data'] = None
-                                    st.rerun()
-                            
+                                # The old form implementation has been removed and replaced with the reusable function
                             # Delete functionality moved to bottom
                             st.divider()
                             st.subheader("🗑️ Delete Selected Records")
