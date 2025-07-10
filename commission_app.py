@@ -817,6 +817,22 @@ def format_dates_mmddyyyy(df):
             df[target_col] = df[target_col].dt.strftime("%m/%d/%Y")
     return df
 
+def convert_timestamps_for_json(data):
+    """Convert any Timestamp objects in data to strings for JSON serialization."""
+    cleaned_data = {}
+    for key, value in data.items():
+        if isinstance(value, pd.Timestamp):
+            cleaned_data[key] = value.strftime('%m/%d/%Y')
+        elif isinstance(value, datetime.datetime):
+            cleaned_data[key] = value.strftime('%m/%d/%Y %H:%M:%S')
+        elif isinstance(value, datetime.date):
+            cleaned_data[key] = value.strftime('%m/%d/%Y')
+        elif pd.isna(value):
+            cleaned_data[key] = None
+        else:
+            cleaned_data[key] = value
+    return cleaned_data
+
 CURRENCY_COLUMNS = [
     "Premium Sold",    "Agency Comm Received (STMT)",
     "Gross Premium Paid",
@@ -2019,7 +2035,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         # Define field groups for better organization
         client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-        policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+        policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
         date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
         commission_fields = [
             'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -2068,9 +2084,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     key="modal_MGA Name"
                 )
         
-        # Handle Transaction Type and Policy Term together
-        col5, col6 = st.columns(2)
-        with col5:
+        # Second row - Transaction Type 
+        with col3:
             if 'Transaction Type' in modal_data.keys():
                 # Transaction type dropdown
                 transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
@@ -2094,33 +2109,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         key="modal_Transaction Type"
                     )
         
-        with col6:
-            if 'Policy Term' in modal_data.keys():
-                # Policy Term dropdown
-                policy_terms = [3, 6, 9, 12]
-                current_term = modal_data.get('Policy Term', None)
-                # Handle the display
-                if current_term is None or pd.isna(current_term):
-                    selected_index = 0
-                else:
-                    try:
-                        selected_index = policy_terms.index(int(current_term)) + 1
-                    except (ValueError, TypeError):
-                        selected_index = 0
-                
-                updated_data['Policy Term'] = st.selectbox(
-                    'Policy Term',
-                    options=[None] + policy_terms,
-                    format_func=lambda x: "" if x is None else f"{x} months",
-                    index=selected_index,
-                    key="modal_Policy Term",
-                    help="Select policy duration in months"
-                )
-        
         # Now handle the rest of the policy fields
         field_counter = 0
-        for field in modal_data.keys():
-            if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+        for field in policy_fields:
+            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
                 with col3 if field_counter % 2 == 0 else col4:
                     if field == 'Policy Type':
                         # Load policy types from configuration
@@ -2144,11 +2136,23 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         )
                     else:
                         # Regular text input
-                        updated_data[field] = st.text_input(
-                            field, 
-                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                            key=f"modal_{field}"
-                        )
+                        # Make Prior Policy Number read-only for renewals
+                        if field == 'Prior Policy Number' and is_renewal:
+                            value = modal_data.get(field, '')
+                            st.text_input(
+                                field, 
+                                value=str(value) if value is not None else '',
+                                key=f"modal_{field}",
+                                disabled=True,
+                                help="Automatically populated from the policy being renewed"
+                            )
+                            updated_data[field] = value  # Preserve the value since it's disabled
+                        else:
+                            updated_data[field] = st.text_input(
+                                field, 
+                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                key=f"modal_{field}"
+                            )
                 field_counter += 1
         
         
@@ -2252,6 +2256,30 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         key="modal_X-DATE",
                         format="MM/DD/YYYY"
                     )
+        
+        # Add Policy Term after Policy Origination Date
+        with col6:
+            if 'Policy Term' in modal_data.keys():
+                # Policy Term dropdown
+                policy_terms = [3, 6, 9, 12]
+                current_term = modal_data.get('Policy Term', None)
+                # Handle the display
+                if current_term is None or pd.isna(current_term):
+                    selected_index = 0
+                else:
+                    try:
+                        selected_index = policy_terms.index(int(current_term)) + 1
+                    except (ValueError, TypeError):
+                        selected_index = 0
+                
+                updated_data['Policy Term'] = st.selectbox(
+                    'Policy Term',
+                    options=[None] + policy_terms,
+                    format_func=lambda x: "" if x is None else f"{x} months",
+                    index=selected_index,
+                    key="modal_Policy Term",
+                    help="Select policy duration in months"
+                )
         
         # Premium Information
         st.markdown("#### Premium Information")
@@ -2650,28 +2678,36 @@ def main():
                         if col in all_data.columns:
                             mask |= all_data[col].astype(str).str.contains(search_term, case=False, na=False)
                     
-                    search_results = all_data[mask]
+                    search_results = all_data[mask].copy()
                     
                     if not search_results.empty:
                         st.success(f"Found {len(search_results)} matching records")
+                        
+                        # Format dates to strings before displaying
+                        search_results = format_dates_mmddyyyy(search_results)
                         
                         # Configure column settings for proper numeric display
                         column_config = {}
                         numeric_cols = [
                             'Agent Estimated Comm $',
-                                        'Policy Gross Comm %',
+                            'Policy Gross Comm %',
                             'Agency Estimated Comm/Revenue (CRM)',
                             'Agency Comm Received (STMT)',
                             'Premium Sold',
                             'Agent Paid Amount (STMT)',
-                            'Agency Comm Received (STMT)'
+                            'Agency Comm Received (STMT)',
+                            'Commissionable Premium',
+                            'Broker Fee',
+                            'Broker Fee Agent Comm',
+                            'Total Agent Comm',
+                            'Policy Taxes & Fees'
                         ]
                         
                         for col in numeric_cols:
                             if col in search_results.columns:
                                 column_config[col] = st.column_config.NumberColumn(
                                     col,
-                                    format="%.2f",
+                                    format="$%.2f" if '$' in col or col in ['Premium Sold', 'Commissionable Premium', 'Broker Fee', 'Policy Taxes & Fees'] else "%.2f",
                                     step=0.01
                                 )
                         
@@ -3001,6 +3037,25 @@ def main():
             
             # Display paginated data
             paginated_data = all_data.iloc[start_idx:end_idx]
+            
+            # Define preferred column order
+            preferred_order = [
+                '_id', 'Transaction ID', 'Client ID', 'Customer', 
+                'Policy Number', 'Prior Policy Number',
+                'Carrier Name', 'MGA Name',  # MGA right after Carrier
+                'Policy Type', 'Transaction Type',
+                'Effective Date', 'Policy Origination Date', 'Policy Term', 'X-DATE',  # Policy Term after Origination Date
+                'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
+                'Policy Gross Comm %', 'Agency Estimated Comm/Revenue (CRM)',
+                'Agent Estimated Comm $', 'Broker Fee', 'Broker Fee Agent Comm', 'Total Agent Comm',
+                'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
+                'STMT DATE', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES'
+            ]
+            
+            # Reorder columns - keep preferred order columns that exist, then add any remaining
+            existing_preferred = [col for col in preferred_order if col in paginated_data.columns]
+            remaining_cols = [col for col in paginated_data.columns if col not in preferred_order]
+            paginated_data = paginated_data[existing_preferred + remaining_cols]
             
             # Apply formula display to existing columns
             paginated_data_display = apply_formula_display(paginated_data, show_formulas=show_formulas)
@@ -3685,7 +3740,7 @@ def main():
                                     
                                     # Define field groups for better organization
                                     client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-                                    policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+                                    policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
                                     date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
                                     commission_fields = [
                                         'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -8930,8 +8985,28 @@ TO "New Column Name";
                 # Prepare renewal data (pre-populate with calculated values)
                 renewal_data = st.session_state.renewal_to_edit.copy()
                 
-                # Generate new Transaction ID
-                renewal_data['Transaction ID'] = generate_transaction_id()
+                # Generate new unique Transaction ID
+                # Try up to 10 times to generate a unique ID
+                unique_id_found = False
+                for attempt in range(10):
+                    new_id = generate_transaction_id()
+                    # Check if this ID already exists
+                    try:
+                        existing = supabase.table('policies').select('"Transaction ID"').eq('"Transaction ID"', new_id).execute()
+                        if not existing.data:
+                            renewal_data['Transaction ID'] = new_id
+                            unique_id_found = True
+                            break
+                    except Exception as e:
+                        st.warning(f"Error checking Transaction ID uniqueness: {e}")
+                        break
+                
+                if not unique_id_found:
+                    # If we couldn't generate a unique ID after 10 attempts, use a timestamp-based ID
+                    renewal_data['Transaction ID'] = f"RWL{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+                
+                # Pre-populate Prior Policy Number with the current policy number
+                renewal_data['Prior Policy Number'] = renewal_data.get('Policy Number', '')
                 
                 # Clear commission fields for renewal
                 fields_to_clear = [
@@ -8959,10 +9034,52 @@ TO "New Column Name";
                             # Insert the new renewal transaction
                             new_renewal = result["data"]
                             
-                            # Handle NaN values
-                            for key, value in new_renewal.items():
-                                if pd.isna(value):
-                                    new_renewal[key] = None
+                            # Convert timestamps to strings for JSON serialization
+                            new_renewal = convert_timestamps_for_json(new_renewal)
+                            
+                            # Remove UI-only columns and fields that shouldn't be duplicated
+                            ui_only_columns = ['Edit', 'Select', 'Action', 'Details', 'new_effective_date', 'new_expiration_date', '_id']
+                            for col in ui_only_columns:
+                                if col in new_renewal:
+                                    del new_renewal[col]
+                            
+                            # Handle column name changes
+                            if 'NEW BIZ CHECKLIST COMPLETE' in new_renewal:
+                                new_renewal['Policy Checklist Complete'] = new_renewal.pop('NEW BIZ CHECKLIST COMPLETE')
+                            
+                            # Map expiration_date to the actual database column
+                            if 'expiration_date' in new_renewal:
+                                new_renewal['X-DATE'] = new_renewal.pop('expiration_date')
+                            
+                            # Add policy tracking fields
+                            original_policy = st.session_state.renewal_to_edit
+                            new_renewal['Prior Policy Number'] = original_policy.get('Policy Number', '')
+                            
+                            # Policy Origination Date stays the same through renewals (it's already in the data)
+                            # No need to set it explicitly as it's preserved from the original policy
+                            
+                            # Debug: Show what we're trying to insert
+                            trans_id = new_renewal.get('Transaction ID', 'MISSING')
+                            st.info(f"Attempting to insert renewal with Transaction ID: {trans_id}")
+                            
+                            # Show all fields being inserted (for debugging)
+                            with st.expander("Debug: Full renewal data being inserted"):
+                                debug_data = {k: v for k, v in new_renewal.items() if k not in ['Edit', 'Select', 'Action', 'Details']}
+                                st.json(debug_data)
+                            
+                            # Double-check if this ID really exists
+                            try:
+                                check_existing = supabase.table('policies').select('"Transaction ID"').eq('"Transaction ID"', trans_id).execute()
+                                if check_existing.data:
+                                    st.error(f"Transaction ID {trans_id} already exists in database! Found {len(check_existing.data)} matching records.")
+                                    st.error("The uniqueness check failed. Trying with timestamp-based ID...")
+                                    # Generate a timestamp-based ID instead
+                                    new_renewal['Transaction ID'] = f"RWL{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}"
+                                    st.info(f"Using new Transaction ID: {new_renewal['Transaction ID']}")
+                                else:
+                                    st.success(f"Transaction ID {trans_id} is unique and ready to insert.")
+                            except Exception as e:
+                                st.error(f"Error checking existing ID: {e}")
                             
                             # Insert to database
                             supabase.table('policies').insert(new_renewal).execute()
@@ -8977,7 +9094,10 @@ TO "New Column Name";
                                     "new_transaction_id": new_renewal.get('Transaction ID', ''),
                                     "details": json.dumps({
                                         "count": 1, 
-                                        "renewed_ids": [new_renewal.get('Transaction ID', '')]
+                                        "renewed_ids": [new_renewal.get('Transaction ID', '')],
+                                        "original_policy_number": original_policy.get('Policy Number', ''),
+                                        "new_policy_number": new_renewal.get('Policy Number', ''),
+                                        "policy_chain": True if new_renewal.get('Prior Policy Number') else False
                                     })
                                 }
                                 supabase.table('renewal_history').insert(renewal_history_data).execute()
@@ -9022,8 +9142,14 @@ TO "New Column Name";
                     if st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True):
                         # Get the row where Edit is checked
                         row_to_edit = edit_selected_rows.iloc[0]
+                        renewal_dict = row_to_edit.to_dict()
+                        # Remove UI-only columns
+                        ui_only_columns = ['Edit', 'Select', 'Action', 'Details']
+                        for col in ui_only_columns:
+                            if col in renewal_dict:
+                                del renewal_dict[col]
                         st.session_state.editing_renewal = True
-                        st.session_state.renewal_to_edit = row_to_edit.to_dict()
+                        st.session_state.renewal_to_edit = renewal_dict
                         st.rerun()
                 elif selected_count == 0:
                     st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True, 

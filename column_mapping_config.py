@@ -78,7 +78,10 @@ class ColumnMapper:
             "Policy Taxes & Fees": "Policy Taxes & Fees",
             "Commissionable Premium": "Commissionable Premium",
             "Broker Fee Agent Comm": "Broker Fee Agent Comm",
-            "Total Agent Comm": "Total Agent Comm"
+            "Total Agent Comm": "Total Agent Comm",
+            
+            # Policy renewal tracking fields
+            "Prior Policy Number": "Prior Policy Number"
         }
           # Fields that are calculated and not stored in database
         self.calculated_fields = {
