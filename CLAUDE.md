@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 10, 2025 (Afternoon)  
-**Current Version**: 3.5.1
+**Last Updated**: July 10, 2025 (Evening)  
+**Current Version**: 3.5.2
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,10 +13,10 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.1)
-1. **Pending Renewals Enhancement**: Policies with renewals now auto-hide from pending list
-2. **Data Architecture**: Page-specific loading eliminates stale data issues
-3. **Display Fix**: Transaction types show correctly without modification
+## Recent Major Changes (v3.5.2)
+1. **Cancel/Rewrite Workflow**: Complete implementation with auto-filtering and documentation
+2. **UI Enhancements**: Blue Calculate buttons, info reminders, improved field organization
+3. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture improvements
 4. **Prior Changes (v3.5.0)**: Policy renewal tracking, column renaming, field reordering
 
 ## Known Issues & Solutions

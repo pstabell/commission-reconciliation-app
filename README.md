@@ -2,7 +2,7 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.1  
+**Version**: 3.5.2  
 **Last Updated**: July 10, 2025
 
 ## Overview
@@ -86,20 +86,21 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.1)
+## Recent Updates (v3.5.2)
 
 ### New Features
-- Enhanced Pending Renewals filtering - renewed policies auto-hide
-- Page-specific data loading for fresh information
-- Improved data synchronization between pages
+- Complete Cancel/Rewrite workflow implementation
+- Enhanced UI with blue Calculate buttons and info reminders
+- Prior Policy Number field in Add New Policy form
+- Comprehensive Cancel/Rewrite documentation in Help page
 
-### Bug Fixes
-- Fixed NEW transactions displaying as "RWL" in Pending Renewals
-- Resolved stale data issues after edits
-- Corrected multiple syntax errors and indentation problems
-- Fixed empty dataset handling
+### Improvements
+- Cancelled policies auto-excluded from Pending Renewals
+- Policy Type field moved to right column under MGA Name
+- Better form field organization and visual balance
+- Clear guidance for handling complex policy scenarios
 
-### Previous Updates (v3.5.0)
+### Previous Updates (v3.5.1)
 - Policy renewal tracking with Prior Policy Number
 - Complete audit trails for policy chains
 - Enhanced UI field ordering

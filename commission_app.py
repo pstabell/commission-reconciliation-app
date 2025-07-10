@@ -1226,6 +1226,15 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(renewed_policies)]
     
+    # Exclude policies that have been cancelled
+    # Check if any transaction for a policy number has type "CAN"
+    transaction_type_col = get_mapped_column("Transaction Type")
+    if transaction_type_col and transaction_type_col in df.columns:
+        # Get all policy numbers that have a CAN transaction
+        cancelled_policies = df[df[transaction_type_col] == "CAN"]["Policy Number"].unique()
+        # Exclude these from pending renewals
+        pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
+    
     return pending_renewals
 
 def normalize_business_name(name):
@@ -2092,6 +2101,28 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
                     key="modal_MGA Name"
                 )
+            
+            # Policy Type in right column, second position
+            if 'Policy Type' in modal_data.keys():
+                # Load policy types from configuration
+                policy_types_config = load_policy_types_config()
+                active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
+                
+                # Get current value
+                current_policy_type = modal_data.get('Policy Type', '')
+                
+                # Ensure current value is in options
+                options = active_types.copy()
+                if current_policy_type and current_policy_type not in options:
+                    options.insert(0, current_policy_type)
+                
+                updated_data['Policy Type'] = st.selectbox(
+                    'Policy Type (add in Admin Panel)',
+                    options=options,
+                    index=options.index(current_policy_type) if current_policy_type in options else 0,
+                    key="modal_Policy Type",
+                    help="Go to Admin Panel → Policy Types to add new types"
+                )
         
         # Second row - Transaction Type 
         with col3:
@@ -2121,47 +2152,26 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         # Now handle the rest of the policy fields
         field_counter = 0
         for field in policy_fields:
-            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Policy Type', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
                 with col3 if field_counter % 2 == 0 else col4:
-                    if field == 'Policy Type':
-                        # Load policy types from configuration
-                        policy_types_config = load_policy_types_config()
-                        active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
-                        
-                        # Get current value
-                        current_policy_type = modal_data.get(field, '')
-                        
-                        # Ensure current value is in options
-                        options = active_types.copy()
-                        if current_policy_type and current_policy_type not in options:
-                            options.insert(0, current_policy_type)
-                        
-                        updated_data[field] = st.selectbox(
-                            field + " (add in Admin Panel or table above)",
-                            options=options,
-                            index=options.index(current_policy_type) if current_policy_type in options else 0,
-                            key=f"modal_{field}_select",
-                            help="To add new types: Admin Panel or use the editable table above"
+                    # Regular text input
+                    # Make Prior Policy Number read-only for renewals
+                    if field == 'Prior Policy Number' and is_renewal:
+                        value = modal_data.get(field, '')
+                        st.text_input(
+                            field, 
+                            value=str(value) if value is not None else '',
+                            key=f"modal_{field}",
+                            disabled=True,
+                            help="Automatically populated from the policy being renewed"
                         )
+                        updated_data[field] = value  # Preserve the value since it's disabled
                     else:
-                        # Regular text input
-                        # Make Prior Policy Number read-only for renewals
-                        if field == 'Prior Policy Number' and is_renewal:
-                            value = modal_data.get(field, '')
-                            st.text_input(
-                                field, 
-                                value=str(value) if value is not None else '',
-                                key=f"modal_{field}",
-                                disabled=True,
-                                help="Automatically populated from the policy being renewed"
-                            )
-                            updated_data[field] = value  # Preserve the value since it's disabled
-                        else:
-                            updated_data[field] = st.text_input(
-                                field, 
-                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                key=f"modal_{field}"
-                            )
+                        updated_data[field] = st.text_input(
+                            field, 
+                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                            key=f"modal_{field}"
+                        )
                 field_counter += 1
         
         
@@ -2537,9 +2547,9 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             height=70
         )
         
-        # Calculate button
-        if st.form_submit_button("Calculate", type="secondary"):
-            st.info("Calculations will be performed when you save the transaction.")
+        # Calculate button - make it prominent
+        if st.form_submit_button("🧮 Calculate", type="primary", help="Click to verify all commission calculations"):
+            st.success("✅ Calculations updated! Review the amounts above before saving.")
         
         # Internal Fields (collapsed by default)
         with st.expander("Internal Fields", expanded=False):
@@ -4293,7 +4303,7 @@ def main():
                                     col_calc, col_save, col_cancel = st.columns(3)
                                     
                                     with col_calc:
-                                        calculate_modal = st.form_submit_button("🔄 Calculate", use_container_width=True, help="Refresh calculations before saving")
+                                        calculate_modal = st.form_submit_button("🧮 Calculate", type="primary", use_container_width=True, help="Click to verify all commission calculations")
                                     
                                     with col_save:
                                         save_modal = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
@@ -4706,6 +4716,14 @@ def main():
             with col2:
                 policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
             
+            # Row 1.5: Prior Policy Number (for rewrites and renewals)
+            prior_policy_number = st.text_input(
+                "Prior Policy Number (optional)", 
+                placeholder="Enter if this is a renewal or rewrite",
+                help="For REWRITE or renewal transactions, enter the original policy number to maintain audit trail",
+                key="add_prior_policy_number"
+            )
+            
             # Row 2: Carrier Name and MGA Name
             col1, col2 = st.columns(2)
             with col1:
@@ -4841,7 +4859,7 @@ def main():
             # Form buttons
             col1, col2 = st.columns(2)
             with col1:
-                calculate = st.form_submit_button("🔄 Calculate", use_container_width=True, help="Update all calculations")
+                calculate = st.form_submit_button("🧮 Calculate", type="primary", use_container_width=True, help="Click to verify all commission calculations")
             with col2:
                 submitted = st.form_submit_button("💾 Save Policy Transaction", type="primary", use_container_width=True)
             
@@ -4869,6 +4887,7 @@ def main():
                             "MGA Name": mga_name,
                             "Policy Type": policy_type,
                             "Policy Number": policy_number,
+                            "Prior Policy Number": prior_policy_number if prior_policy_number else None,
                             "Transaction Type": transaction_type,
                             "Policy Term": policy_term,  # Add Policy Term
                             "Policy Origination Date": policy_orig_date.strftime('%m/%d/%Y'),
@@ -8459,6 +8478,59 @@ SOLUTION NEEDED:
             st.write("- **Admin Panel**: Database management and system tools")
             st.write("- **Tools**: Utilities for calculations and data formatting")
             st.write("- **Accounting**: Commission reconciliation and payment tracking")
+            
+            st.divider()
+            
+            # Cancel/Rewrite Scenario Guide
+            st.write("**🔄 Cancel/Rewrite Scenario Guide**")
+            st.info("**Important**: This section explains how to handle mid-term policy cancellations that are immediately rewritten (common for rate reductions).")
+            
+            with st.expander("📋 Step-by-Step Process for Cancel/Rewrite", expanded=True):
+                st.success("🎉 **NEW FEATURES**: Prior Policy Number field now available in Add New Policy! Cancelled policies automatically hidden from Pending Renewals!")
+                st.markdown("""
+                ### When to Use Cancel/Rewrite
+                Use this process when a customer wants to cancel their current policy mid-term and immediately 
+                rewrite it (typically to save money with a better rate).
+                
+                ### Step 1: Cancel the Original Policy
+                Create a new transaction with:
+                - **Transaction Type**: `CAN` (Cancel)
+                - **Policy Number**: Same as the original policy
+                - **Effective Date**: The cancellation date
+                - **Premium/Commission fields**: Enter negative amounts or zeros
+                - **Description**: Add note like "Cancelled for rewrite - see policy [new policy number]"
+                
+                ✅ **NEW**: Cancelled policies now automatically disappear from Pending Renewals!
+                
+                ### Step 2: Create the Rewrite Policy
+                Use "Add New Policy Transaction" with:
+                - **Transaction Type**: `REWRITE` (not RWL - this ensures 25% commission, not 50%)
+                - **Policy Number**: New number if changed, or same if carrier kept it
+                - **Prior Policy Number**: Enter the original policy number (NOW AVAILABLE in Add New Policy!)
+                - **Effective Date**: New effective date (immediate)
+                - **X-DATE**: New expiration date
+                - **Policy Origination Date**: Keep the ORIGINAL date (preserves customer history)
+                - **Commission**: Will calculate at 25% (rewrite rate)
+                - **Description**: Add note like "Rewrite of policy [original number] - mid-term for rate reduction"
+                
+                ### Key Benefits
+                ✅ Maintains complete audit trail  
+                ✅ Prior Policy Number links rewrite to original (field now in Add New Policy!)
+                ✅ Preserves customer relationship timeline  
+                ✅ Both transactions appear in reports  
+                ✅ Cancelled policies automatically removed from Pending Renewals  
+                ✅ Rewrite won't show in Pending Renewals (due to Prior Policy Number)
+                ✅ Commission calculates correctly at 25%  
+                
+                ### Alternative: Same Policy Number
+                If the carrier keeps the same policy number:
+                - Still create both CAN and REWRITE transactions
+                - Use the same Policy Number for both
+                - Different Transaction IDs keep them separate
+                - The dates and transaction types tell the complete story
+                """)
+            
+            st.warning("⚠️ **Remember**: Always use REWRITE (not RWL) for mid-term rewrites to ensure proper 25% commission calculation!")
         
         with tab3:
             st.subheader("🔧 Troubleshooting")
@@ -9046,6 +9118,9 @@ TO "New Column Name";
             if st.session_state.editing_renewal and st.session_state.renewal_to_edit:
                 st.divider()
                 st.markdown("### 📝 Edit Renewal Transaction")
+                
+                # Important reminder for user
+                st.info("💡 **Note**: To edit a different transaction, click the **Cancel** button below to return to the selection table.")
                 
                 # Prepare renewal data (pre-populate with calculated values)
                 renewal_data = st.session_state.renewal_to_edit.copy()

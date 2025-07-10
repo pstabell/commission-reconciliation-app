@@ -668,6 +668,36 @@ Comprehensive renewal tracking system implementation with complete audit trail c
 
 ---
 
+### Version 3.5.2 (July 10, 2025 - Evening) - UI Enhancement & Cancel/Rewrite Workflow
+
+#### UI Improvements for Pending Policy Renewals
+- **Added Info Box Reminder**: Clear guidance about using Cancel button to switch transactions
+- **Blue Calculate Buttons**: All Calculate buttons now use primary (blue) styling for visibility
+- **Improved User Workflow**: Better visual cues prevent confusion during renewal editing
+- **Form Field Reorganization**: Policy Type moved to right column under MGA Name
+
+#### Cancel/Rewrite Workflow Implementation
+- **Comprehensive Documentation**: Added detailed Cancel/Rewrite Scenario Guide to Help page
+- **Automatic Filtering**: Cancelled policies (CAN transactions) excluded from Pending Renewals
+- **Prior Policy Number in Add New**: Field now available for tracking policy chains
+- **Complete Workflow Support**: Full support for mid-term policy changes
+
+#### Technical Enhancements
+- **get_pending_renewals() Update**: Added logic to check for CAN transaction types
+- **Add New Policy Form**: Conditional Prior Policy Number field with smart visibility
+- **Edit Transaction Form**: Improved field positioning and layout balance
+- **Help Page Enhancement**: Added comprehensive cancel/rewrite documentation
+
+#### User Experience Improvements
+- Clear instructions for handling policy cancellations
+- Proper workflow for creating replacement policies
+- Automatic hiding of cancelled policies from renewals
+- Complete audit trail maintenance through policy chains
+
+**Impact**: Dramatically improved handling of complex policy scenarios. Users can now confidently process cancellations and rewrites while maintaining complete audit trails. The enhanced UI provides better guidance and prevents common workflow errors.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 10, 2025 (Afternoon)*  
-*Current Application Version: 3.5.1*
+*Last Updated: July 10, 2025 (Evening)*  
+*Current Application Version: 3.5.2*

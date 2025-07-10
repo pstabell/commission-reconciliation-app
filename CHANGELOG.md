@@ -5,6 +5,37 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.2] - 2025-07-10 (Evening)
+
+### Added
+- **UI Improvements for Pending Policy Renewals**
+  - Added info box reminder about using Cancel button to switch transactions
+  - Made all Calculate buttons primary (blue) type for better visibility
+  - Improved user guidance during renewal editing workflow
+
+- **Cancel/Rewrite Workflow Enhancement**
+  - Added comprehensive Cancel/Rewrite Scenario Guide to Help page
+  - Implemented automatic exclusion of cancelled policies from Pending Renewals
+  - Added Prior Policy Number field to Add New Policy form for complete tracking
+  - Documented best practices for handling mid-term policy changes
+
+### Changed
+- **Form Field Reorganization**
+  - Moved Policy Type field to right column under MGA Name in Pending Renewals
+  - Improved visual hierarchy and logical field grouping
+  - Better balance between left and right columns in edit forms
+
+### Fixed
+- **Cancel/Rewrite Issues**
+  - Cancelled policies (with CAN transactions) no longer appear in Pending Renewals
+  - Prior Policy Number field now available in Add New Policy form
+  - Proper handling of policy chains for cancelled and rewritten policies
+
+### Technical
+- Updated `get_pending_renewals()` to check for CAN transaction types
+- Enhanced Add New Policy form with conditional Prior Policy Number field
+- Improved edit transaction form layout with better field positioning
+
 ## [3.5.1] - 2025-07-10 (Afternoon)
 
 ### Added
