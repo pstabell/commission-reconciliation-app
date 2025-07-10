@@ -3744,7 +3744,7 @@ def main():
                                     if result["action"] == "save":
                                         try:
                                             # Update the database
-                                            transaction_id = result["data"].get(get_transaction_id_column())
+                                            transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
                                             
                                             # Convert data for database update
                                             update_data = result["data"].copy()
@@ -3757,7 +3757,7 @@ def main():
                                             
                                             # Update the record
                                             response = supabase.table('policies').update(update_data).eq(
-                                                f'"{get_transaction_id_column()}"', transaction_id
+                                                f'"{get_mapped_column("Transaction ID")}"', transaction_id
                                             ).execute()
                                             
                                             if response.data:
