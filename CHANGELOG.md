@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.3] - 2025-07-10 (Evening - Critical Fix)
+
+### Fixed
+- **Critical Production Error**: StreamlitDuplicateElementKey error when editing transactions
+  - Removed 657 lines of duplicate edit form code in Edit Policies page
+  - Consolidated to use single reusable edit_transaction_form function
+  - Added proper field tracking to prevent duplicate widget rendering
+  - Fixed form name conflicts that caused production crashes
+
+### Technical
+- Eliminated duplicate form implementation that was causing key conflicts
+- Improved field rendering tracking in edit forms
+- Ensured consistent form behavior across all edit contexts
+
 ## [3.5.2] - 2025-07-10 (Evening)
 
 ### Added

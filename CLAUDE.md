@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 10, 2025 (Evening)  
-**Current Version**: 3.5.2
+**Current Version**: 3.5.3
 
 ## Quick Context
 - **Language**: Python with Streamlit
