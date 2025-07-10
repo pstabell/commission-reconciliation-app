@@ -1,3 +1,37 @@
+# Pending Policy Renewals Feature
+
+**Last Updated**: July 10, 2025
+
+## Current Implementation
+
+The Pending Policy Renewals feature is now live with the following capabilities:
+
+### Key Features:
+1. **Automatic Renewal Detection**: Identifies policies expiring within 60 days
+2. **Policy Term Support**: Uses actual policy terms (3, 6, 9, 12 months) for accurate renewal calculations
+3. **Transaction Type Filtering**: Only considers NEW and RWL policies for renewal
+4. **Batch Operations**: Select multiple policies for renewal at once
+
+### How It Works:
+1. **Data Source**: Reads from the `policies` table
+2. **Filtering Logic**:
+   - Transaction Type must be "NEW" or "RWL"
+   - Expiration date (X-DATE) within next 60 days
+   - Groups by Policy Number to find latest transaction
+3. **Renewal Calculation**:
+   - New Effective Date = Previous policy's Expiration Date
+   - New Expiration Date = New Effective Date + Policy Term months
+   - If no Policy Term specified, defaults to 6 months
+
+### Recent Enhancements (July 10, 2025):
+- Added Policy Term field to database and UI
+- Updated renewal calculation to use actual policy terms instead of hardcoded 6 months
+- 98 existing policies automatically assigned terms based on date calculations
+
+---
+
+## Original Design Document
+
 # Pending Policy Renewals – Master Design V2
 
 ## Phase 1: Foundational Setup (Safe Scaffolding)

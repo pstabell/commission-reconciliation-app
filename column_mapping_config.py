@@ -36,7 +36,9 @@ class ColumnMapper:
             
             # Policy details
             "Policy Type": "Policy Type",
-            "Carrier Name": "Carrier Name", 
+            "Policy Term": "Policy Term",
+            "Carrier Name": "Carrier Name",
+            "MGA Name": "MGA Name", 
             "Effective Date": "Effective Date",            "Policy Origination Date": "Policy Origination Date",
             "X-DATE": "X-DATE",
             "Transaction Type": "Transaction Type",

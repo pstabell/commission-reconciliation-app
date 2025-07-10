@@ -108,6 +108,9 @@ def load_policies_data():
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
             
+            # Keep date columns as they are in the database
+            # DO NOT format dates here as it can cause data loss
+            
             # Round all numeric columns to 2 decimal places
             df = round_numeric_columns(df)
             return df
@@ -119,6 +122,52 @@ def load_policies_data():
 def clear_policies_cache():
     """Clear the policies data cache."""
     load_policies_data.clear()
+
+def format_date_value(date_value, format='%m/%d/%Y'):
+    """Safely format a date value to MM/DD/YYYY string format.
+    
+    Args:
+        date_value: The date value to format (can be string, datetime, date, or pandas timestamp)
+        format: The desired output format (default: '%m/%d/%Y')
+    
+    Returns:
+        Formatted date string or original value if formatting fails
+    """
+    # If null or empty, return the original value
+    if pd.isna(date_value) or date_value is None:
+        return date_value
+    
+    # If it's already an empty string, keep it
+    if str(date_value).strip() == '':
+        return date_value
+    
+    try:
+        # Store original value
+        original_value = date_value
+        
+        # If it's already a datetime or date object
+        if isinstance(date_value, (datetime.datetime, datetime.date)):
+            return date_value.strftime(format)
+        
+        # If it's a pandas Timestamp
+        if hasattr(date_value, 'strftime'):
+            return date_value.strftime(format)
+        
+        # If it's already in MM/DD/YYYY format, return as is
+        date_str = str(date_value)
+        if re.match(r'^\d{2}/\d{2}/\d{4}$', date_str):
+            return date_str
+        
+        # Try to parse string dates
+        parsed_date = pd.to_datetime(date_value, errors='coerce')
+        if pd.notna(parsed_date):
+            return parsed_date.strftime(format)
+        
+        # If all else fails, return the original value unchanged
+        return original_value
+    except:
+        # On any error, return the original value unchanged
+        return date_value
 
 def calculate_dashboard_metrics(df):
     """Calculate dashboard metrics distinguishing transactions vs policies."""
@@ -1882,7 +1931,15 @@ def duplicate_for_renewal(df: pd.DataFrame) -> pd.DataFrame:
     
     # Calculate new term dates
     renewed_df['new_effective_date'] = renewed_df['expiration_date']
-    renewed_df['new_expiration_date'] = renewed_df['new_effective_date'] + pd.DateOffset(months=6) # Assuming 6-month terms for now
+    
+    # Calculate new expiration date based on Policy Term
+    policy_term_col = get_mapped_column("Policy Term")
+    renewed_df['new_expiration_date'] = renewed_df.apply(
+        lambda row: row['new_effective_date'] + pd.DateOffset(months=int(row[policy_term_col])) 
+        if policy_term_col in row and pd.notna(row.get(policy_term_col)) and row.get(policy_term_col) != 0
+        else row['new_effective_date'] + pd.DateOffset(months=6),  # Default to 6 months if not specified
+        axis=1
+    )
     
     # Update the relevant columns
     renewed_df[get_mapped_column("Effective Date")] = renewed_df['new_effective_date'].dt.strftime('%m/%d/%Y')
@@ -2017,6 +2074,15 @@ def main():
                                     step=0.01
                                 )
                         
+                        # Configure date columns as text columns
+                        date_cols = ['Policy Origination Date', 'Effective Date', 'X-DATE', 'STMT DATE']
+                        for col in date_cols:
+                            if col in search_results.columns:
+                                column_config[col] = st.column_config.TextColumn(
+                                    col,
+                                    help="Date format: MM/DD/YYYY"
+                                )
+                        
                         # Display search results in an editable table
                         edited_data = st.data_editor(
                             search_results,
@@ -2080,6 +2146,15 @@ def main():
                     column_config[col] = st.column_config.NumberColumn(
                         col,
                         format="%.2f"
+                    )
+            
+            # Configure date columns for safe display formatting
+            date_cols = ['Policy Origination Date', 'Effective Date', 'X-DATE', 'STMT DATE']
+            for col in date_cols:
+                if col in recent_data.columns:
+                    column_config[col] = st.column_config.TextColumn(
+                        col,
+                        help="Date format: MM/DD/YYYY"
                     )
             
             st.dataframe(
@@ -2479,6 +2554,17 @@ def main():
                         # Format numeric columns to ensure 2 decimal places
                         edit_results = round_numeric_columns(edit_results)
                         
+                        # Keep dates as they are from the database
+                        date_cols = [
+                            'Policy Origination Date',
+                            'Effective Date',
+                            'X-DATE',
+                            'STMT DATE',
+                            'Policy Issue Date',
+                            'Policy Effective Date',
+                            'As of Date'
+                        ]
+                        
                         # Filter out reconciliation transactions
                         # First, find the transaction ID column using multiple detection methods
                         transaction_id_col = None
@@ -2550,6 +2636,8 @@ def main():
                             # Add a selection column for deletion
                             edit_results_with_selection = edit_results.copy()
                             edit_results_with_selection.insert(0, 'Select', False)
+                            
+                            # DO NOT format dates here - keep original values
                         
                             # Configure column settings for the data editor
                             column_config = {
@@ -2613,6 +2701,16 @@ def main():
                                         col,
                                         format="%.2f",
                                         step=0.01
+                                    )
+                            
+                            # Configure date columns as text columns with help text
+                            # Since dates are stored as strings, we can't use DateColumn
+                            for col in date_cols:
+                                if col in edit_results_with_selection.columns:
+                                    column_config[col] = st.column_config.TextColumn(
+                                        col,
+                                        help="Date format: MM/DD/YYYY",
+                                        max_chars=10
                                     )
                             
                             # If we have transaction ID column, make it clear it will be auto-generated
@@ -2687,13 +2785,18 @@ def main():
                                 - Shift+Enter: Confirm edit and move up
                                 """)
                             
+                            # Calculate height based on number of rows (35px per row + 50px for header)
+                            # Max height of 600px to prevent very tall tables
+                            num_data_rows = len(st.session_state[editor_key])
+                            calculated_height = min(50 + (num_data_rows + 2) * 35, 600)  # +2 for the extra rows you want
+                            
                             # Editable data grid with selection column
                             edited_data = st.data_editor(
                                 st.session_state[editor_key],
                                 use_container_width=True,
-                                height=500,
+                                height=calculated_height,
                                 key=f"{editor_key}_widget",
-                                num_rows="fixed",  # Changed from dynamic since it's not working
+                                num_rows="fixed",  # Back to fixed to prevent too many blank rows
                                 column_config=column_config,
                                 disabled=False
                             )
@@ -2981,7 +3084,7 @@ def main():
                                     
                                     # Define field groups for better organization
                                     client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-                                    policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'Policy Number', 'Transaction Type', 'NEW BIZ CHECKLIST COMPLETE', 'FULL OR MONTHLY PMTS', 'NOTES']
+                                    policy_fields = ['Writing Code', 'Policy #', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Policy Number', 'Transaction Type', 'Policy Term', 'NEW BIZ CHECKLIST COMPLETE', 'FULL OR MONTHLY PMTS', 'NOTES']
                                     date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
                                     commission_fields = [
                                         'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -3009,9 +3112,65 @@ def main():
                                     # Policy Information
                                     st.markdown("#### Policy Information")
                                     col3, col4 = st.columns(2)
+                                    
+                                    # Handle Carrier Name and MGA Name first to ensure they're at the top
+                                    with col3:
+                                        if 'Carrier Name' in modal_data.keys():
+                                            updated_data['Carrier Name'] = st.text_input(
+                                                'Carrier Name', 
+                                                value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
+                                                key="modal_Carrier Name"
+                                            )
+                                    
+                                    with col4:
+                                        if 'MGA Name' in modal_data.keys():
+                                            updated_data['MGA Name'] = st.text_input(
+                                                'MGA Name', 
+                                                value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
+                                                key="modal_MGA Name"
+                                            )
+                                    
+                                    # Handle Transaction Type and Policy Term together
+                                    col5, col6 = st.columns(2)
+                                    with col5:
+                                        if 'Transaction Type' in modal_data.keys():
+                                            # Transaction type dropdown
+                                            transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
+                                            current_trans_type = modal_data.get('Transaction Type', 'NEW')
+                                            updated_data['Transaction Type'] = st.selectbox(
+                                                'Transaction Type',
+                                                options=transaction_types,
+                                                index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
+                                                key="modal_Transaction Type"
+                                            )
+                                    
+                                    with col6:
+                                        if 'Policy Term' in modal_data.keys():
+                                            # Policy Term dropdown
+                                            policy_terms = [3, 6, 9, 12]
+                                            current_term = modal_data.get('Policy Term', None)
+                                            # Handle the display
+                                            if current_term is None or pd.isna(current_term):
+                                                selected_index = 0
+                                            else:
+                                                try:
+                                                    selected_index = policy_terms.index(int(current_term)) + 1
+                                                except (ValueError, TypeError):
+                                                    selected_index = 0
+                                            
+                                            updated_data['Policy Term'] = st.selectbox(
+                                                'Policy Term',
+                                                options=[None] + policy_terms,
+                                                format_func=lambda x: "" if x is None else f"{x} months",
+                                                index=selected_index,
+                                                key="modal_Policy Term",
+                                                help="Select policy duration in months"
+                                            )
+                                    
+                                    # Now handle the rest of the policy fields
                                     field_counter = 0
                                     for field in modal_data.keys():
-                                        if field in policy_fields:
+                                        if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'NEW BIZ CHECKLIST COMPLETE', 'FULL OR MONTHLY PMTS', 'NOTES']:
                                             with col3 if field_counter % 2 == 0 else col4:
                                                 if field == 'Policy Type':
                                                     # Load policy types from configuration
@@ -3033,42 +3192,6 @@ def main():
                                                         key=f"modal_{field}_select",
                                                         help="To add new types: Admin Panel or use the editable table above"
                                                     )
-                                                elif field == 'Transaction Type':
-                                                    # Transaction type dropdown
-                                                    transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
-                                                    current_trans_type = modal_data.get(field, 'NEW')
-                                                    updated_data[field] = st.selectbox(
-                                                        field,
-                                                        options=transaction_types,
-                                                        index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
-                                                        key=f"modal_{field}"
-                                                    )
-                                                elif field == 'NEW BIZ CHECKLIST COMPLETE':
-                                                    # Checkbox field
-                                                    current_val = str(modal_data.get(field, 'No')).upper() == 'YES'
-                                                    updated_data[field] = 'Yes' if st.checkbox(
-                                                        field,
-                                                        value=current_val,
-                                                        key=f"modal_{field}"
-                                                    ) else 'No'
-                                                elif field == 'FULL OR MONTHLY PMTS':
-                                                    # Dropdown for payment type
-                                                    payment_types = ["FULL", "MONTHLY", ""]
-                                                    current_payment = modal_data.get(field, '')
-                                                    updated_data[field] = st.selectbox(
-                                                        field,
-                                                        options=payment_types,
-                                                        index=payment_types.index(current_payment) if current_payment in payment_types else 2,
-                                                        key=f"modal_{field}"
-                                                    )
-                                                elif field == 'NOTES':
-                                                    # Text area for notes
-                                                    updated_data[field] = st.text_area(
-                                                        field,
-                                                        value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                                                        key=f"modal_{field}",
-                                                        height=100
-                                                    )
                                                 else:
                                                     # Regular text input
                                                     updated_data[field] = st.text_input(
@@ -3077,6 +3200,40 @@ def main():
                                                         key=f"modal_{field}"
                                                     )
                                             field_counter += 1
+                                    
+                                    # Bottom fields - NEW BIZ CHECKLIST COMPLETE, FULL OR MONTHLY PMTS, and NOTES
+                                    col7, col8 = st.columns(2)
+                                    
+                                    with col7:
+                                        # NEW BIZ CHECKLIST COMPLETE
+                                        if 'NEW BIZ CHECKLIST COMPLETE' in modal_data.keys():
+                                            current_val = str(modal_data.get('NEW BIZ CHECKLIST COMPLETE', 'No')).upper() == 'YES'
+                                            updated_data['NEW BIZ CHECKLIST COMPLETE'] = 'Yes' if st.checkbox(
+                                                'NEW BIZ CHECKLIST COMPLETE',
+                                                value=current_val,
+                                                key="modal_NEW BIZ CHECKLIST COMPLETE"
+                                            ) else 'No'
+                                    
+                                    with col8:
+                                        # FULL OR MONTHLY PMTS
+                                        if 'FULL OR MONTHLY PMTS' in modal_data.keys():
+                                            payment_types = ["FULL", "MONTHLY", ""]
+                                            current_payment = modal_data.get('FULL OR MONTHLY PMTS', '')
+                                            updated_data['FULL OR MONTHLY PMTS'] = st.selectbox(
+                                                'FULL OR MONTHLY PMTS',
+                                                options=payment_types,
+                                                index=payment_types.index(current_payment) if current_payment in payment_types else 2,
+                                                key="modal_FULL OR MONTHLY PMTS"
+                                            )
+                                    
+                                    # NOTES - Full width at the bottom
+                                    if 'NOTES' in modal_data.keys():
+                                        updated_data['NOTES'] = st.text_area(
+                                            'NOTES',
+                                            value=str(modal_data.get('NOTES', '')) if modal_data.get('NOTES') is not None else '',
+                                            key="modal_NOTES",
+                                            height=70
+                                        )
                                     
                                     # Date Fields
                                     st.markdown("#### Dates")
@@ -3490,9 +3647,9 @@ def main():
                                         
                                         # Then override with any fields that were updated in the form
                                         for field, value in updated_data.items():
-                                            # Convert date objects to strings
+                                            # Convert date objects to strings in MM/DD/YYYY format
                                             if isinstance(value, datetime.date):
-                                                update_dict[field] = value.isoformat()
+                                                update_dict[field] = value.strftime('%m/%d/%Y')
                                             # Handle empty strings as None
                                             elif value == '':
                                                 update_dict[field] = None
@@ -3870,12 +4027,24 @@ def main():
             with col2:
                 policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
             
-            # Row 2: Carrier Name and Transaction Type
+            # Row 2: Carrier Name and MGA Name
             col1, col2 = st.columns(2)
             with col1:
                 carrier_name = st.text_input("Carrier Name", placeholder="Enter carrier name")
             with col2:
+                mga_name = st.text_input("MGA Name", placeholder="Enter MGA name")
+            
+            # Row 2.5: Transaction Type and Policy Term
+            col1, col2 = st.columns(2)
+            with col1:
                 transaction_type = st.selectbox("Transaction Type", ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"])
+            with col2:
+                policy_term = st.selectbox(
+                    "Policy Term",
+                    options=[None, 3, 6, 9, 12],
+                    format_func=lambda x: "" if x is None else f"{x} months",
+                    help="Select policy duration in months"
+                )
             
             # Row 3: Effective Date and Policy Origination Date
             col1, col2 = st.columns(2)
@@ -4018,9 +4187,11 @@ def main():
                             "Transaction ID": transaction_id,
                             "Customer": customer,
                             "Carrier Name": carrier_name,
+                            "MGA Name": mga_name,
                             "Policy Type": policy_type,
                             "Policy Number": policy_number,
                             "Transaction Type": transaction_type,
+                            "Policy Term": policy_term,  # Add Policy Term
                             "Policy Origination Date": policy_orig_date.strftime('%m/%d/%Y'),
                             "Effective Date": effective_date.strftime('%m/%d/%Y'),
                             "X-DATE": x_date.strftime('%m/%d/%Y'),
@@ -7313,7 +7484,7 @@ SOLUTION NEEDED:
                 st.markdown("### Policy Details (Editable)")
                 # Show policy-level details using mapped column names
                 policy_detail_field_names = [
-                    "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name",
+                    "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
                     "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
                     "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
                 ]
@@ -7343,6 +7514,7 @@ SOLUTION NEEDED:
                             "Policy Number": "policy_number",
                             "Policy Type": "policy_type",
                             "Carrier Name": "carrier_name",
+                            "MGA Name": "mga_name",
                             "Effective Date": "policy_effective_date",
                             "Policy Origination Date": "policy_origination_date",
                             "Policy Gross Comm %": "policy_commission_pct",
@@ -7730,7 +7902,7 @@ TO "New Column Name";
                 agg_dict = {}
                 
                 # For descriptive fields, take the first value (they should be the same for all transactions of the same policy)
-                descriptive_field_names = ["Customer", "Policy Type", "Carrier Name", "Effective Date", 
+                descriptive_field_names = ["Customer", "Policy Type", "Carrier Name", "MGA Name", "Effective Date", 
                                          "Policy Origination Date", "X-DATE", "Client ID"]
                 for field_name in descriptive_field_names:
                     mapped_col = get_mapped_column(field_name)

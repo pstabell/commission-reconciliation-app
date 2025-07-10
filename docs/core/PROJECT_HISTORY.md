@@ -499,6 +499,49 @@ Comprehensive improvements to Add New Policy and Edit Transaction forms:
 
 ---
 
+### Version 3.3.0 (July 10, 2025) - Major Feature Additions & UI Improvements
+Comprehensive update adding new database fields, improving data accuracy, and enhancing user experience:
+
+#### MGA Name Column Implementation
+- Added "MGA Name" (Managing General Agent) column to database
+- Positioned immediately after "Carrier Name" in all views
+- Updated Edit modal to display MGA Name at top right (across from Carrier Name)
+- Added to all data entry forms and displays
+
+#### Date Format Display Standardization
+- Fixed date format display issues throughout application
+- Implemented safe approach using Streamlit column configuration
+- Standardized all dates to MM/DD/YYYY format
+- Resolved StreamlitAPIException errors with TextColumn implementation
+
+#### Policy Term Feature - Complete Implementation
+- Added "Policy Term" field to track policy duration (3, 6, 9, or 12 months)
+- Ensures accurate renewal date calculations
+- Updated renewal logic to use actual policy terms instead of default 6 months
+- Successfully migrated 98 existing policies with calculated terms
+- UI: Dropdown positioned next to Transaction Type in all forms
+
+#### Edit Policy Modal UI Improvements
+- Reorganized field layout for better user experience
+- Top section: Carrier Name/MGA Name and Transaction Type/Policy Term
+- Moved bottom fields (New Biz Checklist, Notes, Full/Monthly Pmts) to end of Policy Information
+- Improved visual hierarchy and data grouping
+
+#### Table Display Enhancement
+- Fixed Edit Policy Transactions table showing excessive blank rows
+- Implemented dynamic height calculation (1-2 blank rows only)
+- Improved data density and visual appeal
+
+#### Documentation Consolidation
+- Merged 9 separate Policy Term documentation files into single comprehensive guide
+- Cleaned root directory by archiving temporary implementation files
+- Created structured documentation hierarchy
+- Updated feature documentation with latest enhancements
+
+**Impact**: Major improvements to data accuracy (especially renewals), user interface consistency, and documentation organization. Application now tracks more comprehensive policy information with MGA relationships and accurate term durations.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 8, 2025 (Evening)*  
-*Current Application Version: 3.2.0*
+*Last Updated: July 10, 2025*  
+*Current Application Version: 3.3.0*
