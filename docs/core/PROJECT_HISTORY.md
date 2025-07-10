@@ -580,6 +580,94 @@ Major improvements to the Pending Policy Renewals feature with shared forms and 
 
 ---
 
+### Version 3.5.0 (July 10, 2025 - Morning) - Policy Renewal Tracking & Critical Fixes
+Comprehensive renewal tracking system implementation with complete audit trail capabilities:
+
+#### Policy Renewal Tracking System
+- Added "Prior Policy Number" field to maintain policy chain history
+- Tracks policy number changes common in commercial surplus lines
+- Creates complete audit trail from original policy through all renewals
+- Policy Origination Date preserved throughout renewal chain
+- Prior Policy Number auto-populates and displays as read-only in renewal forms
+- Full popcorn trail for all policies, not just surplus lines
+
+#### Database Schema Updates
+- Added "Prior Policy Number" column to policies table
+- Renamed "NEW BIZ CHECKLIST COMPLETE" to "Policy Checklist Complete"
+- Created migration scripts for schema updates
+- Improved column naming consistency
+
+#### Critical Bug Fixes
+- Fixed JSON serialization error for Timestamp objects with `convert_timestamps_for_json()`
+- Resolved duplicate Transaction ID generation with uniqueness checking
+- Fixed datetime column display issues in Dashboard Quick Client Search
+- Corrected column name mappings (expiration_date → X-DATE)
+- Removed non-existent UI fields from database operations
+- Fixed multiple schema mismatch errors during renewal process
+
+#### UI/UX Improvements
+- Reordered form fields: MGA Name appears after Carrier Name
+- Policy Term moved to appear after Policy Origination Date in forms
+- Standardized column order in All Policy Transactions page
+- Added two decimal formatting for all numeric columns (e.g., $3971.00 not 3971)
+- Prior Policy Number positioned next to Policy Number for easy comparison
+
+#### Technical Enhancements
+- Improved error handling with detailed debugging for renewals
+- Created test scripts for renewal functionality verification
+- Added comprehensive column reordering system
+- Created timestamped backup system for version control
+- Enhanced renewal form with step-by-step error resolution
+
+#### Documentation
+- Created migration scripts with clear instructions
+- Added plan for future column selection feature
+- Comprehensive testing scripts for renewal tracking
+
+**Impact**: Transformed renewal processing from error-prone to bulletproof. Commercial surplus lines policies can now change numbers freely while maintaining complete history. All policies benefit from enhanced tracking and audit capabilities.
+
+---
+
+### Version 3.5.1 (July 10, 2025 - Afternoon) - Pending Renewals Improvements & Data Architecture
+
+#### Enhanced Pending Renewals Filtering
+- Implemented automatic hiding of already-renewed policies
+- System now checks Prior Policy Number field across all policies
+- Policies that have been renewed no longer appear in Pending Renewals list
+- Prevents duplicate renewal processing and confusion
+
+#### Fixed Critical Display Bug
+- **Issue**: NEW transactions incorrectly displayed as "RWL" in Pending Renewals
+- **Cause**: `duplicate_for_renewal()` function was modifying data for display
+- **Fix**: Removed inappropriate transformation, now shows actual transaction types
+- Transaction Types display correctly without modification
+
+#### Data Loading Architecture Overhaul
+- **Previous**: Single global `all_data` load at login causing stale data issues
+- **New**: Page-specific data loading for fresh information
+- Each page independently loads data when accessed
+- Maintains 5-minute cache TTL for performance
+- Eliminates stale data between page navigation
+- Form data remains safe - refresh only occurs on page load
+
+#### Technical Improvements
+- Fixed multiple duplicate `else` statements causing syntax errors
+- Corrected indentation issues in Policy Revenue Ledger section
+- Improved error handling for empty datasets
+- Added proper return statements for missing data scenarios
+- Enhanced code structure consistency across all pages
+
+#### User Experience Improvements
+- Renewed policies automatically disappear from Pending Renewals
+- Accurate transaction type display prevents confusion
+- Fresh data on every page navigation
+- No more manual refresh required after edits
+- Consistent behavior across all application pages
+
+**Impact**: Significantly improved user experience with accurate displays and automatic data refresh. Pending Renewals now correctly shows only policies that actually need renewal, preventing duplicate work and confusion.
+
+---
+
 *Document Created: July 3, 2025*  
 *Last Updated: July 10, 2025 (Afternoon)*  
-*Current Application Version: 3.4.0*
+*Current Application Version: 3.5.1*

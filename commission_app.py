@@ -1200,6 +1200,7 @@ def calculate_commission(row):
 def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Identifies and generates a DataFrame of policies pending renewal.
+    Excludes policies that have already been renewed (appear in Prior Policy Number of another policy).
     """
     # Filter for relevant transaction types
     renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL"])].copy()
@@ -1216,6 +1217,14 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     # Filter for policies that are expired or expiring soon (e.g., within 60 days)
     today = pd.to_datetime(datetime.date.today())
     pending_renewals = latest_renewals[latest_renewals['expiration_date'] < (today + pd.DateOffset(days=60))]
+    
+    # Get list of policy numbers that have been renewed (appear in Prior Policy Number field)
+    prior_policy_col = get_mapped_column("Prior Policy Number")
+    if prior_policy_col and prior_policy_col in df.columns:
+        # Get all policy numbers that appear as prior policies (meaning they've been renewed)
+        renewed_policies = df[df[prior_policy_col].notna()][prior_policy_col].unique()
+        # Exclude these from pending renewals
+        pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(renewed_policies)]
     
     return pending_renewals
 
@@ -2611,17 +2620,22 @@ def main():
         st.rerun()
     
     # --- Load data with caching for better performance ---
-    all_data = load_policies_data()
+    # Moved all_data loading to individual pages for proper cache refresh
+    # all_data = load_policies_data()
     supabase = get_supabase_client()
     
-    if all_data.empty:
-        st.warning("No data found in policies table. Please add some policy data first.")
+    # Note: all_data empty check moved to individual pages
 
     # --- Page Navigation ---
     if page == "Dashboard":
         st.title("📊 Commission Dashboard")
         
-        if not all_data.empty:
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+        else:
             # Calculate metrics
             metrics = calculate_dashboard_metrics(all_data)
             
@@ -2831,15 +2845,17 @@ def main():
                                  })
                     fig.update_traces(textposition='inside', textinfo='percent+label')
                     st.plotly_chart(fig, use_container_width=True)
-            
-        else:
-            st.info("No data available. Please add some policy data to see dashboard metrics.")
     
     # --- Reports ---
     elif page == "Reports":
         st.title("📈 Reports")
         
-        if not all_data.empty:
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+        else:
             tab1, tab2, tab3, tab4 = st.tabs(["Summary Reports", "Commission Analysis", "Policy Reports", "Custom Reports"])
             
             with tab1:
@@ -3006,14 +3022,17 @@ def main():
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             help="Export comprehensive multi-sheet Excel report with all data and summaries"
                         )
-        else:
-            st.info("No data available for reports.")
     
     # --- All Policy Transactions ---
     elif page == "All Policy Transactions":
         st.title("📋 All Policy Transactions")
         
-        if not all_data.empty:
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+        else:
             # Calculate unique policy count
             unique_policies = all_data['Policy Number'].nunique() if 'Policy Number' in all_data.columns else 0
             st.write(f"**Total Transactions: {len(all_data):,} | Unique Policies: {unique_policies:,}**")
@@ -3169,14 +3188,17 @@ def main():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         help="Export all policies as formatted Excel file"
                     )
-        else:
-            st.info("No policies found in database.")
     
     # --- Edit Policy Transactions ---
     elif page == "Edit Policy Transactions":
         st.title("✏️ Edit Policy Transactions")
         
-        if not all_data.empty:
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+        else:
             st.warning("⚠️ Be careful when editing data. Changes are saved directly to the database.")
             
             # Search and filter options
@@ -4585,12 +4607,13 @@ def main():
                             
                         except Exception as e:
                             st.error(f"Error saving changes: {e}")
-        else:
-            st.info("No policies available to edit.")
     
     # --- Add New Policy Transaction ---
     elif page == "Add New Policy Transaction":
         st.title("➕ Add New Policy Transaction")
+        
+        # Load fresh data for this page
+        all_data = load_policies_data()
         
         # Display success message if a policy was just added
         if 'add_policy_success' in st.session_state:
@@ -4909,7 +4932,12 @@ def main():
     elif page == "Search & Filter":
         st.title("🔍 Advanced Search & Filter")
         
-        if not all_data.empty:
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+        else:
             st.subheader("Search Criteria")
             
             # Create filter form
@@ -5069,12 +5097,13 @@ def main():
                     st.warning("No records match your search criteria")
             else:
                 st.info("Use the form above to search and filter policies")
-        else:
-            st.info("No data available to search.")
     
     # --- Reconciliation ---
     elif page == "Reconciliation":
         st.title("💳 Commission Reconciliation")
+        
+        # Load fresh data for this page
+        all_data = load_policies_data()
         
         # Create tabs for different reconciliation functions
         rec_tab1, rec_tab2, rec_tab3, rec_tab4 = st.tabs([
@@ -6330,6 +6359,9 @@ def main():
     elif page == "Admin Panel":
         st.title("⚙️ Admin Panel")
         
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types"])
         
         with tab1:
@@ -7265,6 +7297,9 @@ SOLUTION NEEDED:
     elif page == "Tools":
         st.title("🛠️ Tools")
         
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
         tab1, tab2, tab3 = st.tabs(["Data Tools", "Utility Functions", "Import/Export"])
         
         with tab1:
@@ -7465,6 +7500,9 @@ SOLUTION NEEDED:
     elif page == "Accounting":
         st.subheader("Accounting")
         st.info("This section provides accounting summaries, reconciliation tools, and export options. Use the reconciliation tool below to match your commission statement to your database and mark payments as received.")
+        
+        # Load fresh data for this page
+        all_data = load_policies_data()
 
         # --- Tables are already created in Supabase ---
         # No need to create tables as they were created during schema setup        # --- Load manual entries from DB if session state is empty ---
@@ -8062,11 +8100,21 @@ SOLUTION NEEDED:
                     del st.session_state['pending_delete_history_id']
                     st.rerun()
         else:
-            st.info("No payment/reconciliation history found.")# --- Policy Revenue Ledger ---
+            st.info("No payment/reconciliation history found.")
+    
+    # --- Policy Revenue Ledger ---
     elif page == "Policy Revenue Ledger":
         st.subheader("Policy Revenue Ledger")
+        
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+            return
+        
         st.info("Search for a policy to view and edit a detailed ledger of all commission credits and debits for that policy. You can edit, delete transactions below. Be sure to click 'Save Changes' to commit your edits.")
-
+        
         # --- Granular Policy Search ---
         customers = all_data["Customer"].dropna().unique().tolist() if "Customer" in all_data.columns else []
         selected_customer = st.selectbox("Select Customer:", ["Select..."] + sorted(customers), key="ledger_customer_select")
@@ -8091,7 +8139,8 @@ SOLUTION NEEDED:
         if selected_customer != "Select..." and selected_policy_type != "Select..." and selected_effective_date != "Select...":
             selected_policy = st.selectbox("Select Policy Number:", ["Select..."] + sorted(policy_numbers), key="ledger_policy_select")
 
-        if selected_policy and selected_policy != "Select...":            # Get all rows for this policy, using only real database data
+        if selected_policy and selected_policy != "Select...":
+            # Get all rows for this policy, using only real database data
             policy_rows = all_data[all_data["Policy Number"] == selected_policy].copy()
             # Define the original ledger columns
             ledger_columns = [
@@ -8123,11 +8172,14 @@ SOLUTION NEEDED:
                 if credit_col in policy_rows.columns:
                     ledger_df["Credit (Commission Owed)"] = policy_rows[credit_col]
                 else:
-                    ledger_df["Credit (Commission Owed)"] = 0.0                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
+                    ledger_df["Credit (Commission Owed)"] = 0.0
+                    
+                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
                 if debit_col in policy_rows.columns:
                     ledger_df["Debit (Paid to Agent)"] = policy_rows[debit_col]
                 else:
                     ledger_df["Debit (Paid to Agent)"] = 0.0
+                    
                 ledger_df["Transaction Type"] = policy_rows[transaction_type_col] if transaction_type_col in policy_rows.columns else ""
                 # Ensure correct column order
                 ledger_df = ledger_df[ledger_columns]
@@ -8135,224 +8187,225 @@ SOLUTION NEEDED:
                 ledger_df = ledger_df.reset_index(drop=True)
             else:
                 # If no rows, show empty DataFrame with correct columns
-                ledger_df = pd.DataFrame(columns=ledger_columns)            
-            if not ledger_df.empty:
-                st.markdown("### Policy Details (Editable)")
-                # Show policy-level details using mapped column names
-                policy_detail_field_names = [
-                    "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
-                    "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
-                    "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
-                ]
-                policy_detail_cols = []
-                for field_name in policy_detail_field_names:
-                    mapped_col = get_mapped_column(field_name)
-                    if mapped_col and mapped_col in policy_rows.columns:
-                        policy_detail_cols.append(mapped_col)
-                    elif field_name in policy_rows.columns:
-                        policy_detail_cols.append(field_name)
+                ledger_df = pd.DataFrame(columns=ledger_columns)
                 
-                policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
-                edited_details_df = st.data_editor(
-                    policy_details_df,
-                    use_container_width=True,
-                    key="policy_details_editor",
-                    num_rows="fixed",
-                    height=100
-                )
-                if st.button("Test Mapping (Preview Policy Details)", key="test_mapping_policy_details_btn") or st.session_state.get("show_policy_details_mapping_preview", False):
-                    st.session_state["show_policy_details_mapping_preview"] = True
+            if not ledger_df.empty:
+                    st.markdown("### Policy Details (Editable)")
+                    # Show policy-level details using mapped column names
+                    policy_detail_field_names = [
+                        "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
+                        "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
+                        "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
+                    ]
+                    policy_detail_cols = []
+                    for field_name in policy_detail_field_names:
+                        mapped_col = get_mapped_column(field_name)
+                        if mapped_col and mapped_col in policy_rows.columns:
+                            policy_detail_cols.append(mapped_col)
+                        elif field_name in policy_rows.columns:
+                            policy_detail_cols.append(field_name)
                     
-                    def get_policy_details_column_mapping(col, val):
-                        mapping = {
-                            "Customer": "customer",
-                            "Client ID": "client_id",
-                            "Policy Number": "policy_number",
-                            "Policy Type": "policy_type",
-                            "Carrier Name": "carrier_name",
-                            "MGA Name": "mga_name",
-                            "Effective Date": "policy_effective_date",
-                            "Policy Origination Date": "policy_origination_date",
-                            "Policy Gross Comm %": "policy_commission_pct",
-                            "Agent Comm (NEW 50% RWL 25%)": "agent_commission_pct",
-                            "X-DATE": "policy_expiration_date"
-                        }
-                        db_col = mapping.get(col, col)
-                        return {
-                            "UI Column Title": col,
-                            "Database Column Name": db_col,
-                            "Current Value": val
-                        }
-                    mapping_table = [get_policy_details_column_mapping(col, edited_details_df.iloc[0][col]) for col in policy_detail_cols] if not edited_details_df.empty else []
-                    mapping_df = pd.DataFrame(mapping_table)
-                    with st.expander("Preview Policy Details Mapping & Changes", expanded=True):
-                        st.write("**Column Mapping (UI → Database):**")
-                        st.dataframe(mapping_df, use_container_width=True)
-                else:
-                    st.session_state["show_policy_details_mapping_preview"] = False
-                if st.button("Save Policy Details", key="save_policy_details_btn") and not edited_details_df.empty:
-                    update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in policy_detail_cols if col != "Policy Number"]) + " WHERE \"Policy Number\" = :policy_number"
-                    update_params = {col: edited_details_df.iloc[0][col] for col in policy_detail_cols if col != "Policy Number"}
-                    update_params["policy_number"] = edited_details_df.iloc[0]["Policy Number"]
-                    with engine.begin() as conn:
-                        # Update via Supabase
-                        if '_id' in selected_df.columns:
-                            policy_id = selected_df.iloc[0]['_id']
-                        else:
-                            # Get the record ID first
-                            search_key = 'Policy Number' if 'Policy Number' in update_params else 'Transaction ID'
-                            search_value = update_params.get('policy_number', update_params.get('transaction_id'))
-                            if search_value:
-                                result = supabase.table('policies').select('_id').eq(search_key, search_value).execute()
-                                if result.data:
-                                    policy_id = result.data[0]['_id']
+                    policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
+                    edited_details_df = st.data_editor(
+                        policy_details_df,
+                        use_container_width=True,
+                        key="policy_details_editor",
+                        num_rows="fixed",
+                        height=100
+                    )
+                    if st.button("Test Mapping (Preview Policy Details)", key="test_mapping_policy_details_btn") or st.session_state.get("show_policy_details_mapping_preview", False):
+                        st.session_state["show_policy_details_mapping_preview"] = True
+                        
+                        def get_policy_details_column_mapping(col, val):
+                            mapping = {
+                                "Customer": "customer",
+                                "Client ID": "client_id",
+                                "Policy Number": "policy_number",
+                                "Policy Type": "policy_type",
+                                "Carrier Name": "carrier_name",
+                                "MGA Name": "mga_name",
+                                "Effective Date": "policy_effective_date",
+                                "Policy Origination Date": "policy_origination_date",
+                                "Policy Gross Comm %": "policy_commission_pct",
+                                "Agent Comm (NEW 50% RWL 25%)": "agent_commission_pct",
+                                "X-DATE": "policy_expiration_date"
+                            }
+                            db_col = mapping.get(col, col)
+                            return {
+                                "UI Column Title": col,
+                                "Database Column Name": db_col,
+                                "Current Value": val
+                            }
+                        mapping_table = [get_policy_details_column_mapping(col, edited_details_df.iloc[0][col]) for col in policy_detail_cols] if not edited_details_df.empty else []
+                        mapping_df = pd.DataFrame(mapping_table)
+                        with st.expander("Preview Policy Details Mapping & Changes", expanded=True):
+                            st.write("**Column Mapping (UI → Database):**")
+                            st.dataframe(mapping_df, use_container_width=True)
+                    else:
+                        st.session_state["show_policy_details_mapping_preview"] = False
+                    if st.button("Save Policy Details", key="save_policy_details_btn") and not edited_details_df.empty:
+                        update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in policy_detail_cols if col != "Policy Number"]) + " WHERE \"Policy Number\" = :policy_number"
+                        update_params = {col: edited_details_df.iloc[0][col] for col in policy_detail_cols if col != "Policy Number"}
+                        update_params["policy_number"] = edited_details_df.iloc[0]["Policy Number"]
+                        with engine.begin() as conn:
+                            # Update via Supabase
+                            if '_id' in selected_df.columns:
+                                policy_id = selected_df.iloc[0]['_id']
+                            else:
+                                # Get the record ID first
+                                search_key = 'Policy Number' if 'Policy Number' in update_params else 'Transaction ID'
+                                search_value = update_params.get('policy_number', update_params.get('transaction_id'))
+                                if search_value:
+                                    result = supabase.table('policies').select('_id').eq(search_key, search_value).execute()
+                                    if result.data:
+                                        policy_id = result.data[0]['_id']
+                                    else:
+                                        policy_id = None
                                 else:
                                     policy_id = None
-                            else:
-                                policy_id = None
-                        
-                        if policy_id:
-                            # Remove ID fields from update
-                            update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'policy_number', 'transaction_id']}
-                            supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
-                            clear_policies_cache()
-                    st.success("Policy details updated.")
-                    st.rerun()
-
-                st.markdown("### Policy Ledger (Editable)")                # Ensure Credit and Debit columns are numeric
-                if "Credit (Commission Owed)" in ledger_df.columns:
-                    ledger_df["Credit (Commission Owed)"] = pd.to_numeric(ledger_df["Credit (Commission Owed)"], errors="coerce").fillna(0.0)
-                if "Debit (Paid to Agent)" in ledger_df.columns:
-                    ledger_df["Debit (Paid to Agent)"] = pd.to_numeric(ledger_df["Debit (Paid to Agent)"], errors="coerce").fillna(0.0)
-
-                # Lock formula columns
-                formula_columns = []
-                for col in ["Credit (Commission Owed)", "Debit (Paid to Agent)"]:
-                    if col in ledger_df.columns:
-                        formula_columns.append(col)
-                column_config = {}
-                for col in ledger_df.columns:
-                    if col in formula_columns:
-                        column_config[col] = {"disabled": True}
-
-                # Prevent deletion of the first (opening) row
-                ledger_df_display = ledger_df.copy()
-                ledger_df_display["Delete"] = True
-                ledger_df_display.loc[0, "Delete"] = False  # Opening row cannot be deleted
-                display_cols = ledger_columns + ["Delete"]
-
-                # --- Ensure all display columns exist in the DataFrame ---
-                for col in display_cols:
-                    if col not in ledger_df_display.columns:
-                        # For Delete, default to True except first row; for others, empty string
-                        if col == "Delete":
-                            ledger_df_display[col] = [True] * len(ledger_df_display)
-                            if len(ledger_df_display) > 0:
-                                ledger_df_display.loc[0, "Delete"] = False
-                        else:
-                            ledger_df_display[col] = ""
-                # Reorder columns safely
-                ledger_df_display = ledger_df_display[display_cols]
-
-                st.markdown("<b>Why are some columns locked?</b>", unsafe_allow_html=True)
-                with st.expander("Locked Columns Explanation", expanded=False):
-                    st.markdown("""
-                    Some columns in the Policy Revenue Ledger are locked because their values are automatically calculated by the app based on other fields or business rules. These formula columns ensure the accuracy of your commission and revenue calculations. If you need to change a value in a locked column, you must update the underlying fields that drive the calculation, or contact your administrator if you believe the formula needs to be changed.
-                    
-                    **Locked columns in this ledger include:**
-                    - Credit (Commission Owed)
-                    - Debit (Paid to Agent)
-                    """)
-
-                # Show the table as editable, with locked columns and strictly no row add/delete
-                # Lock formula columns and Transaction ID, and set num_rows to 'fixed' to prevent row add/delete
-                column_config["Credit (Commission Owed)"] = {
-                    "disabled": True,
-                    "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
-                }
-                column_config["Debit (Paid to Agent)"] = {
-                    "disabled": True,
-                    "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
-                }
-                column_config["Transaction ID"] = {
-                    "disabled": True,
-                    "help": "Transaction ID is a unique identifier and cannot be changed."
-                }
-                edited_ledger_df = st.data_editor(
-                    ledger_df_display,
-                    use_container_width=True,
-                    height=max(400, 40 + 40 * len(ledger_df_display)),
-                    key="policy_ledger_editor",
-                    num_rows="fixed",
-                    column_config=column_config,
-                    hide_index=True
-                )
-
-                # Strictly prevent row addition and deletion: only allow editing of existing rows
-                # Remove the Delete column before saving (no row deletion allowed)
-                edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
-                # Only keep the original ledger columns (no extra columns)
-                edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
-                if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
-                    st.session_state["show_policy_ledger_mapping_preview"] = True
-                    def get_policy_ledger_column_mapping(col, val):
-                        mapping = {
-                            "Transaction ID": "transaction_id",
-                            "Description": "description",
-                            "Credit (Commission Owed)": "agent_estimated_comm",
-                            "Debit (Paid to Agent)": "Agent Paid Amount (STMT)",
-                            "Transaction Type": "transaction_type"
-                        }
-                        db_col = mapping.get(col, col)
-                        return {
-                            "UI Column Title": col,
-                            "Database Column Name": db_col,
-                            "Current Value": val
-                        }
-                    mapping_table = [get_policy_ledger_column_mapping(col, edited_ledger_df.iloc[0][col] if not edited_ledger_df.empty else "") for col in ledger_columns]
-                    mapping_df = pd.DataFrame(mapping_table)
-                    with st.expander("Preview Policy Ledger Mapping & Changes", expanded=True):
-                        st.write("**Column Mapping (UI → Database):**")
-                        st.dataframe(mapping_df, use_container_width=True)
-                        st.write("**Proposed Policy Ledger Preview:**")
-                        st.dataframe(edited_ledger_df, use_container_width=True)
-                else:
-                    st.session_state["show_policy_ledger_mapping_preview"] = False                # --- Ledger Totals Section ---
-                total_credits = edited_ledger_df["Credit (Commission Owed)"].apply(pd.to_numeric, errors="coerce").sum() if "Credit (Commission Owed)" in edited_ledger_df.columns else 0.0
-                total_debits = edited_ledger_df["Debit (Paid to Agent)"].apply(pd.to_numeric, errors="coerce").sum() if "Debit (Paid to Agent)" in edited_ledger_df.columns else 0.0
-                balance_due = total_credits - total_debits
-
-                st.markdown("#### Ledger Totals")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Credits", f"${total_credits:,.2f}")
-                with col2:
-                    st.metric("Total Debits", f"${total_debits:,.2f}")
-                with col3:
-                    st.metric("Balance Due", f"${balance_due:,.2f}")
-
-                if st.button("Save Changes", key="save_policy_ledger_btn"):
-                    for idx, row in edited_ledger_df.iterrows():
-                        update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in ledger_columns if col != "Transaction ID"]) + " WHERE \"Transaction ID\" = :transaction_id"
-                        update_params = {col: row[col] for col in ledger_columns if col != "Transaction ID"}
-                        update_params["transaction_id"] = row["Transaction ID"]
-                        
-                        # Update via Supabase
-                        try:
-                            # Find the policy by Transaction ID
-                            result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
-                            if result.data:
-                                policy_id = result.data[0]['_id']
+                            
+                            if policy_id:
                                 # Remove ID fields from update
-                                update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
+                                update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'policy_number', 'transaction_id']}
                                 supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
                                 clear_policies_cache()
+                        st.success("Policy details updated.")
+                        st.rerun()
+
+                    st.markdown("### Policy Ledger (Editable)")                # Ensure Credit and Debit columns are numeric
+                    if "Credit (Commission Owed)" in ledger_df.columns:
+                        ledger_df["Credit (Commission Owed)"] = pd.to_numeric(ledger_df["Credit (Commission Owed)"], errors="coerce").fillna(0.0)
+                    if "Debit (Paid to Agent)" in ledger_df.columns:
+                        ledger_df["Debit (Paid to Agent)"] = pd.to_numeric(ledger_df["Debit (Paid to Agent)"], errors="coerce").fillna(0.0)
+
+                    # Lock formula columns
+                    formula_columns = []
+                    for col in ["Credit (Commission Owed)", "Debit (Paid to Agent)"]:
+                        if col in ledger_df.columns:
+                            formula_columns.append(col)
+                    column_config = {}
+                    for col in ledger_df.columns:
+                        if col in formula_columns:
+                            column_config[col] = {"disabled": True}
+
+                    # Prevent deletion of the first (opening) row
+                    ledger_df_display = ledger_df.copy()
+                    ledger_df_display["Delete"] = True
+                    ledger_df_display.loc[0, "Delete"] = False  # Opening row cannot be deleted
+                    display_cols = ledger_columns + ["Delete"]
+
+                    # --- Ensure all display columns exist in the DataFrame ---
+                    for col in display_cols:
+                        if col not in ledger_df_display.columns:
+                            # For Delete, default to True except first row; for others, empty string
+                            if col == "Delete":
+                                ledger_df_display[col] = [True] * len(ledger_df_display)
+                                if len(ledger_df_display) > 0:
+                                    ledger_df_display.loc[0, "Delete"] = False
                             else:
-                                st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
-                        except Exception as e:
-                            st.error(f"Error updating policy: {e}")
-                    st.success("Policy ledger changes saved.")
-                    st.rerun()    # --- Help ---
+                                ledger_df_display[col] = ""
+                    # Reorder columns safely
+                    ledger_df_display = ledger_df_display[display_cols]
+
+                    st.markdown("<b>Why are some columns locked?</b>", unsafe_allow_html=True)
+                    with st.expander("Locked Columns Explanation", expanded=False):
+                        st.markdown("""
+                        Some columns in the Policy Revenue Ledger are locked because their values are automatically calculated by the app based on other fields or business rules. These formula columns ensure the accuracy of your commission and revenue calculations. If you need to change a value in a locked column, you must update the underlying fields that drive the calculation, or contact your administrator if you believe the formula needs to be changed.
+                        
+                        **Locked columns in this ledger include:**
+                        - Credit (Commission Owed)
+                        - Debit (Paid to Agent)
+                        """)
+
+                    # Show the table as editable, with locked columns and strictly no row add/delete
+                    # Lock formula columns and Transaction ID, and set num_rows to 'fixed' to prevent row add/delete
+                    column_config["Credit (Commission Owed)"] = {
+                        "disabled": True,
+                        "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
+                    }
+                    column_config["Debit (Paid to Agent)"] = {
+                        "disabled": True,
+                        "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
+                    }
+                    column_config["Transaction ID"] = {
+                        "disabled": True,
+                        "help": "Transaction ID is a unique identifier and cannot be changed."
+                    }
+                    edited_ledger_df = st.data_editor(
+                        ledger_df_display,
+                        use_container_width=True,
+                        height=max(400, 40 + 40 * len(ledger_df_display)),
+                        key="policy_ledger_editor",
+                        num_rows="fixed",
+                        column_config=column_config,
+                        hide_index=True
+                    )
+
+                    # Strictly prevent row addition and deletion: only allow editing of existing rows
+                    # Remove the Delete column before saving (no row deletion allowed)
+                    edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
+                    # Only keep the original ledger columns (no extra columns)
+                    edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
+                    if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
+                        st.session_state["show_policy_ledger_mapping_preview"] = True
+                        def get_policy_ledger_column_mapping(col, val):
+                            mapping = {
+                                "Transaction ID": "transaction_id",
+                                "Description": "description",
+                                "Credit (Commission Owed)": "agent_estimated_comm",
+                                "Debit (Paid to Agent)": "Agent Paid Amount (STMT)",
+                                "Transaction Type": "transaction_type"
+                            }
+                            db_col = mapping.get(col, col)
+                            return {
+                                "UI Column Title": col,
+                                "Database Column Name": db_col,
+                                "Current Value": val
+                            }
+                        mapping_table = [get_policy_ledger_column_mapping(col, edited_ledger_df.iloc[0][col] if not edited_ledger_df.empty else "") for col in ledger_columns]
+                        mapping_df = pd.DataFrame(mapping_table)
+                        with st.expander("Preview Policy Ledger Mapping & Changes", expanded=True):
+                            st.write("**Column Mapping (UI → Database):**")
+                            st.dataframe(mapping_df, use_container_width=True)
+                            st.write("**Proposed Policy Ledger Preview:**")
+                            st.dataframe(edited_ledger_df, use_container_width=True)
+                    else:
+                        st.session_state["show_policy_ledger_mapping_preview"] = False                # --- Ledger Totals Section ---
+                    total_credits = edited_ledger_df["Credit (Commission Owed)"].apply(pd.to_numeric, errors="coerce").sum() if "Credit (Commission Owed)" in edited_ledger_df.columns else 0.0
+                    total_debits = edited_ledger_df["Debit (Paid to Agent)"].apply(pd.to_numeric, errors="coerce").sum() if "Debit (Paid to Agent)" in edited_ledger_df.columns else 0.0
+                    balance_due = total_credits - total_debits
+
+                    st.markdown("#### Ledger Totals")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Credits", f"${total_credits:,.2f}")
+                    with col2:
+                        st.metric("Total Debits", f"${total_debits:,.2f}")
+                    with col3:
+                        st.metric("Balance Due", f"${balance_due:,.2f}")
+
+                    if st.button("Save Changes", key="save_policy_ledger_btn"):
+                        for idx, row in edited_ledger_df.iterrows():
+                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in ledger_columns if col != "Transaction ID"]) + " WHERE \"Transaction ID\" = :transaction_id"
+                            update_params = {col: row[col] for col in ledger_columns if col != "Transaction ID"}
+                            update_params["transaction_id"] = row["Transaction ID"]
+                            
+                            # Update via Supabase
+                            try:
+                                # Find the policy by Transaction ID
+                                result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
+                                if result.data:
+                                    policy_id = result.data[0]['_id']
+                                    # Remove ID fields from update
+                                    update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
+                                    supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
+                                    clear_policies_cache()
+                                else:
+                                    st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
+                            except Exception as e:
+                                st.error(f"Error updating policy: {e}")
+                        st.success("Policy ledger changes saved.")
+                        st.rerun()    # --- Help ---
     elif page == "Help":
         st.title("📚 Help & Documentation")
         
@@ -8541,6 +8594,9 @@ TO "New Column Name";
     elif page == "Policy Revenue Ledger Reports":
         st.subheader("Policy Revenue Ledger Reports")
         st.success("📊 Generate customizable reports for policy summaries with Balance Due calculations and export capabilities.")
+        
+        # Load fresh data for this page
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No policy data loaded. Please check database connection or import data.")
@@ -8920,6 +8976,13 @@ TO "New Column Name";
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
         
+        # Load fresh data for this page
+        all_data = load_policies_data()
+        
+        if all_data.empty:
+            st.warning("No data found in policies table. Please add some policy data first.")
+            return
+        
         # Initialize session state
         if 'deleted_renewals' not in st.session_state:
             st.session_state['deleted_renewals'] = []
@@ -8929,7 +8992,9 @@ TO "New Column Name";
             st.session_state.renewal_to_edit = None
 
         pending_renewals_df = get_pending_renewals(all_data)
-        duplicated_renewals_df = duplicate_for_renewal(pending_renewals_df)
+        # Don't use duplicate_for_renewal for display - it modifies the transaction type!
+        # Just display the original pending renewals as they are
+        duplicated_renewals_df = pending_renewals_df.copy()
         
         # Filter out deleted renewals
         if not duplicated_renewals_df.empty:
@@ -9007,6 +9072,25 @@ TO "New Column Name";
                 
                 # Pre-populate Prior Policy Number with the current policy number
                 renewal_data['Prior Policy Number'] = renewal_data.get('Policy Number', '')
+                
+                # Set transaction type to RWL for renewal
+                renewal_data[get_mapped_column("Transaction Type")] = "RWL"
+                
+                # Update dates for renewal - calculate new effective and expiration dates
+                if 'expiration_date' in renewal_data:
+                    # New effective date is the old expiration date
+                    new_effective = pd.to_datetime(renewal_data['expiration_date'])
+                    renewal_data[get_mapped_column("Effective Date")] = new_effective.strftime('%m/%d/%Y')
+                    
+                    # Calculate new expiration date based on Policy Term
+                    policy_term_col = get_mapped_column("Policy Term")
+                    if policy_term_col in renewal_data and pd.notna(renewal_data.get(policy_term_col)) and renewal_data.get(policy_term_col) != 0:
+                        months_to_add = int(renewal_data[policy_term_col])
+                    else:
+                        months_to_add = 6  # Default to 6 months if not specified
+                    
+                    new_expiration = new_effective + pd.DateOffset(months=months_to_add)
+                    renewal_data[get_mapped_column("X-DATE")] = new_expiration.strftime('%m/%d/%Y')
                 
                 # Clear commission fields for renewal
                 fields_to_clear = [
