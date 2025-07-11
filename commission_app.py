@@ -5352,36 +5352,54 @@ def main():
                         with col1:
                             st.markdown("**Required Fields**")
                             for sys_field, description in required_fields.items():
-                                # Get the current value from session state if it exists
-                                widget_key = f"map_{sys_field}"
-                                current_value = st.session_state.get(widget_key, st.session_state.column_mapping.get(sys_field, ''))
+                                # Get the current value from column_mapping
+                                current_value = st.session_state.column_mapping.get(sys_field, '')
+                                
+                                # Find the index of the current value in options
+                                options = [''] + list(df.columns)
+                                try:
+                                    default_index = options.index(current_value) if current_value in options else 0
+                                except:
+                                    default_index = 0
                                 
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
-                                    options=[''] + list(df.columns),
-                                    key=widget_key,
-                                    index=([''] + list(df.columns)).index(current_value) if current_value in [''] + list(df.columns) else 0,
+                                    options=options,
+                                    key=f"map_{sys_field}",
+                                    index=default_index,
                                     help=f"Select the column that contains {description}"
                                 )
                                 if selected_col:
                                     st.session_state.column_mapping[sys_field] = selected_col
+                                elif sys_field in st.session_state.column_mapping:
+                                    # Remove from mapping if deselected
+                                    del st.session_state.column_mapping[sys_field]
                         
                         with col2:
                             st.markdown("**Optional Fields**")
                             for sys_field, description in optional_fields.items():
-                                # Get the current value from session state if it exists
-                                widget_key = f"map_{sys_field}"
-                                current_value = st.session_state.get(widget_key, st.session_state.column_mapping.get(sys_field, ''))
+                                # Get the current value from column_mapping
+                                current_value = st.session_state.column_mapping.get(sys_field, '')
+                                
+                                # Find the index of the current value in options
+                                options = [''] + list(df.columns)
+                                try:
+                                    default_index = options.index(current_value) if current_value in options else 0
+                                except:
+                                    default_index = 0
                                 
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
-                                    options=[''] + list(df.columns),
-                                    key=widget_key,
-                                    index=([''] + list(df.columns)).index(current_value) if current_value in [''] + list(df.columns) else 0,
+                                    options=options,
+                                    key=f"map_{sys_field}",
+                                    index=default_index,
                                     help=f"Select the column that contains {description}"
                                 )
                                 if selected_col:
                                     st.session_state.column_mapping[sys_field] = selected_col
+                                elif sys_field in st.session_state.column_mapping:
+                                    # Remove from mapping if deselected
+                                    del st.session_state.column_mapping[sys_field]
                         
                         # Column Mapping Management
                         st.divider()
@@ -5435,20 +5453,13 @@ def main():
                                     for sys_field, stmt_col in saved_map.items():
                                         if stmt_col in df.columns:
                                             valid_mapping[sys_field] = stmt_col
-                                            # Update the selectbox widget state to reflect loaded mapping
-                                            widget_key = f"map_{sys_field}"
-                                            st.session_state[widget_key] = stmt_col
                                         else:
                                             missing_cols.append(stmt_col)
                                     
-                                    # Also set empty values for fields not in the saved mapping
-                                    all_fields = list(required_fields.keys()) + list(optional_fields.keys())
-                                    for field in all_fields:
-                                        if field not in valid_mapping:
-                                            widget_key = f"map_{field}"
-                                            st.session_state[widget_key] = ''
-                                    
+                                    # Store the loaded mapping in session state
                                     st.session_state.column_mapping = valid_mapping
+                                    # Flag that we just loaded a mapping
+                                    st.session_state.mapping_just_loaded = True
                                     
                                     if missing_cols:
                                         st.warning(f"Some columns not found in current file: {', '.join(missing_cols)}")
