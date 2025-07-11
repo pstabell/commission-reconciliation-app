@@ -3743,49 +3743,22 @@ def main():
                                 if result:
                                     if result["action"] == "save":
                                         try:
-                                            # Get transaction ID and _id to determine if this is new or existing
+                                            # Update the database
                                             transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
-                                            record_id = result["data"].get('_id')
                                             
-                                            # Convert data for database operation
-                                            save_data = result["data"].copy()
-                                            save_data = convert_timestamps_for_json(save_data)
+                                            # Convert data for database update
+                                            update_data = result["data"].copy()
+                                            update_data = convert_timestamps_for_json(update_data)
                                             
                                             # Handle NaN values
-                                            for key, value in save_data.items():
+                                            for key, value in update_data.items():
                                                 if pd.isna(value):
-                                                    save_data[key] = None
+                                                    update_data[key] = None
                                             
-                                            # First check if this transaction already exists in the database
-                                            # This handles cases where the record was added inline but doesn't have _id in session state
-                                            existing_record = None
-                                            if transaction_id:
-                                                try:
-                                                    check_response = supabase.table('policies').select('_id').eq(
-                                                        f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                    ).execute()
-                                                    if check_response.data and len(check_response.data) > 0:
-                                                        existing_record = check_response.data[0]
-                                                except:
-                                                    pass
-                                            
-                                            # Determine if this is an INSERT or UPDATE
-                                            if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
-                                                # Existing record - UPDATE
-                                                # Remove _id from update data as it shouldn't be updated
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').update(save_data).eq(
-                                                    f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                ).execute()
-                                            else:
-                                                # New record - INSERT
-                                                # Remove _id field to let database auto-generate it
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').insert(save_data).execute()
+                                            # Update the record
+                                            response = supabase.table('policies').update(update_data).eq(
+                                                f'"{get_mapped_column("Transaction ID")}"', transaction_id
+                                            ).execute()
                                             
                                             if response.data:
                                                 st.success("✅ Transaction updated successfully!")
@@ -5353,10 +5326,8 @@ def main():
             
             # Show reconciliation entries
             if not all_data.empty:
-                # Include both -STMT- and -VOID- transactions
                 recon_entries = all_data[
-                    (all_data['Transaction ID'].str.contains('-STMT-', na=False)) |
-                    (all_data['Transaction ID'].str.contains('-VOID-', na=False))
+                    all_data['Transaction ID'].str.contains('-STMT-', na=False)
                 ]
                 
                 if not recon_entries.empty:
@@ -5434,7 +5405,7 @@ def main():
                             
                             # Add reconciliation status aggregation
                             if 'reconciliation_status' in filtered_recon.columns:
-                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if any(str(v).upper() == 'VOID' for v in x.values if pd.notna(v)) else 'ACTIVE'
+                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if 'VOID' in x.values else 'ACTIVE'
                             
                             batch_summary = filtered_recon.groupby('reconciliation_id').agg(agg_dict).reset_index()
                             
@@ -5475,8 +5446,7 @@ def main():
                                 
                                 # Also check reconciliation_status if available
                                 if 'reconciliation_status' in batch_summary.columns:
-                                    status = str(row.get('reconciliation_status', '')).upper()
-                                    if status == 'VOIDED' or status == 'VOID':
+                                    if row.get('reconciliation_status') == 'VOIDED' or row.get('reconciliation_status') == 'VOID':
                                         batch_summary.at[idx, 'Status'] = 'VOIDED'
                             
                             rename_dict = {
@@ -5585,9 +5555,8 @@ def main():
                             
                             # Add Is Void Entry column
                             display_recon['Is Void Entry'] = display_recon.apply(
-                                lambda row: 'Yes' if str(row.get('Reconciliation Status', '')).upper() == 'VOID' or 
-                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False) or
-                                          ('-VOID-' in str(row.get('Transaction ID', '')))
+                                lambda row: 'Yes' if row.get('Reconciliation Status') == 'VOID' or 
+                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False)
                                           else 'No', 
                                 axis=1
                             )
@@ -5609,7 +5578,7 @@ def main():
                             def highlight_void_status(row):
                                 if row.get('Is Void Entry') == 'Yes':
                                     return ['background-color: #ffcccc'] * len(row)
-                                elif str(row.get('Reconciliation Status', '')).upper() == 'VOID':
+                                elif row.get('Reconciliation Status') == 'VOID':
                                     return ['background-color: #ffe6cc'] * len(row)
                                 else:
                                     return [''] * len(row)

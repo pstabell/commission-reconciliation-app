@@ -478,5 +478,30 @@ Complete transparency in reconciliation status. Users now have instant visibilit
 
 ---
 
+## ✅ COMPLETED: Duplicate Transaction Fix (Completed July 10, 2025 - Evening)
+
+### Critical Issue Resolved
+Fixed duplicate transaction creation when editing inline-added records.
+
+### Problem Summary:
+- User added new transaction using "Add New Transaction for This Client"
+- Transaction saved successfully inline
+- When editing that transaction via modal, a duplicate was created instead of updating
+
+### Root Cause:
+- Inline-added transactions lacked `_id` field in session state
+- Modal save logic only checked `_id` to determine INSERT vs UPDATE
+- Without `_id`, system performed INSERT creating duplicate
+
+### Solution Implementation:
+- Enhanced modal save logic to check database for existing Transaction ID
+- Added fallback query before deciding INSERT vs UPDATE
+- System now properly recognizes existing records regardless of `_id` presence
+
+### Impact:
+Users can now safely add transactions inline and immediately edit them without creating duplicates. Data integrity maintained throughout the add/edit workflow.
+
+---
+
 *Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.4*
+*Current Application Version: 3.5.5*

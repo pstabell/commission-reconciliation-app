@@ -1200,7 +1200,6 @@ def calculate_commission(row):
 def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Identifies and generates a DataFrame of policies pending renewal.
-    Excludes policies that have already been renewed (appear in Prior Policy Number of another policy).
     """
     # Filter for relevant transaction types
     renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL"])].copy()
@@ -1217,23 +1216,6 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     # Filter for policies that are expired or expiring soon (e.g., within 60 days)
     today = pd.to_datetime(datetime.date.today())
     pending_renewals = latest_renewals[latest_renewals['expiration_date'] < (today + pd.DateOffset(days=60))]
-    
-    # Get list of policy numbers that have been renewed (appear in Prior Policy Number field)
-    prior_policy_col = get_mapped_column("Prior Policy Number")
-    if prior_policy_col and prior_policy_col in df.columns:
-        # Get all policy numbers that appear as prior policies (meaning they've been renewed)
-        renewed_policies = df[df[prior_policy_col].notna()][prior_policy_col].unique()
-        # Exclude these from pending renewals
-        pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(renewed_policies)]
-    
-    # Exclude policies that have been cancelled
-    # Check if any transaction for a policy number has type "CAN"
-    transaction_type_col = get_mapped_column("Transaction Type")
-    if transaction_type_col and transaction_type_col in df.columns:
-        # Get all policy numbers that have a CAN transaction
-        cancelled_policies = df[df[transaction_type_col] == "CAN"]["Policy Number"].unique()
-        # Exclude these from pending renewals
-        pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
     
     return pending_renewals
 
@@ -1998,9 +1980,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     # Get transaction ID column name
     transaction_id_col = get_mapped_column("Transaction ID")
     
-    # Track all rendered fields to prevent duplicates
-    rendered_fields = set()
-    
     # Remove the Select column from modal data if present
     if 'Select' in modal_data:
         del modal_data['Select']
@@ -2056,7 +2035,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         # Define field groups for better organization
         client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-        policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+        policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
         date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
         commission_fields = [
             'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -2082,7 +2061,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
                         key=f"modal_{field}"
                     )
-                    rendered_fields.add(field)  # Track rendered field
                 field_counter += 1
         
         # Policy Information
@@ -2097,7 +2075,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
                     key="modal_Carrier Name"
                 )
-                rendered_fields.add('Carrier Name')
         
         with col4:
             if 'MGA Name' in modal_data.keys():
@@ -2106,32 +2083,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
                     key="modal_MGA Name"
                 )
-                rendered_fields.add('MGA Name')
-            
-            # Policy Type in right column, second position
-            if 'Policy Type' in modal_data.keys():
-                # Load policy types from configuration
-                policy_types_config = load_policy_types_config()
-                active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
-                
-                # Get current value
-                current_policy_type = modal_data.get('Policy Type', '')
-                
-                # Ensure current value is in options
-                options = active_types.copy()
-                if current_policy_type and current_policy_type not in options:
-                    options.insert(0, current_policy_type)
-                
-                updated_data['Policy Type'] = st.selectbox(
-                    'Policy Type (add in Admin Panel)',
-                    options=options,
-                    index=options.index(current_policy_type) if current_policy_type in options else 0,
-                    key="modal_Policy Type",
-                    help="Go to Admin Panel → Policy Types to add new types"
-                )
-                rendered_fields.add('Policy Type')
         
-        # Second row - Transaction Type 
+        # Second row - Transaction Type on left, Policy Term on right
         with col3:
             if 'Transaction Type' in modal_data.keys():
                 # Transaction type dropdown
@@ -2155,31 +2108,74 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
                         key="modal_Transaction Type"
                     )
-                    rendered_fields.add('Transaction Type')
+        
+        with col4:
+            if 'Policy Term' in modal_data.keys():
+                # Policy Term dropdown
+                policy_terms = [3, 6, 9, 12]
+                current_term = modal_data.get('Policy Term', None)
+                # Handle the display
+                if current_term is None or pd.isna(current_term):
+                    selected_index = 0
+                else:
+                    try:
+                        selected_index = policy_terms.index(int(current_term)) + 1
+                    except (ValueError, TypeError):
+                        selected_index = 0
+                
+                updated_data['Policy Term'] = st.selectbox(
+                    'Policy Term',
+                    options=[None] + policy_terms,
+                    format_func=lambda x: "" if x is None else f"{x} months",
+                    index=selected_index,
+                    key="modal_Policy Term",
+                    help="Select policy duration in months"
+                )
         
         # Now handle the rest of the policy fields
         field_counter = 0
         for field in policy_fields:
-            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Policy Type', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
                 with col3 if field_counter % 2 == 0 else col4:
-                    # Regular text input
-                    # Make Prior Policy Number read-only for renewals
-                    if field == 'Prior Policy Number' and is_renewal:
-                        value = modal_data.get(field, '')
-                        st.text_input(
-                            field, 
-                            value=str(value) if value is not None else '',
-                            key=f"modal_{field}",
-                            disabled=True,
-                            help="Automatically populated from the policy being renewed"
+                    if field == 'Policy Type':
+                        # Load policy types from configuration
+                        policy_types_config = load_policy_types_config()
+                        active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
+                        
+                        # Get current value
+                        current_policy_type = modal_data.get(field, '')
+                        
+                        # Ensure current value is in options
+                        options = active_types.copy()
+                        if current_policy_type and current_policy_type not in options:
+                            options.insert(0, current_policy_type)
+                        
+                        updated_data[field] = st.selectbox(
+                            field + " (add in Admin Panel or table above)",
+                            options=options,
+                            index=options.index(current_policy_type) if current_policy_type in options else 0,
+                            key=f"modal_{field}_select",
+                            help="To add new types: Admin Panel or use the editable table above"
                         )
-                        updated_data[field] = value  # Preserve the value since it's disabled
                     else:
-                        updated_data[field] = st.text_input(
-                            field, 
-                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
-                            key=f"modal_{field}"
-                        )
+                        # Regular text input
+                        # Make Prior Policy Number read-only for renewals
+                        if field == 'Prior Policy Number' and is_renewal:
+                            value = modal_data.get(field, '')
+                            st.text_input(
+                                field, 
+                                value=str(value) if value is not None else '',
+                                key=f"modal_{field}",
+                                disabled=True,
+                                help="Automatically populated from the policy being renewed"
+                            )
+                            updated_data[field] = value  # Preserve the value since it's disabled
+                        else:
+                            updated_data[field] = st.text_input(
+                                field, 
+                                value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                key=f"modal_{field}"
+                            )
                 field_counter += 1
         
         
@@ -2201,7 +2197,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             key="modal_Effective Date",
                             format="MM/DD/YYYY"
                         )
-                        rendered_fields.add('Effective Date')
                     except:
                         updated_data['Effective Date'] = st.text_input(
                             'Effective Date',
@@ -2216,7 +2211,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         key="modal_Effective Date",
                         format="MM/DD/YYYY"
                     )
-                rendered_fields.add('Effective Date')
             
             # Policy Origination Date (read-only for renewals)
             if 'Policy Origination Date' in modal_data.keys():
@@ -2285,30 +2279,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         key="modal_X-DATE",
                         format="MM/DD/YYYY"
                     )
-        
-        # Add Policy Term after Policy Origination Date
-        with col6:
-            if 'Policy Term' in modal_data.keys():
-                # Policy Term dropdown
-                policy_terms = [3, 6, 9, 12]
-                current_term = modal_data.get('Policy Term', None)
-                # Handle the display
-                if current_term is None or pd.isna(current_term):
-                    selected_index = 0
-                else:
-                    try:
-                        selected_index = policy_terms.index(int(current_term)) + 1
-                    except (ValueError, TypeError):
-                        selected_index = 0
-                
-                updated_data['Policy Term'] = st.selectbox(
-                    'Policy Term',
-                    options=[None] + policy_terms,
-                    format_func=lambda x: "" if x is None else f"{x} months",
-                    index=selected_index,
-                    key="modal_Policy Term",
-                    help="Select policy duration in months"
-                )
         
         # Premium Information
         st.markdown("#### Premium Information")
@@ -2557,9 +2527,9 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             height=70
         )
         
-        # Calculate button - make it prominent
-        if st.form_submit_button("🧮 Calculate", type="primary", help="Click to verify all commission calculations"):
-            st.success("✅ Calculations updated! Review the amounts above before saving.")
+        # Calculate button
+        if st.form_submit_button("Calculate", type="secondary"):
+            st.info("Calculations will be performed when you save the transaction.")
         
         # Internal Fields (collapsed by default)
         with st.expander("Internal Fields", expanded=False):
@@ -2640,22 +2610,17 @@ def main():
         st.rerun()
     
     # --- Load data with caching for better performance ---
-    # Moved all_data loading to individual pages for proper cache refresh
-    # all_data = load_policies_data()
+    all_data = load_policies_data()
     supabase = get_supabase_client()
     
-    # Note: all_data empty check moved to individual pages
+    if all_data.empty:
+        st.warning("No data found in policies table. Please add some policy data first.")
 
     # --- Page Navigation ---
     if page == "Dashboard":
         st.title("📊 Commission Dashboard")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-        else:
+        if not all_data.empty:
             # Calculate metrics
             metrics = calculate_dashboard_metrics(all_data)
             
@@ -2865,17 +2830,15 @@ def main():
                                  })
                     fig.update_traces(textposition='inside', textinfo='percent+label')
                     st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.info("No data available. Please add some policy data to see dashboard metrics.")
     
     # --- Reports ---
     elif page == "Reports":
         st.title("📈 Reports")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-        else:
+        if not all_data.empty:
             tab1, tab2, tab3, tab4 = st.tabs(["Summary Reports", "Commission Analysis", "Policy Reports", "Custom Reports"])
             
             with tab1:
@@ -3042,17 +3005,14 @@ def main():
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             help="Export comprehensive multi-sheet Excel report with all data and summaries"
                         )
+        else:
+            st.info("No data available for reports.")
     
     # --- All Policy Transactions ---
     elif page == "All Policy Transactions":
         st.title("📋 All Policy Transactions")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-        else:
+        if not all_data.empty:
             # Calculate unique policy count
             unique_policies = all_data['Policy Number'].nunique() if 'Policy Number' in all_data.columns else 0
             st.write(f"**Total Transactions: {len(all_data):,} | Unique Policies: {unique_policies:,}**")
@@ -3076,25 +3036,6 @@ def main():
             
             # Display paginated data
             paginated_data = all_data.iloc[start_idx:end_idx]
-            
-            # Define preferred column order
-            preferred_order = [
-                '_id', 'Transaction ID', 'Client ID', 'Customer', 
-                'Policy Number', 'Prior Policy Number',
-                'Carrier Name', 'MGA Name',  # MGA right after Carrier
-                'Policy Type', 'Transaction Type',
-                'Effective Date', 'Policy Origination Date', 'Policy Term', 'X-DATE',  # Policy Term after Origination Date
-                'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
-                'Policy Gross Comm %', 'Agency Estimated Comm/Revenue (CRM)',
-                'Agent Estimated Comm $', 'Broker Fee', 'Broker Fee Agent Comm', 'Total Agent Comm',
-                'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-                'STMT DATE', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES'
-            ]
-            
-            # Reorder columns - keep preferred order columns that exist, then add any remaining
-            existing_preferred = [col for col in preferred_order if col in paginated_data.columns]
-            remaining_cols = [col for col in paginated_data.columns if col not in preferred_order]
-            paginated_data = paginated_data[existing_preferred + remaining_cols]
             
             # Apply formula display to existing columns
             paginated_data_display = apply_formula_display(paginated_data, show_formulas=show_formulas)
@@ -3208,17 +3149,14 @@ def main():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         help="Export all policies as formatted Excel file"
                     )
+        else:
+            st.info("No policies found in database.")
     
     # --- Edit Policy Transactions ---
     elif page == "Edit Policy Transactions":
         st.title("✏️ Edit Policy Transactions")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-        else:
+        if not all_data.empty:
             st.warning("⚠️ Be careful when editing data. Changes are saved directly to the database.")
             
             # Search and filter options
@@ -3737,85 +3675,688 @@ def main():
                                 
                                 modal_data = st.session_state.get('edit_modal_data', {})
                                 
-                                # Use the reusable edit transaction form
-                                result = edit_transaction_form(modal_data, source_page="edit_policies")
+                                # Remove the Select column from modal data
+                                if 'Select' in modal_data:
+                                    del modal_data['Select']
                                 
-                                if result:
-                                    if result["action"] == "save":
-                                        try:
-                                            # Get transaction ID and _id to determine if this is new or existing
-                                            transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
-                                            record_id = result["data"].get('_id')
-                                            
-                                            # Convert data for database operation
-                                            save_data = result["data"].copy()
-                                            save_data = convert_timestamps_for_json(save_data)
-                                            
-                                            # Handle NaN values
-                                            for key, value in save_data.items():
-                                                if pd.isna(value):
-                                                    save_data[key] = None
-                                            
-                                            # First check if this transaction already exists in the database
-                                            # This handles cases where the record was added inline but doesn't have _id in session state
-                                            existing_record = None
-                                            if transaction_id:
-                                                try:
-                                                    check_response = supabase.table('policies').select('_id').eq(
-                                                        f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                    ).execute()
-                                                    if check_response.data and len(check_response.data) > 0:
-                                                        existing_record = check_response.data[0]
-                                                except:
-                                                    pass
-                                            
-                                            # Determine if this is an INSERT or UPDATE
-                                            if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
-                                                # Existing record - UPDATE
-                                                # Remove _id from update data as it shouldn't be updated
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').update(save_data).eq(
-                                                    f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                ).execute()
-                                            else:
-                                                # New record - INSERT
-                                                # Remove _id field to let database auto-generate it
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').insert(save_data).execute()
-                                            
-                                            if response.data:
-                                                st.success("✅ Transaction updated successfully!")
-                                                clear_policies_cache()
-                                                
-                                                # Clear modal state
-                                                st.session_state['show_edit_modal'] = False
-                                                st.session_state['edit_modal_data'] = None
-                                                
-                                                # Force clear the session state for the editor
-                                                if 'edit_policies_editor' in st.session_state:
-                                                    del st.session_state['edit_policies_editor']
-                                                if 'last_search_edit_policies_editor' in st.session_state:
-                                                    del st.session_state['last_search_edit_policies_editor']
-                                                
-                                                time.sleep(1)
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ Update may have failed - no data returned")
-                                        
-                                        except Exception as e:
-                                            st.error(f"Error updating transaction: {str(e)}")
-                                    
-                                    elif result["action"] == "close" or result["action"] == "cancel":
-                                        # Clear modal state
+                                # Get transaction ID and customer name for header
+                                transaction_id = modal_data.get(transaction_id_col, 'Unknown')
+                                customer_name = modal_data.get('Customer', 'Unknown')
+                                
+                                # Check if this is a reconciliation transaction
+                                if is_reconciliation_transaction(transaction_id):
+                                    st.error("🔒 This is a reconciliation transaction and cannot be edited.")
+                                    st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
+                                    if st.button("Close", type="primary"):
                                         st.session_state['show_edit_modal'] = False
                                         st.session_state['edit_modal_data'] = None
                                         st.rerun()
+                                    return  # Exit early
                                 
-                                # The old form implementation has been removed and replaced with the reusable function
+                                st.info(f"**Transaction ID:** {transaction_id} | **Customer:** {customer_name}")
+                                
+                                # Create form
+                                with st.form("edit_transaction_form"):
+                                    # Group fields logically
+                                    st.markdown("#### Client Information")
+                                    col1, col2 = st.columns(2)
+                                    
+                                    # Track updated values
+                                    updated_data = {}
+                                    
+                                    # Define internal system fields that should be read-only
+                                    internal_fields = [
+                                        'reconciliation_status', 
+                                        'reconciliation_id', 
+                                        'reconciled_at', 
+                                        'is_reconciliation_entry',
+                                        '_id',
+                                        'Client ID',
+                                        'Client ID (CRM)',
+                                        'STMT DATE',
+                                        'Agency Comm Received (STMT)',
+                                        'Agent Paid Amount (STMT)'
+                                    ]
+                                    
+                                    # Define field groups for better organization
+                                    client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
+                                    policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+                                    date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
+                                    commission_fields = [
+                                        'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
+                                        'Agency Estimated Comm/Revenue (CRM)', 
+                                        'Policy Gross Comm %', 'Agent Estimated Comm $',
+                                        'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
+                                        'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
+                                        'Broker Fee Agent Comm', 'Total Agent Comm'
+                                    ]
+                                    status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
+                                    
+                                    # Client Information
+                                    field_counter = 0
+                                    for field in modal_data.keys():
+                                        # Skip internal fields - they'll be shown at the bottom
+                                        if field in client_fields and field not in internal_fields:
+                                            with col1 if field_counter % 2 == 0 else col2:
+                                                updated_data[field] = st.text_input(
+                                                    field, 
+                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                    key=f"modal_{field}"
+                                                )
+                                            field_counter += 1
+                                    
+                                    # Policy Information
+                                    st.markdown("#### Policy Information")
+                                    col3, col4 = st.columns(2)
+                                    
+                                    # Handle Carrier Name and MGA Name first to ensure they're at the top
+                                    with col3:
+                                        if 'Carrier Name' in modal_data.keys():
+                                            updated_data['Carrier Name'] = st.text_input(
+                                                'Carrier Name', 
+                                                value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
+                                                key="modal_Carrier Name"
+                                            )
+                                    
+                                    with col4:
+                                        if 'MGA Name' in modal_data.keys():
+                                            updated_data['MGA Name'] = st.text_input(
+                                                'MGA Name', 
+                                                value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
+                                                key="modal_MGA Name"
+                                            )
+                                    
+                                    # Handle Transaction Type and Policy Term together
+                                    col5, col6 = st.columns(2)
+                                    with col5:
+                                        if 'Transaction Type' in modal_data.keys():
+                                            # Transaction type dropdown
+                                            transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
+                                            current_trans_type = modal_data.get('Transaction Type', 'NEW')
+                                            updated_data['Transaction Type'] = st.selectbox(
+                                                'Transaction Type',
+                                                options=transaction_types,
+                                                index=transaction_types.index(current_trans_type) if current_trans_type in transaction_types else 0,
+                                                key="modal_Transaction Type"
+                                            )
+                                    
+                                    with col6:
+                                        if 'Policy Term' in modal_data.keys():
+                                            # Policy Term dropdown
+                                            policy_terms = [3, 6, 9, 12]
+                                            current_term = modal_data.get('Policy Term', None)
+                                            # Handle the display
+                                            if current_term is None or pd.isna(current_term):
+                                                selected_index = 0
+                                            else:
+                                                try:
+                                                    selected_index = policy_terms.index(int(current_term)) + 1
+                                                except (ValueError, TypeError):
+                                                    selected_index = 0
+                                            
+                                            updated_data['Policy Term'] = st.selectbox(
+                                                'Policy Term',
+                                                options=[None] + policy_terms,
+                                                format_func=lambda x: "" if x is None else f"{x} months",
+                                                index=selected_index,
+                                                key="modal_Policy Term",
+                                                help="Select policy duration in months"
+                                            )
+                                    
+                                    # Now handle the rest of the policy fields
+                                    field_counter = 0
+                                    for field in modal_data.keys():
+                                        if field in policy_fields and field not in ['Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Term', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+                                            with col3 if field_counter % 2 == 0 else col4:
+                                                if field == 'Policy Type':
+                                                    # Load policy types from configuration
+                                                    policy_types_config = load_policy_types_config()
+                                                    active_types = [pt['name'] for pt in policy_types_config['policy_types'] if pt['active']]
+                                                    
+                                                    # Get current value
+                                                    current_policy_type = modal_data.get(field, '')
+                                                    
+                                                    # Ensure current value is in options
+                                                    options = active_types.copy()
+                                                    if current_policy_type and current_policy_type not in options:
+                                                        options.insert(0, current_policy_type)
+                                                    
+                                                    updated_data[field] = st.selectbox(
+                                                        field + " (add in Admin Panel or table above)",
+                                                        options=options,
+                                                        index=options.index(current_policy_type) if current_policy_type in options else 0,
+                                                        key=f"modal_{field}_select",
+                                                        help="To add new types: Admin Panel or use the editable table above"
+                                                    )
+                                                else:
+                                                    # Regular text input
+                                                    updated_data[field] = st.text_input(
+                                                        field, 
+                                                        value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                        key=f"modal_{field}"
+                                                    )
+                                            field_counter += 1
+                                    
+                                    # Bottom fields - Policy Checklist Complete, FULL OR MONTHLY PMTS, and NOTES
+                                    col7, col8 = st.columns(2)
+                                    
+                                    with col7:
+                                        # Policy Checklist Complete
+                                        if 'Policy Checklist Complete' in modal_data.keys():
+                                            current_val = str(modal_data.get('Policy Checklist Complete', 'No')).upper() == 'YES'
+                                            updated_data['Policy Checklist Complete'] = 'Yes' if st.checkbox(
+                                                'Policy Checklist Complete',
+                                                value=current_val,
+                                                key="modal_Policy Checklist Complete"
+                                            ) else 'No'
+                                    
+                                    with col8:
+                                        # FULL OR MONTHLY PMTS
+                                        if 'FULL OR MONTHLY PMTS' in modal_data.keys():
+                                            payment_types = ["FULL", "MONTHLY", ""]
+                                            current_payment = modal_data.get('FULL OR MONTHLY PMTS', '')
+                                            updated_data['FULL OR MONTHLY PMTS'] = st.selectbox(
+                                                'FULL OR MONTHLY PMTS',
+                                                options=payment_types,
+                                                index=payment_types.index(current_payment) if current_payment in payment_types else 2,
+                                                key="modal_FULL OR MONTHLY PMTS"
+                                            )
+                                    
+                                    # NOTES - Full width at the bottom
+                                    if 'NOTES' in modal_data.keys():
+                                        updated_data['NOTES'] = st.text_area(
+                                            'NOTES',
+                                            value=str(modal_data.get('NOTES', '')) if modal_data.get('NOTES') is not None else '',
+                                            key="modal_NOTES",
+                                            height=70
+                                        )
+                                    
+                                    # Date Fields
+                                    st.markdown("#### Dates")
+                                    col5, col6 = st.columns(2)
+                                    
+                                    # Left column - Effective Date first, then Policy Origination Date
+                                    with col5:
+                                        # Effective Date
+                                        if 'Effective Date' in modal_data.keys():
+                                            date_value = modal_data.get('Effective Date')
+                                            if date_value and pd.notna(date_value):
+                                                try:
+                                                    parsed_date = pd.to_datetime(date_value)
+                                                    updated_data['Effective Date'] = st.date_input(
+                                                        'Effective Date',
+                                                        value=parsed_date.date(),
+                                                        key="modal_Effective Date",
+                                                        format="MM/DD/YYYY"
+                                                    )
+                                                except:
+                                                    updated_data['Effective Date'] = st.text_input(
+                                                        'Effective Date',
+                                                        value=str(date_value),
+                                                        key="modal_Effective Date",
+                                                        help="Enter date in MM/DD/YYYY format"
+                                                    )
+                                            else:
+                                                updated_data['Effective Date'] = st.date_input(
+                                                    'Effective Date',
+                                                    value=None,
+                                                    key="modal_Effective Date",
+                                                    format="MM/DD/YYYY"
+                                                )
+                                        
+                                        # Policy Origination Date
+                                        if 'Policy Origination Date' in modal_data.keys():
+                                            date_value = modal_data.get('Policy Origination Date')
+                                            if date_value and pd.notna(date_value):
+                                                try:
+                                                    parsed_date = pd.to_datetime(date_value)
+                                                    updated_data['Policy Origination Date'] = st.date_input(
+                                                        'Policy Origination Date',
+                                                        value=parsed_date.date(),
+                                                        key="modal_Policy Origination Date",
+                                                        format="MM/DD/YYYY"
+                                                    )
+                                                except:
+                                                    updated_data['Policy Origination Date'] = st.text_input(
+                                                        'Policy Origination Date',
+                                                        value=str(date_value),
+                                                        key="modal_Policy Origination Date",
+                                                        help="Enter date in MM/DD/YYYY format"
+                                                    )
+                                            else:
+                                                updated_data['Policy Origination Date'] = st.date_input(
+                                                    'Policy Origination Date',
+                                                    value=None,
+                                                    key="modal_Policy Origination Date",
+                                                    format="MM/DD/YYYY"
+                                                )
+                                    
+                                    # Right column - X-DATE only (aligned with Effective Date)
+                                    with col6:
+                                        # X-DATE
+                                        if 'X-DATE' in modal_data.keys():
+                                            date_value = modal_data.get('X-DATE')
+                                            if date_value and pd.notna(date_value):
+                                                try:
+                                                    parsed_date = pd.to_datetime(date_value)
+                                                    updated_data['X-DATE'] = st.date_input(
+                                                        'X-DATE',
+                                                        value=parsed_date.date(),
+                                                        key="modal_X-DATE",
+                                                        format="MM/DD/YYYY"
+                                                    )
+                                                except:
+                                                    updated_data['X-DATE'] = st.text_input(
+                                                        'X-DATE',
+                                                        value=str(date_value),
+                                                        key="modal_X-DATE",
+                                                        help="Enter date in MM/DD/YYYY format"
+                                                    )
+                                            else:
+                                                updated_data['X-DATE'] = st.date_input(
+                                                    'X-DATE',
+                                                    value=None,
+                                                    key="modal_X-DATE",
+                                                    format="MM/DD/YYYY"
+                                                )
+                                    
+                                    # Premium Information
+                                    st.markdown("#### Premium Information")
+                                    col_prem = st.columns(1)[0]
+                                    with col_prem:
+                                        # Premium Sold
+                                        premium_sold = modal_data.get('Premium Sold', 0)
+                                        if pd.isna(premium_sold):
+                                            premium_sold = 0.0
+                                        updated_data['Premium Sold'] = st.number_input(
+                                            'Premium ($)',
+                                            value=float(premium_sold),
+                                            format="%.2f",
+                                            key="modal_Premium_Sold",
+                                            help="Enter the premium amount for this transaction"
+                                        )
+                                    
+                                    # Carrier Taxes & Fees
+                                    st.markdown("#### Carrier Taxes & Fees")
+                                    col5 = st.columns(1)[0]
+                                    
+                                    with col5:
+                                        # Policy Taxes & Fees
+                                        policy_taxes_fees = modal_data.get('Policy Taxes & Fees', 0)
+                                        if pd.isna(policy_taxes_fees):
+                                            policy_taxes_fees = 0.0
+                                        updated_data['Policy Taxes & Fees'] = st.number_input(
+                                            'Carrier Taxes & Fees ($)',
+                                            value=float(policy_taxes_fees),
+                                            format="%.2f",
+                                            key="modal_Policy_Taxes_Fees",
+                                            help="Non-commissionable carrier taxes and fees"
+                                        )
+                                        
+                                        # Calculate and display Commissionable Premium
+                                        commissionable_premium = updated_data.get('Premium Sold', 0) - updated_data['Policy Taxes & Fees']
+                                        st.number_input(
+                                            'Commissionable Premium ($)',
+                                            value=commissionable_premium,
+                                            format="%.2f",
+                                            key="modal_Commissionable_Premium",
+                                            disabled=True,
+                                            help="Premium minus Carrier Taxes & Fees"
+                                        )
+                                        updated_data['Commissionable Premium'] = commissionable_premium
+                                    
+                                    # Commission Fields
+                                    st.markdown("#### Commission Details")
+                                    col7, col8 = st.columns(2)
+                                    
+                                    # Left column fields in specific order
+                                    left_commission_fields = [
+                                        'Policy Gross Comm %',
+                                        'Agent Comm (NEW 50% RWL 25%)',
+                                        'Broker Fee'
+                                    ]
+                                    
+                                    # Right column fields in specific order
+                                    right_commission_fields = [
+                                        'Agency Estimated Comm/Revenue (CRM)',
+                                        'Agent Estimated Comm $',
+                                        'Broker Fee Agent Comm',
+                                        'Total Agent Comm'
+                                    ]
+                                    
+                                    # Display left column fields
+                                    with col7:
+                                        for field in left_commission_fields:
+                                            if field == 'Broker Fee':
+                                                # Broker Fee input (editable)
+                                                broker_fee = modal_data.get('Broker Fee', 0)
+                                                if pd.isna(broker_fee):
+                                                    broker_fee = 0.0
+                                                updated_data['Broker Fee'] = st.number_input(
+                                                    'Broker Fee ($)',
+                                                    value=float(broker_fee),
+                                                    format="%.2f",
+                                                    key="modal_Broker_Fee_commission",
+                                                    help="Agency broker fee (you receive 50% commission on this amount)"
+                                                )
+                                            elif field in modal_data.keys():
+                                                current_value = modal_data.get(field, 0)
+                                                if pd.isna(current_value):
+                                                    current_value = 0.0
+                                                updated_data[field] = st.number_input(
+                                                    field,
+                                                    value=float(current_value),
+                                                    format="%.2f",
+                                                    key=f"modal_{field}"
+                                                )
+                                    
+                                    # Display right column fields
+                                    with col8:
+                                        # Calculate formula values
+                                        commissionable_prem = updated_data.get('Commissionable Premium', 0)
+                                        gross_comm_pct = updated_data.get('Policy Gross Comm %', modal_data.get('Policy Gross Comm %', 0))
+                                        agent_comm_rate = updated_data.get('Agent Comm (NEW 50% RWL 25%)', modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0))
+                                        # Calculate broker fee agent commission (always 50% of broker fee)
+                                        broker_fee = updated_data.get('Broker Fee', modal_data.get('Broker Fee', 0))
+                                        broker_fee_agent = float(broker_fee) * 0.50 if broker_fee else 0.0
+                                        
+                                        # Ensure numeric values
+                                        try:
+                                            commissionable_prem = float(commissionable_prem) if commissionable_prem else 0.0
+                                            gross_comm_pct = float(gross_comm_pct) if gross_comm_pct else 0.0
+                                            agent_comm_rate = float(agent_comm_rate) if agent_comm_rate else 0.0
+                                        except:
+                                            commissionable_prem = 0.0
+                                            gross_comm_pct = 0.0
+                                            agent_comm_rate = 0.0
+                                        
+                                        # Handle agent commission rate - it might be stored as decimal (0.50) or percentage (50)
+                                        # If it's less than 1, assume it's a decimal and convert to percentage
+                                        if agent_comm_rate > 0 and agent_comm_rate < 1:
+                                            agent_comm_rate = agent_comm_rate * 100
+                                        
+                                        # Calculate Agency Estimated Comm/Revenue (CRM) using Commissionable Premium
+                                        agency_comm = commissionable_prem * (gross_comm_pct / 100) if gross_comm_pct else 0.0
+                                        
+                                        # Calculate Agent Estimated Comm $
+                                        agent_comm = agency_comm * (agent_comm_rate / 100) if agent_comm_rate else 0.0
+                                        
+                                        # Calculate Total Agent Commission
+                                        total_agent_comm = agent_comm + broker_fee_agent
+                                        
+                                        # Ensure calculated values are valid numbers
+                                        if pd.isna(agency_comm) or (isinstance(agency_comm, float) and (agency_comm == float('inf') or agency_comm == float('-inf'))):
+                                            agency_comm = 0.0
+                                        if pd.isna(agent_comm) or (isinstance(agent_comm, float) and (agent_comm == float('inf') or agent_comm == float('-inf'))):
+                                            agent_comm = 0.0
+                                        
+                                        for field in right_commission_fields:
+                                            if field in modal_data.keys() or field in ['Broker Fee Agent Comm', 'Total Agent Comm']:
+                                                if field == 'Agency Estimated Comm/Revenue (CRM)':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=agency_comm,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help=f"Formula: Commissionable Premium × Policy Gross Comm % = ${commissionable_prem:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = agency_comm
+                                                elif field == 'Agent Estimated Comm $':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=agent_comm,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help=f"Formula: Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_rate:.2f}% = ${agent_comm:.2f}"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = agent_comm
+                                                elif field == 'Broker Fee Agent Comm':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=broker_fee_agent,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help="50% of broker fee"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = broker_fee_agent
+                                                elif field == 'Total Agent Comm':
+                                                    # Display as read-only calculated field
+                                                    st.number_input(
+                                                        field,
+                                                        value=total_agent_comm,
+                                                        format="%.2f",
+                                                        key=f"modal_{field}_display",
+                                                        disabled=True,
+                                                        help=f"Formula: Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
+                                                    )
+                                                    # Store the calculated value
+                                                    updated_data[field] = total_agent_comm
+                                                else:
+                                                    # This shouldn't happen but handle it just in case
+                                                    current_value = modal_data.get(field, 0)
+                                                    if pd.isna(current_value):
+                                                        current_value = 0.0
+                                                    updated_data[field] = st.number_input(
+                                                        field,
+                                                        value=float(current_value),
+                                                        format="%.2f",
+                                                        key=f"modal_{field}"
+                                                    )
+                                    
+                                    # Internal Commission Fields (Reconciliation) - will be combined with other internal fields below
+                                    commission_internal_fields = ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)', 'STMT DATE']
+                                    
+                                    # Status Fields - only show if there are any
+                                    status_fields_present = [f for f in modal_data.keys() if f in status_fields]
+                                    if status_fields_present:
+                                        st.markdown("#### Status & Notes")
+                                    for field in modal_data.keys():
+                                        if field in status_fields:
+                                            if field == 'Reconciled?':
+                                                current_val = str(modal_data.get(field, 'No')).upper() == 'YES'
+                                                updated_data[field] = 'Yes' if st.checkbox(
+                                                    "Reconciled?",
+                                                    value=current_val,
+                                                    key=f"modal_{field}"
+                                                ) else 'No'
+                                            elif field == 'Reconciliation Notes':
+                                                updated_data[field] = st.text_area(
+                                                    field,
+                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                    key=f"modal_{field}",
+                                                    height=100
+                                                )
+                                            else:
+                                                updated_data[field] = st.text_input(
+                                                    field,
+                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                    key=f"modal_{field}"
+                                                )
+                                    
+                                    # Handle any uncategorized fields
+                                    uncategorized_fields = [f for f in modal_data.keys() if f not in 
+                                                          client_fields + policy_fields + date_fields + 
+                                                          commission_fields + status_fields + [transaction_id_col] + internal_fields]
+                                    
+                                    if uncategorized_fields:
+                                        st.markdown("#### Additional Fields")
+                                        col_add1, col_add2 = st.columns(2)
+                                        field_counter = 0
+                                        for field in sorted(uncategorized_fields):
+                                            with col_add1 if field_counter % 2 == 0 else col_add2:
+                                                updated_data[field] = st.text_input(
+                                                    field,
+                                                    value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                    key=f"modal_{field}"
+                                                )
+                                            field_counter += 1
+                                    
+                                    # Display all internal/readonly fields at the bottom
+                                    internal_fields_to_show = [f for f in modal_data.keys() if f in internal_fields]
+                                    # Include commission internal fields in the combined section
+                                    commission_internal_present = [f for f in commission_internal_fields if f in modal_data.keys()]
+                                    all_internal_fields = sorted(set(internal_fields_to_show + commission_internal_present))
+                                    
+                                    if all_internal_fields:
+                                        st.markdown("---")
+                                        with st.expander("Internal Fields (Read-only)", expanded=False):
+                                            col11, col12 = st.columns(2)
+                                            field_counter = 0
+                                            for field in all_internal_fields:
+                                                with col11 if field_counter % 2 == 0 else col12:
+                                                    if field == 'STMT DATE':
+                                                        # STMT DATE is a text/date field
+                                                        st.text_input(
+                                                            field,
+                                                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                            key=f"modal_{field}",
+                                                            disabled=True,
+                                                            help="Statement date - update via Reconciliation page"
+                                                        )
+                                                    elif field in ['Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)']:
+                                                        # These are number fields
+                                                        current_value = modal_data.get(field, 0)
+                                                        if pd.isna(current_value):
+                                                            current_value = 0.0
+                                                        st.number_input(
+                                                            field,
+                                                            value=float(current_value),
+                                                            format="%.2f",
+                                                            key=f"modal_{field}",
+                                                            disabled=True,
+                                                            help="Reconciliation field - update via Reconciliation page"
+                                                        )
+                                                    else:
+                                                        # Other internal fields
+                                                        st.text_input(
+                                                            field,
+                                                            value=str(modal_data.get(field, '')) if modal_data.get(field) is not None else '',
+                                                            key=f"modal_{field}",
+                                                            disabled=True,
+                                                            help="Internal system field (read-only)"
+                                                        )
+                                                field_counter += 1
+                                    
+                                    # Form buttons
+                                    st.markdown("---")
+                                    col_calc, col_save, col_cancel = st.columns(3)
+                                    
+                                    with col_calc:
+                                        calculate_modal = st.form_submit_button("🔄 Calculate", use_container_width=True, help="Refresh calculations before saving")
+                                    
+                                    with col_save:
+                                        save_modal = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+                                    
+                                    with col_cancel:
+                                        cancel_modal = st.form_submit_button("❌ Cancel", use_container_width=True)
+                                
+                                # Handle form submission
+                                if calculate_modal:
+                                    # Just refresh the form to recalculate
+                                    st.success("✅ Calculations refreshed!")
+                                    st.rerun()
+                                
+                                if save_modal:
+                                    try:
+                                        # Build complete update dictionary with ALL fields
+                                        update_dict = {}
+                                        
+                                        # First, include ALL original fields from modal_data (except Select and ID)
+                                        for field, original_value in modal_data.items():
+                                            if field != transaction_id_col and field != 'Select':
+                                                # Clean NaN values from original data
+                                                if pd.isna(original_value):
+                                                    update_dict[field] = None
+                                                elif isinstance(original_value, float) and (original_value == float('inf') or original_value == float('-inf')):
+                                                    update_dict[field] = None
+                                                else:
+                                                    update_dict[field] = original_value
+                                        
+                                        # Then override with any fields that were updated in the form
+                                        for field, value in updated_data.items():
+                                            # Convert date objects to strings in MM/DD/YYYY format
+                                            if isinstance(value, datetime.date):
+                                                update_dict[field] = value.strftime('%m/%d/%Y')
+                                            # Handle empty strings as None
+                                            elif value == '':
+                                                update_dict[field] = None
+                                            # Handle NaN and None values
+                                            elif pd.isna(value):
+                                                update_dict[field] = None
+                                            # Handle numeric values
+                                            elif isinstance(value, (int, float)):
+                                                # Check for NaN or infinity
+                                                if pd.isna(value) or (isinstance(value, float) and (value == float('inf') or value == float('-inf'))):
+                                                    update_dict[field] = None
+                                                else:
+                                                    update_dict[field] = value
+                                            else:
+                                                update_dict[field] = value
+                                        
+                                        # Debug: Show what we're updating
+                                        st.write(f"DEBUG: Updating {len(update_dict)} fields for transaction {transaction_id}")
+                                        st.write("DEBUG: Sample fields being updated:", list(update_dict.keys())[:5])
+                                        
+                                        # Check for NaN values before updating
+                                        nan_fields = []
+                                        for field, value in update_dict.items():
+                                            if isinstance(value, float) and pd.isna(value):
+                                                nan_fields.append(f"{field}: {value}")
+                                                update_dict[field] = None  # Replace NaN with None
+                                        
+                                        if nan_fields:
+                                            st.warning(f"Found NaN values in fields: {nan_fields}. Converting to None.")
+                                        
+                                        # Update in database with ALL fields
+                                        result = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                        
+                                        # Check if update actually happened
+                                        if result.data:
+                                            st.success(f"✅ Transaction updated successfully! Updated {len(update_dict)} fields.")
+                                            
+                                            # Verify the update by reading back
+                                            verify = supabase.table('policies').select("*").eq(transaction_id_col, transaction_id).execute()
+                                            if verify.data and len(verify.data) > 0:
+                                                # Check a sample field
+                                                sample_field = list(updated_data.keys())[0] if updated_data else None
+                                                if sample_field and sample_field in verify.data[0]:
+                                                    st.write(f"DEBUG: Verified - {sample_field} is now: {verify.data[0][sample_field]}")
+                                            
+                                            # Force clear the session state for the editor
+                                            if 'edit_policies_editor' in st.session_state:
+                                                del st.session_state['edit_policies_editor']
+                                            if 'last_search_edit_policies_editor' in st.session_state:
+                                                del st.session_state['last_search_edit_policies_editor']
+                                        else:
+                                            st.error("❌ Update may have failed - no data returned")
+                                        
+                                        # Clear modal state
+                                        st.session_state['show_edit_modal'] = False
+                                        st.session_state['edit_modal_data'] = None
+                                        
+                                        # Clear cache and refresh
+                                        clear_policies_cache()
+                                        time.sleep(1)
+                                        st.rerun()
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error updating transaction: {str(e)}")
+                                
+                                if cancel_modal:
+                                    # Clear modal state
+                                    st.session_state['show_edit_modal'] = False
+                                    st.session_state['edit_modal_data'] = None
+                                    st.rerun()
+                            
                             # Delete functionality moved to bottom
                             st.divider()
                             st.subheader("🗑️ Delete Selected Records")
@@ -4024,13 +4565,12 @@ def main():
                             
                         except Exception as e:
                             st.error(f"Error saving changes: {e}")
+        else:
+            st.info("No policies available to edit.")
     
     # --- Add New Policy Transaction ---
     elif page == "Add New Policy Transaction":
         st.title("➕ Add New Policy Transaction")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
         
         # Display success message if a policy was just added
         if 'add_policy_success' in st.session_state:
@@ -4122,14 +4662,6 @@ def main():
                 )
             with col2:
                 policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
-            
-            # Row 1.5: Prior Policy Number (for rewrites and renewals)
-            prior_policy_number = st.text_input(
-                "Prior Policy Number (optional)", 
-                placeholder="Enter if this is a renewal or rewrite",
-                help="For REWRITE or renewal transactions, enter the original policy number to maintain audit trail",
-                key="add_prior_policy_number"
-            )
             
             # Row 2: Carrier Name and MGA Name
             col1, col2 = st.columns(2)
@@ -4266,7 +4798,7 @@ def main():
             # Form buttons
             col1, col2 = st.columns(2)
             with col1:
-                calculate = st.form_submit_button("🧮 Calculate", type="primary", use_container_width=True, help="Click to verify all commission calculations")
+                calculate = st.form_submit_button("🔄 Calculate", use_container_width=True, help="Update all calculations")
             with col2:
                 submitted = st.form_submit_button("💾 Save Policy Transaction", type="primary", use_container_width=True)
             
@@ -4294,7 +4826,6 @@ def main():
                             "MGA Name": mga_name,
                             "Policy Type": policy_type,
                             "Policy Number": policy_number,
-                            "Prior Policy Number": prior_policy_number if prior_policy_number else None,
                             "Transaction Type": transaction_type,
                             "Policy Term": policy_term,  # Add Policy Term
                             "Policy Origination Date": policy_orig_date.strftime('%m/%d/%Y'),
@@ -4358,12 +4889,7 @@ def main():
     elif page == "Search & Filter":
         st.title("🔍 Advanced Search & Filter")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-        else:
+        if not all_data.empty:
             st.subheader("Search Criteria")
             
             # Create filter form
@@ -4523,13 +5049,12 @@ def main():
                     st.warning("No records match your search criteria")
             else:
                 st.info("Use the form above to search and filter policies")
+        else:
+            st.info("No data available to search.")
     
     # --- Reconciliation ---
     elif page == "Reconciliation":
         st.title("💳 Commission Reconciliation")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
         
         # Create tabs for different reconciliation functions
         rec_tab1, rec_tab2, rec_tab3, rec_tab4 = st.tabs([
@@ -5353,10 +5878,8 @@ def main():
             
             # Show reconciliation entries
             if not all_data.empty:
-                # Include both -STMT- and -VOID- transactions
                 recon_entries = all_data[
-                    (all_data['Transaction ID'].str.contains('-STMT-', na=False)) |
-                    (all_data['Transaction ID'].str.contains('-VOID-', na=False))
+                    all_data['Transaction ID'].str.contains('-STMT-', na=False)
                 ]
                 
                 if not recon_entries.empty:
@@ -5432,52 +5955,7 @@ def main():
                             else:
                                 agg_dict['Agency Comm Received (STMT)'] = 'sum'
                             
-                            # Add reconciliation status aggregation
-                            if 'reconciliation_status' in filtered_recon.columns:
-                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if any(str(v).upper() == 'VOID' for v in x.values if pd.notna(v)) else 'ACTIVE'
-                            
                             batch_summary = filtered_recon.groupby('reconciliation_id').agg(agg_dict).reset_index()
-                            
-                            # Determine status, void ID, and void date for each batch
-                            batch_summary['Status'] = 'ACTIVE'  # Default
-                            batch_summary['Void ID'] = '-'
-                            batch_summary['Void Date'] = '-'
-                            
-                            # Check if batch has been voided
-                            for idx, row in batch_summary.iterrows():
-                                batch_id = row['reconciliation_id']
-                                
-                                # Check if this batch has void entries
-                                if batch_id.startswith('VOID-'):
-                                    # This is a void batch itself
-                                    batch_summary.at[idx, 'Status'] = 'VOID ENTRY'
-                                    batch_summary.at[idx, 'Void ID'] = batch_id
-                                    # Get the date from the batch transactions
-                                    void_transactions = filtered_recon[filtered_recon['reconciliation_id'] == batch_id]
-                                    if not void_transactions.empty and 'As of Date' in void_transactions.columns:
-                                        void_date = pd.to_datetime(void_transactions['As of Date'].iloc[0])
-                                        batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
-                                else:
-                                    # Check if there's a corresponding void batch
-                                    void_batch_id = f"VOID-{batch_id}"
-                                    void_exists = all_data[
-                                        (all_data['reconciliation_id'] == void_batch_id) & 
-                                        (all_data['Transaction ID'].str.contains('-STMT-', na=False))
-                                    ]
-                                    
-                                    if not void_exists.empty:
-                                        batch_summary.at[idx, 'Status'] = 'VOIDED'
-                                        batch_summary.at[idx, 'Void ID'] = void_batch_id
-                                        # Get void date
-                                        if 'As of Date' in void_exists.columns:
-                                            void_date = pd.to_datetime(void_exists['As of Date'].iloc[0])
-                                            batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
-                                
-                                # Also check reconciliation_status if available
-                                if 'reconciliation_status' in batch_summary.columns:
-                                    status = str(row.get('reconciliation_status', '')).upper()
-                                    if status == 'VOIDED' or status == 'VOID':
-                                        batch_summary.at[idx, 'Status'] = 'VOIDED'
                             
                             rename_dict = {
                                 'reconciliation_id': 'Batch ID',
@@ -5501,39 +5979,11 @@ def main():
                                 format_func=lambda x: 'Select a batch...' if x == '' else f"{x} ({batch_summary[batch_summary['Batch ID']==x]['Statement Date'].iloc[0] if x != '' else ''})"
                             )
                             
-                            # Configure column display with color coding for status
-                            column_config = {
-                                "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f"),
-                                "Status": st.column_config.TextColumn(
-                                    help="ACTIVE = Normal reconciliation, VOIDED = Has been reversed, VOID ENTRY = Reversal entry"
-                                ),
-                                "Void ID": st.column_config.TextColumn(
-                                    help="ID of the void batch if this reconciliation was voided"
-                                ),
-                                "Void Date": st.column_config.TextColumn(
-                                    help="Date when this reconciliation was voided"
-                                )
-                            }
-                            
-                            # Reorder columns for better display
-                            display_columns = ['Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
-                            # Only include columns that exist
-                            display_columns = [col for col in display_columns if col in batch_summary.columns]
-                            
-                            # Apply styling based on status
-                            def highlight_status(row):
-                                if row['Status'] == 'VOIDED':
-                                    return ['background-color: #ffcccc'] * len(row)
-                                elif row['Status'] == 'VOID ENTRY':
-                                    return ['background-color: #ffe6cc'] * len(row)
-                                else:
-                                    return [''] * len(row)
-                            
-                            styled_df = batch_summary[display_columns].sort_values('Statement Date', ascending=False).style.apply(highlight_status, axis=1)
-                            
                             st.dataframe(
-                                styled_df,
-                                column_config=column_config,
+                                batch_summary.sort_values('Statement Date', ascending=False),
+                                column_config={
+                                    "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f")
+                                },
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -5568,29 +6018,7 @@ def main():
                                 display_recon = filtered_recon.copy()
                                 display_recon['STMT DATE'] = pd.to_datetime(display_recon['STMT DATE']).dt.strftime('%m/%d/%Y')
                             else:
-                                display_recon = filtered_recon.copy()
-                            
-                            # Add reconciliation status display
-                            if 'reconciliation_status' not in display_recon.columns:
-                                display_recon['reconciliation_status'] = 'reconciled'  # Default for old data
-                            
-                            # Rename reconciliation_status for display
-                            display_recon['Reconciliation Status'] = display_recon['reconciliation_status'].apply(
-                                lambda x: x.upper() if pd.notna(x) else 'RECONCILED'
-                            )
-                            
-                            # Add batch ID column if not present
-                            if 'reconciliation_id' in display_recon.columns:
-                                display_recon['Batch ID'] = display_recon['reconciliation_id']
-                            
-                            # Add Is Void Entry column
-                            display_recon['Is Void Entry'] = display_recon.apply(
-                                lambda row: 'Yes' if str(row.get('Reconciliation Status', '')).upper() == 'VOID' or 
-                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False) or
-                                          ('-VOID-' in str(row.get('Transaction ID', '')))
-                                          else 'No', 
-                                axis=1
-                            )
+                                display_recon = filtered_recon
                             
                             # Include both agent and agency amounts
                             display_columns = ['Transaction ID', 'Customer', 'Policy Number', 'STMT DATE']
@@ -5599,37 +6027,11 @@ def main():
                             if 'Agency Comm Received (STMT)' in display_recon.columns:
                                 display_columns.append('Agency Comm Received (STMT)')
                             
-                            # Add new tracking columns
-                            display_columns.extend(['Reconciliation Status', 'Batch ID', 'Is Void Entry'])
-                            
-                            # Only include columns that exist
-                            display_columns = [col for col in display_columns if col in display_recon.columns]
-                            
-                            # Apply styling based on status
-                            def highlight_void_status(row):
-                                if row.get('Is Void Entry') == 'Yes':
-                                    return ['background-color: #ffcccc'] * len(row)
-                                elif str(row.get('Reconciliation Status', '')).upper() == 'VOID':
-                                    return ['background-color: #ffe6cc'] * len(row)
-                                else:
-                                    return [''] * len(row)
-                            
-                            styled_df = display_recon[display_columns].sort_values('STMT DATE', ascending=False).style.apply(highlight_void_status, axis=1)
-                            
                             st.dataframe(
-                                styled_df,
+                                display_recon[display_columns].sort_values('STMT DATE', ascending=False),
                                 column_config={
                                     "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Reconciliation Status": st.column_config.TextColumn(
-                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
-                                    ),
-                                    "Batch ID": st.column_config.TextColumn(
-                                        help="Batch ID this transaction belongs to"
-                                    ),
-                                    "Is Void Entry": st.column_config.TextColumn(
-                                        help="Yes = This is a reversal entry, No = Original entry"
-                                    )
+                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f")
                                 },
                                 use_container_width=True,
                                 hide_index=True
@@ -5907,9 +6309,6 @@ def main():
     # --- Admin Panel ---
     elif page == "Admin Panel":
         st.title("⚙️ Admin Panel")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
         
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types"])
         
@@ -6846,9 +7245,6 @@ SOLUTION NEEDED:
     elif page == "Tools":
         st.title("🛠️ Tools")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
         tab1, tab2, tab3 = st.tabs(["Data Tools", "Utility Functions", "Import/Export"])
         
         with tab1:
@@ -7049,9 +7445,6 @@ SOLUTION NEEDED:
     elif page == "Accounting":
         st.subheader("Accounting")
         st.info("This section provides accounting summaries, reconciliation tools, and export options. Use the reconciliation tool below to match your commission statement to your database and mark payments as received.")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
 
         # --- Tables are already created in Supabase ---
         # No need to create tables as they were created during schema setup        # --- Load manual entries from DB if session state is empty ---
@@ -7649,21 +8042,11 @@ SOLUTION NEEDED:
                     del st.session_state['pending_delete_history_id']
                     st.rerun()
         else:
-            st.info("No payment/reconciliation history found.")
-    
-    # --- Policy Revenue Ledger ---
+            st.info("No payment/reconciliation history found.")# --- Policy Revenue Ledger ---
     elif page == "Policy Revenue Ledger":
         st.subheader("Policy Revenue Ledger")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-            return
-        
         st.info("Search for a policy to view and edit a detailed ledger of all commission credits and debits for that policy. You can edit, delete transactions below. Be sure to click 'Save Changes' to commit your edits.")
-        
+
         # --- Granular Policy Search ---
         customers = all_data["Customer"].dropna().unique().tolist() if "Customer" in all_data.columns else []
         selected_customer = st.selectbox("Select Customer:", ["Select..."] + sorted(customers), key="ledger_customer_select")
@@ -7688,8 +8071,7 @@ SOLUTION NEEDED:
         if selected_customer != "Select..." and selected_policy_type != "Select..." and selected_effective_date != "Select...":
             selected_policy = st.selectbox("Select Policy Number:", ["Select..."] + sorted(policy_numbers), key="ledger_policy_select")
 
-        if selected_policy and selected_policy != "Select...":
-            # Get all rows for this policy, using only real database data
+        if selected_policy and selected_policy != "Select...":            # Get all rows for this policy, using only real database data
             policy_rows = all_data[all_data["Policy Number"] == selected_policy].copy()
             # Define the original ledger columns
             ledger_columns = [
@@ -7721,14 +8103,11 @@ SOLUTION NEEDED:
                 if credit_col in policy_rows.columns:
                     ledger_df["Credit (Commission Owed)"] = policy_rows[credit_col]
                 else:
-                    ledger_df["Credit (Commission Owed)"] = 0.0
-                    
-                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
+                    ledger_df["Credit (Commission Owed)"] = 0.0                # Debit (Paid to Agent) from mapped Agent Paid Amount (STMT)
                 if debit_col in policy_rows.columns:
                     ledger_df["Debit (Paid to Agent)"] = policy_rows[debit_col]
                 else:
                     ledger_df["Debit (Paid to Agent)"] = 0.0
-                    
                 ledger_df["Transaction Type"] = policy_rows[transaction_type_col] if transaction_type_col in policy_rows.columns else ""
                 # Ensure correct column order
                 ledger_df = ledger_df[ledger_columns]
@@ -7736,225 +8115,224 @@ SOLUTION NEEDED:
                 ledger_df = ledger_df.reset_index(drop=True)
             else:
                 # If no rows, show empty DataFrame with correct columns
-                ledger_df = pd.DataFrame(columns=ledger_columns)
-                
+                ledger_df = pd.DataFrame(columns=ledger_columns)            
             if not ledger_df.empty:
-                    st.markdown("### Policy Details (Editable)")
-                    # Show policy-level details using mapped column names
-                    policy_detail_field_names = [
-                        "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
-                        "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
-                        "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
-                    ]
-                    policy_detail_cols = []
-                    for field_name in policy_detail_field_names:
-                        mapped_col = get_mapped_column(field_name)
-                        if mapped_col and mapped_col in policy_rows.columns:
-                            policy_detail_cols.append(mapped_col)
-                        elif field_name in policy_rows.columns:
-                            policy_detail_cols.append(field_name)
+                st.markdown("### Policy Details (Editable)")
+                # Show policy-level details using mapped column names
+                policy_detail_field_names = [
+                    "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
+                    "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
+                    "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
+                ]
+                policy_detail_cols = []
+                for field_name in policy_detail_field_names:
+                    mapped_col = get_mapped_column(field_name)
+                    if mapped_col and mapped_col in policy_rows.columns:
+                        policy_detail_cols.append(mapped_col)
+                    elif field_name in policy_rows.columns:
+                        policy_detail_cols.append(field_name)
+                
+                policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
+                edited_details_df = st.data_editor(
+                    policy_details_df,
+                    use_container_width=True,
+                    key="policy_details_editor",
+                    num_rows="fixed",
+                    height=100
+                )
+                if st.button("Test Mapping (Preview Policy Details)", key="test_mapping_policy_details_btn") or st.session_state.get("show_policy_details_mapping_preview", False):
+                    st.session_state["show_policy_details_mapping_preview"] = True
                     
-                    policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
-                    edited_details_df = st.data_editor(
-                        policy_details_df,
-                        use_container_width=True,
-                        key="policy_details_editor",
-                        num_rows="fixed",
-                        height=100
-                    )
-                    if st.button("Test Mapping (Preview Policy Details)", key="test_mapping_policy_details_btn") or st.session_state.get("show_policy_details_mapping_preview", False):
-                        st.session_state["show_policy_details_mapping_preview"] = True
-                        
-                        def get_policy_details_column_mapping(col, val):
-                            mapping = {
-                                "Customer": "customer",
-                                "Client ID": "client_id",
-                                "Policy Number": "policy_number",
-                                "Policy Type": "policy_type",
-                                "Carrier Name": "carrier_name",
-                                "MGA Name": "mga_name",
-                                "Effective Date": "policy_effective_date",
-                                "Policy Origination Date": "policy_origination_date",
-                                "Policy Gross Comm %": "policy_commission_pct",
-                                "Agent Comm (NEW 50% RWL 25%)": "agent_commission_pct",
-                                "X-DATE": "policy_expiration_date"
-                            }
-                            db_col = mapping.get(col, col)
-                            return {
-                                "UI Column Title": col,
-                                "Database Column Name": db_col,
-                                "Current Value": val
-                            }
-                        mapping_table = [get_policy_details_column_mapping(col, edited_details_df.iloc[0][col]) for col in policy_detail_cols] if not edited_details_df.empty else []
-                        mapping_df = pd.DataFrame(mapping_table)
-                        with st.expander("Preview Policy Details Mapping & Changes", expanded=True):
-                            st.write("**Column Mapping (UI → Database):**")
-                            st.dataframe(mapping_df, use_container_width=True)
-                    else:
-                        st.session_state["show_policy_details_mapping_preview"] = False
-                    if st.button("Save Policy Details", key="save_policy_details_btn") and not edited_details_df.empty:
-                        update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in policy_detail_cols if col != "Policy Number"]) + " WHERE \"Policy Number\" = :policy_number"
-                        update_params = {col: edited_details_df.iloc[0][col] for col in policy_detail_cols if col != "Policy Number"}
-                        update_params["policy_number"] = edited_details_df.iloc[0]["Policy Number"]
-                        with engine.begin() as conn:
-                            # Update via Supabase
-                            if '_id' in selected_df.columns:
-                                policy_id = selected_df.iloc[0]['_id']
-                            else:
-                                # Get the record ID first
-                                search_key = 'Policy Number' if 'Policy Number' in update_params else 'Transaction ID'
-                                search_value = update_params.get('policy_number', update_params.get('transaction_id'))
-                                if search_value:
-                                    result = supabase.table('policies').select('_id').eq(search_key, search_value).execute()
-                                    if result.data:
-                                        policy_id = result.data[0]['_id']
-                                    else:
-                                        policy_id = None
-                                else:
-                                    policy_id = None
-                            
-                            if policy_id:
-                                # Remove ID fields from update
-                                update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'policy_number', 'transaction_id']}
-                                supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
-                                clear_policies_cache()
-                        st.success("Policy details updated.")
-                        st.rerun()
-
-                    st.markdown("### Policy Ledger (Editable)")                # Ensure Credit and Debit columns are numeric
-                    if "Credit (Commission Owed)" in ledger_df.columns:
-                        ledger_df["Credit (Commission Owed)"] = pd.to_numeric(ledger_df["Credit (Commission Owed)"], errors="coerce").fillna(0.0)
-                    if "Debit (Paid to Agent)" in ledger_df.columns:
-                        ledger_df["Debit (Paid to Agent)"] = pd.to_numeric(ledger_df["Debit (Paid to Agent)"], errors="coerce").fillna(0.0)
-
-                    # Lock formula columns
-                    formula_columns = []
-                    for col in ["Credit (Commission Owed)", "Debit (Paid to Agent)"]:
-                        if col in ledger_df.columns:
-                            formula_columns.append(col)
-                    column_config = {}
-                    for col in ledger_df.columns:
-                        if col in formula_columns:
-                            column_config[col] = {"disabled": True}
-
-                    # Prevent deletion of the first (opening) row
-                    ledger_df_display = ledger_df.copy()
-                    ledger_df_display["Delete"] = True
-                    ledger_df_display.loc[0, "Delete"] = False  # Opening row cannot be deleted
-                    display_cols = ledger_columns + ["Delete"]
-
-                    # --- Ensure all display columns exist in the DataFrame ---
-                    for col in display_cols:
-                        if col not in ledger_df_display.columns:
-                            # For Delete, default to True except first row; for others, empty string
-                            if col == "Delete":
-                                ledger_df_display[col] = [True] * len(ledger_df_display)
-                                if len(ledger_df_display) > 0:
-                                    ledger_df_display.loc[0, "Delete"] = False
-                            else:
-                                ledger_df_display[col] = ""
-                    # Reorder columns safely
-                    ledger_df_display = ledger_df_display[display_cols]
-
-                    st.markdown("<b>Why are some columns locked?</b>", unsafe_allow_html=True)
-                    with st.expander("Locked Columns Explanation", expanded=False):
-                        st.markdown("""
-                        Some columns in the Policy Revenue Ledger are locked because their values are automatically calculated by the app based on other fields or business rules. These formula columns ensure the accuracy of your commission and revenue calculations. If you need to change a value in a locked column, you must update the underlying fields that drive the calculation, or contact your administrator if you believe the formula needs to be changed.
-                        
-                        **Locked columns in this ledger include:**
-                        - Credit (Commission Owed)
-                        - Debit (Paid to Agent)
-                        """)
-
-                    # Show the table as editable, with locked columns and strictly no row add/delete
-                    # Lock formula columns and Transaction ID, and set num_rows to 'fixed' to prevent row add/delete
-                    column_config["Credit (Commission Owed)"] = {
-                        "disabled": True,
-                        "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
-                    }
-                    column_config["Debit (Paid to Agent)"] = {
-                        "disabled": True,
-                        "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
-                    }
-                    column_config["Transaction ID"] = {
-                        "disabled": True,
-                        "help": "Transaction ID is a unique identifier and cannot be changed."
-                    }
-                    edited_ledger_df = st.data_editor(
-                        ledger_df_display,
-                        use_container_width=True,
-                        height=max(400, 40 + 40 * len(ledger_df_display)),
-                        key="policy_ledger_editor",
-                        num_rows="fixed",
-                        column_config=column_config,
-                        hide_index=True
-                    )
-
-                    # Strictly prevent row addition and deletion: only allow editing of existing rows
-                    # Remove the Delete column before saving (no row deletion allowed)
-                    edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
-                    # Only keep the original ledger columns (no extra columns)
-                    edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
-                    if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
-                        st.session_state["show_policy_ledger_mapping_preview"] = True
-                        def get_policy_ledger_column_mapping(col, val):
-                            mapping = {
-                                "Transaction ID": "transaction_id",
-                                "Description": "description",
-                                "Credit (Commission Owed)": "agent_estimated_comm",
-                                "Debit (Paid to Agent)": "Agent Paid Amount (STMT)",
-                                "Transaction Type": "transaction_type"
-                            }
-                            db_col = mapping.get(col, col)
-                            return {
-                                "UI Column Title": col,
-                                "Database Column Name": db_col,
-                                "Current Value": val
-                            }
-                        mapping_table = [get_policy_ledger_column_mapping(col, edited_ledger_df.iloc[0][col] if not edited_ledger_df.empty else "") for col in ledger_columns]
-                        mapping_df = pd.DataFrame(mapping_table)
-                        with st.expander("Preview Policy Ledger Mapping & Changes", expanded=True):
-                            st.write("**Column Mapping (UI → Database):**")
-                            st.dataframe(mapping_df, use_container_width=True)
-                            st.write("**Proposed Policy Ledger Preview:**")
-                            st.dataframe(edited_ledger_df, use_container_width=True)
-                    else:
-                        st.session_state["show_policy_ledger_mapping_preview"] = False                # --- Ledger Totals Section ---
-                    total_credits = edited_ledger_df["Credit (Commission Owed)"].apply(pd.to_numeric, errors="coerce").sum() if "Credit (Commission Owed)" in edited_ledger_df.columns else 0.0
-                    total_debits = edited_ledger_df["Debit (Paid to Agent)"].apply(pd.to_numeric, errors="coerce").sum() if "Debit (Paid to Agent)" in edited_ledger_df.columns else 0.0
-                    balance_due = total_credits - total_debits
-
-                    st.markdown("#### Ledger Totals")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Credits", f"${total_credits:,.2f}")
-                    with col2:
-                        st.metric("Total Debits", f"${total_debits:,.2f}")
-                    with col3:
-                        st.metric("Balance Due", f"${balance_due:,.2f}")
-
-                    if st.button("Save Changes", key="save_policy_ledger_btn"):
-                        for idx, row in edited_ledger_df.iterrows():
-                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in ledger_columns if col != "Transaction ID"]) + " WHERE \"Transaction ID\" = :transaction_id"
-                            update_params = {col: row[col] for col in ledger_columns if col != "Transaction ID"}
-                            update_params["transaction_id"] = row["Transaction ID"]
-                            
-                            # Update via Supabase
-                            try:
-                                # Find the policy by Transaction ID
-                                result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
+                    def get_policy_details_column_mapping(col, val):
+                        mapping = {
+                            "Customer": "customer",
+                            "Client ID": "client_id",
+                            "Policy Number": "policy_number",
+                            "Policy Type": "policy_type",
+                            "Carrier Name": "carrier_name",
+                            "MGA Name": "mga_name",
+                            "Effective Date": "policy_effective_date",
+                            "Policy Origination Date": "policy_origination_date",
+                            "Policy Gross Comm %": "policy_commission_pct",
+                            "Agent Comm (NEW 50% RWL 25%)": "agent_commission_pct",
+                            "X-DATE": "policy_expiration_date"
+                        }
+                        db_col = mapping.get(col, col)
+                        return {
+                            "UI Column Title": col,
+                            "Database Column Name": db_col,
+                            "Current Value": val
+                        }
+                    mapping_table = [get_policy_details_column_mapping(col, edited_details_df.iloc[0][col]) for col in policy_detail_cols] if not edited_details_df.empty else []
+                    mapping_df = pd.DataFrame(mapping_table)
+                    with st.expander("Preview Policy Details Mapping & Changes", expanded=True):
+                        st.write("**Column Mapping (UI → Database):**")
+                        st.dataframe(mapping_df, use_container_width=True)
+                else:
+                    st.session_state["show_policy_details_mapping_preview"] = False
+                if st.button("Save Policy Details", key="save_policy_details_btn") and not edited_details_df.empty:
+                    update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in policy_detail_cols if col != "Policy Number"]) + " WHERE \"Policy Number\" = :policy_number"
+                    update_params = {col: edited_details_df.iloc[0][col] for col in policy_detail_cols if col != "Policy Number"}
+                    update_params["policy_number"] = edited_details_df.iloc[0]["Policy Number"]
+                    with engine.begin() as conn:
+                        # Update via Supabase
+                        if '_id' in selected_df.columns:
+                            policy_id = selected_df.iloc[0]['_id']
+                        else:
+                            # Get the record ID first
+                            search_key = 'Policy Number' if 'Policy Number' in update_params else 'Transaction ID'
+                            search_value = update_params.get('policy_number', update_params.get('transaction_id'))
+                            if search_value:
+                                result = supabase.table('policies').select('_id').eq(search_key, search_value).execute()
                                 if result.data:
                                     policy_id = result.data[0]['_id']
-                                    # Remove ID fields from update
-                                    update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
-                                    supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
-                                    clear_policies_cache()
                                 else:
-                                    st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
-                            except Exception as e:
-                                st.error(f"Error updating policy: {e}")
-                        st.success("Policy ledger changes saved.")
-                        st.rerun()    # --- Help ---
+                                    policy_id = None
+                            else:
+                                policy_id = None
+                        
+                        if policy_id:
+                            # Remove ID fields from update
+                            update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'policy_number', 'transaction_id']}
+                            supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
+                            clear_policies_cache()
+                    st.success("Policy details updated.")
+                    st.rerun()
+
+                st.markdown("### Policy Ledger (Editable)")                # Ensure Credit and Debit columns are numeric
+                if "Credit (Commission Owed)" in ledger_df.columns:
+                    ledger_df["Credit (Commission Owed)"] = pd.to_numeric(ledger_df["Credit (Commission Owed)"], errors="coerce").fillna(0.0)
+                if "Debit (Paid to Agent)" in ledger_df.columns:
+                    ledger_df["Debit (Paid to Agent)"] = pd.to_numeric(ledger_df["Debit (Paid to Agent)"], errors="coerce").fillna(0.0)
+
+                # Lock formula columns
+                formula_columns = []
+                for col in ["Credit (Commission Owed)", "Debit (Paid to Agent)"]:
+                    if col in ledger_df.columns:
+                        formula_columns.append(col)
+                column_config = {}
+                for col in ledger_df.columns:
+                    if col in formula_columns:
+                        column_config[col] = {"disabled": True}
+
+                # Prevent deletion of the first (opening) row
+                ledger_df_display = ledger_df.copy()
+                ledger_df_display["Delete"] = True
+                ledger_df_display.loc[0, "Delete"] = False  # Opening row cannot be deleted
+                display_cols = ledger_columns + ["Delete"]
+
+                # --- Ensure all display columns exist in the DataFrame ---
+                for col in display_cols:
+                    if col not in ledger_df_display.columns:
+                        # For Delete, default to True except first row; for others, empty string
+                        if col == "Delete":
+                            ledger_df_display[col] = [True] * len(ledger_df_display)
+                            if len(ledger_df_display) > 0:
+                                ledger_df_display.loc[0, "Delete"] = False
+                        else:
+                            ledger_df_display[col] = ""
+                # Reorder columns safely
+                ledger_df_display = ledger_df_display[display_cols]
+
+                st.markdown("<b>Why are some columns locked?</b>", unsafe_allow_html=True)
+                with st.expander("Locked Columns Explanation", expanded=False):
+                    st.markdown("""
+                    Some columns in the Policy Revenue Ledger are locked because their values are automatically calculated by the app based on other fields or business rules. These formula columns ensure the accuracy of your commission and revenue calculations. If you need to change a value in a locked column, you must update the underlying fields that drive the calculation, or contact your administrator if you believe the formula needs to be changed.
+                    
+                    **Locked columns in this ledger include:**
+                    - Credit (Commission Owed)
+                    - Debit (Paid to Agent)
+                    """)
+
+                # Show the table as editable, with locked columns and strictly no row add/delete
+                # Lock formula columns and Transaction ID, and set num_rows to 'fixed' to prevent row add/delete
+                column_config["Credit (Commission Owed)"] = {
+                    "disabled": True,
+                    "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
+                }
+                column_config["Debit (Paid to Agent)"] = {
+                    "disabled": True,
+                    "help": "This column is automatically calculated and cannot be edited. See 'Why are some columns locked?' above."
+                }
+                column_config["Transaction ID"] = {
+                    "disabled": True,
+                    "help": "Transaction ID is a unique identifier and cannot be changed."
+                }
+                edited_ledger_df = st.data_editor(
+                    ledger_df_display,
+                    use_container_width=True,
+                    height=max(400, 40 + 40 * len(ledger_df_display)),
+                    key="policy_ledger_editor",
+                    num_rows="fixed",
+                    column_config=column_config,
+                    hide_index=True
+                )
+
+                # Strictly prevent row addition and deletion: only allow editing of existing rows
+                # Remove the Delete column before saving (no row deletion allowed)
+                edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
+                # Only keep the original ledger columns (no extra columns)
+                edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
+                if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
+                    st.session_state["show_policy_ledger_mapping_preview"] = True
+                    def get_policy_ledger_column_mapping(col, val):
+                        mapping = {
+                            "Transaction ID": "transaction_id",
+                            "Description": "description",
+                            "Credit (Commission Owed)": "agent_estimated_comm",
+                            "Debit (Paid to Agent)": "Agent Paid Amount (STMT)",
+                            "Transaction Type": "transaction_type"
+                        }
+                        db_col = mapping.get(col, col)
+                        return {
+                            "UI Column Title": col,
+                            "Database Column Name": db_col,
+                            "Current Value": val
+                        }
+                    mapping_table = [get_policy_ledger_column_mapping(col, edited_ledger_df.iloc[0][col] if not edited_ledger_df.empty else "") for col in ledger_columns]
+                    mapping_df = pd.DataFrame(mapping_table)
+                    with st.expander("Preview Policy Ledger Mapping & Changes", expanded=True):
+                        st.write("**Column Mapping (UI → Database):**")
+                        st.dataframe(mapping_df, use_container_width=True)
+                        st.write("**Proposed Policy Ledger Preview:**")
+                        st.dataframe(edited_ledger_df, use_container_width=True)
+                else:
+                    st.session_state["show_policy_ledger_mapping_preview"] = False                # --- Ledger Totals Section ---
+                total_credits = edited_ledger_df["Credit (Commission Owed)"].apply(pd.to_numeric, errors="coerce").sum() if "Credit (Commission Owed)" in edited_ledger_df.columns else 0.0
+                total_debits = edited_ledger_df["Debit (Paid to Agent)"].apply(pd.to_numeric, errors="coerce").sum() if "Debit (Paid to Agent)" in edited_ledger_df.columns else 0.0
+                balance_due = total_credits - total_debits
+
+                st.markdown("#### Ledger Totals")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Credits", f"${total_credits:,.2f}")
+                with col2:
+                    st.metric("Total Debits", f"${total_debits:,.2f}")
+                with col3:
+                    st.metric("Balance Due", f"${balance_due:,.2f}")
+
+                if st.button("Save Changes", key="save_policy_ledger_btn"):
+                    for idx, row in edited_ledger_df.iterrows():
+                        update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in ledger_columns if col != "Transaction ID"]) + " WHERE \"Transaction ID\" = :transaction_id"
+                        update_params = {col: row[col] for col in ledger_columns if col != "Transaction ID"}
+                        update_params["transaction_id"] = row["Transaction ID"]
+                        
+                        # Update via Supabase
+                        try:
+                            # Find the policy by Transaction ID
+                            result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
+                            if result.data:
+                                policy_id = result.data[0]['_id']
+                                # Remove ID fields from update
+                                update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
+                                supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
+                                clear_policies_cache()
+                            else:
+                                st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
+                        except Exception as e:
+                            st.error(f"Error updating policy: {e}")
+                    st.success("Policy ledger changes saved.")
+                    st.rerun()    # --- Help ---
     elif page == "Help":
         st.title("📚 Help & Documentation")
         
@@ -8008,59 +8386,6 @@ SOLUTION NEEDED:
             st.write("- **Admin Panel**: Database management and system tools")
             st.write("- **Tools**: Utilities for calculations and data formatting")
             st.write("- **Accounting**: Commission reconciliation and payment tracking")
-            
-            st.divider()
-            
-            # Cancel/Rewrite Scenario Guide
-            st.write("**🔄 Cancel/Rewrite Scenario Guide**")
-            st.info("**Important**: This section explains how to handle mid-term policy cancellations that are immediately rewritten (common for rate reductions).")
-            
-            with st.expander("📋 Step-by-Step Process for Cancel/Rewrite", expanded=True):
-                st.success("🎉 **NEW FEATURES**: Prior Policy Number field now available in Add New Policy! Cancelled policies automatically hidden from Pending Renewals!")
-                st.markdown("""
-                ### When to Use Cancel/Rewrite
-                Use this process when a customer wants to cancel their current policy mid-term and immediately 
-                rewrite it (typically to save money with a better rate).
-                
-                ### Step 1: Cancel the Original Policy
-                Create a new transaction with:
-                - **Transaction Type**: `CAN` (Cancel)
-                - **Policy Number**: Same as the original policy
-                - **Effective Date**: The cancellation date
-                - **Premium/Commission fields**: Enter negative amounts or zeros
-                - **Description**: Add note like "Cancelled for rewrite - see policy [new policy number]"
-                
-                ✅ **NEW**: Cancelled policies now automatically disappear from Pending Renewals!
-                
-                ### Step 2: Create the Rewrite Policy
-                Use "Add New Policy Transaction" with:
-                - **Transaction Type**: `REWRITE` (not RWL - this ensures 25% commission, not 50%)
-                - **Policy Number**: New number if changed, or same if carrier kept it
-                - **Prior Policy Number**: Enter the original policy number (NOW AVAILABLE in Add New Policy!)
-                - **Effective Date**: New effective date (immediate)
-                - **X-DATE**: New expiration date
-                - **Policy Origination Date**: Keep the ORIGINAL date (preserves customer history)
-                - **Commission**: Will calculate at 25% (rewrite rate)
-                - **Description**: Add note like "Rewrite of policy [original number] - mid-term for rate reduction"
-                
-                ### Key Benefits
-                ✅ Maintains complete audit trail  
-                ✅ Prior Policy Number links rewrite to original (field now in Add New Policy!)
-                ✅ Preserves customer relationship timeline  
-                ✅ Both transactions appear in reports  
-                ✅ Cancelled policies automatically removed from Pending Renewals  
-                ✅ Rewrite won't show in Pending Renewals (due to Prior Policy Number)
-                ✅ Commission calculates correctly at 25%  
-                
-                ### Alternative: Same Policy Number
-                If the carrier keeps the same policy number:
-                - Still create both CAN and REWRITE transactions
-                - Use the same Policy Number for both
-                - Different Transaction IDs keep them separate
-                - The dates and transaction types tell the complete story
-                """)
-            
-            st.warning("⚠️ **Remember**: Always use REWRITE (not RWL) for mid-term rewrites to ensure proper 25% commission calculation!")
         
         with tab3:
             st.subheader("🔧 Troubleshooting")
@@ -8196,9 +8521,6 @@ TO "New Column Name";
     elif page == "Policy Revenue Ledger Reports":
         st.subheader("Policy Revenue Ledger Reports")
         st.success("📊 Generate customizable reports for policy summaries with Balance Due calculations and export capabilities.")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No policy data loaded. Please check database connection or import data.")
@@ -8578,13 +8900,6 @@ TO "New Column Name";
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
         
-        # Load fresh data for this page
-        all_data = load_policies_data()
-        
-        if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
-            return
-        
         # Initialize session state
         if 'deleted_renewals' not in st.session_state:
             st.session_state['deleted_renewals'] = []
@@ -8594,9 +8909,7 @@ TO "New Column Name";
             st.session_state.renewal_to_edit = None
 
         pending_renewals_df = get_pending_renewals(all_data)
-        # Don't use duplicate_for_renewal for display - it modifies the transaction type!
-        # Just display the original pending renewals as they are
-        duplicated_renewals_df = pending_renewals_df.copy()
+        duplicated_renewals_df = duplicate_for_renewal(pending_renewals_df)
         
         # Filter out deleted renewals
         if not duplicated_renewals_df.empty:
@@ -8649,9 +8962,6 @@ TO "New Column Name";
                 st.divider()
                 st.markdown("### 📝 Edit Renewal Transaction")
                 
-                # Important reminder for user
-                st.info("💡 **Note**: To edit a different transaction, click the **Cancel** button below to return to the selection table.")
-                
                 # Prepare renewal data (pre-populate with calculated values)
                 renewal_data = st.session_state.renewal_to_edit.copy()
                 
@@ -8677,25 +8987,6 @@ TO "New Column Name";
                 
                 # Pre-populate Prior Policy Number with the current policy number
                 renewal_data['Prior Policy Number'] = renewal_data.get('Policy Number', '')
-                
-                # Set transaction type to RWL for renewal
-                renewal_data[get_mapped_column("Transaction Type")] = "RWL"
-                
-                # Update dates for renewal - calculate new effective and expiration dates
-                if 'expiration_date' in renewal_data:
-                    # New effective date is the old expiration date
-                    new_effective = pd.to_datetime(renewal_data['expiration_date'])
-                    renewal_data[get_mapped_column("Effective Date")] = new_effective.strftime('%m/%d/%Y')
-                    
-                    # Calculate new expiration date based on Policy Term
-                    policy_term_col = get_mapped_column("Policy Term")
-                    if policy_term_col in renewal_data and pd.notna(renewal_data.get(policy_term_col)) and renewal_data.get(policy_term_col) != 0:
-                        months_to_add = int(renewal_data[policy_term_col])
-                    else:
-                        months_to_add = 6  # Default to 6 months if not specified
-                    
-                    new_expiration = new_effective + pd.DateOffset(months=months_to_add)
-                    renewal_data[get_mapped_column("X-DATE")] = new_expiration.strftime('%m/%d/%Y')
                 
                 # Clear commission fields for renewal
                 fields_to_clear = [

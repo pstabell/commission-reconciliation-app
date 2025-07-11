@@ -789,6 +789,64 @@ This led to understanding that the filter was too restrictive and the status com
 
 ---
 
+### Version 3.5.5 (July 10, 2025 - Evening) - Duplicate Transaction Fix
+
+#### Problem Discovery
+User reported: "I'm getting duplicates! 269 U6LPWP 5HR97QP Frank Fanelli Progressive Insurance Private Passenger Auto NEW"
+
+The issue occurred when:
+1. User clicked "Add New Transaction for This Client" button
+2. Successfully saved the new transaction inline
+3. Selected the transaction and clicked "Edit Selected Transaction"
+4. Made changes and saved through the modal form
+5. Instead of updating, a duplicate record was created
+
+#### Root Cause Analysis
+Investigation revealed the modal save logic issue:
+- Inline-added transactions lacked `_id` field in session state (only exists in database)
+- Modal save logic only checked for `_id` presence to determine INSERT vs UPDATE
+- Without `_id`, the modal assumed it was a new record and performed INSERT
+- This created a duplicate with the same Transaction ID but different `_id`
+
+#### Technical Solution
+Enhanced the modal save logic with database existence check:
+```python
+# Before: Only checked _id field
+if record_id is not None and record_id != '' and not pd.isna(record_id):
+    # UPDATE
+else:
+    # INSERT
+
+# After: Check database for existing Transaction ID first
+existing_record = None
+if transaction_id:
+    try:
+        check_response = supabase.table('policies').select('_id').eq(
+            f'"{get_mapped_column("Transaction ID")}"', transaction_id
+        ).execute()
+        if check_response.data and len(check_response.data) > 0:
+            existing_record = check_response.data[0]
+    except:
+        pass
+
+# Now checks both database and local _id
+if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
+    # UPDATE
+else:
+    # INSERT
+```
+
+#### Testing & Verification
+1. Added new transaction inline for client U6LPWP
+2. Saved successfully with "Save All Changes"
+3. Selected and edited the transaction
+4. Changes saved correctly without creating duplicate
+5. Verified only one record exists with proper updates applied
+
+**Impact**: Users can now safely use the inline add feature followed by immediate editing without creating duplicate records. The system properly recognizes existing records regardless of whether they have `_id` in session state, maintaining data integrity throughout the add/edit workflow.
+
+---
+
 *Document Created: July 3, 2025*  
 *Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.4*
+*Current Application Version: 3.5.5*

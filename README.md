@@ -2,7 +2,7 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.4  
+**Version**: 3.5.5  
 **Last Updated**: July 10, 2025
 
 ## Overview
@@ -86,10 +86,16 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.4)
+## Recent Updates (v3.5.5)
 
-### Void Visibility Enhancement
-- **Complete Reconciliation Status Tracking**: See which statements are voided at a glance
+### Duplicate Transaction Fix
+- **Fixed Inline Add/Edit Issue**: Resolved duplicate creation when editing newly added transactions
+- **Enhanced Modal Save Logic**: Now checks database for existing records before INSERT/UPDATE
+- **Improved Data Integrity**: Prevents duplicates regardless of session state
+- **Seamless Workflow**: Add inline → Edit immediately without creating duplicates
+
+### Previous Updates (v3.5.4)
+- **Void Visibility Enhancement**: Complete reconciliation status tracking
 - **Enhanced History Views**: Added Status, Void ID, and Void Date columns
 - **Visual Indicators**: Color coding for voided batches and void entries
 - **Fixed Void Transaction Filter**: Now includes both -STMT- and -VOID- transactions

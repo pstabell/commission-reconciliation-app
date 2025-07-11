@@ -5,6 +5,23 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.5] - 2025-07-10 (Evening) - Duplicate Transaction Fix
+
+### Fixed
+- **Duplicate Transaction Creation on Inline Add/Edit**
+  - Fixed issue where editing a newly added inline transaction created a duplicate instead of updating
+  - Modal save logic now checks database for existing Transaction ID before deciding INSERT vs UPDATE
+  - Resolves issue where inline-added transactions lacked `_id` in session state
+  - Prevents duplicate records when using "Add New Transaction for This Client" followed by edit
+
+### Technical
+- Enhanced modal save logic to query database for existing records by Transaction ID
+- Added fallback check when `_id` is not available in session state
+- Ensures proper UPDATE operation for records that exist in database but not in local state
+
+### Impact
+Users can now safely add transactions inline and immediately edit them without creating duplicates. The system properly recognizes existing records regardless of how they were created, maintaining data integrity throughout the add/edit workflow.
+
 ## [3.5.4] - 2025-07-10 (Evening) - Void Visibility Enhancement
 
 ### Added

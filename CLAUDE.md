@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 10, 2025 (Evening)  
-**Current Version**: 3.5.4
+**Current Version**: 3.5.5
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.4)
-1. **Void Visibility**: Complete reconciliation status tracking in history
-2. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
-3. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
-4. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture
-5. **Prior Changes (v3.5.0)**: Policy renewal tracking, column renaming
+## Recent Major Changes (v3.5.5)
+1. **Duplicate Fix**: Resolved duplicate creation on inline add/edit workflow
+2. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
+3. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
+4. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
+5. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture
 
 ## Known Issues & Solutions
 
@@ -68,6 +68,12 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: Filter only looked for `-STMT-` transactions, not `-VOID-`
 **Solution**: Updated filter to include both patterns with OR condition
 **Note**: Also fixed case-sensitive status comparisons (handles lowercase 'void')
+
+### 9. Duplicate Transactions on Inline Add/Edit (FIXED in v3.5.5)
+**Issue**: Editing inline-added transactions created duplicates instead of updating
+**Cause**: Modal save logic only checked `_id` field which wasn't in session state
+**Solution**: Added database check for existing Transaction ID before INSERT/UPDATE
+**Prevention**: Modal now queries database to verify record existence
 
 ## Development Guidelines
 
@@ -150,6 +156,7 @@ data = convert_timestamps_for_json(data)
 - [ ] Check error messages are user-friendly
 - [ ] Test reconciliation void visibility
 - [ ] Verify case-insensitive status handling
+- [ ] Test inline add followed by immediate edit (no duplicates)
 
 ## Contact & Support
 - **Repository**: https://github.com/pstabell/commission-reconciliation-app

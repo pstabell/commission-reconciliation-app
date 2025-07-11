@@ -3756,21 +3756,8 @@ def main():
                                                 if pd.isna(value):
                                                     save_data[key] = None
                                             
-                                            # First check if this transaction already exists in the database
-                                            # This handles cases where the record was added inline but doesn't have _id in session state
-                                            existing_record = None
-                                            if transaction_id:
-                                                try:
-                                                    check_response = supabase.table('policies').select('_id').eq(
-                                                        f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                    ).execute()
-                                                    if check_response.data and len(check_response.data) > 0:
-                                                        existing_record = check_response.data[0]
-                                                except:
-                                                    pass
-                                            
-                                            # Determine if this is an INSERT or UPDATE
-                                            if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
+                                            # Determine if this is an INSERT or UPDATE based on _id presence
+                                            if record_id is not None and record_id != '' and not pd.isna(record_id):
                                                 # Existing record - UPDATE
                                                 # Remove _id from update data as it shouldn't be updated
                                                 if '_id' in save_data:

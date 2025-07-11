@@ -3743,49 +3743,22 @@ def main():
                                 if result:
                                     if result["action"] == "save":
                                         try:
-                                            # Get transaction ID and _id to determine if this is new or existing
-                                            transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
-                                            record_id = result["data"].get('_id')
+                                            # Update the database
+                                            transaction_id = result["data"].get(get_transaction_id_column())
                                             
-                                            # Convert data for database operation
-                                            save_data = result["data"].copy()
-                                            save_data = convert_timestamps_for_json(save_data)
+                                            # Convert data for database update
+                                            update_data = result["data"].copy()
+                                            update_data = convert_timestamps_for_json(update_data)
                                             
                                             # Handle NaN values
-                                            for key, value in save_data.items():
+                                            for key, value in update_data.items():
                                                 if pd.isna(value):
-                                                    save_data[key] = None
+                                                    update_data[key] = None
                                             
-                                            # First check if this transaction already exists in the database
-                                            # This handles cases where the record was added inline but doesn't have _id in session state
-                                            existing_record = None
-                                            if transaction_id:
-                                                try:
-                                                    check_response = supabase.table('policies').select('_id').eq(
-                                                        f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                    ).execute()
-                                                    if check_response.data and len(check_response.data) > 0:
-                                                        existing_record = check_response.data[0]
-                                                except:
-                                                    pass
-                                            
-                                            # Determine if this is an INSERT or UPDATE
-                                            if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
-                                                # Existing record - UPDATE
-                                                # Remove _id from update data as it shouldn't be updated
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').update(save_data).eq(
-                                                    f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                                ).execute()
-                                            else:
-                                                # New record - INSERT
-                                                # Remove _id field to let database auto-generate it
-                                                if '_id' in save_data:
-                                                    del save_data['_id']
-                                                
-                                                response = supabase.table('policies').insert(save_data).execute()
+                                            # Update the record
+                                            response = supabase.table('policies').update(update_data).eq(
+                                                f'"{get_transaction_id_column()}"', transaction_id
+                                            ).execute()
                                             
                                             if response.data:
                                                 st.success("✅ Transaction updated successfully!")
@@ -5353,10 +5326,8 @@ def main():
             
             # Show reconciliation entries
             if not all_data.empty:
-                # Include both -STMT- and -VOID- transactions
                 recon_entries = all_data[
-                    (all_data['Transaction ID'].str.contains('-STMT-', na=False)) |
-                    (all_data['Transaction ID'].str.contains('-VOID-', na=False))
+                    all_data['Transaction ID'].str.contains('-STMT-', na=False)
                 ]
                 
                 if not recon_entries.empty:
@@ -5432,52 +5403,7 @@ def main():
                             else:
                                 agg_dict['Agency Comm Received (STMT)'] = 'sum'
                             
-                            # Add reconciliation status aggregation
-                            if 'reconciliation_status' in filtered_recon.columns:
-                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if any(str(v).upper() == 'VOID' for v in x.values if pd.notna(v)) else 'ACTIVE'
-                            
                             batch_summary = filtered_recon.groupby('reconciliation_id').agg(agg_dict).reset_index()
-                            
-                            # Determine status, void ID, and void date for each batch
-                            batch_summary['Status'] = 'ACTIVE'  # Default
-                            batch_summary['Void ID'] = '-'
-                            batch_summary['Void Date'] = '-'
-                            
-                            # Check if batch has been voided
-                            for idx, row in batch_summary.iterrows():
-                                batch_id = row['reconciliation_id']
-                                
-                                # Check if this batch has void entries
-                                if batch_id.startswith('VOID-'):
-                                    # This is a void batch itself
-                                    batch_summary.at[idx, 'Status'] = 'VOID ENTRY'
-                                    batch_summary.at[idx, 'Void ID'] = batch_id
-                                    # Get the date from the batch transactions
-                                    void_transactions = filtered_recon[filtered_recon['reconciliation_id'] == batch_id]
-                                    if not void_transactions.empty and 'As of Date' in void_transactions.columns:
-                                        void_date = pd.to_datetime(void_transactions['As of Date'].iloc[0])
-                                        batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
-                                else:
-                                    # Check if there's a corresponding void batch
-                                    void_batch_id = f"VOID-{batch_id}"
-                                    void_exists = all_data[
-                                        (all_data['reconciliation_id'] == void_batch_id) & 
-                                        (all_data['Transaction ID'].str.contains('-STMT-', na=False))
-                                    ]
-                                    
-                                    if not void_exists.empty:
-                                        batch_summary.at[idx, 'Status'] = 'VOIDED'
-                                        batch_summary.at[idx, 'Void ID'] = void_batch_id
-                                        # Get void date
-                                        if 'As of Date' in void_exists.columns:
-                                            void_date = pd.to_datetime(void_exists['As of Date'].iloc[0])
-                                            batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
-                                
-                                # Also check reconciliation_status if available
-                                if 'reconciliation_status' in batch_summary.columns:
-                                    status = str(row.get('reconciliation_status', '')).upper()
-                                    if status == 'VOIDED' or status == 'VOID':
-                                        batch_summary.at[idx, 'Status'] = 'VOIDED'
                             
                             rename_dict = {
                                 'reconciliation_id': 'Batch ID',
@@ -5501,39 +5427,11 @@ def main():
                                 format_func=lambda x: 'Select a batch...' if x == '' else f"{x} ({batch_summary[batch_summary['Batch ID']==x]['Statement Date'].iloc[0] if x != '' else ''})"
                             )
                             
-                            # Configure column display with color coding for status
-                            column_config = {
-                                "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f"),
-                                "Status": st.column_config.TextColumn(
-                                    help="ACTIVE = Normal reconciliation, VOIDED = Has been reversed, VOID ENTRY = Reversal entry"
-                                ),
-                                "Void ID": st.column_config.TextColumn(
-                                    help="ID of the void batch if this reconciliation was voided"
-                                ),
-                                "Void Date": st.column_config.TextColumn(
-                                    help="Date when this reconciliation was voided"
-                                )
-                            }
-                            
-                            # Reorder columns for better display
-                            display_columns = ['Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
-                            # Only include columns that exist
-                            display_columns = [col for col in display_columns if col in batch_summary.columns]
-                            
-                            # Apply styling based on status
-                            def highlight_status(row):
-                                if row['Status'] == 'VOIDED':
-                                    return ['background-color: #ffcccc'] * len(row)
-                                elif row['Status'] == 'VOID ENTRY':
-                                    return ['background-color: #ffe6cc'] * len(row)
-                                else:
-                                    return [''] * len(row)
-                            
-                            styled_df = batch_summary[display_columns].sort_values('Statement Date', ascending=False).style.apply(highlight_status, axis=1)
-                            
                             st.dataframe(
-                                styled_df,
-                                column_config=column_config,
+                                batch_summary.sort_values('Statement Date', ascending=False),
+                                column_config={
+                                    "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f")
+                                },
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -5568,29 +5466,7 @@ def main():
                                 display_recon = filtered_recon.copy()
                                 display_recon['STMT DATE'] = pd.to_datetime(display_recon['STMT DATE']).dt.strftime('%m/%d/%Y')
                             else:
-                                display_recon = filtered_recon.copy()
-                            
-                            # Add reconciliation status display
-                            if 'reconciliation_status' not in display_recon.columns:
-                                display_recon['reconciliation_status'] = 'reconciled'  # Default for old data
-                            
-                            # Rename reconciliation_status for display
-                            display_recon['Reconciliation Status'] = display_recon['reconciliation_status'].apply(
-                                lambda x: x.upper() if pd.notna(x) else 'RECONCILED'
-                            )
-                            
-                            # Add batch ID column if not present
-                            if 'reconciliation_id' in display_recon.columns:
-                                display_recon['Batch ID'] = display_recon['reconciliation_id']
-                            
-                            # Add Is Void Entry column
-                            display_recon['Is Void Entry'] = display_recon.apply(
-                                lambda row: 'Yes' if str(row.get('Reconciliation Status', '')).upper() == 'VOID' or 
-                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False) or
-                                          ('-VOID-' in str(row.get('Transaction ID', '')))
-                                          else 'No', 
-                                axis=1
-                            )
+                                display_recon = filtered_recon
                             
                             # Include both agent and agency amounts
                             display_columns = ['Transaction ID', 'Customer', 'Policy Number', 'STMT DATE']
@@ -5599,37 +5475,11 @@ def main():
                             if 'Agency Comm Received (STMT)' in display_recon.columns:
                                 display_columns.append('Agency Comm Received (STMT)')
                             
-                            # Add new tracking columns
-                            display_columns.extend(['Reconciliation Status', 'Batch ID', 'Is Void Entry'])
-                            
-                            # Only include columns that exist
-                            display_columns = [col for col in display_columns if col in display_recon.columns]
-                            
-                            # Apply styling based on status
-                            def highlight_void_status(row):
-                                if row.get('Is Void Entry') == 'Yes':
-                                    return ['background-color: #ffcccc'] * len(row)
-                                elif str(row.get('Reconciliation Status', '')).upper() == 'VOID':
-                                    return ['background-color: #ffe6cc'] * len(row)
-                                else:
-                                    return [''] * len(row)
-                            
-                            styled_df = display_recon[display_columns].sort_values('STMT DATE', ascending=False).style.apply(highlight_void_status, axis=1)
-                            
                             st.dataframe(
-                                styled_df,
+                                display_recon[display_columns].sort_values('STMT DATE', ascending=False),
                                 column_config={
                                     "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Reconciliation Status": st.column_config.TextColumn(
-                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
-                                    ),
-                                    "Batch ID": st.column_config.TextColumn(
-                                        help="Batch ID this transaction belongs to"
-                                    ),
-                                    "Is Void Entry": st.column_config.TextColumn(
-                                        help="Yes = This is a reversal entry, No = Original entry"
-                                    )
+                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f")
                                 },
                                 use_container_width=True,
                                 hide_index=True
