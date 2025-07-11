@@ -1713,70 +1713,70 @@ def show_import_results(statement_date, all_data):
                                             customer_trans.append(trans_dict)
                                 
                                 if customer_trans:
-                                        st.markdown("**Available Transactions:**")
+                                    st.markdown("**Available Transactions:**")
+                                    
+                                    trans_options = []
+                                    for trans in customer_trans:
+                                        trans_desc = f"ID: {trans['Transaction ID']} | "
+                                        trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
+                                        trans_desc += f"Policy: {trans['Policy Number']} | "
+                                        trans_desc += f"Eff: {trans['Effective Date']} | "
+                                        trans_desc += f"Balance: ${trans['balance']:,.2f}"
+                                        trans_options.append(trans_desc)
+                                    
+                                    selected_trans_idx = st.selectbox(
+                                        "Select Transaction",
+                                        range(len(trans_options)),
+                                        format_func=lambda x: trans_options[x],
+                                        key=f"trans_select_{idx}"
+                                    )
+                                    
+                                    if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
+                                        # Add to manual matches
+                                        st.session_state.manual_matches[idx] = {
+                                            'statement_item': item,
+                                            'matched_transaction': customer_trans[selected_trans_idx],
+                                            'customer': selected_customer
+                                        }
+                                        st.success("Match confirmed!")
+                                        st.rerun()
+                                else:
+                                    st.info("No transactions with balance for this customer")
+                                    
+                                    # Debug mode - show why transactions aren't available
+                                    if st.checkbox("🔍 Show debug info", key=f"debug_{idx}"):
+                                        # Get ALL transactions for this customer (not just those with balance)
+                                        all_customer_trans = all_data[
+                                            (all_data['Customer'] == selected_customer) &
+                                            (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
+                                        ]
                                         
-                                        trans_options = []
-                                        for trans in customer_trans:
-                                            trans_desc = f"ID: {trans['Transaction ID']} | "
-                                            trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
-                                            trans_desc += f"Policy: {trans['Policy Number']} | "
-                                            trans_desc += f"Eff: {trans['Effective Date']} | "
-                                            trans_desc += f"Balance: ${trans['balance']:,.2f}"
-                                            trans_options.append(trans_desc)
-                                        
-                                        selected_trans_idx = st.selectbox(
-                                            "Select Transaction",
-                                            range(len(trans_options)),
-                                            format_func=lambda x: trans_options[x],
-                                            key=f"trans_select_{idx}"
-                                        )
-                                        
-                                        if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
-                                            # Add to manual matches
-                                            st.session_state.manual_matches[idx] = {
-                                                'statement_item': item,
-                                                'matched_transaction': customer_trans[selected_trans_idx],
-                                                'customer': selected_customer
-                                            }
-                                            st.success("Match confirmed!")
-                                            st.rerun()
-                                    else:
-                                        st.info("No transactions with balance for this customer")
-                                        
-                                        # Debug mode - show why transactions aren't available
-                                        if st.checkbox("🔍 Show debug info", key=f"debug_{idx}"):
-                                            # Get ALL transactions for this customer (not just those with balance)
-                                            all_customer_trans = all_data[
-                                                (all_data['Customer'] == selected_customer) &
-                                                (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
-                                            ]
-                                            
-                                            if not all_customer_trans.empty:
-                                                st.write(f"Found {len(all_customer_trans)} total transactions for {selected_customer}:")
-                                                for _, trans in all_customer_trans.iterrows():
-                                                    # Calculate balance for this transaction
-                                                    credit = float(trans.get('Agent Estimated Comm $', 0) or 0)
-                                                    policy_num = trans['Policy Number']
-                                                    effective_date = trans['Effective Date']
-                                                    
-                                                    # Get reconciliation entries
-                                                    recon_entries = all_data[
-                                                        (all_data['Policy Number'] == policy_num) &
-                                                        (all_data['Effective Date'] == effective_date) &
-                                                        (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
-                                                    ]
-                                                    
-                                                    debit = 0
-                                                    if not recon_entries.empty:
-                                                        debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
-                                                    
-                                                    balance = credit - debit
-                                                    
-                                                    st.write(f"- **{trans['Transaction ID']}**: Policy {policy_num}, Credit: ${credit:,.2f}, Debit: ${debit:,.2f}, Balance: ${balance:,.2f}")
-                                                    if balance <= 0.01:
-                                                        st.write(f"  ⚠️ Not shown because balance is ${balance:,.2f}")
-                                            else:
-                                                st.warning(f"No transactions found for customer '{selected_customer}' in database. Check for name variations.")
+                                        if not all_customer_trans.empty:
+                                            st.write(f"Found {len(all_customer_trans)} total transactions for {selected_customer}:")
+                                            for _, trans in all_customer_trans.iterrows():
+                                                # Calculate balance for this transaction
+                                                credit = float(trans.get('Agent Estimated Comm $', 0) or 0)
+                                                policy_num = trans['Policy Number']
+                                                effective_date = trans['Effective Date']
+                                                
+                                                # Get reconciliation entries
+                                                recon_entries = all_data[
+                                                    (all_data['Policy Number'] == policy_num) &
+                                                    (all_data['Effective Date'] == effective_date) &
+                                                    (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+                                                ]
+                                                
+                                                debit = 0
+                                                if not recon_entries.empty:
+                                                    debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+                                                
+                                                balance = credit - debit
+                                                
+                                                st.write(f"- **{trans['Transaction ID']}**: Policy {policy_num}, Credit: ${credit:,.2f}, Debit: ${debit:,.2f}, Balance: ${balance:,.2f}")
+                                                if balance <= 0.01:
+                                                    st.write(f"  ⚠️ Not shown because balance is ${balance:,.2f}")
+                                        else:
+                                            st.warning(f"No transactions found for customer '{selected_customer}' in database. Check for name variations.")
                         else:
                             st.info("No potential matches found")
                     
