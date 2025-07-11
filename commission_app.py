@@ -5323,6 +5323,90 @@ def main():
                         with st.expander("📊 File Preview", expanded=True):
                             st.dataframe(df.head(10), use_container_width=True)
                         
+                        # Initialize saved mappings in session state if not exists
+                        if 'saved_column_mappings' not in st.session_state:
+                            st.session_state.saved_column_mappings = load_saved_column_mappings()
+                        
+                        # Save/Load Column Mappings Section (moved up for better workflow)
+                        st.divider()
+                        st.markdown("### 💾 Save/Load Column Mappings")
+                        st.info("💡 Load a saved mapping first to auto-fill the column selections below!")
+                        
+                        col1, col2, col3 = st.columns([2, 1, 1])
+                        
+                        with col1:
+                            mapping_name = st.text_input(
+                                "Mapping Name",
+                                placeholder="e.g., ABC Insurance Statement",
+                                help="Give this mapping a name to save it for future use"
+                            )
+                        
+                        with col2:
+                            # Save current mapping
+                            if st.button("💾 Save Mapping", type="secondary", disabled=not mapping_name, key="save_mapping_top"):
+                                if st.session_state.column_mapping:
+                                    st.session_state.saved_column_mappings[mapping_name] = {
+                                        'mapping': st.session_state.column_mapping.copy(),
+                                        'created': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                        'field_count': len(st.session_state.column_mapping)
+                                    }
+                                    # Save to file for persistence
+                                    if save_column_mappings_to_file(st.session_state.saved_column_mappings):
+                                        st.success(f"✅ Saved mapping: {mapping_name}")
+                                    else:
+                                        st.error("Failed to save mapping to file")
+                                else:
+                                    st.warning("No mapping to save")
+                        
+                        with col3:
+                            # Load saved mapping
+                            if st.session_state.saved_column_mappings:
+                                selected_mapping = st.selectbox(
+                                    "Load Saved Mapping",
+                                    options=[''] + list(st.session_state.saved_column_mappings.keys()),
+                                    format_func=lambda x: 'Select a mapping...' if x == '' else x
+                                )
+                                
+                                if selected_mapping and st.button("📂 Load", type="secondary", key="load_mapping_top"):
+                                    saved_map = st.session_state.saved_column_mappings[selected_mapping]['mapping']
+                                    # Verify columns exist in current file
+                                    valid_mapping = {}
+                                    missing_cols = []
+                                    
+                                    for sys_field, stmt_col in saved_map.items():
+                                        if stmt_col in df.columns:
+                                            valid_mapping[sys_field] = stmt_col
+                                        else:
+                                            missing_cols.append(stmt_col)
+                                    
+                                    # Store the loaded mapping in session state
+                                    st.session_state.column_mapping = valid_mapping
+                                    # Flag that we just loaded a mapping
+                                    st.session_state.mapping_just_loaded = True
+                                    
+                                    if missing_cols:
+                                        st.warning(f"Some columns not found in current file: {', '.join(missing_cols)}")
+                                    else:
+                                        st.success(f"✅ Loaded mapping: {selected_mapping}")
+                                    st.rerun()
+                        
+                        # Show saved mappings
+                        if st.session_state.saved_column_mappings:
+                            with st.expander("📋 Saved Mappings", expanded=False):
+                                for name, info in st.session_state.saved_column_mappings.items():
+                                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                                    with col1:
+                                        st.text(name)
+                                    with col2:
+                                        st.text(f"Created: {info['created']}")
+                                    with col3:
+                                        st.text(f"{info['field_count']} fields")
+                                    with col4:
+                                        if st.button("🗑️", key=f"delete_{name}", help=f"Delete {name}"):
+                                            del st.session_state.saved_column_mappings[name]
+                                            save_column_mappings_to_file(st.session_state.saved_column_mappings)
+                                            st.rerun()
+                        
                         # Step 2: Column Mapping
                         st.divider()
                         st.markdown("### 🔗 Map Statement Columns to System Fields")
@@ -5400,89 +5484,6 @@ def main():
                                 elif sys_field in st.session_state.column_mapping:
                                     # Remove from mapping if deselected
                                     del st.session_state.column_mapping[sys_field]
-                        
-                        # Column Mapping Management
-                        st.divider()
-                        st.markdown("### 💾 Save/Load Column Mappings")
-                        
-                        # Initialize saved mappings in session state if not exists
-                        if 'saved_column_mappings' not in st.session_state:
-                            st.session_state.saved_column_mappings = load_saved_column_mappings()
-                        
-                        col1, col2, col3 = st.columns([2, 1, 1])
-                        
-                        with col1:
-                            mapping_name = st.text_input(
-                                "Mapping Name",
-                                placeholder="e.g., ABC Insurance Statement",
-                                help="Give this mapping a name to save it for future use"
-                            )
-                        
-                        with col2:
-                            # Save current mapping
-                            if st.button("💾 Save Mapping", type="secondary", disabled=not mapping_name):
-                                if st.session_state.column_mapping:
-                                    st.session_state.saved_column_mappings[mapping_name] = {
-                                        'mapping': st.session_state.column_mapping.copy(),
-                                        'created': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                        'field_count': len(st.session_state.column_mapping)
-                                    }
-                                    # Save to file for persistence
-                                    if save_column_mappings_to_file(st.session_state.saved_column_mappings):
-                                        st.success(f"✅ Saved mapping: {mapping_name}")
-                                    else:
-                                        st.error("Failed to save mapping to file")
-                                else:
-                                    st.warning("No mapping to save")
-                        
-                        with col3:
-                            # Load saved mapping
-                            if st.session_state.saved_column_mappings:
-                                selected_mapping = st.selectbox(
-                                    "Load Saved Mapping",
-                                    options=[''] + list(st.session_state.saved_column_mappings.keys()),
-                                    format_func=lambda x: 'Select a mapping...' if x == '' else x
-                                )
-                                
-                                if selected_mapping and st.button("📂 Load", type="secondary"):
-                                    saved_map = st.session_state.saved_column_mappings[selected_mapping]['mapping']
-                                    # Verify columns exist in current file
-                                    valid_mapping = {}
-                                    missing_cols = []
-                                    
-                                    for sys_field, stmt_col in saved_map.items():
-                                        if stmt_col in df.columns:
-                                            valid_mapping[sys_field] = stmt_col
-                                        else:
-                                            missing_cols.append(stmt_col)
-                                    
-                                    # Store the loaded mapping in session state
-                                    st.session_state.column_mapping = valid_mapping
-                                    # Flag that we just loaded a mapping
-                                    st.session_state.mapping_just_loaded = True
-                                    
-                                    if missing_cols:
-                                        st.warning(f"Some columns not found in current file: {', '.join(missing_cols)}")
-                                    else:
-                                        st.success(f"✅ Loaded mapping: {selected_mapping}")
-                                    st.rerun()
-                        
-                        # Show saved mappings
-                        if st.session_state.saved_column_mappings:
-                            with st.expander("📋 Saved Mappings", expanded=False):
-                                for name, info in st.session_state.saved_column_mappings.items():
-                                    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
-                                    with col1:
-                                        st.text(name)
-                                    with col2:
-                                        st.text(f"Created: {info['created']}")
-                                    with col3:
-                                        st.text(f"{info['field_count']} fields")
-                                    with col4:
-                                        if st.button("🗑️", key=f"delete_{name}", help=f"Delete {name}"):
-                                            del st.session_state.saved_column_mappings[name]
-                                            save_column_mappings_to_file(st.session_state.saved_column_mappings)
-                                            st.rerun()
                         
                         # Check if all required fields are mapped
                         required_mapped = all(
