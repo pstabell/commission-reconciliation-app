@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 10, 2025 (Evening)  
-**Current Version**: 3.5.6
+**Last Updated**: July 10, 2025 (Late Evening)  
+**Current Version**: 3.5.8
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.6)
-1. **Customer Name Consistency**: Fixed reconciliation import using inconsistent name formats
-2. **Prior Fix (v3.5.5)**: Resolved duplicate creation on inline add/edit workflow
-3. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
-4. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
-5. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
+## Recent Major Changes (v3.5.8)
+1. **Void Balance Calculation**: Fixed unreconciled transactions not showing after void
+2. **Import Parameter Fix (v3.5.7)**: Fixed "all_data not defined" error during import
+3. **Customer Name Consistency (v3.5.6)**: Fixed reconciliation import using inconsistent name formats
+4. **Prior Fix (v3.5.5)**: Resolved duplicate creation on inline add/edit workflow
+5. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
 
 ## Known Issues & Solutions
 
@@ -81,6 +81,18 @@ supabase.table('policies').select('"Transaction ID"')
 **Solution**: Added customer matching before transaction creation
 **Example**: "Ghosh, Susmit" from statement now uses existing "Susmit K. Ghosh"
 
+### 11. Import Function Missing Parameter (FIXED in v3.5.7)
+**Issue**: "name 'all_data' is not defined" error when clicking "Proceed with Import"
+**Cause**: show_import_results function needed access to all_data but wasn't receiving it
+**Solution**: Added all_data parameter to function signature and call
+**Impact**: Reconciliation imports now work without errors
+
+### 12. Voided Reconciliations Not Showing as Unreconciled (FIXED in v3.5.8)
+**Issue**: Transactions remained reconciled after voiding the batch
+**Cause**: calculate_transaction_balances only counted -STMT- entries, not -VOID-
+**Solution**: Updated to include -VOID- entries (which have negative amounts)
+**Impact**: Voided transactions now properly show as unreconciled and can be re-reconciled
+
 ## Development Guidelines
 
 ### 1. Before Making Changes
@@ -118,14 +130,18 @@ Test with policy that changes numbers:
 /
 ├── commission_app.py              # Main application (monolithic by design)
 ├── column_mapping_config.py       # UI to database field mappings
+├── README.md                     # Project overview (ONLY .md file in root)
 ├── .env                          # Environment variables (not in git)
-├── CHANGELOG.md                  # Version history
 ├── docs/
 │   ├── core/                    # Essential documentation
+│   │   ├── CHANGELOG.md         # Version history
 │   │   ├── PROJECT_HISTORY.md   # Detailed development chronicle
 │   │   └── NEXT_STEPS.md       # Current status and roadmap
 │   ├── features/               # Feature-specific docs
+│   │   └── RENEWAL_DIAGNOSIS.md # Renewal feature analysis
 │   └── operations/            # Operational guides
+│       ├── CLAUDE.md          # This file - AI context guide
+│       └── PUSH_TO_GITHUB.md  # Git workflow guide
 ├── migration_scripts/         # Database migration scripts
 ├── plans/                    # Future feature plans
 └── help_content/            # User help documentation

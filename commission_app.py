@@ -1383,16 +1383,17 @@ def calculate_transaction_balances(all_data):
         policy_num = row['Policy Number']
         effective_date = row['Effective Date']
         
-        # Get all STMT entries for this specific policy and date
-        stmt_entries = all_data[
+        # Get all STMT and VOID entries for this specific policy and date
+        # Include -VOID- entries since they have negative amounts that reduce the debit
+        recon_entries = all_data[
             (all_data['Policy Number'] == policy_num) &
             (all_data['Effective Date'] == effective_date) &
-            (all_data['Transaction ID'].str.contains('-STMT-', na=False))
+            (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
         ]
         
         debit = 0
-        if not stmt_entries.empty:
-            debit = stmt_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+        if not recon_entries.empty:
+            debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
         
         # Calculate balance
         balance = credit - debit

@@ -5,6 +5,38 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.8] - 2025-07-10 (Late Evening) - Void Reconciliation Balance Fix
+
+### Fixed
+- **Unreconciled Transactions Not Showing After Void**
+  - Fixed calculation in `calculate_transaction_balances` to include -VOID- entries
+  - Voided reconciliations now properly show transactions as unreconciled
+  - Balance calculation now accounts for negative void amounts that reverse payments
+  - Aligns with Policy Ledger's correct accounting logic
+
+### Technical
+- Updated balance calculation to include both -STMT- and -VOID- entries
+- -VOID- entries have negative amounts that properly offset original -STMT- entries
+- Ensures voided transactions reappear in Unreconciled Transactions tab
+
+### Impact
+When a reconciliation batch is voided, the affected transactions now correctly show as having outstanding balances again, allowing them to be re-reconciled in future statements.
+
+## [3.5.7] - 2025-07-10 (Late Evening) - Import Function Parameter Fix
+
+### Fixed
+- **"name 'all_data' is not defined" Error During Import**
+  - Fixed error when clicking "Proceed with Import" in reconciliation
+  - Added missing `all_data` parameter to `show_import_results` function
+  - Ensures customer name matching works during import process
+
+### Technical
+- Updated function signature to pass `all_data` from reconciliation page context
+- Maintains access to existing customer data for name matching
+
+### Impact
+Reconciliation imports now work without errors, maintaining the customer name consistency feature from v3.5.6.
+
 ## [3.5.6] - 2025-07-10 (Evening) - Customer Name Consistency Fix
 
 ### Fixed
