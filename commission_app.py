@@ -3743,22 +3743,36 @@ def main():
                                 if result:
                                     if result["action"] == "save":
                                         try:
-                                            # Update the database
+                                            # Get transaction ID and _id to determine if this is new or existing
                                             transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
+                                            record_id = result["data"].get('_id')
                                             
-                                            # Convert data for database update
-                                            update_data = result["data"].copy()
-                                            update_data = convert_timestamps_for_json(update_data)
+                                            # Convert data for database operation
+                                            save_data = result["data"].copy()
+                                            save_data = convert_timestamps_for_json(save_data)
                                             
                                             # Handle NaN values
-                                            for key, value in update_data.items():
+                                            for key, value in save_data.items():
                                                 if pd.isna(value):
-                                                    update_data[key] = None
+                                                    save_data[key] = None
                                             
-                                            # Update the record
-                                            response = supabase.table('policies').update(update_data).eq(
-                                                f'"{get_mapped_column("Transaction ID")}"', transaction_id
-                                            ).execute()
+                                            # Determine if this is an INSERT or UPDATE based on _id presence
+                                            if record_id is not None and record_id != '' and not pd.isna(record_id):
+                                                # Existing record - UPDATE
+                                                # Remove _id from update data as it shouldn't be updated
+                                                if '_id' in save_data:
+                                                    del save_data['_id']
+                                                
+                                                response = supabase.table('policies').update(save_data).eq(
+                                                    f'"{get_mapped_column("Transaction ID")}"', transaction_id
+                                                ).execute()
+                                            else:
+                                                # New record - INSERT
+                                                # Remove _id field to let database auto-generate it
+                                                if '_id' in save_data:
+                                                    del save_data['_id']
+                                                
+                                                response = supabase.table('policies').insert(save_data).execute()
                                             
                                             if response.data:
                                                 st.success("✅ Transaction updated successfully!")
