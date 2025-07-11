@@ -1966,9 +1966,9 @@ def show_import_results(statement_date, all_data):
                     # Create reconciliation entry
                     recon_entry = {
                         'Transaction ID': recon_id,
-                        'Customer': item.get('matched_customer', item['match'].get('Customer', item['customer'])),
-                        'Policy Number': item['match'].get('Policy Number', item['policy_number']),
-                        'Effective Date': item['match'].get('Effective Date', item['effective_date']),
+                        'Customer': item.get('matched_customer', item['match'].get('Customer', item.get('customer', ''))),
+                        'Policy Number': item['match'].get('Policy Number', item.get('policy_number', '')),
+                        'Effective Date': item['match'].get('Effective Date', item.get('effective_date', '')),
                         'Transaction Type': item['match'].get('Transaction Type', ''),
                         'Premium Sold': 0,
                         'Agency Comm Received (STMT)': item.get('agency_amount', 0),  # Agency amount for audit
