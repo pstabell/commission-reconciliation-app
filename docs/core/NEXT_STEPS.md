@@ -503,5 +503,27 @@ Users can now safely add transactions inline and immediately edit them without c
 
 ---
 
+## ✅ COMPLETED: Customer Name Consistency Fix (Completed July 10, 2025 - Evening)
+
+### Reconciliation Import Issue Resolved
+Fixed inconsistent customer naming when creating new transactions during statement import.
+
+### Problem Summary:
+- Statements had customer names in "Last, First" format (e.g., "Ghosh, Susmit")
+- Database had customers in "First Last" format (e.g., "Susmit K. Ghosh")
+- New transactions created using statement format instead of existing customer format
+- Resulted in duplicate customer entries with different name formats
+
+### Solution Implementation:
+- Enhanced transaction creation to check for existing customers before creating new ones
+- Uses `find_potential_customer_matches` function which handles name format variations
+- If high-confidence match found (90%+), uses existing customer name format
+- Only uses statement format if no existing customer found
+
+### Impact:
+Reconciliation imports now maintain consistent customer naming throughout the system. Prevents duplicate customer entries and ensures accurate customer-based reporting.
+
+---
+
 *Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.5*
+*Current Application Version: 3.5.6*

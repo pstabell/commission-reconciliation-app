@@ -847,6 +847,63 @@ else:
 
 ---
 
+### Version 3.5.6 (July 10, 2025 - Evening) - Customer Name Consistency Fix
+
+#### Problem Discovery
+User reported inconsistent customer naming in reconciled transactions:
+- Statement entries showed "Ghosh, Susmit" (Last, First format)
+- Database had "Susmit K. Ghosh" (First Last format)
+- New transactions created with statement format instead of existing customer format
+- Multiple "Lat 26 Enterprises, Inc." entries created despite existing customer
+
+Example reconciliation results:
+```
+68I4T3Y-STMT-20240831    Ghosh, Susmit    NAA3678880
+PB891F3-STMT-20240831    Susmit K. Ghosh    FPH5549526-00
+```
+
+#### Root Cause Analysis
+Investigation revealed:
+1. The `find_potential_customer_matches` function correctly handled "Last, First" format matching
+2. When creating new transactions during import, the system used the statement's customer name format
+3. This happened even when a matching customer already existed in the database
+4. Result: Same customer with different name formats across transactions
+
+#### Technical Solution
+Enhanced the transaction creation logic in reconciliation import:
+```python
+# Before: Always used statement customer name
+'Customer': item['customer'],
+
+# After: Check for existing customer first
+final_customer_name = item['customer']
+if not all_data.empty:
+    all_customers = all_data['Customer'].dropna().unique().tolist()
+    potential_matches = find_potential_customer_matches(item['customer'], all_customers)
+    if potential_matches and potential_matches[0][2] >= 90:  # High confidence match
+        final_customer_name = potential_matches[0][0]  # Use existing customer name format
+
+'Customer': final_customer_name,
+```
+
+#### Implementation Details
+1. Before creating any new transaction, system now checks for existing customers
+2. Uses the same matching logic that handles various name formats
+3. If high-confidence match found (90%+), uses existing customer name
+4. Only uses statement format if no existing customer found
+5. Ensures consistency across all transaction records
+
+#### Testing & Verification
+The fix ensures:
+- "Ghosh, Susmit" from statement → "Susmit K. Ghosh" in new transaction
+- "Lat 26 Enterprises, Inc." uses consistent format across all entries
+- No duplicate customer entries with different formats
+- Better data integrity and reporting accuracy
+
+**Impact**: Reconciliation imports now maintain consistent customer naming conventions throughout the system. This prevents duplicate customer entries, ensures accurate customer-based reporting, and maintains data integrity when importing statements with different name formatting conventions.
+
+---
+
 *Document Created: July 3, 2025*  
 *Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.5*
+*Current Application Version: 3.5.6*

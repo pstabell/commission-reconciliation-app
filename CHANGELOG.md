@@ -5,6 +5,23 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.6] - 2025-07-10 (Evening) - Customer Name Consistency Fix
+
+### Fixed
+- **Reconciliation Customer Name Format Issue**
+  - Fixed inconsistent customer naming when creating new transactions during import
+  - System now checks for existing customers before creating new ones
+  - Uses existing customer name format instead of statement format (e.g., "Susmit K. Ghosh" not "Ghosh, Susmit")
+  - Prevents duplicate customer entries with different name formats
+
+### Technical
+- Enhanced transaction creation logic to use `find_potential_customer_matches`
+- Added customer name normalization for "Last, First" format matching
+- Maintains data integrity by using consistent customer names across all transactions
+
+### Impact
+Reconciliation imports now maintain consistent customer naming conventions. When importing statements with different name formats, the system matches to existing customers and uses their established name format, preventing duplicate customer entries and ensuring data consistency.
+
 ## [3.5.5] - 2025-07-10 (Evening) - Duplicate Transaction Fix
 
 ### Fixed

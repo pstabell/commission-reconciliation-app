@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 10, 2025 (Evening)  
-**Current Version**: 3.5.5
+**Current Version**: 3.5.6
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.5)
-1. **Duplicate Fix**: Resolved duplicate creation on inline add/edit workflow
-2. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
-3. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
-4. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
-5. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture
+## Recent Major Changes (v3.5.6)
+1. **Customer Name Consistency**: Fixed reconciliation import using inconsistent name formats
+2. **Prior Fix (v3.5.5)**: Resolved duplicate creation on inline add/edit workflow
+3. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
+4. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
+5. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
 
 ## Known Issues & Solutions
 
@@ -74,6 +74,12 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: Modal save logic only checked `_id` field which wasn't in session state
 **Solution**: Added database check for existing Transaction ID before INSERT/UPDATE
 **Prevention**: Modal now queries database to verify record existence
+
+### 10. Customer Name Format Inconsistency (FIXED in v3.5.6)
+**Issue**: Reconciliation created new transactions with statement name format instead of existing
+**Cause**: System didn't check for existing customers when creating new transactions
+**Solution**: Added customer matching before transaction creation
+**Example**: "Ghosh, Susmit" from statement now uses existing "Susmit K. Ghosh"
 
 ## Development Guidelines
 

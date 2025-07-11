@@ -2,7 +2,7 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.5  
+**Version**: 3.5.6  
 **Last Updated**: July 10, 2025
 
 ## Overview
@@ -86,10 +86,16 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.5)
+## Recent Updates (v3.5.6)
 
-### Duplicate Transaction Fix
-- **Fixed Inline Add/Edit Issue**: Resolved duplicate creation when editing newly added transactions
+### Customer Name Consistency Fix
+- **Fixed Reconciliation Import Issue**: Consistent customer naming when creating new transactions
+- **Smart Name Matching**: Uses existing customer format instead of statement format
+- **Prevents Duplicates**: No more "Ghosh, Susmit" vs "Susmit K. Ghosh" entries
+- **Data Integrity**: Maintains consistent customer names across all transactions
+
+### Previous Updates (v3.5.5)
+- **Duplicate Transaction Fix**: Resolved duplicate creation when editing newly added transactions
 - **Enhanced Modal Save Logic**: Now checks database for existing records before INSERT/UPDATE
 - **Improved Data Integrity**: Prevents duplicates regardless of session state
 - **Seamless Workflow**: Add inline → Edit immediately without creating duplicates

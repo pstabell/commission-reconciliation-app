@@ -1872,20 +1872,10 @@ def show_import_results(statement_date):
                             # Generate new transaction ID
                             new_trans_id = generate_transaction_id()
                             
-                            # Check if customer exists to use consistent naming
-                            final_customer_name = item['customer']
-                            if not all_data.empty:
-                                all_customers = all_data['Customer'].dropna().unique().tolist()
-                                # Use the find_potential_customer_matches function to check for existing customer
-                                potential_matches = find_potential_customer_matches(item['customer'], all_customers)
-                                if potential_matches and potential_matches[0][2] >= 90:  # High confidence match
-                                    # Use the existing customer name format
-                                    final_customer_name = potential_matches[0][0]
-                            
                             # Create new transaction
                             new_trans = {
                                 'Transaction ID': new_trans_id,
-                                'Customer': final_customer_name,  # Use matched customer name if found
+                                'Customer': item['customer'],
                                 'Policy Number': item['policy_number'],
                                 'Effective Date': item['effective_date'],
                                 'Transaction Type': item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW'),
@@ -1909,7 +1899,7 @@ def show_import_results(statement_date):
                                 st.session_state.matched_transactions.append({
                                     'match': result.data[0],
                                     'amount': item['amount'],
-                                    'customer': final_customer_name,  # Use the matched customer name
+                                    'customer': item['customer'],
                                     'policy_number': item['policy_number']
                                 })
                 
