@@ -1589,7 +1589,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     
     return matched, unmatched, can_create
 
-def show_import_results(statement_date):
+def show_import_results(statement_date, all_data):
     """Display import results and allow user to review/confirm"""
     st.divider()
     st.markdown("### 📊 Import Preview")
@@ -5293,7 +5293,7 @@ def main():
                             
                             # Show match results
                             if st.session_state.matched_transactions or st.session_state.unmatched_transactions or st.session_state.transactions_to_create:
-                                show_import_results(statement_date)
+                                show_import_results(statement_date, all_data)
                         
                         else:
                             st.warning("⚠️ Please map all required fields before proceeding")
