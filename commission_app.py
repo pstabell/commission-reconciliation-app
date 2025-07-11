@@ -2111,7 +2111,7 @@ def show_import_results(statement_date, all_data):
                         'reconciliation_status': 'reconciled',
                         'reconciliation_id': batch_id,
                         'is_reconciliation_entry': True,
-                        'Cross-Reference Key': item['match'].get('Transaction ID', ''),  # Store original transaction ID
+                        # 'Cross-Reference Key': item['match'].get('Transaction ID', ''),  # Field doesn't exist in database
                         'NOTES': f"Import batch {batch_id} | Matched to: {item['match'].get('Transaction ID', 'Manual Match')}"
                     }
                     
@@ -2286,7 +2286,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
             'Broker Fee Agent Comm', 'Total Agent Comm'
         ]
-        status_fields = ['Reconciliation Notes', 'Reconciled?', 'Cross-Reference Key']
+        status_fields = ['Reconciliation Notes', 'Reconciled?']  # 'Cross-Reference Key' not in database
         
         # Client Information
         st.markdown("#### Client Information")
@@ -5831,9 +5831,9 @@ def main():
                             if 'Agency Comm Received (STMT)' in display_recon.columns:
                                 display_columns.append('Agency Comm Received (STMT)')
                             
-                            # Add Cross-Reference Key to show original transaction
-                            if 'Cross-Reference Key' in display_recon.columns:
-                                display_columns.append('Cross-Reference Key')
+                            # Add Cross-Reference Key to show original transaction (if column exists)
+                            # if 'Cross-Reference Key' in display_recon.columns:
+                            #     display_columns.append('Cross-Reference Key')
                             
                             # Add new tracking columns
                             display_columns.extend(['Reconciliation Status', 'Batch ID', 'Is Void Entry'])
@@ -5857,9 +5857,9 @@ def main():
                                 column_config={
                                     "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
                                     "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Cross-Reference Key": st.column_config.TextColumn(
-                                        help="Original Transaction ID that was matched"
-                                    ),
+                                    # "Cross-Reference Key": st.column_config.TextColumn(
+                                    #     help="Original Transaction ID that was matched"
+                                    # ),
                                     "Reconciliation Status": st.column_config.TextColumn(
                                         help="RECONCILED = Normal entry, VOID = Void reversal entry"
                                     ),
