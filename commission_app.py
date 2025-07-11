@@ -1719,6 +1719,7 @@ def show_import_results(statement_date, all_data):
                                     for trans in customer_trans:
                                         trans_desc = f"ID: {trans['Transaction ID']} | "
                                         trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
+                                        trans_desc += f"Policy Type: {trans.get('Policy Type', 'N/A')} | "
                                         trans_desc += f"Policy: {trans['Policy Number']} | "
                                         trans_desc += f"Eff: {trans['Effective Date']} | "
                                         trans_desc += f"Balance: ${trans['balance']:,.2f}"
