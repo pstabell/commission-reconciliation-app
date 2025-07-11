@@ -1727,7 +1727,7 @@ def show_import_results(statement_date, all_data):
                                         st.info("No transactions with balance for this customer")
                                         
                                         # Debug mode - show why transactions aren't available
-                                        with st.expander("🔍 Debug: Show all transactions for this customer"):
+                                        if st.checkbox("🔍 Show debug info", key=f"debug_{idx}"):
                                             # Get ALL transactions for this customer (not just those with balance)
                                             all_customer_trans = all_data[
                                                 (all_data['Customer'] == selected_customer) &
