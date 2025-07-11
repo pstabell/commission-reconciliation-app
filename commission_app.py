@@ -1711,13 +1711,29 @@ def show_import_results(statement_date, all_data):
                         else:
                             st.info("No potential matches found")
                     
-                    # Option to create new
-                    if st.checkbox(f"Create as new transaction", key=f"create_new_{idx}"):
-                        st.session_state.manual_matches[idx] = {
-                            'statement_item': item,
-                            'create_new': True
-                        }
-                        st.success("Will create new transaction")
+                    # Options for handling the transaction
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Option to match existing transaction
+                        if 'potential_customers' in item and selected_customer_idx is not None:
+                            if st.checkbox(f"Match transaction", key=f"match_existing_{idx}"):
+                                selected_customer = item['potential_customers'][selected_customer_idx][0]
+                                st.session_state.manual_matches[idx] = {
+                                    'statement_item': item,
+                                    'match_to_customer': selected_customer,
+                                    'match_existing': True
+                                }
+                                st.success(f"Will match to {selected_customer}")
+                    
+                    with col2:
+                        # Option to create new
+                        if st.checkbox(f"Create as new transaction", key=f"create_new_{idx}"):
+                            st.session_state.manual_matches[idx] = {
+                                'statement_item': item,
+                                'create_new': True
+                            }
+                            st.success("Will create new transaction")
             
             # Show confirmed matches
             if st.session_state.manual_matches:
@@ -1733,8 +1749,36 @@ def show_import_results(statement_date, all_data):
                         if 'create_new' in match_info and match_info['create_new']:
                             # Move to create list
                             st.session_state.transactions_to_create.append(match_info['statement_item'])
+                        elif 'match_existing' in match_info and match_info['match_existing']:
+                            # Handle match to existing customer without specific transaction
+                            matched_item = match_info['statement_item'].copy()
+                            # Find the best matching transaction for this customer
+                            customer_name = match_info['match_to_customer']
+                            
+                            # Look for a transaction with matching policy/date/amount
+                            matching_trans = all_data[
+                                (all_data['Customer'] == customer_name) &
+                                (all_data['Policy Number'] == matched_item['policy_number']) &
+                                (all_data['Effective Date'] == matched_item['effective_date']) &
+                                (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
+                            ]
+                            
+                            if not matching_trans.empty:
+                                # Use the first matching transaction
+                                matched_item['match'] = matching_trans.iloc[0].to_dict()
+                                matched_item['confidence'] = 100
+                                matched_item['match_type'] = 'Manual'
+                                matched_item['matched_customer'] = customer_name
+                                st.session_state.matched_transactions.append(matched_item)
+                            else:
+                                # If no exact match found, still add to matched with customer info
+                                matched_item['match'] = {'Customer': customer_name}
+                                matched_item['confidence'] = 100
+                                matched_item['match_type'] = 'Manual - Customer Only'
+                                matched_item['matched_customer'] = customer_name
+                                st.session_state.matched_transactions.append(matched_item)
                         else:
-                            # Move to matched list
+                            # Original logic for transaction-specific matches
                             matched_item = match_info['statement_item'].copy()
                             matched_item['match'] = match_info['matched_transaction']
                             matched_item['confidence'] = 100
