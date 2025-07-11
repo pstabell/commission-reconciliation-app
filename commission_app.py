@@ -5326,8 +5326,10 @@ def main():
             
             # Show reconciliation entries
             if not all_data.empty:
+                # Include both -STMT- and -VOID- transactions
                 recon_entries = all_data[
-                    all_data['Transaction ID'].str.contains('-STMT-', na=False)
+                    (all_data['Transaction ID'].str.contains('-STMT-', na=False)) |
+                    (all_data['Transaction ID'].str.contains('-VOID-', na=False))
                 ]
                 
                 if not recon_entries.empty:
@@ -5405,7 +5407,7 @@ def main():
                             
                             # Add reconciliation status aggregation
                             if 'reconciliation_status' in filtered_recon.columns:
-                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if 'VOID' in x.values else 'ACTIVE'
+                                agg_dict['reconciliation_status'] = lambda x: 'VOIDED' if any(str(v).upper() == 'VOID' for v in x.values if pd.notna(v)) else 'ACTIVE'
                             
                             batch_summary = filtered_recon.groupby('reconciliation_id').agg(agg_dict).reset_index()
                             
@@ -5446,7 +5448,8 @@ def main():
                                 
                                 # Also check reconciliation_status if available
                                 if 'reconciliation_status' in batch_summary.columns:
-                                    if row.get('reconciliation_status') == 'VOIDED' or row.get('reconciliation_status') == 'VOID':
+                                    status = str(row.get('reconciliation_status', '')).upper()
+                                    if status == 'VOIDED' or status == 'VOID':
                                         batch_summary.at[idx, 'Status'] = 'VOIDED'
                             
                             rename_dict = {
@@ -5555,8 +5558,9 @@ def main():
                             
                             # Add Is Void Entry column
                             display_recon['Is Void Entry'] = display_recon.apply(
-                                lambda row: 'Yes' if row.get('Reconciliation Status') == 'VOID' or 
-                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False)
+                                lambda row: 'Yes' if str(row.get('Reconciliation Status', '')).upper() == 'VOID' or 
+                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False) or
+                                          ('-VOID-' in str(row.get('Transaction ID', '')))
                                           else 'No', 
                                 axis=1
                             )
@@ -5578,7 +5582,7 @@ def main():
                             def highlight_void_status(row):
                                 if row.get('Is Void Entry') == 'Yes':
                                     return ['background-color: #ffcccc'] * len(row)
-                                elif row.get('Reconciliation Status') == 'VOID':
+                                elif str(row.get('Reconciliation Status', '')).upper() == 'VOID':
                                     return ['background-color: #ffe6cc'] * len(row)
                                 else:
                                     return [''] * len(row)
