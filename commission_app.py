@@ -1798,11 +1798,29 @@ def show_import_results(statement_date, all_data):
                     with col2:
                         # Option to create new
                         if st.checkbox(f"Create as new transaction", key=f"create_new_{idx}"):
+                            # Show transaction type selector
+                            transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
+                            default_type = "NEW"
+                            
+                            # Try to guess from statement if available
+                            if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                stmt_type = item['statement_data'].get('Transaction Type', '').upper()
+                                if stmt_type in transaction_types:
+                                    default_type = stmt_type
+                            
+                            selected_type = st.selectbox(
+                                "Transaction Type",
+                                transaction_types,
+                                index=transaction_types.index(default_type),
+                                key=f"trans_type_{idx}"
+                            )
+                            
                             st.session_state.manual_matches[idx] = {
                                 'statement_item': item,
-                                'create_new': True
+                                'create_new': True,
+                                'transaction_type': selected_type
                             }
-                            st.success("Will create new transaction")
+                            st.success(f"Will create {selected_type} transaction")
                         st.caption("*(Use for new policies or endorsements not yet in system)*")
             
             # Show confirmed matches
@@ -1817,8 +1835,10 @@ def show_import_results(statement_date, all_data):
                     # Move manually matched items to appropriate lists
                     for idx, match_info in st.session_state.manual_matches.items():
                         if 'create_new' in match_info and match_info['create_new']:
-                            # Move to create list
-                            st.session_state.transactions_to_create.append(match_info['statement_item'])
+                            # Move to create list with selected transaction type
+                            item_to_create = match_info['statement_item'].copy()
+                            item_to_create['selected_transaction_type'] = match_info.get('transaction_type', 'NEW')
+                            st.session_state.transactions_to_create.append(item_to_create)
                         elif 'match_existing' in match_info and match_info['match_existing']:
                             # Handle match to existing customer without specific transaction
                             matched_item = match_info['statement_item'].copy()
@@ -1894,10 +1914,12 @@ def show_import_results(statement_date, all_data):
             
             create_df = []
             for item in st.session_state.transactions_to_create:
-                # Try to get transaction type from statement data
-                trans_type = 'NEW'  # Default
-                if 'statement_data' in item and st.session_state.column_mapping.get('Transaction Type'):
-                    trans_type = item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')
+                # Use selected transaction type if available, otherwise try to get from statement
+                trans_type = item.get('selected_transaction_type', 'NEW')
+                if trans_type == 'NEW' and 'statement_data' in item and st.session_state.column_mapping.get('Transaction Type'):
+                    stmt_type = item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')
+                    if stmt_type:
+                        trans_type = stmt_type
                 
                 create_df.append({
                     'Create': True,
