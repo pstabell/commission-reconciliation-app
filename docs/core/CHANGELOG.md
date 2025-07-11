@@ -5,6 +5,83 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.12] - 2025-07-11 - Void Screen Agent Amount Fix
+
+### Fixed
+- **Void Screen Showing Wrong Amounts**
+  - Fixed Adjustments & Voids tab showing Agency amounts instead of Agent amounts
+  - Void selection dropdown now displays the same amounts as Reconciliation History
+  - Ensures consistency between reconciliation and void operations
+
+### Technical
+- Changed all references in void section from 'Agency Comm Received (STMT)' to 'Agent Paid Amount (STMT)'
+- Updated batch summary aggregation, dropdown display, batch total, and transaction details
+
+### Impact
+Users now see consistent commission amounts throughout the reconciliation system. The void screen correctly shows agent commissions (what you were paid) rather than agency commissions (what the agency received), preventing confusion and ensuring accurate void operations.
+
+## [3.5.11] - 2025-07-11 - Reconciliation Error Handling
+
+### Fixed
+- **Missing effective_date KeyError**
+  - Fixed error when reconciling statements with missing effective_date fields
+  - Added safe fallbacks for customer, policy_number, and effective_date
+  - Prevents crashes when processing incomplete statement data
+
+### Technical
+- Updated reconciliation entry creation to use .get() with empty string defaults
+- Handles cases where statement items have None or missing required fields
+
+### Impact
+Reconciliation process is now more robust and can handle statements with incomplete or missing data fields without errors.
+
+## [3.5.10] - 2025-07-11 - Manual Match Reconciliation Fixes
+
+### Fixed
+- **KeyError 'balance' for Manual Matches**
+  - Fixed error when displaying manually matched transactions
+  - Manual customer-only matches now display statement amount as balance
+- **KeyError 'Policy Number' During Import**
+  - Fixed error when creating reconciliation entries for manual matches
+  - System now uses statement data when match fields are missing
+
+### Added
+- **Endorsement Reminder Caption**
+  - Added helpful caption under "Create as new transaction" checkbox
+  - Text: "*(Use for new policies or endorsements not yet in system)*"
+  - Reminds users that endorsements are common reasons for unmatched transactions
+
+### Technical
+- Manual matches now gracefully handle missing transaction fields
+- Improved error handling for customer-only matches
+
+### Impact
+Manual matching workflow is now fully functional, allowing users to match transactions even when exact database matches aren't found.
+
+## [3.5.9] - 2025-07-11 - Manual Transaction Matching
+
+### Added
+- **"Match transaction" Checkbox**
+  - New checkbox appears next to "Create as new transaction" for unmatched items
+  - Allows manual matching to existing customers even without exact transaction match
+  - Prevents duplicate customer entries (e.g., "D'Alessandro, Nicole" vs "Nicole D'Alessandro")
+  - Displayed only when potential customer matches are found
+
+### Changed
+- **Repository Cleanup**
+  - Moved all commission_app backup files to backups/ folder
+  - Moved all .md files (except README) to docs/ folder structure
+  - Removed 298,205 lines of backup files from root directory
+  - Consolidated backup and backups folders into single backups/ folder
+
+### Technical
+- Added dual-checkbox layout for transaction handling options
+- Implemented manual match logic to find transactions by customer/policy/date
+- Falls back to customer-only match if no exact transaction found
+
+### Impact
+Significantly improves reconciliation workflow by allowing users to manually resolve customer name mismatches without creating duplicate entries. Repository is now clean and well-organized.
+
 ## [3.5.8] - 2025-07-10 (Late Evening) - Void Reconciliation Balance Fix
 
 ### Fixed

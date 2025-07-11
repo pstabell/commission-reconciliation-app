@@ -5811,7 +5811,7 @@ def main():
                         # Group by batch to show batch summary
                         batch_summary = reconciliation_entries.groupby('reconciliation_id').agg({
                             'Transaction ID': 'count',
-                            'Agency Comm Received (STMT)': 'sum',
+                            'Agent Paid Amount (STMT)': 'sum',
                             'STMT DATE': 'first',
                             'reconciled_at': 'first'
                         }).reset_index()
@@ -5828,7 +5828,7 @@ def main():
                             selected_batch = st.selectbox(
                                 "Select Batch to Void",
                                 options=[''] + batch_options,
-                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} - ${batch_summary[batch_summary['reconciliation_id']==x]['Agency Comm Received (STMT)'].iloc[0]:,.2f} ({batch_summary[batch_summary['reconciliation_id']==x]['Transaction ID'].iloc[0]} transactions)"
+                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} - ${batch_summary[batch_summary['reconciliation_id']==x]['Agent Paid Amount (STMT)'].iloc[0]:,.2f} ({batch_summary[batch_summary['reconciliation_id']==x]['Transaction ID'].iloc[0]} transactions)"
                             )
                             
                             if selected_batch:
@@ -5839,7 +5839,7 @@ def main():
                                 with col1:
                                     st.metric("Transactions in Batch", len(batch_details))
                                 with col2:
-                                    batch_total = batch_details['Agency Comm Received (STMT)'].sum()
+                                    batch_total = batch_details['Agent Paid Amount (STMT)'].sum()
                                     st.metric("Batch Total", f"${batch_total:,.2f}")
                                 with col3:
                                     stmt_date = pd.to_datetime(batch_details['STMT DATE'].iloc[0]).strftime('%m/%d/%Y')
@@ -5847,11 +5847,11 @@ def main():
                                 
                                 # Show transactions that will be voided
                                 with st.expander("View Transactions to be Voided", expanded=True):
-                                    display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Agency Comm Received (STMT)']
+                                    display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Agent Paid Amount (STMT)']
                                     st.dataframe(
                                         batch_details[display_cols],
                                         column_config={
-                                            "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f")
+                                            "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f")
                                         },
                                         use_container_width=True,
                                         hide_index=True

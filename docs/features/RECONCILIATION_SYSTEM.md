@@ -1,6 +1,6 @@
 # Reconciliation System - Comprehensive Documentation
 **Created**: July 4, 2025  
-**Last Updated**: July 6, 2025  
+**Last Updated**: July 11, 2025  
 **Purpose**: Complete reference for the commission reconciliation system implementation
 
 ## Table of Contents
@@ -242,6 +242,27 @@ if "," in search_name:
 5. **Contains Match** (85%): Substring matching
 6. **Amount Validation**: Within 5% tolerance
 
+### Manual Matching Feature (Added v3.5.9)
+
+When automatic matching fails, users can now manually match transactions:
+
+#### UI Elements
+- **Customer Dropdown**: Pre-populated with potential matches and confidence scores
+- **"Match transaction" Checkbox**: Allows manual customer selection
+- **"Create as new transaction" Checkbox**: For genuine new transactions
+- **Helpful Caption**: "*(Use for new policies or endorsements not yet in system)*"
+
+#### Use Cases
+1. **Name Format Mismatches**: "D'Alessandro, Nicole" → "Nicole D'Alessandro"
+2. **Missing Transactions**: Endorsements not yet entered in system
+3. **Negative Transactions**: Cancellations or refunds
+
+#### Technical Implementation
+- Manual matches store customer selection in session state
+- System attempts to find matching transaction by customer/policy/date
+- Falls back to customer-only match if no exact transaction found
+- Handles missing fields gracefully with .get() methods
+
 ## Technical Implementation
 
 ### Transaction ID Generation
@@ -285,6 +306,44 @@ Key reconciliation columns:
 - `reconciled_at`: Timestamp
 - `is_reconciliation_entry`: Boolean flag
 - `STMT DATE`: Statement date for reconciliations
+
+## Void and Adjustment Functionality
+
+### Void Reconciliation Process
+When voiding a reconciliation batch:
+1. Creates negative -VOID- entries for each -STMT- transaction
+2. Updates original transactions back to 'unreconciled' status
+3. Maintains complete audit trail with void reason
+
+### Important: Agent vs Agency Amounts (Fixed v3.5.12)
+The system tracks two commission amounts:
+- **Agent Paid Amount (STMT)**: What YOU receive (primary reconciliation field)
+- **Agency Comm Received (STMT)**: What the agency receives (audit/verification)
+
+All reconciliation and void operations use Agent Paid Amount to ensure consistency.
+
+### Void Entry Structure
+```python
+void_entry = {
+    'Transaction ID': 'ABC123-VOID-20250711',
+    'Agent Paid Amount (STMT)': -491.55,  # Negative to reverse
+    'reconciliation_status': 'void',
+    'reconciliation_id': 'VOID-{original_batch_id}',
+    'NOTES': 'VOID: {reason}'
+}
+```
+
+### Balance Calculation with Voids
+The `calculate_transaction_balances` function includes both -STMT- and -VOID- entries:
+```python
+# Include both STMT and VOID entries
+recon_entries = all_data[
+    (all_data['Policy Number'] == policy_num) &
+    (all_data['Effective Date'] == effective_date) &
+    (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+]
+```
+This ensures voided transactions properly show as unreconciled again.
 
 ### Protection Mechanisms
 ```python

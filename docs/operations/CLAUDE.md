@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 10, 2025 (Late Evening)  
-**Current Version**: 3.5.8
+**Last Updated**: July 11, 2025  
+**Current Version**: 3.5.12
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.8)
-1. **Void Balance Calculation**: Fixed unreconciled transactions not showing after void
-2. **Import Parameter Fix (v3.5.7)**: Fixed "all_data not defined" error during import
-3. **Customer Name Consistency (v3.5.6)**: Fixed reconciliation import using inconsistent name formats
-4. **Prior Fix (v3.5.5)**: Resolved duplicate creation on inline add/edit workflow
-5. **Prior Fix (v3.5.4)**: Complete reconciliation void visibility
+## Recent Major Changes (v3.5.12)
+1. **Void Screen Agent Amounts**: Fixed void screen to show Agent amounts instead of Agency amounts
+2. **Manual Reconciliation Matching (v3.5.9)**: Added "Match transaction" checkbox for customer name mismatches
+3. **Reconciliation Error Fixes (v3.5.10-11)**: Fixed KeyErrors for manual matches and missing fields
+4. **Void Balance Calculation (v3.5.8)**: Fixed unreconciled transactions not showing after void
+5. **Repository Cleanup (v3.5.9)**: Organized all files into proper folders
 
 ## Known Issues & Solutions
 
@@ -92,6 +92,30 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: calculate_transaction_balances only counted -STMT- entries, not -VOID-
 **Solution**: Updated to include -VOID- entries (which have negative amounts)
 **Impact**: Voided transactions now properly show as unreconciled and can be re-reconciled
+
+### 13. Manual Match Customer Name Mismatches (FIXED in v3.5.9)
+**Issue**: Cannot reconcile when customer names don't match exactly (e.g., "Last, First" vs "First Last")
+**Cause**: Auto-match requires exact name matches, no manual override option
+**Solution**: Added "Match transaction" checkbox for manual customer selection
+**Impact**: Users can now match transactions despite name format differences
+
+### 14. Manual Match KeyErrors (FIXED in v3.5.10)
+**Issue**: KeyError 'balance' and 'Policy Number' when processing manual matches
+**Cause**: Manual matches don't have all fields that automatic matches have
+**Solution**: Added .get() with fallbacks for missing fields
+**Impact**: Manual matching now works without errors
+
+### 15. Missing Statement Fields (FIXED in v3.5.11)
+**Issue**: KeyError 'effective_date' when statement data incomplete
+**Cause**: Direct dictionary access without checking field existence
+**Solution**: Use .get() with empty string defaults for all statement fields
+**Impact**: Reconciliation handles incomplete statements gracefully
+
+### 16. Void Screen Shows Agency Amounts Instead of Agent (FIXED in v3.5.12)
+**Issue**: Adjustments & Voids tab showed different amounts than Reconciliation History
+**Cause**: Hardcoded to use 'Agency Comm Received (STMT)' instead of 'Agent Paid Amount (STMT)'
+**Solution**: Changed all void screen references to use Agent amounts
+**Impact**: Void screen now shows consistent amounts with reconciliation, preventing confusion
 
 ## Development Guidelines
 
