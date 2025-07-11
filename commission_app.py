@@ -5352,10 +5352,15 @@ def main():
                         with col1:
                             st.markdown("**Required Fields**")
                             for sys_field, description in required_fields.items():
+                                # Get the current value from session state if it exists
+                                widget_key = f"map_{sys_field}"
+                                current_value = st.session_state.get(widget_key, st.session_state.column_mapping.get(sys_field, ''))
+                                
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
                                     options=[''] + list(df.columns),
-                                    key=f"map_{sys_field}",
+                                    key=widget_key,
+                                    index=([''] + list(df.columns)).index(current_value) if current_value in [''] + list(df.columns) else 0,
                                     help=f"Select the column that contains {description}"
                                 )
                                 if selected_col:
@@ -5364,10 +5369,15 @@ def main():
                         with col2:
                             st.markdown("**Optional Fields**")
                             for sys_field, description in optional_fields.items():
+                                # Get the current value from session state if it exists
+                                widget_key = f"map_{sys_field}"
+                                current_value = st.session_state.get(widget_key, st.session_state.column_mapping.get(sys_field, ''))
+                                
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
                                     options=[''] + list(df.columns),
-                                    key=f"map_{sys_field}",
+                                    key=widget_key,
+                                    index=([''] + list(df.columns)).index(current_value) if current_value in [''] + list(df.columns) else 0,
                                     help=f"Select the column that contains {description}"
                                 )
                                 if selected_col:
@@ -5425,8 +5435,18 @@ def main():
                                     for sys_field, stmt_col in saved_map.items():
                                         if stmt_col in df.columns:
                                             valid_mapping[sys_field] = stmt_col
+                                            # Update the selectbox widget state to reflect loaded mapping
+                                            widget_key = f"map_{sys_field}"
+                                            st.session_state[widget_key] = stmt_col
                                         else:
                                             missing_cols.append(stmt_col)
+                                    
+                                    # Also set empty values for fields not in the saved mapping
+                                    all_fields = list(required_fields.keys()) + list(optional_fields.keys())
+                                    for field in all_fields:
+                                        if field not in valid_mapping:
+                                            widget_key = f"map_{field}"
+                                            st.session_state[widget_key] = ''
                                     
                                     st.session_state.column_mapping = valid_mapping
                                     
