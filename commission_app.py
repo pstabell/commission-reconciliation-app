@@ -1617,7 +1617,7 @@ def show_import_results(statement_date, all_data):
                     'Policy': item['policy_number'],
                     'Eff Date': item['effective_date'],
                     'Statement Amt': item['amount'],
-                    'DB Balance': item['match']['balance'],
+                    'DB Balance': item['match'].get('balance', item['amount']),
                     'Confidence': f"{item['confidence']}%",
                     'Match Type': item['match_type']
                 })
@@ -1734,6 +1734,7 @@ def show_import_results(statement_date, all_data):
                                 'create_new': True
                             }
                             st.success("Will create new transaction")
+                        st.caption("*(Use for new policies or endorsements not yet in system)*")
             
             # Show confirmed matches
             if st.session_state.manual_matches:
@@ -1965,9 +1966,9 @@ def show_import_results(statement_date, all_data):
                     # Create reconciliation entry
                     recon_entry = {
                         'Transaction ID': recon_id,
-                        'Customer': item['match']['Customer'],
-                        'Policy Number': item['match']['Policy Number'],
-                        'Effective Date': item['match']['Effective Date'],
+                        'Customer': item.get('matched_customer', item['match'].get('Customer', item['customer'])),
+                        'Policy Number': item['match'].get('Policy Number', item['policy_number']),
+                        'Effective Date': item['match'].get('Effective Date', item['effective_date']),
                         'Transaction Type': item['match'].get('Transaction Type', ''),
                         'Premium Sold': 0,
                         'Agency Comm Received (STMT)': item.get('agency_amount', 0),  # Agency amount for audit
