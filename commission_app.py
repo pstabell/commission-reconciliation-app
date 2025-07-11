@@ -5317,7 +5317,10 @@ def main():
                             except:
                                 continue
                         
-                        st.success(f"✅ Loaded {transaction_count} transactions from {uploaded_file.name}")
+                        if transaction_count == len(df):
+                            st.success(f"✅ Loaded {transaction_count} transactions from {uploaded_file.name}")
+                        else:
+                            st.success(f"✅ Loaded {transaction_count} transactions from {uploaded_file.name} (excluded {len(df) - transaction_count} total row{'s' if len(df) - transaction_count > 1 else ''})")
                         
                         # Show preview
                         with st.expander("📊 File Preview", expanded=True):
