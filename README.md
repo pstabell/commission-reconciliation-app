@@ -2,8 +2,8 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.6  
-**Last Updated**: July 10, 2025
+**Version**: 3.5.13  
+**Last Updated**: July 11, 2025
 
 ## Overview
 
@@ -86,7 +86,39 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.6)
+## Recent Updates (v3.5.13)
+
+### Debug Mode & Enhanced Matching
+- **Debug Mode**: New expandable section shows why transactions aren't available for matching
+- **Balance Transparency**: Displays credit, debit, and balance calculations for each transaction
+- **Improved Matching**: Enhanced fuzzy customer name matching handles variations better
+- **Word-Based Matching**: "Adam Gomes" now matches "Gomes, Adam" or "Adam J. Gomes"
+
+### Previous Updates (v3.5.12)
+- **Void Screen Fix**: Corrected amounts display to show Agent commissions instead of Agency
+- **Consistency**: All reconciliation screens now show the same commission amounts
+- **Clarity**: Prevents confusion about which amounts are being voided
+
+### Previous Updates (v3.5.11)
+- **Error Handling**: Fixed KeyError for missing effective_date during reconciliation
+- **Robustness**: System handles incomplete statement data gracefully
+
+### Previous Updates (v3.5.10)
+- **Manual Match Fixes**: Resolved KeyErrors when manually matching transactions
+- **Endorsement Reminder**: Added helpful caption for creating new transactions
+
+### Previous Updates (v3.5.9)
+- **Manual Matching**: Added checkbox to force matches despite name mismatches
+- **Repository Cleanup**: Organized all files into proper folder structure
+
+### Previous Updates (v3.5.8)
+- **Void Balance Fix**: Voided transactions now properly show as unreconciled
+- **-VOID- Entry Support**: Balance calculation includes void reversals
+
+### Previous Updates (v3.5.7)
+- **Import Function Fix**: Resolved "all_data not defined" error during reconciliation
+
+### Previous Updates (v3.5.6)
 
 ### Customer Name Consistency Fix
 - **Fixed Reconciliation Import Issue**: Consistent customer naming when creating new transactions

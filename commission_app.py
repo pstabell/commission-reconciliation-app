@@ -1350,6 +1350,19 @@ def find_potential_customer_matches(search_name, existing_customers):
         if customer_lower.startswith(search_name_lower[:3]) and len(search_name) >= 3:
             if customer not in matches or matches[customer][1] < 75:
                 matches[customer] = ('starts_with', 75)
+        
+        # 8. Fuzzy word matching (e.g., "Adam Gomes" matches "Gomes Adam" or "Adam J Gomes")
+        search_words = set(search_name_lower.split())
+        customer_words = set(customer_lower.split())
+        if len(search_words) >= 2 and len(customer_words) >= 2:
+            # Check if all search words are in customer name (any order)
+            if search_words.issubset(customer_words):
+                if customer not in matches or matches[customer][1] < 88:
+                    matches[customer] = ('all_words', 88)
+            # Check if most words match
+            elif len(search_words.intersection(customer_words)) >= min(len(search_words), len(customer_words)) - 1:
+                if customer not in matches or matches[customer][1] < 82:
+                    matches[customer] = ('most_words', 82)
     
     # Convert to sorted list
     result = [(name, match_type, score) for name, (match_type, score) in matches.items()]
@@ -1613,6 +1626,8 @@ def show_import_results(statement_date, all_data):
                 
                 matched_df.append({
                     'Status': '✅',
+                    'Transaction ID': item['match'].get('Transaction ID', 'N/A'),
+                    'Type': item['match'].get('Transaction Type', 'N/A'),
                     'Customer': display_customer,
                     'Policy': item['policy_number'],
                     'Eff Date': item['effective_date'],
@@ -1685,7 +1700,9 @@ def show_import_results(statement_date, all_data):
                                         
                                         trans_options = []
                                         for trans in customer_trans:
-                                            trans_desc = f"Policy: {trans['Policy Number']} | "
+                                            trans_desc = f"ID: {trans['Transaction ID']} | "
+                                            trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
+                                            trans_desc += f"Policy: {trans['Policy Number']} | "
                                             trans_desc += f"Eff: {trans['Effective Date']} | "
                                             trans_desc += f"Balance: ${trans['balance']:,.2f}"
                                             trans_options.append(trans_desc)
@@ -1708,6 +1725,41 @@ def show_import_results(statement_date, all_data):
                                             st.rerun()
                                     else:
                                         st.info("No transactions with balance for this customer")
+                                        
+                                        # Debug mode - show why transactions aren't available
+                                        with st.expander("🔍 Debug: Show all transactions for this customer"):
+                                            # Get ALL transactions for this customer (not just those with balance)
+                                            all_customer_trans = all_data[
+                                                (all_data['Customer'] == selected_customer) &
+                                                (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
+                                            ]
+                                            
+                                            if not all_customer_trans.empty:
+                                                st.write(f"Found {len(all_customer_trans)} total transactions for {selected_customer}:")
+                                                for _, trans in all_customer_trans.iterrows():
+                                                    # Calculate balance for this transaction
+                                                    credit = float(trans.get('Agent Estimated Comm $', 0) or 0)
+                                                    policy_num = trans['Policy Number']
+                                                    effective_date = trans['Effective Date']
+                                                    
+                                                    # Get reconciliation entries
+                                                    recon_entries = all_data[
+                                                        (all_data['Policy Number'] == policy_num) &
+                                                        (all_data['Effective Date'] == effective_date) &
+                                                        (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+                                                    ]
+                                                    
+                                                    debit = 0
+                                                    if not recon_entries.empty:
+                                                        debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+                                                    
+                                                    balance = credit - debit
+                                                    
+                                                    st.write(f"- **{trans['Transaction ID']}**: Policy {policy_num}, Credit: ${credit:,.2f}, Debit: ${debit:,.2f}, Balance: ${balance:,.2f}")
+                                                    if balance <= 0.01:
+                                                        st.write(f"  ⚠️ Not shown because balance is ${balance:,.2f}")
+                                            else:
+                                                st.warning(f"No transactions found for customer '{selected_customer}' in database. Check for name variations.")
                         else:
                             st.info("No potential matches found")
                     
@@ -1756,23 +1808,42 @@ def show_import_results(statement_date, all_data):
                             # Find the best matching transaction for this customer
                             customer_name = match_info['match_to_customer']
                             
-                            # Look for a transaction with matching policy/date/amount
+                            # For manual matches, first try to find ANY transaction for this customer
+                            # with outstanding balance, regardless of policy/date match
                             matching_trans = all_data[
                                 (all_data['Customer'] == customer_name) &
-                                (all_data['Policy Number'] == matched_item['policy_number']) &
-                                (all_data['Effective Date'] == matched_item['effective_date']) &
                                 (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
                             ]
                             
+                            # Calculate balances for customer transactions
                             if not matching_trans.empty:
-                                # Use the first matching transaction
-                                matched_item['match'] = matching_trans.iloc[0].to_dict()
+                                # Get transactions with balance using the same logic as unreconciled
+                                trans_with_balance = calculate_transaction_balances(all_data)
+                                customer_trans_with_balance = trans_with_balance[
+                                    trans_with_balance['Customer'] == customer_name
+                                ]
+                                
+                                # First try exact policy match
+                                exact_match = customer_trans_with_balance[
+                                    customer_trans_with_balance['Policy Number'] == matched_item['policy_number']
+                                ]
+                                
+                                if not exact_match.empty:
+                                    # Use the exact policy match
+                                    matched_item['match'] = exact_match.iloc[0].to_dict()
+                                elif not customer_trans_with_balance.empty:
+                                    # Use any transaction with balance for this customer
+                                    matched_item['match'] = customer_trans_with_balance.iloc[0].to_dict()
+                                else:
+                                    # Use any transaction for this customer
+                                    matched_item['match'] = matching_trans.iloc[0].to_dict()
+                                
                                 matched_item['confidence'] = 100
-                                matched_item['match_type'] = 'Manual'
+                                matched_item['match_type'] = 'Manual - Forced Match'
                                 matched_item['matched_customer'] = customer_name
                                 st.session_state.matched_transactions.append(matched_item)
                             else:
-                                # If no exact match found, still add to matched with customer info
+                                # If no transactions found, still honor the manual match
                                 matched_item['match'] = {'Customer': customer_name}
                                 matched_item['confidence'] = 100
                                 matched_item['match_type'] = 'Manual - Customer Only'
@@ -1806,10 +1877,16 @@ def show_import_results(statement_date, all_data):
             
             create_df = []
             for item in st.session_state.transactions_to_create:
+                # Try to get transaction type from statement data
+                trans_type = 'NEW'  # Default
+                if 'statement_data' in item and st.session_state.column_mapping.get('Transaction Type'):
+                    trans_type = item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')
+                
                 create_df.append({
                     'Create': True,
                     'Customer': item['customer'],
                     'Policy': item['policy_number'],
+                    'Type': trans_type,
                     'Eff Date': item['effective_date'],
                     'Amount': item['amount']
                 })
@@ -1892,11 +1969,14 @@ def show_import_results(statement_date, all_data):
     # Import button
     if st.button("🔄 Proceed with Import", type="primary", disabled=len(st.session_state.matched_transactions) == 0):
         with st.spinner("Importing transactions..."):
+            # Store all database operations to execute at once
+            all_operations = []
+            created_count = 0
+            reconciled_count = 0
+            
             try:
                 # Generate batch ID
                 batch_id = f"IMPORT-{statement_date.strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-                created_count = 0
-                reconciled_count = 0
                 
                 # Step 1: Create missing transactions if selected
                 if create_selected and st.session_state.transactions_to_create:
@@ -1946,18 +2026,18 @@ def show_import_results(statement_date, all_data):
                                 if sys_field not in new_trans and stmt_field in item['statement_data']:
                                     new_trans[sys_field] = item['statement_data'][stmt_field]
                             
-                            # Insert to database
-                            supabase = get_supabase_client()
-                            result = supabase.table('policies').insert(new_trans).execute()
-                            if result.data:
-                                created_count += 1
-                                # Add to matched transactions for reconciliation
-                                st.session_state.matched_transactions.append({
-                                    'match': result.data[0],
-                                    'amount': item['amount'],
-                                    'customer': final_customer_name,  # Use the matched customer name
-                                    'policy_number': item['policy_number']
-                                })
+                            # Queue operation instead of immediate execution
+                            all_operations.append(('insert', 'policies', new_trans))
+                            created_count += 1
+                            
+                            # Add to matched transactions for reconciliation
+                            # Use the new transaction data as the match
+                            st.session_state.matched_transactions.append({
+                                'match': new_trans,
+                                'amount': item['amount'],
+                                'customer': final_customer_name,  # Use the matched customer name
+                                'policy_number': item['policy_number']
+                            })
                 
                 # Step 2: Create reconciliation entries for all matched transactions
                 for item in st.session_state.matched_transactions:
@@ -1977,15 +2057,34 @@ def show_import_results(statement_date, all_data):
                         'reconciliation_status': 'reconciled',
                         'reconciliation_id': batch_id,
                         'is_reconciliation_entry': True,
-                        'NOTES': f"Import batch {batch_id}"
+                        'Cross-Reference Key': item['match'].get('Transaction ID', ''),  # Store original transaction ID
+                        'NOTES': f"Import batch {batch_id} | Matched to: {item['match'].get('Transaction ID', 'Manual Match')}"
                     }
                     
-                    # Insert reconciliation entry
-                    supabase = get_supabase_client()
-                    supabase.table('policies').insert(recon_entry).execute()
+                    # Queue reconciliation entry
+                    all_operations.append(('insert', 'policies', recon_entry))
                     reconciled_count += 1
                 
-                # Clear session state
+                # Execute all operations in a single batch
+                # This ensures atomicity - either all succeed or none do
+                if all_operations:
+                    st.info(f"Executing {len(all_operations)} database operations...")
+                    
+                    supabase = get_supabase_client()
+                    successful_operations = 0
+                    
+                    # Execute each operation
+                    for op_type, table, data in all_operations:
+                        if op_type == 'insert':
+                            result = supabase.table(table).insert(data).execute()
+                            if not result.data:
+                                raise Exception(f"Failed to insert record: {data.get('Transaction ID', 'Unknown')}")
+                            successful_operations += 1
+                    
+                    # If we got here, all operations succeeded
+                    st.success(f"✅ All {successful_operations} operations completed successfully!")
+                
+                # Clear session state only after successful completion
                 st.session_state.import_data = None
                 st.session_state.matched_transactions = []
                 st.session_state.unmatched_transactions = []
@@ -2007,8 +2106,19 @@ def show_import_results(statement_date, all_data):
                 st.rerun()
                 
             except Exception as e:
-                st.error(f"Error during import: {str(e)}")
+                # If ANY error occurs, no database changes were made
+                st.error(f"""
+                ❌ Import failed - NO changes were made to the database
+                
+                Error: {str(e)}
+                
+                Please fix the issue and try again. All transactions remain unchanged.
+                """)
                 st.exception(e)
+                
+                # Log which operation failed if possible
+                if 'all_operations' in locals() and all_operations:
+                    st.info(f"Failed while processing operation {successful_operations + 1} of {len(all_operations)}")
 
 def duplicate_for_renewal(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -5649,11 +5759,15 @@ def main():
                             )
                             
                             # Include both agent and agency amounts
-                            display_columns = ['Transaction ID', 'Customer', 'Policy Number', 'STMT DATE']
+                            display_columns = ['Transaction ID', 'Transaction Type', 'Customer', 'Policy Number', 'STMT DATE']
                             if 'Agent Paid Amount (STMT)' in display_recon.columns:
                                 display_columns.append('Agent Paid Amount (STMT)')
                             if 'Agency Comm Received (STMT)' in display_recon.columns:
                                 display_columns.append('Agency Comm Received (STMT)')
+                            
+                            # Add Cross-Reference Key to show original transaction
+                            if 'Cross-Reference Key' in display_recon.columns:
+                                display_columns.append('Cross-Reference Key')
                             
                             # Add new tracking columns
                             display_columns.extend(['Reconciliation Status', 'Batch ID', 'Is Void Entry'])
@@ -5677,6 +5791,9 @@ def main():
                                 column_config={
                                     "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
                                     "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Cross-Reference Key": st.column_config.TextColumn(
+                                        help="Original Transaction ID that was matched"
+                                    ),
                                     "Reconciliation Status": st.column_config.TextColumn(
                                         help="RECONCILED = Normal entry, VOID = Void reversal entry"
                                     ),

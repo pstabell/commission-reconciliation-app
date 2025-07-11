@@ -5,6 +5,29 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.13] - 2025-07-11 - Enhanced Transaction Matching & Debug Mode
+
+### Added
+- **Debug Mode for Unmatched Transactions**
+  - New expandable debug section shows ALL transactions for a customer
+  - Displays credit, debit, and balance calculations for each transaction
+  - Explains why transactions aren't available (e.g., zero balance)
+  - Helps identify customer name mismatches or reconciliation issues
+
+- **Improved Customer Name Matching**
+  - Added "all words" matching (88% confidence) for any word order
+  - Added "most words" matching (82% confidence) for partial matches
+  - Better handles variations like "Adam Gomes" vs "Gomes, Adam" vs "Adam J. Gomes"
+  - Reduces false negatives in customer matching
+
+### Technical
+- Enhanced `find_potential_customer_matches` with fuzzy word-based matching
+- Added detailed balance calculation display in debug mode
+- Shows exact reasons why transactions are excluded from matching
+
+### Impact
+Users can now troubleshoot why specific transactions aren't appearing in the matching dropdown. The debug mode provides transparency into balance calculations and helps identify data issues. Improved customer matching reduces manual work when names don't match exactly.
+
 ## [3.5.12] - 2025-07-11 - Void Screen Agent Amount Fix
 
 ### Fixed

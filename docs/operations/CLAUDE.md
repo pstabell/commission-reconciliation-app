@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 11, 2025  
-**Current Version**: 3.5.12
+**Current Version**: 3.5.13
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.12)
-1. **Void Screen Agent Amounts**: Fixed void screen to show Agent amounts instead of Agency amounts
-2. **Manual Reconciliation Matching (v3.5.9)**: Added "Match transaction" checkbox for customer name mismatches
-3. **Reconciliation Error Fixes (v3.5.10-11)**: Fixed KeyErrors for manual matches and missing fields
-4. **Void Balance Calculation (v3.5.8)**: Fixed unreconciled transactions not showing after void
-5. **Repository Cleanup (v3.5.9)**: Organized all files into proper folders
+## Recent Major Changes (v3.5.13)
+1. **Debug Mode for Transaction Matching**: Added expandable debug section showing why transactions aren't available
+2. **Enhanced Customer Name Matching**: Improved fuzzy matching with word-based algorithms
+3. **Void Screen Agent Amounts (v3.5.12)**: Fixed void screen to show Agent amounts instead of Agency amounts
+4. **Manual Reconciliation Matching (v3.5.9)**: Added "Match transaction" checkbox for customer name mismatches
+5. **Reconciliation Error Fixes (v3.5.10-11)**: Fixed KeyErrors for manual matches and missing fields
 
 ## Known Issues & Solutions
 
@@ -116,6 +116,16 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: Hardcoded to use 'Agency Comm Received (STMT)' instead of 'Agent Paid Amount (STMT)'
 **Solution**: Changed all void screen references to use Agent amounts
 **Impact**: Void screen now shows consistent amounts with reconciliation, preventing confusion
+
+### 17. Transactions Not Showing in Matching Dropdown (ENHANCED in v3.5.13)
+**Issue**: Users report transactions with balance not appearing in reconciliation matching
+**Common Causes**:
+- Customer name variations (e.g., "Adam Gomes" vs "Gomes, Adam")
+- Transaction has zero commission amount
+- Transaction already fully reconciled
+**Solution**: Added debug mode showing all customer transactions with balance calculations
+**Enhanced**: Improved fuzzy customer matching with word-based algorithms
+**Impact**: Users can now troubleshoot missing transactions and system handles name variations better
 
 ## Development Guidelines
 
