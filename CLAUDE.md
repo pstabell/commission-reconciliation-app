@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 10, 2025 (Evening)  
-**Current Version**: 3.5.3
+**Current Version**: 3.5.4
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,11 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.2)
-1. **Cancel/Rewrite Workflow**: Complete implementation with auto-filtering and documentation
-2. **UI Enhancements**: Blue Calculate buttons, info reminders, improved field organization
-3. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture improvements
-4. **Prior Changes (v3.5.0)**: Policy renewal tracking, column renaming, field reordering
+## Recent Major Changes (v3.5.4)
+1. **Void Visibility**: Complete reconciliation status tracking in history
+2. **Prior Fix (v3.5.3)**: Resolved StreamlitDuplicateElementKey error
+3. **Prior Changes (v3.5.2)**: Cancel/Rewrite workflow, UI enhancements
+4. **Prior Changes (v3.5.1)**: Pending renewals filtering, data architecture
+5. **Prior Changes (v3.5.0)**: Policy renewal tracking, column renaming
 
 ## Known Issues & Solutions
 
@@ -55,6 +56,18 @@ supabase.table('policies').select('"Transaction ID"')
 **Issue**: `duplicate_for_renewal()` was modifying display data
 **Solution**: Use `.copy()` for display, only transform when actually creating renewals
 **Impact**: Transaction types now display correctly
+
+### 7. Duplicate Form Names (FIXED in v3.5.3)
+**Issue**: StreamlitDuplicateElementKey error preventing all edits
+**Cause**: Two implementations of edit form with same name
+**Solution**: Removed 657 lines of duplicate code, consolidated to single function
+**Prevention**: Track rendered fields to avoid duplicate widget keys
+
+### 8. Void Transactions Not Visible (FIXED in v3.5.4)
+**Issue**: Voided reconciliations appeared ACTIVE in history
+**Cause**: Filter only looked for `-STMT-` transactions, not `-VOID-`
+**Solution**: Updated filter to include both patterns with OR condition
+**Note**: Also fixed case-sensitive status comparisons (handles lowercase 'void')
 
 ## Development Guidelines
 
@@ -135,6 +148,8 @@ data = convert_timestamps_for_json(data)
 - [ ] Test with policies containing special characters
 - [ ] Verify cache clears after saves
 - [ ] Check error messages are user-friendly
+- [ ] Test reconciliation void visibility
+- [ ] Verify case-insensitive status handling
 
 ## Contact & Support
 - **Repository**: https://github.com/pstabell/commission-reconciliation-app

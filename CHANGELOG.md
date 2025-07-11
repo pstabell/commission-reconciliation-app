@@ -5,6 +5,31 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.4] - 2025-07-10 (Evening) - Void Visibility Enhancement
+
+### Added
+- **Comprehensive Void Status Tracking in Reconciliation History**
+  - By Batch view now displays Status, Void ID, and Void Date columns
+  - All Transactions view shows Reconciliation Status, Batch ID, and Is Void Entry columns
+  - Color coding: Light red for voided batches, light orange for void entries
+  - Clear visual indicators make voided reconciliations immediately apparent
+
+### Fixed
+- **Void Transactions Not Appearing in Reconciliation History**
+  - Updated filter to include both `-STMT-` and `-VOID-` transactions
+  - Fixed case-sensitive status comparisons (now handles lowercase 'void')
+  - Enhanced void entry detection to check Transaction ID patterns
+  - Original batches now correctly show as VOIDED when void entries exist
+
+### Technical
+- Modified reconciliation entry filter from single pattern to OR condition
+- Added case-insensitive string comparisons throughout void detection
+- Improved batch status aggregation logic
+- Enhanced styling functions with proper void status highlighting
+
+### Impact
+Users can now clearly see which reconciliations have been voided without investigating individual transactions. The reconciliation history provides complete visibility into the status of all statements, preventing confusion about which are active vs. voided.
+
 ## [3.5.3] - 2025-07-10 (Evening - Critical Fix)
 
 ### Fixed

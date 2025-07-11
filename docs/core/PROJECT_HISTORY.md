@@ -698,6 +698,97 @@ Comprehensive renewal tracking system implementation with complete audit trail c
 
 ---
 
+### Version 3.5.3 (July 10, 2025 - Evening) - Critical Production Fix
+
+#### Critical Bug Resolution
+- **StreamlitDuplicateElementKey Error**: Fixed production-breaking error when editing transactions
+- **Root Cause**: Duplicate form implementations with identical names causing widget key conflicts
+- **Impact**: Users unable to edit any transactions in production environment
+
+#### Technical Fix Details
+- **Removed Duplicate Code**: Eliminated 657 lines of redundant edit form implementation
+- **Code Consolidation**: All edit operations now use single `edit_transaction_form()` function
+- **Form Tracking**: Added `rendered_fields` set to track which fields have been displayed
+- **Prevented Double Rendering**: Fields now tracked as rendered to avoid duplicate keys
+
+#### Code Architecture Improvements
+- **Single Source of Truth**: One edit form implementation for entire application
+- **Consistent Behavior**: All edit contexts now behave identically
+- **Improved Maintainability**: Reduced code from 9,359 to 8,702 lines
+- **Better Error Prevention**: Field tracking prevents future duplicate key issues
+
+#### Files Modified
+- `commission_app.py`: Major refactoring to remove duplicate form code
+- Added field tracking throughout edit form
+- Consolidated all edit operations to use reusable function
+- Fixed form submission handlers
+
+**Impact**: Restored full editing functionality in production. Users can now edit transactions without encountering application crashes. The consolidated code base is more maintainable and less prone to similar errors in the future.
+
+---
+
+### Version 3.5.4 (July 10, 2025 - Evening) - Void Visibility Enhancement
+
+#### Background & Problem Discovery
+User reported a critical visibility issue: "I voided a reconciliation but it still shows as ACTIVE in Reconciliation History. There's no way to tell which statements have been voided!"
+
+Investigation revealed:
+- Void process created reversal entries with Transaction IDs containing `-VOID-` instead of `-STMT-`
+- Reconciliation History filter only looked for `-STMT-` transactions
+- Void entries were invisible in the history view
+- Original batches appeared active despite being voided
+
+#### Comprehensive Solution Implementation
+
+##### 1. Enhanced Reconciliation History Views
+**By Batch View** - Added three new columns:
+- **Status Column**: Shows ACTIVE, VOIDED, or VOID ENTRY
+- **Void ID Column**: Displays the void batch ID for voided reconciliations
+- **Void Date Column**: Shows when the reconciliation was voided
+- **Color Coding**: Light red background for VOIDED, light orange for VOID ENTRY
+
+**All Transactions View** - Added tracking columns:
+- **Reconciliation Status**: Shows RECONCILED or VOID
+- **Batch ID**: Links transactions to their batch
+- **Is Void Entry**: Yes/No indicator for reversal entries
+- **Color Coding**: Visual highlighting for void-related entries
+
+##### 2. Technical Fixes
+- **Filter Enhancement**: Changed from single pattern to OR condition:
+  ```python
+  # Before: only -STMT-
+  all_data['Transaction ID'].str.contains('-STMT-', na=False)
+  
+  # After: both -STMT- and -VOID-
+  (all_data['Transaction ID'].str.contains('-STMT-', na=False)) |
+  (all_data['Transaction ID'].str.contains('-VOID-', na=False))
+  ```
+
+- **Case-Insensitive Handling**: Fixed lowercase 'void' status detection
+- **Void Detection Logic**: Enhanced to check multiple indicators:
+  - Transaction ID patterns
+  - Reconciliation status field
+  - Batch ID prefixes
+
+##### 3. User Experience Improvements
+- Immediate visual identification of voided reconciliations
+- No need to investigate individual transactions
+- Clear audit trail of all void operations
+- Prevents accidental re-reconciliation of voided statements
+
+#### Discovery Process & Debugging
+The issue was discovered through careful analysis of the user's data:
+1. User showed void entries existed in All Policy Transactions
+2. Transaction IDs followed pattern: `Y355HZ2-VOID-20250710`
+3. Reconciliation status was lowercase 'void'
+4. Batch ID was `VOID-IMPORT-20250731-3232D7ED`
+
+This led to understanding that the filter was too restrictive and the status comparisons were case-sensitive.
+
+**Impact**: Complete visibility into reconciliation status. Users can now instantly identify which statements are active vs. voided, preventing confusion and potential errors. The enhancement provides a clear audit trail for all reconciliation operations.
+
+---
+
 *Document Created: July 3, 2025*  
 *Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.2*
+*Current Application Version: 3.5.4*

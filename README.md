@@ -2,7 +2,7 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.3  
+**Version**: 3.5.4  
 **Last Updated**: July 10, 2025
 
 ## Overview
@@ -86,19 +86,24 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.2)
+## Recent Updates (v3.5.4)
 
-### New Features
+### Void Visibility Enhancement
+- **Complete Reconciliation Status Tracking**: See which statements are voided at a glance
+- **Enhanced History Views**: Added Status, Void ID, and Void Date columns
+- **Visual Indicators**: Color coding for voided batches and void entries
+- **Fixed Void Transaction Filter**: Now includes both -STMT- and -VOID- transactions
+
+### Previous Updates (v3.5.3)
+- **Critical Fix**: Resolved StreamlitDuplicateElementKey error
+- **Code Consolidation**: Removed 657 lines of duplicate form code
+- **Improved Stability**: Added field tracking to prevent conflicts
+
+### Previous Updates (v3.5.2)
 - Complete Cancel/Rewrite workflow implementation
 - Enhanced UI with blue Calculate buttons and info reminders
 - Prior Policy Number field in Add New Policy form
 - Comprehensive Cancel/Rewrite documentation in Help page
-
-### Improvements
-- Cancelled policies auto-excluded from Pending Renewals
-- Policy Type field moved to right column under MGA Name
-- Better form field organization and visual balance
-- Clear guidance for handling complex policy scenarios
 
 ### Previous Updates (v3.5.1)
 - Policy renewal tracking with Prior Policy Number
