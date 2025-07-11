@@ -1547,9 +1547,9 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                             match_result['needs_selection'] = True
                             unmatched.append(match_result)
                 else:
-                    # Customer found but no transactions with balance
+                    # Customer found but no transactions in lookup - still add to unmatched for manual selection
                     match_result['potential_customers'] = potential_customers
-                    match_result['no_balance'] = True
+                    match_result['needs_selection'] = True
                     unmatched.append(match_result)
             else:
                 # Multiple potential matches or low confidence - needs manual selection
@@ -1691,11 +1691,28 @@ def show_import_results(statement_date, all_data):
                                 selected_customer = item['potential_customers'][selected_customer_idx][0]
                                 
                                 # Show transactions for selected customer
+                                # First try to get from potential_matches if available
+                                customer_trans = []
                                 if 'potential_matches' in item:
                                     customer_trans = [t for t in item['potential_matches'] 
                                                     if t.get('_customer_match') == selected_customer]
-                                    
-                                    if customer_trans:
+                                
+                                # If no transactions found in potential_matches, fetch directly
+                                if not customer_trans:
+                                    # Get transactions with balance for this customer
+                                    trans_with_balance = calculate_transaction_balances(all_data)
+                                    customer_trans_df = trans_with_balance[
+                                        trans_with_balance['Customer'] == selected_customer
+                                    ]
+                                    if not customer_trans_df.empty:
+                                        # Convert to list of dicts for consistency
+                                        customer_trans = []
+                                        for _, trans in customer_trans_df.iterrows():
+                                            trans_dict = trans.to_dict()
+                                            trans_dict['balance'] = trans.get('_balance', 0)
+                                            customer_trans.append(trans_dict)
+                                
+                                if customer_trans:
                                         st.markdown("**Available Transactions:**")
                                         
                                         trans_options = []
