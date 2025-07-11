@@ -1733,13 +1733,27 @@ def show_import_results(statement_date, all_data):
                                     )
                                     
                                     if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
-                                        # Add to manual matches
-                                        st.session_state.manual_matches[idx] = {
-                                            'statement_item': item,
-                                            'matched_transaction': customer_trans[selected_trans_idx],
-                                            'customer': selected_customer
-                                        }
-                                        st.success("Match confirmed!")
+                                        # Immediately move to matched transactions
+                                        matched_item = item.copy()
+                                        matched_item['match'] = customer_trans[selected_trans_idx]
+                                        matched_item['confidence'] = 100
+                                        matched_item['match_type'] = 'Manual - Selected'
+                                        matched_item['matched_customer'] = selected_customer
+                                        
+                                        # Add to matched list
+                                        st.session_state.matched_transactions.append(matched_item)
+                                        
+                                        # Remove from unmatched list
+                                        st.session_state.unmatched_transactions = [
+                                            unmatched for i, unmatched in enumerate(st.session_state.unmatched_transactions) 
+                                            if i != idx
+                                        ]
+                                        
+                                        # Clear any manual match entry for this index
+                                        if idx in st.session_state.manual_matches:
+                                            del st.session_state.manual_matches[idx]
+                                        
+                                        st.success("Match confirmed and moved to matched list!")
                                         st.rerun()
                                 else:
                                     st.info("No transactions with balance for this customer")
