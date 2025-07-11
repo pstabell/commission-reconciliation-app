@@ -5305,7 +5305,19 @@ def main():
                             df = pd.read_excel(uploaded_file)
                         
                         st.session_state.import_data = df
-                        st.success(f"✅ Loaded {len(df)} rows from {uploaded_file.name}")
+                        
+                        # Count actual transactions (excluding totals rows)
+                        transaction_count = len(df)
+                        # Check if any row contains 'total' in any column
+                        for col in df.columns:
+                            try:
+                                if df[col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False).any():
+                                    transaction_count = len(df) - df[col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False).sum()
+                                    break
+                            except:
+                                continue
+                        
+                        st.success(f"✅ Loaded {transaction_count} transactions from {uploaded_file.name}")
                         
                         # Show preview
                         with st.expander("📊 File Preview", expanded=True):
