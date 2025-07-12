@@ -272,6 +272,38 @@ def is_reconciliation_transaction(transaction_id):
     
     return any(suffix in transaction_id_str for suffix in reconciliation_types)
 
+def clean_data_for_database(data):
+    """
+    Remove UI-only fields from data dictionary before database insertion.
+    
+    UI-only fields that don't exist in the database:
+    - Rate (Commission Rate display field)
+    - Edit, Select, Action, Details (table checkboxes)
+    - new_effective_date, new_expiration_date (renewal helpers)
+    - expiration_date (maps to X-DATE in database)
+    """
+    # Define fields that should be removed before database insertion
+    ui_only_fields = {
+        'Rate', 
+        'Edit', 
+        'Select', 
+        'Action', 
+        'Details',
+        'new_effective_date',
+        'new_expiration_date',
+        'expiration_date'  # This maps to X-DATE in the database
+    }
+    
+    # Create a copy of the data to avoid modifying the original
+    cleaned_data = data.copy()
+    
+    # Remove UI-only fields
+    for field in ui_only_fields:
+        if field in cleaned_data:
+            del cleaned_data[field]
+    
+    return cleaned_data
+
 def load_policy_types():
     """Load policy types from configuration file."""
     policy_types_file = "config_files/policy_types.json"
@@ -1629,10 +1661,10 @@ def show_import_results(statement_date, all_data):
                     'Transaction ID': item['match'].get('Transaction ID', 'N/A'),
                     'Type': item['match'].get('Transaction Type', 'N/A'),
                     'Customer': display_customer,
-                    'Policy': item['policy_number'],
-                    'Eff Date': item['effective_date'],
-                    'Statement Amt': item['amount'],
-                    'DB Balance': item['match'].get('balance', item['amount']),
+                    'Policy': item.get('policy_number', ''),
+                    'Eff Date': item.get('effective_date', ''),
+                    'Statement Amt': item.get('amount', 0),
+                    'DB Balance': item['match'].get('balance', item.get('amount', 0)),
                     'Confidence': f"{item['confidence']}%",
                     'Match Type': item['match_type']
                 })
@@ -1648,7 +1680,7 @@ def show_import_results(statement_date, all_data):
                 hide_index=True
             )
             
-            total_matched = sum(item['amount'] for item in st.session_state.matched_transactions)
+            total_matched = sum(item.get('amount', 0) for item in st.session_state.matched_transactions)
             st.metric("Total Matched Amount", f"${total_matched:,.2f}")
         else:
             st.info("No matched transactions")
@@ -1662,14 +1694,14 @@ def show_import_results(statement_date, all_data):
                 st.session_state.manual_matches = {}
             
             for idx, item in enumerate(st.session_state.unmatched_transactions):
-                with st.expander(f"🔍 {item['customer']} - ${item['amount']:,.2f}", expanded=True):
+                with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=True):
                     col1, col2 = st.columns([2, 1])
                     
                     with col1:
                         st.markdown(f"**Statement Details:**")
-                        st.text(f"Policy: {item['policy_number']}")
-                        st.text(f"Effective Date: {item['effective_date']}")
-                        st.text(f"Amount: ${item['amount']:,.2f}")
+                        st.text(f"Policy: {item.get('policy_number', '')}")
+                        st.text(f"Effective Date: {item.get('effective_date', '')}")
+                        st.text(f"Amount: ${item.get('amount', 0):,.2f}")
                         
                         # Show additional statement details if available
                         if 'statement_data' in item:
@@ -2123,8 +2155,11 @@ def show_import_results(statement_date, all_data):
                                 if sys_field not in new_trans and stmt_field in item['statement_data']:
                                     new_trans[sys_field] = item['statement_data'][stmt_field]
                             
+                            # Clean data before queueing for insertion
+                            cleaned_trans = clean_data_for_database(new_trans)
+                            
                             # Queue operation instead of immediate execution
-                            all_operations.append(('insert', 'policies', new_trans))
+                            all_operations.append(('insert', 'policies', cleaned_trans))
                             created_count += 1
                             
                             # Add to matched transactions for reconciliation
@@ -2158,8 +2193,11 @@ def show_import_results(statement_date, all_data):
                         'NOTES': f"Import batch {batch_id} | Matched to: {item['match'].get('Transaction ID', 'Manual Match')}"
                     }
                     
+                    # Clean data before queueing for insertion
+                    cleaned_recon = clean_data_for_database(recon_entry)
+                    
                     # Queue reconciliation entry
-                    all_operations.append(('insert', 'policies', recon_entry))
+                    all_operations.append(('insert', 'policies', cleaned_recon))
                     reconciled_count += 1
                 
                 # Execute all operations in a single batch
@@ -3940,7 +3978,9 @@ def main():
                                                             insert_dict[col] = value if pd.notna(value) else None
                                                 
                                                 try:
-                                                    supabase.table('policies').insert(insert_dict).execute()
+                                                    # Clean data before insertion
+                                                    cleaned_insert = clean_data_for_database(insert_dict)
+                                                    supabase.table('policies').insert(cleaned_insert).execute()
                                                     inserted_count += 1
                                                 except Exception as insert_error:
                                                     st.error(f"Error inserting new record: {insert_error}")
@@ -4049,7 +4089,9 @@ def main():
                                                 if '_id' in save_data:
                                                     del save_data['_id']
                                                 
-                                                response = supabase.table('policies').insert(save_data).execute()
+                                                # Clean data before insertion
+                                                cleaned_save = clean_data_for_database(save_data)
+                                                response = supabase.table('policies').insert(cleaned_save).execute()
                                             
                                             if response.data:
                                                 st.success("✅ Transaction updated successfully!")
@@ -4255,7 +4297,9 @@ def main():
                                                 insert_dict[col] = row[col] if pd.notna(row[col]) else None
                                         
                                         try:
-                                            supabase.table('policies').insert(insert_dict).execute()
+                                            # Clean data before insertion
+                                            cleaned_insert = clean_data_for_database(insert_dict)
+                                            supabase.table('policies').insert(cleaned_insert).execute()
                                             inserted_count += 1
                                         except Exception as insert_error:
                                             st.error(f"Error inserting new record: {insert_error}")
@@ -4582,8 +4626,11 @@ def main():
                         # Remove None values to avoid database issues
                         new_policy = {k: v for k, v in new_policy.items() if v is not None}
                         
+                        # Clean data before insertion
+                        cleaned_policy = clean_data_for_database(new_policy)
+                        
                         # Insert into database
-                        supabase.table('policies').insert(new_policy).execute()
+                        supabase.table('policies').insert(cleaned_policy).execute()
                         clear_policies_cache()
                         
                         # Set success message in session state to persist after rerun
@@ -5003,8 +5050,11 @@ def main():
                                             'is_reconciliation_entry': True
                                         }
                                         
+                                        # Clean data before insertion
+                                        cleaned_recon = clean_data_for_database(recon_entry)
+                                        
                                         # Insert reconciliation entry
-                                        supabase.table('policies').insert(recon_entry).execute()
+                                        supabase.table('policies').insert(cleaned_recon).execute()
                                         
                                         # Update original transaction
                                         supabase.table('policies').update({
@@ -6035,8 +6085,11 @@ def main():
                                     'Description': f"Adjustment: {adjustment_reason}"
                                 }
                                 
+                                # Clean data before insertion
+                                cleaned_adjustment = clean_data_for_database(adjustment_entry)
+                                
                                 # Save to database
-                                result = supabase.table('policies').insert(adjustment_entry).execute()
+                                result = supabase.table('policies').insert(cleaned_adjustment).execute()
                                 
                                 if result.data:
                                     st.success(f"✅ Adjustment {adj_id} created successfully!")
@@ -6174,8 +6227,11 @@ def main():
                                                         'NOTES': f"VOID: {void_reason}"
                                                     }
                                                     
+                                                    # Clean data before insertion
+                                                    cleaned_void = clean_data_for_database(void_entry)
+                                                    
                                                     # Insert void entry
-                                                    supabase.table('policies').insert(void_entry).execute()
+                                                    supabase.table('policies').insert(cleaned_void).execute()
                                                     void_count += 1
                                                 
                                                 # Update original transactions to mark as unreconciled again

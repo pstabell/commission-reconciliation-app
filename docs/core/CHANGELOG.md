@@ -19,11 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Duplicate Rate Display**
   - Removed redundant Rate display when mapped column matches direct column
   - Cleaner statement details without duplicate information
+- **Rate Field Database Error**
+  - Created `clean_data_for_database()` function to remove UI-only fields before insertion
+  - Prevents "Could not find the 'Rate' column" error during import
+  - Applied to all database insert operations throughout the app
+- **Missing effective_date KeyError**
+  - Fixed error when statement data missing required fields
+  - Updated to use `.get()` with safe defaults for all dictionary access
+  - Handles incomplete statement data gracefully
 
 ### Technical
 - Smart column detection for variations (LOB/Chg, LOB, Tran, Transaction, Rate)
 - Automatic percentage formatting (0.15 → 15%, 15 → 15%)
 - Only displays fields with actual values
+- Comprehensive UI-only field cleaning before database operations
 
 ## [3.5.13] - 2025-07-11 - Enhanced Transaction Matching & Debug Mode
 

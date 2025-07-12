@@ -42,6 +42,8 @@ supabase.table('policies').select('"Transaction ID"')
 - Edit, Select, Action, Details (table checkboxes)
 - new_effective_date, new_expiration_date (renewal helpers)
 - expiration_date (maps to X-DATE in database)
+- Rate (commission rate from statement - display only)
+**Solution**: Use `clean_data_for_database()` function before any insert operations
 
 ### 4. Date Format Standardization
 **Standard**: MM/DD/YYYY throughout the application
@@ -139,6 +141,18 @@ supabase.table('policies').select('"Transaction ID"')
 **Solution**: Removed Cross-Reference Key, tracking info preserved in NOTES field
 **Impact**: Reconciliation imports work without database schema changes
 
+### 20. Rate Field Database Error (FIXED in v3.5.14)
+**Issue**: PGRST204 error - "Could not find the 'Rate' column of 'policies'"
+**Cause**: UI-only field (Rate) was being included in database insert operations
+**Solution**: Created `clean_data_for_database()` function to remove all UI-only fields before insertion
+**Impact**: Import process now works without database errors, Rate still displays in UI
+
+### 21. Missing Statement Fields KeyError (FIXED in v3.5.14)
+**Issue**: KeyError 'effective_date' when processing statement data
+**Cause**: Direct dictionary access without checking if fields exist
+**Solution**: Updated all dictionary access to use `.get()` with safe defaults
+**Impact**: Handles incomplete or missing statement data without crashing
+
 ## Development Guidelines
 
 ### 1. Before Making Changes
@@ -212,6 +226,9 @@ df = format_dates_mmddyyyy(df)
 
 # Convert timestamps for JSON
 data = convert_timestamps_for_json(data)
+
+# Clean data before database insertion
+clean_data = clean_data_for_database(data)
 ```
 
 ## Testing Checklist for Changes
