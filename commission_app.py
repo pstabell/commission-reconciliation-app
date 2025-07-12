@@ -1674,6 +1674,9 @@ def show_import_results(statement_date, all_data):
                         # Show additional statement details if available
                         if 'statement_data' in item:
                             stmt_data = item['statement_data']
+                            # Track if we found a direct Rate column
+                            found_rate = False
+                            
                             # Try to show LOB/Chg, Tran, and Rate from the statement
                             for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
                                 if col_name in stmt_data:
@@ -1686,6 +1689,7 @@ def show_import_results(statement_date, all_data):
                                         elif display_name in ['Tran', 'Transaction']:
                                             st.text(f"Transaction: {value}")
                                         elif display_name == 'Rate':
+                                            found_rate = True
                                             # Format rate as percentage if it's a number
                                             try:
                                                 rate_val = float(value)
@@ -1696,18 +1700,19 @@ def show_import_results(statement_date, all_data):
                                             except:
                                                 st.text(f"Rate: {value}")
                             
-                            # Also try to show mapped Rate field if available
+                            # Only show mapped Rate field if we didn't find a direct Rate column
+                            # or if the mapped column is different from 'Rate'
                             if 'Rate' in st.session_state.column_mapping:
                                 rate_col = st.session_state.column_mapping['Rate']
-                                if rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
+                                if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
                                     try:
                                         rate_val = float(stmt_data[rate_col])
                                         if rate_val < 1:  # Decimal format
-                                            st.text(f"Rate (mapped): {rate_val:.2%}")
+                                            st.text(f"Rate: {rate_val:.2%}")
                                         else:  # Already percentage
-                                            st.text(f"Rate (mapped): {rate_val}%")
+                                            st.text(f"Rate: {rate_val}%")
                                     except:
-                                        st.text(f"Rate (mapped): {stmt_data[rate_col]}")
+                                        st.text(f"Rate: {stmt_data[rate_col]}")
                     
                     with col2:
                         # Check if we have potential customers
