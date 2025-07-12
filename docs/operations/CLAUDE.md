@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 11, 2025  
-**Current Version**: 3.5.14
+**Last Updated**: July 12, 2025  
+**Current Version**: 3.5.15
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.14)
-1. **Statement Details in Unmatched**: Added LOB/Chg, Transaction type, and Rate display for better identification
-2. **Debug Mode for Transaction Matching (v3.5.13)**: Added expandable debug section showing why transactions aren't available
-3. **Enhanced Customer Name Matching (v3.5.13)**: Improved fuzzy matching with word-based algorithms
-4. **UI Workflow Improvements**: Save/Load Column Mappings moved above field mapping for better UX
-5. **Transaction Type Selector**: Added dropdown when creating new transactions from unmatched
+## Recent Major Changes (v3.5.15)
+1. **Client ID Matching**: New transactions from reconciliation now properly link to Client IDs
+2. **Enhanced Reconciliation UI**: Clear force match warnings, improved create transaction labels
+3. **Transactions Requiring Attention**: New filter on Edit Policies page for incomplete data
+4. **Agency Comm Optional**: Moved to optional fields, allowing reconciliation without it
+5. **Smart Warning Logic**: Only shows warnings for genuine customer name mismatches
 
 ## Known Issues & Solutions
 
@@ -152,6 +152,18 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: Direct dictionary access without checking if fields exist
 **Solution**: Updated all dictionary access to use `.get()` with safe defaults
 **Impact**: Handles incomplete or missing statement data without crashing
+
+### 22. Missing Client IDs on New Transactions (FIXED in v3.5.15)
+**Issue**: New transactions created during reconciliation had no Client ID
+**Cause**: System wasn't looking up or creating client records during import
+**Solution**: Added client matching UI with radio buttons for existing/new clients
+**Impact**: All new transactions now properly linked to Client IDs
+
+### 23. Transactions with Missing Data (ADDRESSED in v3.5.15)
+**Issue**: Transactions with payments but no premium/commission data cause incorrect reports
+**Cause**: Created during reconciliation without complete information
+**Solution**: Added "Show Transactions Requiring Attention" filter on Edit Policies page
+**Impact**: Easy identification and completion of incomplete transaction data
 
 ## Development Guidelines
 

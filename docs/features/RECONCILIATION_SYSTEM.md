@@ -1,6 +1,6 @@
 # Reconciliation System - Comprehensive Documentation
 **Created**: July 4, 2025  
-**Last Updated**: July 11, 2025  
+**Last Updated**: July 12, 2025  
 **Purpose**: Complete reference for the commission reconciliation system implementation
 
 ## Table of Contents
@@ -260,6 +260,38 @@ When reviewing unmatched transactions, users now see comprehensive statement det
 - Only displays fields with actual values
 - Rate field added to optional column mappings
 
+### Enhanced Reconciliation UI (Added v3.5.15)
+
+Major improvements to reconciliation clarity and safety:
+
+#### Force Match Warnings
+- Clear red warning text when customer names don't match
+- Transaction ID displayed: "Force match to A1B2C3D4"
+- Smart logic: No warnings for high-confidence name reversals (≥95%)
+- Warnings only appear for genuine mismatches
+
+#### Create Transaction Labels
+- Improved labels showing customer names
+- Format: "Create new transaction for: [Customer Name]"
+- Clear indication of what action will be taken
+
+#### UI Safety Improvements
+- Checkbox order flipped for safety
+- "Create new" (safer) option on left
+- "Force match" (riskier) option on right
+- Pre-filled confirmation messages
+
+#### Agency Comm Made Optional
+- Moved from required to optional fields
+- Positioned in right column
+- Allows reconciliation without agency commission data
+- Focuses on agent payment reconciliation
+
+#### Extended Confirmation Display
+- Success message delay increased from 2 to 4 seconds
+- Ensures users can read confirmation details
+- Better visibility of reconciliation results
+
 ### Manual Matching Feature (Added v3.5.9)
 
 When automatic matching fails, users can now manually match transactions:
@@ -280,6 +312,64 @@ When automatic matching fails, users can now manually match transactions:
 - System attempts to find matching transaction by customer/policy/date
 - Falls back to customer-only match if no exact transaction found
 - Handles missing fields gracefully with .get() methods
+
+### Client ID Matching (Added v3.5.15)
+
+A critical enhancement ensuring all new transactions created during reconciliation are properly linked to Client IDs:
+
+#### The Problem
+New transactions created during reconciliation import had no Client ID, breaking:
+- Client-based reporting and filtering
+- Dashboard client search functionality
+- Overall data integrity and relationships
+
+#### The Solution
+Enhanced reconciliation UI with automatic client matching and selection:
+
+1. **Automatic Client Lookup**
+   - When creating new transactions, system searches for existing clients
+   - Uses same smart matching logic as transaction matching
+   - Shows exact matches and similar client names
+
+2. **Radio Button Selection Interface**
+   ```
+   🔍 Client Match Options:
+   ○ Existing client found: [Matched Client Name] (ID: CL-XXXXXXXX)
+   ○ Similar clients found:
+     - Similar Client 1 (ID: CL-YYYYYYYY)
+     - Similar Client 2 (ID: CL-ZZZZZZZZ)
+   ○ Create new client for: [Statement Customer Name]
+   ```
+
+3. **Client Record Creation**
+   - If no match exists, creates new client record
+   - Auto-generates Client ID in format: CL-XXXXXXXX
+   - Links all transactions to appropriate Client ID
+
+#### Technical Implementation
+```python
+# Check for existing clients
+exact_match = supabase.table('clients').select('*').eq('client_name', customer).execute()
+
+# Find similar clients
+similar_matches = find_potential_customer_matches(customer, is_client_search=True)
+
+# Create new client if needed
+if create_new_client:
+    new_client_id = generate_client_id()  # CL-XXXXXXXX format
+    new_client = {
+        'client_id': new_client_id,
+        'client_name': customer_name,
+        'created_at': datetime.now()
+    }
+    supabase.table('clients').insert(new_client).execute()
+```
+
+#### Impact
+- All new transactions now have proper Client IDs
+- Maintains referential integrity in database
+- Enables accurate client-based reporting
+- Prevents orphaned transactions
 
 ## Technical Implementation
 

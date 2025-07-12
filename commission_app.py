@@ -1881,6 +1881,70 @@ def show_import_results(statement_date, all_data):
                         if st.checkbox(create_checkbox_label, key=f"create_new_{idx}"):
                             st.caption("✓ Mapped client transaction details will be pre-filled from statement")
                             
+                            # Client matching section
+                            st.markdown("**🔍 Client Match Options:**")
+                            
+                            # Look for existing clients with similar names
+                            try:
+                                supabase = get_supabase_client()
+                                
+                                # First try exact match
+                                exact_match = supabase.table('clients').select('*').eq('client_name', statement_customer).execute()
+                                
+                                # Also search for similar names
+                                all_clients = supabase.table('clients').select('client_id', 'client_name').execute()
+                                similar_clients = []
+                                
+                                if all_clients.data:
+                                    # Use the same fuzzy matching logic as transaction matching
+                                    for client in all_clients.data:
+                                        client_name = client.get('client_name', '')
+                                        if client_name and client_name != statement_customer:
+                                            # Check for name variations
+                                            if (statement_customer.lower() in client_name.lower() or 
+                                                client_name.lower() in statement_customer.lower() or
+                                                (len(statement_customer) > 3 and statement_customer.lower()[:3] == client_name.lower()[:3])):
+                                                similar_clients.append(client)
+                                
+                                # Build radio button options
+                                client_options = []
+                                client_values = []
+                                
+                                # If exact match found, add it first
+                                if exact_match.data:
+                                    client = exact_match.data[0]
+                                    client_options.append(f'Link to existing: "{client["client_name"]}" (Client ID: {client["client_id"]})')
+                                    client_values.append(('existing', client['client_id'], client['client_name']))
+                                
+                                # Add similar clients
+                                for client in similar_clients[:3]:  # Limit to top 3 similar
+                                    client_options.append(f'Link to existing: "{client["client_name"]}" (Client ID: {client["client_id"]})')
+                                    client_values.append(('existing', client['client_id'], client['client_name']))
+                                
+                                # Always add option to create new
+                                client_options.append(f'Create as NEW client (new Client ID will be assigned)')
+                                client_values.append(('new', None, statement_customer))
+                                
+                                # Default selection
+                                default_index = 0 if exact_match.data else len(client_options) - 1
+                                
+                                selected_client_option = st.radio(
+                                    "Select client option:",
+                                    client_options,
+                                    index=default_index,
+                                    key=f"client_match_{idx}"
+                                )
+                                
+                                # Get the selected client info
+                                selected_index = client_options.index(selected_client_option)
+                                client_action, client_id, client_name = client_values[selected_index]
+                                
+                            except Exception as e:
+                                st.error(f"Error looking up clients: {str(e)}")
+                                client_action = 'new'
+                                client_id = None
+                                client_name = statement_customer
+                            
                             # Show transaction type selector
                             transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
                             default_type = "NEW"
@@ -1901,9 +1965,16 @@ def show_import_results(statement_date, all_data):
                             st.session_state.manual_matches[idx] = {
                                 'statement_item': item,
                                 'create_new': True,
-                                'transaction_type': selected_type
+                                'transaction_type': selected_type,
+                                'client_action': client_action,
+                                'client_id': client_id,
+                                'client_name': client_name
                             }
-                            st.success(f"Will create {selected_type} transaction")
+                            
+                            if client_action == 'existing':
+                                st.success(f"Will create {selected_type} transaction linked to Client ID: {client_id}")
+                            else:
+                                st.success(f"Will create {selected_type} transaction with NEW client")
                         st.caption("*(Use for new policies or endorsements not yet in system)*")
                     
                     with col2:
@@ -2171,15 +2242,40 @@ def show_import_results(statement_date, all_data):
                             # Generate new transaction ID
                             new_trans_id = generate_transaction_id()
                             
-                            # Check if customer exists to use consistent naming
+                            # Check if this item has client info from manual matching
+                            client_id_to_use = None
                             final_customer_name = item['customer']
-                            if not all_data.empty:
-                                all_customers = all_data['Customer'].dropna().unique().tolist()
-                                # Use the find_potential_customer_matches function to check for existing customer
-                                potential_matches = find_potential_customer_matches(item['customer'], all_customers)
-                                if potential_matches and potential_matches[0][2] >= 90:  # High confidence match
-                                    # Use the existing customer name format
-                                    final_customer_name = potential_matches[0][0]
+                            
+                            # Check if client info was selected during manual matching
+                            if 'client_action' in item:
+                                if item['client_action'] == 'existing' and item.get('client_id'):
+                                    # Use the selected existing client
+                                    client_id_to_use = item['client_id']
+                                    final_customer_name = item.get('client_name', item['customer'])
+                                elif item['client_action'] == 'new':
+                                    # Create new client
+                                    try:
+                                        supabase = get_supabase_client()
+                                        # Generate a client ID if needed
+                                        new_client_id = f"CL-{str(uuid.uuid4())[:8].upper()}"
+                                        new_client = {
+                                            'client_id': new_client_id,
+                                            'client_name': item['customer']
+                                        }
+                                        result = supabase.table('clients').insert(new_client).execute()
+                                        if result.data:
+                                            client_id_to_use = new_client_id
+                                    except Exception as e:
+                                        st.warning(f"Could not create new client for {item['customer']}: {str(e)}")
+                            else:
+                                # Fallback to original customer name matching logic
+                                if not all_data.empty:
+                                    all_customers = all_data['Customer'].dropna().unique().tolist()
+                                    # Use the find_potential_customer_matches function to check for existing customer
+                                    potential_matches = find_potential_customer_matches(item['customer'], all_customers)
+                                    if potential_matches and potential_matches[0][2] >= 90:  # High confidence match
+                                        # Use the existing customer name format
+                                        final_customer_name = potential_matches[0][0]
                             
                             # Create new transaction
                             new_trans = {
@@ -2187,12 +2283,16 @@ def show_import_results(statement_date, all_data):
                                 'Customer': final_customer_name,  # Use matched customer name if found
                                 'Policy Number': item['policy_number'],
                                 'Effective Date': item['effective_date'],
-                                'Transaction Type': item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW'),
+                                'Transaction Type': item.get('selected_transaction_type', item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')),
                                 'Premium Sold': item['statement_data'].get(st.session_state.column_mapping.get('Premium Sold', ''), 0),
                                 'Agent Estimated Comm $': item['amount'],  # Use statement amount as estimated
                                 'Agency Estimated Comm/Revenue (CRM)': item['amount'],
                                 'NOTES': f"Created from statement import {batch_id}"
                             }
+                            
+                            # Add Client ID if we have one
+                            if client_id_to_use:
+                                new_trans['Client ID'] = client_id_to_use
                             
                             # Add other mapped fields
                             for sys_field, stmt_field in st.session_state.column_mapping.items():
@@ -3570,6 +3670,21 @@ def main():
             # Search and filter options
             st.subheader("Find Policies to Edit")
             
+            # Add filter buttons
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                show_attention_needed = st.button("⚠️ Show Transactions Requiring Attention", type="secondary")
+            with col2:
+                if 'show_attention_filter' in st.session_state and st.session_state.show_attention_filter:
+                    if st.button("↩️ Reset Filters", type="secondary"):
+                        st.session_state.show_attention_filter = False
+                        st.rerun()
+            
+            # Track filter state
+            if show_attention_needed:
+                st.session_state.show_attention_filter = True
+                st.rerun()
+            
             # Wrap search in a form to prevent accidental reruns
             with st.form("search_form"):
                 search_col1, search_col2 = st.columns([3, 1])
@@ -3581,9 +3696,36 @@ def main():
                     st.write("")  # Spacing
                     edit_search_button = st.form_submit_button("Find Records", type="primary")
             
+            # Check if we should show attention-needed transactions
+            show_attention_filter = st.session_state.get('show_attention_filter', False)
+            
             # Show filtered data for editing
-            if edit_search_term or edit_search_button:
-                if edit_search_term:
+            if edit_search_term or edit_search_button or show_attention_filter:
+                if show_attention_filter:
+                    # Filter for transactions requiring attention
+                    # These are transactions that have payments but missing premium/commission data
+                    mask = (
+                        # Has a payment recorded
+                        (all_data['Agent Paid Amount (STMT)'].notna() & (all_data['Agent Paid Amount (STMT)'] > 0)) &
+                        # But missing critical data
+                        (
+                            # Missing premium
+                            (all_data['Premium Sold'].isna() | (all_data['Premium Sold'] == 0)) |
+                            # Missing estimated commission
+                            (all_data['Agent Estimated Comm $'].isna() | (all_data['Agent Estimated Comm $'] == 0))
+                        )
+                    )
+                    
+                    edit_results = all_data[mask].copy()
+                    
+                    if not edit_results.empty:
+                        st.warning(f"⚠️ Found {len(edit_results)} transactions with payments but missing premium/commission data")
+                        st.info("These transactions need premium and commission information to ensure accurate ledger reports.")
+                    else:
+                        st.success("✅ All transactions with payments have complete premium and commission data!")
+                        # Continue to show empty result to user
+                        
+                elif edit_search_term:
                     # Search across multiple columns
                     mask = pd.Series(False, index=all_data.index)
                     search_columns = ['Customer', 'Policy Number', 'Transaction ID', 'Client ID']
@@ -3593,214 +3735,215 @@ def main():
                             mask |= all_data[col].astype(str).str.contains(edit_search_term, case=False, na=False)
                     
                     edit_results = all_data[mask].copy()
+                
+                # Common processing for both search and attention filter
+                if 'edit_results' in locals() and not edit_results.empty:
+                    # Format numeric columns to ensure 2 decimal places
+                    edit_results = round_numeric_columns(edit_results)
                     
-                    if not edit_results.empty:
-                        # Format numeric columns to ensure 2 decimal places
-                        edit_results = round_numeric_columns(edit_results)
-                        
-                        # Keep dates as they are from the database
-                        date_cols = [
-                            'Policy Origination Date',
-                            'Effective Date',
-                            'X-DATE',
-                            'STMT DATE',
-                            'Policy Issue Date',
-                            'Policy Effective Date',
-                            'As of Date'
-                        ]
+                    # Keep dates as they are from the database
+                    date_cols = [
+                        'Policy Origination Date',
+                        'Effective Date',
+                        'X-DATE',
+                        'STMT DATE',
+                        'Policy Issue Date',
+                        'Policy Effective Date',
+                        'As of Date'
+                    ]
+                    
+                    # Filter out reconciliation transactions
+                    # First, find the transaction ID column using multiple detection methods
+                    transaction_id_col = None
+                    
+                    # Method 1: Try using column mapper
+                    transaction_id_col = get_mapped_column("Transaction ID")
+                    
+                    # Method 2: If mapper fails, check common variations
+                    if not transaction_id_col:
+                        possible_names = ["Transaction ID", "Transaction_ID", "TransactionID", 
+                                        "transaction_id", "Transaction Id", "TRANSACTION_ID",
+                                        "transaction id", "transactionid"]
+                        for col in edit_results.columns:
+                            if col in possible_names:
+                                transaction_id_col = col
+                                break
+                    
+                    # Method 3: If still not found, use flexible search
+                    if not transaction_id_col:
+                        for col in edit_results.columns:
+                            # Remove spaces and underscores for comparison
+                            col_normalized = col.lower().replace(" ", "").replace("_", "")
+                            if col_normalized == "transactionid":
+                                transaction_id_col = col
+                                break
+                    
+                    if transaction_id_col:
+                        # Count total before filtering
+                        total_count = len(edit_results)
                         
                         # Filter out reconciliation transactions
-                        # First, find the transaction ID column using multiple detection methods
-                        transaction_id_col = None
+                        edit_results_editable = edit_results[
+                            ~edit_results[transaction_id_col].apply(is_reconciliation_transaction)
+                        ].copy()
                         
-                        # Method 1: Try using column mapper
-                        transaction_id_col = get_mapped_column("Transaction ID")
+                        recon_count = total_count - len(edit_results_editable)
                         
-                        # Method 2: If mapper fails, check common variations
-                        if not transaction_id_col:
-                            possible_names = ["Transaction ID", "Transaction_ID", "TransactionID", 
-                                            "transaction_id", "Transaction Id", "TRANSACTION_ID",
-                                            "transaction id", "transactionid"]
-                            for col in edit_results.columns:
-                                if col in possible_names:
-                                    transaction_id_col = col
-                                    break
-                        
-                        # Method 3: If still not found, use flexible search
-                        if not transaction_id_col:
-                            for col in edit_results.columns:
-                                # Remove spaces and underscores for comparison
-                                col_normalized = col.lower().replace(" ", "").replace("_", "")
-                                if col_normalized == "transactionid":
-                                    transaction_id_col = col
-                                    break
-                        
-                        if transaction_id_col:
-                            # Count total before filtering
-                            total_count = len(edit_results)
-                            
-                            # Filter out reconciliation transactions
-                            edit_results_editable = edit_results[
-                                ~edit_results[transaction_id_col].apply(is_reconciliation_transaction)
-                            ].copy()
-                            
-                            recon_count = total_count - len(edit_results_editable)
-                            
-                            # Show counts
-                            if recon_count > 0:
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.success(f"Found {len(edit_results_editable)} editable transactions")
-                                with col2:
-                                    st.info(f"🔒 {recon_count} reconciliation entries (view in Reconciliation page)")
-                            else:
-                                st.success(f"Found {len(edit_results_editable)} transactions for editing")
-                            
-                            # Update edit_results to only contain editable transactions
-                            edit_results = edit_results_editable
-                            
-                            # Check if we have any editable transactions left
-                            if edit_results.empty:
-                                st.warning("No editable transactions found. All transactions for this customer are reconciliation entries.")
-                                return  # Exit early
-                        else:
-                            st.success(f"Found {len(edit_results)} records for editing")
-                        
-                        # Only proceed if we have editable transactions
-                        if not edit_results.empty:
-                            # Find the actual column names dynamically
-                            transaction_id_col = None
-                            client_id_col = None
-                            for col in edit_results.columns:
-                                if 'transaction' in col.lower() and 'id' in col.lower():
-                                    transaction_id_col = col
-                                if 'client' in col.lower() and 'id' in col.lower():
-                                    client_id_col = col
-                            
-                            # Add a selection column for deletion
-                            edit_results_with_selection = edit_results.copy()
-                            edit_results_with_selection.insert(0, 'Select', False)
-                            
-                            # DO NOT format dates here - keep original values
-                        
-                            # Configure column settings for the data editor
-                            column_config = {
-                                "Select": st.column_config.CheckboxColumn(
-                                    "Select",
-                                    help="Select rows to delete",
-                                    default=False,
-                                )
-                            }
-                            
-                            # Configure numeric columns to display with 2 decimal places
-                            numeric_cols = [
-                                'Agent Estimated Comm $',
-                                'Policy Gross Comm %',
-                                'Agency Estimated Comm/Revenue (CRM)',
-                                'Agency Comm Received (STMT)',
-                                'Premium Sold',
-                                'Agent Paid Amount (STMT)',
-                                'Agency Comm Received (STMT)',
-                                'Policy Taxes & Fees',
-                                'Commissionable Premium',
-                                'Broker Fee',
-                                'Broker Fee Agent Comm',
-                                'Total Agent Comm',
-                                'Policy Balance Due',
-                                'Agent Comm (NEW 50% RWL 25%)'
-                            ]
-                            
-                            # Dollar amount columns (show with $ sign)
-                            dollar_cols = [
-                                'Agent Estimated Comm $',
-                                'Agency Estimated Comm/Revenue (CRM)',
-                                'Agency Comm Received (STMT)',
-                                'Premium Sold',
-                                'Agent Paid Amount (STMT)',
-                                'Policy Taxes & Fees',
-                                'Commissionable Premium',
-                                'Broker Fee',
-                                'Broker Fee Agent Comm',
-                                'Total Agent Comm',
-                                'Policy Balance Due'
-                            ]
-                            
-                            # Percentage columns (show without $ sign)
-                            percent_cols = [
-                                'Policy Gross Comm %',
-                                'Agent Comm (NEW 50% RWL 25%)'
-                            ]
-                            
-                            for col in dollar_cols:
-                                if col in edit_results.columns:
-                                    column_config[col] = st.column_config.NumberColumn(
-                                        col,
-                                        format="$%.2f",
-                                        step=0.01
-                                    )
-                            
-                            for col in percent_cols:
-                                if col in edit_results.columns:
-                                    column_config[col] = st.column_config.NumberColumn(
-                                        col,
-                                        format="%.2f",
-                                        step=0.01
-                                    )
-                            
-                            # Configure date columns as text columns with help text
-                            # Since dates are stored as strings, we can't use DateColumn
-                            for col in date_cols:
-                                if col in edit_results_with_selection.columns:
-                                    column_config[col] = st.column_config.TextColumn(
-                                        col,
-                                        help="Date format: MM/DD/YYYY",
-                                        max_chars=10
-                                    )
-                            
-                            # If we have transaction ID column, make it clear it will be auto-generated
-                            if transaction_id_col:
-                                column_config[transaction_id_col] = st.column_config.TextColumn(
-                                    transaction_id_col,
-                                    help="Leave blank for new rows - will be auto-generated on save",
-                                    disabled=False  # Allow editing but we'll generate if blank
-                                )
-                            
-                            # Create a unique key for this search result to track edits
-                            editor_key = "edit_policies_editor"
-                            
-                            # Initialize or reset session state for this editor
-                            search_key = f"last_search_{editor_key}"
-                            edit_position_key = f"edit_position_{editor_key}"
-                            unsaved_changes_key = f"unsaved_changes_{editor_key}"
-                            
-                            # Initialize if not exists or reset if new search
-                            if (editor_key not in st.session_state or 
-                                search_key not in st.session_state or 
-                                st.session_state[search_key] != edit_search_term):
-                                st.session_state[editor_key] = edit_results_with_selection.copy()
-                                st.session_state[search_key] = edit_search_term
-                                # Clear position tracking on new search
-                                if edit_position_key in st.session_state:
-                                    del st.session_state[edit_position_key]
-                                if unsaved_changes_key in st.session_state:
-                                    del st.session_state[unsaved_changes_key]
-                            
-                            # Preserve edit position and unsaved changes
-                            if unsaved_changes_key in st.session_state:
-                                # Restore any unsaved changes from before the refresh
-                                for row_idx, col_name, value in st.session_state[unsaved_changes_key]:
-                                    if row_idx < len(st.session_state[editor_key]) and col_name in st.session_state[editor_key].columns:
-                                        st.session_state[editor_key].loc[row_idx, col_name] = value
-                            
-                            # Auto-save functionality setup
-                            auto_save_key = f"auto_save_{editor_key}"
-                            if auto_save_key not in st.session_state:
-                                st.session_state[auto_save_key] = True
-                            
-                            # Auto-save toggle at the top
-                            col1, col2, col3 = st.columns([4, 1, 1])
+                        # Show counts
+                        if recon_count > 0:
+                            col1, col2 = st.columns(2)
                             with col1:
-                                st.markdown("### Edit Policies")
+                                st.success(f"Found {len(edit_results_editable)} editable transactions")
+                            with col2:
+                                st.info(f"🔒 {recon_count} reconciliation entries (view in Reconciliation page)")
+                        else:
+                            st.success(f"Found {len(edit_results_editable)} transactions for editing")
+                        
+                        # Update edit_results to only contain editable transactions
+                        edit_results = edit_results_editable
+                        
+                        # Check if we have any editable transactions left
+                        if edit_results.empty:
+                            st.warning("No editable transactions found. All transactions for this customer are reconciliation entries.")
+                            return  # Exit early
+                    else:
+                        st.success(f"Found {len(edit_results)} records for editing")
+                    
+                    # Only proceed if we have editable transactions
+                    if not edit_results.empty:
+                        # Find the actual column names dynamically
+                        transaction_id_col = None
+                        client_id_col = None
+                        for col in edit_results.columns:
+                            if 'transaction' in col.lower() and 'id' in col.lower():
+                                transaction_id_col = col
+                            if 'client' in col.lower() and 'id' in col.lower():
+                                client_id_col = col
+                        
+                        # Add a selection column for deletion
+                        edit_results_with_selection = edit_results.copy()
+                        edit_results_with_selection.insert(0, 'Select', False)
+                        
+                        # DO NOT format dates here - keep original values
+                    
+                        # Configure column settings for the data editor
+                        column_config = {
+                            "Select": st.column_config.CheckboxColumn(
+                                "Select",
+                                help="Select rows to delete",
+                                default=False,
+                            )
+                        }
+                        
+                        # Configure numeric columns to display with 2 decimal places
+                        numeric_cols = [
+                            'Agent Estimated Comm $',
+                            'Policy Gross Comm %',
+                            'Agency Estimated Comm/Revenue (CRM)',
+                            'Agency Comm Received (STMT)',
+                            'Premium Sold',
+                            'Agent Paid Amount (STMT)',
+                            'Agency Comm Received (STMT)',
+                            'Policy Taxes & Fees',
+                            'Commissionable Premium',
+                            'Broker Fee',
+                            'Broker Fee Agent Comm',
+                            'Total Agent Comm',
+                            'Policy Balance Due',
+                            'Agent Comm (NEW 50% RWL 25%)'
+                        ]
+                        
+                        # Dollar amount columns (show with $ sign)
+                        dollar_cols = [
+                            'Agent Estimated Comm $',
+                            'Agency Estimated Comm/Revenue (CRM)',
+                            'Agency Comm Received (STMT)',
+                            'Premium Sold',
+                            'Agent Paid Amount (STMT)',
+                            'Policy Taxes & Fees',
+                            'Commissionable Premium',
+                            'Broker Fee',
+                            'Broker Fee Agent Comm',
+                            'Total Agent Comm',
+                            'Policy Balance Due'
+                        ]
+                        
+                        # Percentage columns (show without $ sign)
+                        percent_cols = [
+                            'Policy Gross Comm %',
+                            'Agent Comm (NEW 50% RWL 25%)'
+                        ]
+                        
+                        for col in dollar_cols:
+                            if col in edit_results.columns:
+                                column_config[col] = st.column_config.NumberColumn(
+                                    col,
+                                    format="$%.2f",
+                                    step=0.01
+                                )
+                        
+                        for col in percent_cols:
+                            if col in edit_results.columns:
+                                column_config[col] = st.column_config.NumberColumn(
+                                    col,
+                                    format="%.2f",
+                                    step=0.01
+                                )
+                        
+                        # Configure date columns as text columns with help text
+                        # Since dates are stored as strings, we can't use DateColumn
+                        for col in date_cols:
+                            if col in edit_results_with_selection.columns:
+                                column_config[col] = st.column_config.TextColumn(
+                                    col,
+                                    help="Date format: MM/DD/YYYY",
+                                    max_chars=10
+                                )
+                        
+                        # If we have transaction ID column, make it clear it will be auto-generated
+                        if transaction_id_col:
+                            column_config[transaction_id_col] = st.column_config.TextColumn(
+                                transaction_id_col,
+                                help="Leave blank for new rows - will be auto-generated on save",
+                                disabled=False  # Allow editing but we'll generate if blank
+                            )
+                        
+                        # Create a unique key for this search result to track edits
+                        editor_key = "edit_policies_editor"
+                        
+                        # Initialize or reset session state for this editor
+                        search_key = f"last_search_{editor_key}"
+                        edit_position_key = f"edit_position_{editor_key}"
+                        unsaved_changes_key = f"unsaved_changes_{editor_key}"
+                        
+                        # Initialize if not exists or reset if new search
+                        if (editor_key not in st.session_state or 
+                            search_key not in st.session_state or 
+                            st.session_state[search_key] != edit_search_term):
+                            st.session_state[editor_key] = edit_results_with_selection.copy()
+                            st.session_state[search_key] = edit_search_term
+                            # Clear position tracking on new search
+                            if edit_position_key in st.session_state:
+                                del st.session_state[edit_position_key]
+                            if unsaved_changes_key in st.session_state:
+                                del st.session_state[unsaved_changes_key]
+                        
+                        # Preserve edit position and unsaved changes
+                        if unsaved_changes_key in st.session_state:
+                            # Restore any unsaved changes from before the refresh
+                            for row_idx, col_name, value in st.session_state[unsaved_changes_key]:
+                                if row_idx < len(st.session_state[editor_key]) and col_name in st.session_state[editor_key].columns:
+                                    st.session_state[editor_key].loc[row_idx, col_name] = value
+                        
+                        # Auto-save functionality setup
+                        auto_save_key = f"auto_save_{editor_key}"
+                        if auto_save_key not in st.session_state:
+                            st.session_state[auto_save_key] = True
+                        
+                        # Auto-save toggle at the top
+                        col1, col2, col3 = st.columns([4, 1, 1])
+                        with col1:
+                            st.markdown("### Edit Policies")
                             with col3:
                                 st.session_state[auto_save_key] = st.checkbox(
                                     "🔄 Auto-save", 
@@ -4273,8 +4416,12 @@ def main():
                                 else:
                                     st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
                     else:
-                        st.warning("No records found matching your search")
-                else:
+                        if show_attention_filter:
+                            # Already showed the success message above
+                            pass
+                        else:
+                            st.warning("No records found matching your search")
+                elif not show_attention_filter:
                     st.info("Enter a search term to find records to edit")
             else:
                 st.info("Use the search box above to find policies to edit, or edit all policies below:")
@@ -5558,12 +5705,12 @@ def main():
                             'Customer': 'Customer/Client Name',
                             'Policy Number': 'Policy Number',
                             'Effective Date': 'Policy Effective Date',
-                            'Agent Paid Amount (STMT)': 'Agent Payment Amount (Required)',
-                            'Agency Comm Received (STMT)': 'Agency Commission (for Audit)'
+                            'Agent Paid Amount (STMT)': 'Agent Payment Amount (Required)'
                         }
                         
                         # Optional fields
                         optional_fields = {
+                            'Agency Comm Received (STMT)': 'Agency Commission (for Audit)',
                             'Policy Type': 'Policy Type',
                             'Transaction Type': 'Transaction Type (NEW/RWL/END/CXL)',
                             'Premium Sold': 'Premium Amount',

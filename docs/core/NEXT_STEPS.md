@@ -525,5 +525,89 @@ Reconciliation imports now maintain consistent customer naming throughout the sy
 
 ---
 
-*Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.6*
+---
+
+## ✅ COMPLETED: Import Function Parameter Fix (Completed July 10, 2025 - Late Evening)
+
+### Critical Error Resolved
+Fixed "name 'all_data' is not defined" error preventing reconciliation imports.
+
+### Implementation:
+- Added missing `all_data` parameter to `show_import_results` function
+- Ensures customer name matching works during import process
+- Maintains access to existing customer data for name consistency
+
+### Impact:
+Reconciliation imports now work without errors, maintaining the customer name consistency feature from v3.5.6.
+
+---
+
+## ✅ COMPLETED: Void Reconciliation Balance Fix (Completed July 10, 2025 - Late Evening)
+
+### Issue Resolved
+Fixed calculation so voided reconciliations properly show transactions as unreconciled.
+
+### Solution:
+- Updated `calculate_transaction_balances` to include -VOID- entries
+- -VOID- entries have negative amounts that properly offset original -STMT- entries
+- Ensures voided transactions reappear in Unreconciled Transactions tab
+
+### Impact:
+When a reconciliation batch is voided, the affected transactions now correctly show as having outstanding balances again, allowing them to be re-reconciled in future statements.
+
+---
+
+## ✅ COMPLETED: Manual Transaction Matching (Completed July 11, 2025)
+
+### New Feature
+Added manual matching capability for transactions with name mismatches.
+
+### Implementation:
+- New "Match transaction" checkbox for unmatched items
+- Allows manual matching to existing customers
+- Prevents duplicate customer entries
+- Handles missing transaction fields gracefully
+
+### Impact:
+Significantly improves reconciliation workflow by allowing users to manually resolve customer name mismatches without creating duplicate entries.
+
+---
+
+## ✅ COMPLETED: Enhanced Reconciliation UI & Client ID Matching (Completed July 12, 2025)
+
+### Major Achievement
+Complete overhaul of reconciliation UI with automatic client matching, ensuring all transactions are properly linked to Client IDs.
+
+### Implementation Complete:
+
+1. **Enhanced Reconciliation UI**:
+   - ✅ Clear "Force match" labels with transaction ID display
+   - ✅ Smart warning system for customer name mismatches (red text)
+   - ✅ Improved "Create new transaction" labels showing customer names
+   - ✅ Flipped checkbox order - safer "Create new" on left, riskier "Force match" on right
+   - ✅ Extended confirmation delay from 2 to 4 seconds
+
+2. **Client ID Matching System**:
+   - ✅ Automatic client lookup when creating new transactions
+   - ✅ Radio button selection for existing vs new clients
+   - ✅ Shows exact matches and similar client names
+   - ✅ Creates new client records with auto-generated IDs (CL-XXXXXXXX)
+   - ✅ Links all new transactions to appropriate Client IDs
+
+3. **Transactions Requiring Attention**:
+   - ✅ New button on Edit Policies page to filter incomplete transactions
+   - ✅ Filters transactions with payments but missing premium/commission data
+   - ✅ Uses existing edit workflow for quick data completion
+
+4. **Agency Comm Made Optional**:
+   - ✅ Moved from required to optional fields in reconciliation
+   - ✅ Positioned in right column with other optional fields
+   - ✅ Allows reconciliation without agency commission data
+
+### Impact:
+Critical improvement to data integrity - all new transactions now have proper Client IDs, enabling accurate client-based reporting and maintaining referential integrity. The enhanced UI prevents errors and provides clear guidance throughout the reconciliation process.
+
+---
+
+*Last Updated: July 12, 2025*  
+*Current Application Version: 3.5.15*

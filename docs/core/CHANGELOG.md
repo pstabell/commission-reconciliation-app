@@ -5,6 +5,50 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.15] - 2025-07-12 - Enhanced Reconciliation UI & Client ID Matching
+
+### Added
+- **Enhanced Reconciliation UI**
+  - Clear "Force match" labels with transaction ID display
+  - Smart warning system for customer name mismatches (red text)
+  - Improved "Create new transaction" labels showing customer names
+  - Pre-fill confirmation messages for better clarity
+  - Flipped checkbox order - safer "Create new" option on left, riskier "Force match" on right
+
+- **Client ID Matching for New Transactions**
+  - Automatic client lookup when creating new transactions during reconciliation
+  - Radio button selection for existing clients vs creating new
+  - Shows exact matches and similar client names
+  - Creates new client records with auto-generated Client IDs (CL-XXXXXXXX)
+  - Links all new transactions to appropriate Client IDs
+
+- **Transactions Requiring Attention Filter**
+  - New button on Edit Policies page: "Show Transactions Requiring Attention"
+  - Filters transactions with payments but missing premium/commission data
+  - Helps ensure accurate ledger reports by catching incomplete data
+  - Uses existing edit workflow for quick data completion
+
+- **Agency Comm Received Made Optional**
+  - Moved from required to optional fields in reconciliation
+  - Positioned in right column with other optional fields
+  - Allows reconciliation without agency commission data
+
+### Changed
+- **Reconciliation Success Message Delay**
+  - Extended from 2 to 4 seconds for better visibility
+  - Ensures users can read confirmation details
+
+### Fixed
+- **Smart Warning Logic**
+  - No warnings for high-confidence name reversals (≥95%)
+  - No warnings for exact matches or business name variations
+  - Red warnings only for genuine mismatches
+
+### Technical
+- Enhanced `find_potential_customer_matches` for client lookup
+- Client record creation during transaction import
+- Proper session state handling for client selections
+
 ## [3.5.14] - 2025-07-11 - Statement Details in Unmatched Transactions
 
 ### Added
