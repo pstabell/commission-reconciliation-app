@@ -2156,6 +2156,7 @@ def show_import_results(statement_date, all_data):
                 
                 # Clear cache and refresh
                 st.cache_data.clear()
+                # Note: The uploaded file is automatically cleaned up by Streamlit on rerun
                 time.sleep(2)
                 st.rerun()
                 
