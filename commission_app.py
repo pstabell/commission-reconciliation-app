@@ -1670,6 +1670,44 @@ def show_import_results(statement_date, all_data):
                         st.text(f"Policy: {item['policy_number']}")
                         st.text(f"Effective Date: {item['effective_date']}")
                         st.text(f"Amount: ${item['amount']:,.2f}")
+                        
+                        # Show additional statement details if available
+                        if 'statement_data' in item:
+                            stmt_data = item['statement_data']
+                            # Try to show LOB/Chg, Tran, and Rate from the statement
+                            for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
+                                if col_name in stmt_data:
+                                    value = stmt_data[col_name]
+                                    if pd.notna(value) and str(value).strip():
+                                        # Clean up the column name for display
+                                        display_name = col_name.strip()
+                                        if display_name == 'LOB/Chg' or display_name == 'LOB':
+                                            st.text(f"LOB/Chg: {value}")
+                                        elif display_name in ['Tran', 'Transaction']:
+                                            st.text(f"Transaction: {value}")
+                                        elif display_name == 'Rate':
+                                            # Format rate as percentage if it's a number
+                                            try:
+                                                rate_val = float(value)
+                                                if rate_val < 1:  # Decimal format
+                                                    st.text(f"Rate: {rate_val:.2%}")
+                                                else:  # Already percentage
+                                                    st.text(f"Rate: {rate_val}%")
+                                            except:
+                                                st.text(f"Rate: {value}")
+                            
+                            # Also try to show mapped Rate field if available
+                            if 'Rate' in st.session_state.column_mapping:
+                                rate_col = st.session_state.column_mapping['Rate']
+                                if rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
+                                    try:
+                                        rate_val = float(stmt_data[rate_col])
+                                        if rate_val < 1:  # Decimal format
+                                            st.text(f"Rate (mapped): {rate_val:.2%}")
+                                        else:  # Already percentage
+                                            st.text(f"Rate (mapped): {rate_val}%")
+                                    except:
+                                        st.text(f"Rate (mapped): {stmt_data[rate_col]}")
                     
                     with col2:
                         # Check if we have potential customers
@@ -5431,7 +5469,8 @@ def main():
                             'Transaction Type': 'Transaction Type (NEW/RWL/END/CXL)',
                             'Premium Sold': 'Premium Amount',
                             'X-DATE': 'Expiration/Cancellation Date',
-                            'NOTES': 'Notes/Description'
+                            'NOTES': 'Notes/Description',
+                            'Rate': 'Commission Rate %'
                         }
                         
                         # Create mapping interface
