@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 11, 2025  
-**Current Version**: 3.5.13
+**Current Version**: 3.5.14
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,12 +13,12 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.13)
-1. **Debug Mode for Transaction Matching**: Added expandable debug section showing why transactions aren't available
-2. **Enhanced Customer Name Matching**: Improved fuzzy matching with word-based algorithms
-3. **Void Screen Agent Amounts (v3.5.12)**: Fixed void screen to show Agent amounts instead of Agency amounts
-4. **Manual Reconciliation Matching (v3.5.9)**: Added "Match transaction" checkbox for customer name mismatches
-5. **Reconciliation Error Fixes (v3.5.10-11)**: Fixed KeyErrors for manual matches and missing fields
+## Recent Major Changes (v3.5.14)
+1. **Statement Details in Unmatched**: Added LOB/Chg, Transaction type, and Rate display for better identification
+2. **Debug Mode for Transaction Matching (v3.5.13)**: Added expandable debug section showing why transactions aren't available
+3. **Enhanced Customer Name Matching (v3.5.13)**: Improved fuzzy matching with word-based algorithms
+4. **UI Workflow Improvements**: Save/Load Column Mappings moved above field mapping for better UX
+5. **Transaction Type Selector**: Added dropdown when creating new transactions from unmatched
 
 ## Known Issues & Solutions
 
@@ -126,6 +126,18 @@ supabase.table('policies').select('"Transaction ID"')
 **Solution**: Added debug mode showing all customer transactions with balance calculations
 **Enhanced**: Improved fuzzy customer matching with word-based algorithms
 **Impact**: Users can now troubleshoot missing transactions and system handles name variations better
+
+### 18. Column Mapping Load Not Working (FIXED in v3.5.14)
+**Issue**: Saved column mappings appeared to load but dropdowns didn't update
+**Cause**: Streamlit doesn't allow modifying widget state after creation
+**Solution**: Use column_mapping to set selectbox index parameter on creation
+**Impact**: Saved mappings now properly populate all dropdown selections
+
+### 19. Cross-Reference Key Database Error (FIXED in v3.5.14)
+**Issue**: PGRST204 error - "Could not find the 'Cross-Reference Key' column"
+**Cause**: Code tried to insert field that doesn't exist in database
+**Solution**: Removed Cross-Reference Key, tracking info preserved in NOTES field
+**Impact**: Reconciliation imports work without database schema changes
 
 ## Development Guidelines
 

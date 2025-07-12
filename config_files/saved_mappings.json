@@ -8,9 +8,11 @@
       "Agency Comm Received (STMT)": "Agency Comm",
       "Policy Type": "LOB/Chg",
       "Transaction Type": "Tran",
-      "NOTES": "Inv#"
+      "NOTES": "Inv#",
+      "Rate": "Rate",
+      "Premium Sold": "Agency Gross"
     },
-    "created": "2025-07-06 17:25",
-    "field_count": 8
+    "created": "2025-07-11 22:27",
+    "field_count": 10
   }
 }

@@ -2,7 +2,7 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.13  
+**Version**: 3.5.14  
 **Last Updated**: July 11, 2025
 
 ## Overview
@@ -86,7 +86,21 @@ APP_PASSWORD=your_app_password
 streamlit run commission_app.py
 ```
 
-## Recent Updates (v3.5.13)
+## Recent Updates (v3.5.14)
+
+### Statement Details in Unmatched Transactions
+- **Enhanced Display**: Shows LOB/Chg, Transaction type, and Rate from statement
+- **Smart Formatting**: Commission rates automatically formatted as percentages
+- **Column Detection**: Finds variations like "LOB", "Tran", "Transaction", "Rate"
+- **Rate Mapping**: Added Rate to optional column mappings
+
+### UI/UX Improvements
+- **Save/Load Position**: Column mappings section moved above field mapping
+- **Better Workflow**: Load saved mappings before seeing empty dropdowns
+- **Transaction Count**: Shows accurate count excluding totals rows
+- **Duplicate Fix**: Removed redundant Rate display
+
+### Previous Updates (v3.5.13)
 
 ### Debug Mode & Enhanced Matching
 - **Debug Mode**: New expandable section shows why transactions aren't available for matching

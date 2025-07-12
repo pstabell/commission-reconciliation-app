@@ -1,6 +1,6 @@
 # Statement Import Design
 **Created**: July 5, 2025  
-**Updated**: July 6, 2025 (Enhanced matching logic)  
+**Updated**: July 11, 2025 (v3.5.14 - Enhanced UI and matching features)  
 **Purpose**: Enable bulk import of commission statements from Excel files to streamline reconciliation
 
 ## 🎯 Core Concept
@@ -112,6 +112,7 @@ Note: "Agency Comm" is what the agency received (gross), "Agent Paid" is what yo
   - Premium Amount
   - X-DATE (Expiration/Cancellation Date)
   - Notes/Description
+  - Rate (Commission Rate %)
 
 ## 🔧 Technical Implementation
 
@@ -236,6 +237,28 @@ def import_statement(file, mapping, statement_date):
 ```
 
 ## 🎯 User Interface Design
+
+### Recent Enhancements (v3.5.14)
+
+#### Save/Load Column Mappings (Moved to Top)
+- Save/Load section now appears BEFORE field mapping
+- Load saved mappings first to auto-populate all dropdowns
+- Better workflow - no need to see empty fields first
+
+#### Enhanced Unmatched Transaction Display
+- Shows additional statement details for better identification:
+  - **LOB/Chg**: Line of Business/Change indicator
+  - **Transaction**: Transaction type from statement
+  - **Rate**: Commission rate with smart percentage formatting
+- Automatic column name detection for variations
+- Only displays fields with actual values
+
+#### Additional Features
+- Transaction Type selector when creating new transactions
+- Policy Type added to transaction selection dropdown
+- Immediate match application on confirm button
+- Debug mode showing why transactions aren't available
+- Accurate transaction count excluding totals rows
 
 ### Import Wizard Steps
 

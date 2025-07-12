@@ -242,6 +242,24 @@ if "," in search_name:
 5. **Contains Match** (85%): Substring matching
 6. **Amount Validation**: Within 5% tolerance
 
+### Enhanced Unmatched Transaction Display (Added v3.5.14)
+
+When reviewing unmatched transactions, users now see comprehensive statement details:
+
+#### Statement Details Section
+- **Policy**: Policy number from statement
+- **Effective Date**: Policy effective date  
+- **Amount**: Agent commission amount
+- **LOB/Chg**: Line of Business or Change indicator
+- **Transaction**: Transaction type (NEW, RWL, END, etc.)
+- **Rate**: Commission rate with smart percentage formatting
+
+#### Technical Details
+- Automatic detection of column variations (LOB/Chg, LOB, Tran, Transaction)
+- Smart rate formatting (0.15 → 15%, 15 → 15%)
+- Only displays fields with actual values
+- Rate field added to optional column mappings
+
 ### Manual Matching Feature (Added v3.5.9)
 
 When automatic matching fails, users can now manually match transactions:

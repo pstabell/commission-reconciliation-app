@@ -5,6 +5,26 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.14] - 2025-07-11 - Statement Details in Unmatched Transactions
+
+### Added
+- **Statement Details Display**
+  - LOB/Chg (Line of Business/Change) shown for unmatched transactions
+  - Transaction type from statement displayed
+  - Commission Rate shown with smart percentage formatting
+  - Rate field added to optional column mappings
+  - Helps identify transactions during manual matching
+
+### Fixed
+- **Duplicate Rate Display**
+  - Removed redundant Rate display when mapped column matches direct column
+  - Cleaner statement details without duplicate information
+
+### Technical
+- Smart column detection for variations (LOB/Chg, LOB, Tran, Transaction, Rate)
+- Automatic percentage formatting (0.15 → 15%, 15 → 15%)
+- Only displays fields with actual values
+
 ## [3.5.13] - 2025-07-11 - Enhanced Transaction Matching & Debug Mode
 
 ### Added
