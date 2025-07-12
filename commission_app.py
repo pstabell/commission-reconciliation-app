@@ -1874,20 +1874,13 @@ def show_import_results(statement_date, all_data):
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        # Option to match existing transaction
-                        if 'potential_customers' in item and selected_customer_idx is not None:
-                            if st.checkbox(f"Match transaction", key=f"match_existing_{idx}"):
-                                selected_customer = item['potential_customers'][selected_customer_idx][0]
-                                st.session_state.manual_matches[idx] = {
-                                    'statement_item': item,
-                                    'match_to_customer': selected_customer,
-                                    'match_existing': True
-                                }
-                                st.success(f"Will match to {selected_customer}")
-                    
-                    with col2:
                         # Option to create new
-                        if st.checkbox(f"Create as new transaction", key=f"create_new_{idx}"):
+                        statement_customer = item.get('customer', 'Unknown')
+                        create_checkbox_label = f"Create new transaction for: {statement_customer} (from statement)"
+                        
+                        if st.checkbox(create_checkbox_label, key=f"create_new_{idx}"):
+                            st.caption("✓ Mapped client transaction details will be pre-filled from statement")
+                            
                             # Show transaction type selector
                             transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
                             default_type = "NEW"
@@ -1912,6 +1905,57 @@ def show_import_results(statement_date, all_data):
                             }
                             st.success(f"Will create {selected_type} transaction")
                         st.caption("*(Use for new policies or endorsements not yet in system)*")
+                    
+                    with col2:
+                        # Option to match existing transaction
+                        if 'potential_customers' in item and selected_customer_idx is not None:
+                            selected_customer = item['potential_customers'][selected_customer_idx][0]
+                            
+                            # Get the selected transaction ID if available
+                            transaction_id = "N/A"
+                            if customer_trans and 'trans_select_' + str(idx) in st.session_state:
+                                trans_idx = st.session_state['trans_select_' + str(idx)]
+                                if trans_idx < len(customer_trans):
+                                    transaction_id = customer_trans[trans_idx].get('Transaction ID', 'N/A')
+                            
+                            # Get match type and confidence
+                            match_type = item['potential_customers'][selected_customer_idx][1]
+                            confidence = item['potential_customers'][selected_customer_idx][2]
+                            
+                            # Check if names match
+                            statement_customer = item.get('customer', 'Unknown')
+                            names_match = statement_customer.lower() == selected_customer.lower()
+                            
+                            # Smarter warning logic
+                            should_warn = False
+                            if not names_match:
+                                # Don't warn if it's a high-confidence name reversal
+                                if match_type == "name_reversed" and confidence >= 95:
+                                    should_warn = False
+                                # Don't warn if it's an exact match (just different case)
+                                elif match_type == "exact" and confidence == 100:
+                                    should_warn = False
+                                # Don't warn for high confidence business name variations
+                                elif match_type == "business_normalized" and confidence >= 95:
+                                    should_warn = False
+                                # Warn for everything else
+                                else:
+                                    should_warn = True
+                            
+                            # Build checkbox label
+                            checkbox_label = f"Force match to selected customer: {selected_customer} (Transaction ID: {transaction_id})"
+                            
+                            if st.checkbox(checkbox_label, key=f"match_existing_{idx}"):
+                                st.session_state.manual_matches[idx] = {
+                                    'statement_item': item,
+                                    'match_to_customer': selected_customer,
+                                    'match_existing': True
+                                }
+                                st.success(f"Will match to {selected_customer}")
+                            
+                            # Show warning only when appropriate
+                            if should_warn and st.session_state.get(f"match_existing_{idx}", False):
+                                st.markdown(f"<span style='color: red;'>⚠️ Warning: Customer names don't match ({statement_customer} ≠ {selected_customer})</span>", unsafe_allow_html=True)
             
             # Show confirmed matches
             if st.session_state.manual_matches:
@@ -2238,7 +2282,7 @@ def show_import_results(statement_date, all_data):
                 # Clear cache and refresh
                 st.cache_data.clear()
                 # Note: The uploaded file is automatically cleaned up by Streamlit on rerun
-                time.sleep(2)
+                time.sleep(4)
                 st.rerun()
                 
             except Exception as e:
