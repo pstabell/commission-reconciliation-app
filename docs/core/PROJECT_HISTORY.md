@@ -904,6 +904,87 @@ The fix ensures:
 
 ---
 
+### Version 3.6.0 (July 13, 2025) - Contacts & Commission Structure Management
+
+Major feature addition implementing comprehensive carrier and MGA management with automated commission rate calculations:
+
+#### Contacts & Commission Structure System
+- **New Contacts Page**: Dedicated page with Carriers and MGAs tabs
+- **Carrier Management**: 
+  - Add/edit carriers with NAIC codes and producer codes
+  - Status tracking (Active/Inactive)
+  - Direct appointment indicators
+  - Parent company relationships
+- **MGA Management**:
+  - Comprehensive MGA (Managing General Agency) tracking
+  - Contact information storage
+  - Carrier-MGA relationship mapping
+  - Appointment date tracking
+- **Commission Rules Engine**:
+  - Rule-based commission rates by carrier/MGA/policy type
+  - Support for NEW and RWL (renewal) specific rates
+  - Payment terms tracking (Advanced vs As Earned)
+  - Rule priority system for complex scenarios
+  - Override capabilities with reason tracking
+
+#### Database Infrastructure
+- **New Tables Created**:
+  - `carriers`: Carrier information and status
+  - `mgas`: MGA details and contact info
+  - `carrier_mga_relationships`: Links carriers to MGAs
+  - `commission_rules`: Complex rule definitions
+- **Existing Table Updates**:
+  - Added optional carrier_id and mga_id to policies table
+  - Full backward compatibility maintained
+  - No impact on existing records
+
+#### Modern Policy Types Configuration
+- **Admin Panel Enhancement**:
+  - Redesigned Policy Types section with compact grid layout
+  - Visual category grouping (Personal, Commercial, Specialty)
+  - Configuration file-based management
+  - Download configuration option for backup
+  - Clear documentation for adding new types
+- **Configuration File Approach**:
+  - `policy_types_updated.json` for safe management
+  - No risk of database corruption
+  - Easy backup and restore
+  - Clear audit trail of changes
+
+#### Island Architecture Implementation
+- **Complete Page Isolation**:
+  - Contacts page operates independently
+  - Errors contained within Contacts module
+  - No impact on existing pages
+  - Follows v3.5.1 architecture patterns
+- **Data Loading Pattern**:
+  - Fresh data loads per page
+  - No stale data issues
+  - Independent data queries
+  - No cross-page dependencies
+
+#### Excel Data Import Support
+- **Initial Data Population**:
+  - 22 unique carriers imported
+  - 11 distinct MGAs identified
+  - Commission rate structures preserved
+  - Direct appointments marked appropriately
+- **Complex Rate Handling**:
+  - Multi-product rate structures (e.g., AAA: Home 15%, Auto 12%)
+  - Mono-line carriers (e.g., Progressive Auto only in FL)
+  - Default to NEW rate when RWL blank
+  - Special payment terms preserved
+
+#### Technical Enhancements
+- **SQL Migration Scripts**: Complete table creation and indexing
+- **Performance Optimization**: Indexed lookups for fast rule matching
+- **Update Triggers**: Automatic timestamp tracking
+- **Rule Priority Algorithm**: Intelligent rule selection based on specificity
+
+**Impact**: Transforms commission management from manual entry to intelligent automation while maintaining complete backward compatibility. The island architecture ensures zero risk to existing functionality while adding powerful new capabilities.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 10, 2025 (Evening)*  
-*Current Application Version: 3.5.6*
+*Last Updated: July 13, 2025*  
+*Current Application Version: 3.6.0*

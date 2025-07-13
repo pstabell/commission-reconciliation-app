@@ -575,4 +575,43 @@ The system stands as a testament to the power of listening to users, understandi
 
 ---
 
-*This comprehensive documentation consolidates all reconciliation system knowledge as of July 6, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*
+## Recent Enhancements (v3.5.7 - v3.5.15)
+
+### Debug Mode for Unmatched Transactions (v3.5.13)
+Enhanced troubleshooting capabilities for reconciliation matching:
+- **Expandable Debug Section**: Shows ALL transactions for a customer
+- **Balance Calculations**: Displays credit, debit, and balance for each transaction
+- **Match Explanations**: Explains why transactions aren't available (e.g., zero balance)
+- **Name Mismatch Detection**: Helps identify customer name variations
+
+### Improved Customer Name Matching (v3.5.13)
+Enhanced matching algorithms:
+- **All Words Matching** (88% confidence): Matches any word order
+- **Most Words Matching** (82% confidence): Handles partial matches
+- **Examples**: "Adam Gomes" ↔ "Gomes, Adam" ↔ "Adam J. Gomes"
+- **Business Name Handling**: Better recognition of company variations
+
+### Statement Details Enhancement (v3.5.14)
+Comprehensive information for unmatched transactions:
+- **LOB/Chg Display**: Line of Business or Change type from statement
+- **Transaction Type**: Shows NEW, RWL, END, etc. from statement
+- **Commission Rate**: Smart percentage formatting (0.15 → 15%)
+- **Automatic Detection**: Recognizes column variations (LOB, Tran, Rate)
+
+### Transactions Requiring Attention Filter (v3.5.15)
+New workflow for data completion:
+- **Filter Button**: "Show Transactions Requiring Attention" on Edit Policies page
+- **Smart Detection**: Finds transactions with payments but missing premium/commission
+- **Quick Fix Workflow**: Uses existing edit interface for rapid data entry
+- **Ledger Accuracy**: Ensures complete data for accurate reporting
+
+### Agency Commission Made Optional (v3.5.15)
+Simplified reconciliation requirements:
+- **Moved to Optional**: Agency Comm no longer required for reconciliation
+- **UI Positioning**: Placed in right column with other optional fields
+- **Focus on Agent**: Emphasizes agent payment reconciliation
+- **Flexibility**: Allows reconciliation without full agency data
+
+---
+
+*This comprehensive documentation consolidates all reconciliation system knowledge through July 13, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*

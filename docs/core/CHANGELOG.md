@@ -5,6 +5,39 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2025-07-13 - Contacts & Commission Structure Management
+
+### Added
+- **NEW: Contacts & Commission Structure Management**
+  - Added dedicated Contacts page with Carriers and MGAs tabs
+  - Carrier management with NAIC codes, producer codes, and status tracking
+  - MGA (Managing General Agency) management with contact information
+  - Commission rules system with carrier/MGA/policy type specific rates
+  - Support for NEW and RWL (renewal) commission rates
+  - Payment terms tracking (Advanced vs As Earned)
+  - Island architecture implementation for complete page isolation
+  - Database schema for carriers, MGAs, relationships, and commission rules
+
+- **Modern Policy Types Configuration**
+  - Redesigned Admin Panel Policy Types section with compact grid layout
+  - Visual category grouping for better organization
+  - Configuration file-based management for safety
+  - Download configuration option for backup
+  - Clear documentation for adding new policy types
+
+### Database
+- Created new tables: carriers, mgas, carrier_mga_relationships, commission_rules
+- Added optional carrier_id and mga_id columns to policies table
+- Created indexes for performance optimization
+- Added update timestamp triggers
+- Full backward compatibility maintained
+
+### Technical
+- Island architecture implementation for Contacts page
+- Configuration file approach for policy types (policy_types_updated.json)
+- SQL scripts for table creation and initial data population
+- Support for complex commission structures from Excel data
+
 ## [3.5.15] - 2025-07-12 - Enhanced Reconciliation UI & Client ID Matching
 
 ### Added

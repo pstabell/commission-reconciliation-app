@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 12, 2025  
-**Current Version**: 3.5.15
+**Last Updated**: July 13, 2025  
+**Current Version**: 3.6.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,32 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.5.15)
+## Recent Major Changes (v3.6.0)
+1. **NEW: Contacts & Commission Structure**: Complete carrier and MGA management system
+   - Dedicated Contacts page with Carriers and MGAs tabs
+   - Commission rules engine with carrier/MGA/policy type specific rates
+   - Support for NEW and RWL (renewal) commission rates
+   - Payment terms tracking (Advanced vs As Earned)
+   - Rule priority system for complex scenarios
+   - Initial data import: 22 carriers and 11 MGAs from Excel
+2. **Island Architecture**: Contacts page fully isolated following app architecture principles
+   - Complete error containment within module
+   - Independent data loading per page
+   - No cross-page dependencies
+   - Prepared for future modular architecture
+3. **Modern Policy Types UI**: Redesigned Admin Panel with compact grid layout
+   - Visual category grouping (Personal, Commercial, Specialty)
+   - Configuration file-based management for safety
+   - Download configuration option for backup
+   - Clear documentation for adding new types
+4. **Database Schema Expansion**: Added 4 new tables for commission structure
+   - carriers: Carrier information with NAIC codes
+   - mgas: MGA details and contact information
+   - carrier_mga_relationships: Links carriers to MGAs
+   - commission_rules: Complex rule definitions with priority
+   - Optional carrier_id and mga_id added to policies table
+
+## Prior Changes (v3.5.15)
 1. **Client ID Matching**: New transactions from reconciliation now properly link to Client IDs
 2. **Enhanced Reconciliation UI**: Clear force match warnings, improved create transaction labels
 3. **Transactions Requiring Attention**: New filter on Edit Policies page for incomplete data

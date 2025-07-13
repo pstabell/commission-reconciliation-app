@@ -170,7 +170,7 @@ def format_date_value(date_value, format='%m/%d/%Y'):
         return date_value
 
 def calculate_dashboard_metrics(df):
-    """Calculate dashboard metrics distinguishing transactions vs policies."""
+    """Calculate dashboard metrics with reconciled vs unreconciled YTD 2025 focus."""
     metrics = {
         # Transaction metrics
         'total_transactions': len(df),
@@ -182,10 +182,13 @@ def calculate_dashboard_metrics(df):
         'active_policies': 0,
         'cancelled_policies': 0,
         
-        # Financial metrics
-        'total_premium': 0.0,
-        'total_agency_comm': 0.0,
-        'total_agent_comm': 0.0
+        # YTD 2025 Financial metrics - Reconciled (Paid)
+        'premium_reconciled_ytd': 0.0,
+        'agent_comm_paid_ytd': 0.0,
+        
+        # YTD 2025 Financial metrics - Unreconciled (Estimated)
+        'premium_unreconciled_ytd': 0.0,
+        'agent_comm_estimated_ytd': 0.0
     }
     
     if df.empty:
@@ -220,15 +223,83 @@ def calculate_dashboard_metrics(df):
             metrics['active_policies'] = len(latest_trans[~latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
             metrics['cancelled_policies'] = len(latest_trans[latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
     
-    # Financial metrics
-    if 'Premium Sold' in df.columns:
-        metrics['total_premium'] = df['Premium Sold'].sum()
-    
-    if 'Agency Estimated Comm/Revenue (CRM)' in df.columns:
-        metrics['total_agency_comm'] = df['Agency Estimated Comm/Revenue (CRM)'].sum()
-    
-    if 'Agent Estimated Comm $' in df.columns:
-        metrics['total_agent_comm'] = df['Agent Estimated Comm $'].sum()
+    # YTD 2025 Financial metrics
+    if 'Effective Date' in df.columns:
+        try:
+            df['Effective Date'] = pd.to_datetime(df['Effective Date'], errors='coerce')
+            
+            # For reconciled metrics, we need -STMT- entries from 2025 and their matching originals (which could be from any year)
+            # First, get all -STMT- entries from 2025 for commission paid amounts
+            stmt_mask = pd.Series(False, index=df.index)
+            if 'Transaction ID' in df.columns:
+                stmt_mask = df['Transaction ID'].str.contains('-STMT-', na=False)
+            
+            # Filter -STMT- entries to only 2025 (based on statement date)
+            df_stmt_all = df[stmt_mask]
+            df_stmt_2025 = df_stmt_all[df_stmt_all['Effective Date'].dt.year == 2025]
+            
+            # Get ALL original transactions (from any year, exclude -STMT-, -VOID-, -ADJ-)
+            original_mask = pd.Series(True, index=df.index)
+            if 'Transaction ID' in df.columns:
+                original_mask = ~df['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False)
+            
+            df_originals = df[original_mask]
+            
+            # Now filter originals to only 2025 for unreconciled calculations
+            df_originals_2025 = df_originals[df_originals['Effective Date'].dt.year == 2025]
+            
+            # The issue: -STMT- entries from 2025 might be paying for policies from any year
+            # So we need to track which transactions (from any year) have been paid in 2025
+            
+            # Step 1: Get all -STMT- entries from 2025 (payments made in 2025)
+            # These use STMT DATE for when payment was made
+            df_stmt_2025_by_stmt_date = pd.DataFrame()
+            if 'STMT DATE' in df_stmt_all.columns:
+                df_stmt_all['STMT DATE'] = pd.to_datetime(df_stmt_all['STMT DATE'], errors='coerce')
+                df_stmt_2025_by_stmt_date = df_stmt_all[df_stmt_all['STMT DATE'].dt.year == 2025]
+            
+            # If no STMT DATE column, fall back to Effective Date
+            if df_stmt_2025_by_stmt_date.empty:
+                df_stmt_2025_by_stmt_date = df_stmt_2025
+            
+            # Step 2: Find which original transactions these -STMT- entries paid for
+            reconciled_in_2025 = set()
+            if not df_stmt_2025_by_stmt_date.empty and all(col in df_stmt_2025_by_stmt_date.columns for col in ['Policy Number', 'Effective Date']):
+                for _, stmt_row in df_stmt_2025_by_stmt_date.iterrows():
+                    policy = stmt_row.get('Policy Number', '')
+                    eff_date = pd.to_datetime(stmt_row.get('Effective Date'), errors='coerce')
+                    if policy and pd.notna(eff_date):
+                        reconciled_in_2025.add((policy, eff_date))
+            
+            # Step 3: Find original transactions that were paid in 2025
+            paid_in_2025_mask = pd.Series(False, index=df_originals.index)
+            if reconciled_in_2025 and all(col in df_originals.columns for col in ['Policy Number', 'Effective Date']):
+                for idx, row in df_originals.iterrows():
+                    policy = row.get('Policy Number', '')
+                    eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
+                    if (policy, eff_date) in reconciled_in_2025:
+                        paid_in_2025_mask.loc[idx] = True
+            
+            # Step 4: Calculate metrics
+            df_originals_paid_in_2025 = df_originals[paid_in_2025_mask]
+            df_originals_2025_unpaid = df_originals_2025[~df_originals_2025.index.isin(df_originals_paid_in_2025.index)]
+            
+            # Premium from transactions paid in 2025 (regardless of their effective date)
+            if 'Premium Sold' in df_originals_paid_in_2025.columns:
+                metrics['premium_reconciled_ytd'] = df_originals_paid_in_2025['Premium Sold'].sum()
+            
+            # Agent commission actually paid in 2025
+            if 'Agent Paid Amount (STMT)' in df_stmt_2025_by_stmt_date.columns:
+                metrics['agent_comm_paid_ytd'] = df_stmt_2025_by_stmt_date['Agent Paid Amount (STMT)'].sum()
+            
+            # Unreconciled = 2025 originals that haven't been paid yet
+            if 'Premium Sold' in df_originals_2025_unpaid.columns:
+                metrics['premium_unreconciled_ytd'] = df_originals_2025_unpaid['Premium Sold'].sum()
+            if 'Agent Estimated Comm $' in df_originals_2025_unpaid.columns:
+                metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Agent Estimated Comm $'].sum()
+        except Exception as e:
+            # If date parsing fails, fall back to zero
+            pass
     
     return metrics
 
@@ -969,6 +1040,208 @@ def generate_reconciliation_transaction_id(transaction_type="STMT", date=None):
     date_str = date.strftime("%Y%m%d")
     
     return f"{base_id}-{transaction_type}-{date_str}"
+
+# --- Commission Rule Functions ---
+def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transaction_type="NEW", effective_date=None):
+    """
+    Look up the best matching commission rule for given criteria.
+    
+    Args:
+        carrier_id (str): UUID of the carrier
+        mga_id (str, optional): UUID of the MGA (None for direct appointments)
+        policy_type (str, optional): Policy type (e.g., "Auto", "HO3")
+        transaction_type (str): "NEW" or "RWL" (default: "NEW")
+        effective_date (date, optional): Date to check rule effectiveness (default: today)
+    
+    Returns:
+        dict: Commission rule with rates, or None if no rule found
+        {
+            'rule_id': UUID,
+            'new_rate': decimal,
+            'renewal_rate': decimal, 
+            'rule_description': str,
+            'carrier_name': str,
+            'mga_name': str or None,
+            'applied_rule_text': str  # User-friendly description
+        }
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        if effective_date is None:
+            effective_date = datetime.date.today()
+        
+        # Build query to find matching rules
+        query = supabase.table('commission_rules').select("""
+            rule_id,
+            carrier_id,
+            mga_id,
+            policy_type,
+            new_rate,
+            renewal_rate,
+            rule_description,
+            effective_date,
+            end_date,
+            is_active
+        """)
+        
+        # Filter by carrier
+        query = query.eq('carrier_id', carrier_id)
+        
+        # Filter by active rules and effective date
+        query = query.eq('is_active', True)
+        query = query.lte('effective_date', effective_date.isoformat())
+        query = query.or_('end_date.is.null,end_date.gte.' + effective_date.isoformat())
+        
+        # Execute query
+        response = query.execute()
+        
+        if not response.data:
+            return None
+        
+        # Calculate rule priority for each matching rule
+        rules_with_priority = []
+        for rule in response.data:
+            priority = 0
+            
+            # MGA match gets highest priority
+            if mga_id and rule.get('mga_id') == mga_id:
+                priority += 1000
+            elif not mga_id and not rule.get('mga_id'):
+                priority += 500  # Direct appointment match
+            elif rule.get('mga_id'):
+                continue  # MGA rule doesn't match, skip
+            
+            # Policy type match
+            if policy_type and rule.get('policy_type'):
+                rule_types = [t.strip() for t in rule['policy_type'].split(',')]
+                if policy_type in rule_types:
+                    priority += 100
+                else:
+                    continue  # Policy type doesn't match, skip
+            elif not rule.get('policy_type'):
+                priority += 10  # Default rule (no specific policy type)
+            
+            rules_with_priority.append((priority, rule))
+        
+        if not rules_with_priority:
+            return None
+        
+        # Sort by priority (highest first) and get the best match
+        rules_with_priority.sort(key=lambda x: x[0], reverse=True)
+        best_rule = rules_with_priority[0][1]
+        
+        # Get carrier and MGA names for display
+        carrier_response = supabase.table('carriers').select('carrier_name').eq('carrier_id', carrier_id).execute()
+        carrier_name = carrier_response.data[0]['carrier_name'] if carrier_response.data else 'Unknown Carrier'
+        
+        mga_name = None
+        if best_rule.get('mga_id'):
+            mga_response = supabase.table('mgas').select('mga_name').eq('mga_id', best_rule['mga_id']).execute()
+            mga_name = mga_response.data[0]['mga_name'] if mga_response.data else 'Unknown MGA'
+        
+        # Determine which rate to use based on transaction type
+        rate_to_use = best_rule['new_rate']
+        if transaction_type in ['RWL', 'REWRITE'] and best_rule.get('renewal_rate'):
+            rate_to_use = best_rule['renewal_rate']
+        
+        # Build user-friendly description
+        mga_text = mga_name if mga_name else "Direct"
+        policy_text = f" - {best_rule['policy_type']}" if best_rule.get('policy_type') else ""
+        applied_rule_text = f"{carrier_name} ({mga_text}){policy_text} - {rate_to_use}%"
+        
+        return {
+            'rule_id': best_rule['rule_id'],
+            'new_rate': best_rule['new_rate'],
+            'renewal_rate': best_rule.get('renewal_rate'),
+            'rule_description': best_rule.get('rule_description'),
+            'carrier_name': carrier_name,
+            'mga_name': mga_name,
+            'applied_rule_text': applied_rule_text,
+            'rate_to_use': rate_to_use
+        }
+        
+    except Exception as e:
+        st.error(f"Error looking up commission rule: {e}")
+        return None
+
+def load_carriers_for_dropdown():
+    """Load all active carriers for dropdown selection."""
+    try:
+        supabase = get_supabase_client()
+        response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').order('carrier_name').execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Error loading carriers: {e}")
+        return []
+
+def load_mgas_for_carrier(carrier_id):
+    """Load MGAs associated with a specific carrier."""
+    try:
+        supabase = get_supabase_client()
+        
+        # First try to get MGAs from carrier_mga_relationships table
+        try:
+            # Get relationships for this carrier
+            response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
+            
+            if response.data:
+                # Get the MGA details for each relationship
+                mgas = []
+                for rel in response.data:
+                    if rel.get('mga_id'):
+                        # Get MGA details
+                        mga_response = supabase.table('mgas').select('mga_id, mga_name, status').eq('mga_id', rel['mga_id']).execute()
+                        if mga_response.data and mga_response.data[0].get('status') != 'Inactive':
+                            mga = mga_response.data[0]
+                            mgas.append({
+                                'mga_id': mga['mga_id'],
+                                'mga_name': mga['mga_name']
+                            })
+                
+                if mgas:  # If we found MGAs through relationships, return them
+                    mgas.sort(key=lambda x: x['mga_name'])
+                    return mgas
+        except Exception as e:
+            # Log the error for debugging but continue to fallbacks
+            # Silent fail - continue to other methods
+            pass
+        
+        # Fallback: Get MGAs that have commission rules with this carrier
+        response = supabase.table('commission_rules').select("""
+            mga_id,
+            mgas!inner(mga_name, status)
+        """).eq('carrier_id', carrier_id).neq('mga_id', 'null').execute()
+        
+        # Extract unique MGAs
+        mgas = []
+        seen_mga_ids = set()
+        
+        for rule in response.data:
+            if rule['mga_id'] not in seen_mga_ids and rule.get('mgas'):
+                # Only include active MGAs
+                if rule['mgas'].get('status') == 'Active':
+                    mgas.append({
+                        'mga_id': rule['mga_id'],
+                        'mga_name': rule['mgas']['mga_name']
+                    })
+                    seen_mga_ids.add(rule['mga_id'])
+        
+        # If no MGAs found through rules, load all active MGAs as an option
+        if not mgas:
+            # Get all active MGAs
+            all_mgas_response = supabase.table('mgas').select('mga_id, mga_name').eq('status', 'Active').execute()
+            if all_mgas_response.data:
+                mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in all_mgas_response.data]
+        
+        # Sort by name
+        mgas.sort(key=lambda x: x['mga_name'])
+        
+        return mgas
+        
+    except Exception as e:
+        st.error(f"Error loading MGAs for carrier: {e}")
+        return []
 
 # --- Excel Utility Functions ---
 def create_formatted_excel_file(data, sheet_name="Data", filename_prefix="export"):
@@ -2535,23 +2808,55 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         st.markdown("#### Policy Information")
         col3, col4 = st.columns(2)
         
-        # Handle Carrier Name and MGA Name first to ensure they're at the top
+        # Handle Carrier Name and MGA Name using values from outside selection
         with col3:
             if 'Carrier Name' in modal_data.keys():
-                updated_data['Carrier Name'] = st.text_input(
-                    'Carrier Name', 
-                    value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
-                    key="modal_Carrier Name"
-                )
+                # Get carrier name from session state (selected outside form)
+                carrier_from_outside = st.session_state.get('edit_final_carrier_name', '')
+                if carrier_from_outside:
+                    updated_data['Carrier Name'] = carrier_from_outside
+                    st.text_input(
+                        'Carrier Name (from selection above)', 
+                        value=carrier_from_outside,
+                        key="modal_Carrier Name",
+                        disabled=True,
+                        help="Carrier selected from dropdown above"
+                    )
+                else:
+                    # Fallback to original value if nothing selected
+                    updated_data['Carrier Name'] = modal_data.get('Carrier Name', '')
+                    st.text_input(
+                        'Carrier Name', 
+                        value=str(modal_data.get('Carrier Name', '')) if modal_data.get('Carrier Name') is not None else '',
+                        key="modal_Carrier Name",
+                        disabled=True,
+                        help="Select carrier from dropdown above"
+                    )
                 rendered_fields.add('Carrier Name')
         
         with col4:
             if 'MGA Name' in modal_data.keys():
-                updated_data['MGA Name'] = st.text_input(
-                    'MGA Name', 
-                    value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
-                    key="modal_MGA Name"
-                )
+                # Get MGA name from session state (selected outside form)
+                mga_from_outside = st.session_state.get('edit_final_mga_name', '')
+                if mga_from_outside is not None:  # Can be empty string for Direct Appointment
+                    updated_data['MGA Name'] = mga_from_outside
+                    st.text_input(
+                        'MGA Name (from selection above)', 
+                        value=mga_from_outside if mga_from_outside else "Direct Appointment",
+                        key="modal_MGA Name",
+                        disabled=True,
+                        help="MGA selected from dropdown above"
+                    )
+                else:
+                    # Fallback to original value if nothing selected
+                    updated_data['MGA Name'] = modal_data.get('MGA Name', '')
+                    st.text_input(
+                        'MGA Name', 
+                        value=str(modal_data.get('MGA Name', '')) if modal_data.get('MGA Name') is not None else '',
+                        key="modal_MGA Name",
+                        disabled=True,
+                        help="Select MGA from dropdown above"
+                    )
                 rendered_fields.add('MGA Name')
             
             # Policy Type in right column, second position
@@ -2827,14 +3132,56 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         # Commission Details
         st.markdown("#### Commission Details")
         
+        # Add info about Prior Policy Number affecting rates
+        if st.session_state.get('edit_has_commission_rule', False):
+            current_trans_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
+            if current_trans_type not in ['NEW', 'RWL', 'CAN', 'XCL']:
+                st.info("💡 For END, PCH, and REWRITE transactions: Commission rates depend on Prior Policy Number. If present, renewal rates apply. Save the form to update rates after changing Prior Policy Number.")
+        
         # Row 1: Policy Gross Comm % and Agency Estimated Comm/Revenue
         col9, col10 = st.columns(2)
         
         with col9:
             if 'Policy Gross Comm %' in modal_data.keys():
-                value = modal_data.get('Policy Gross Comm %', 0)
-                if is_renewal:
-                    value = 0
+                # Check if we have commission rates from rule lookup
+                has_rule = st.session_state.get('edit_has_commission_rule', False)
+                
+                if has_rule:
+                    # Get the current transaction type and prior policy number
+                    current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
+                    # Check session state first for the most current value
+                    prior_policy = st.session_state.get('modal_Prior Policy Number', 
+                                    updated_data.get('Prior Policy Number', 
+                                    modal_data.get('Prior Policy Number', '')))
+                    new_rate = st.session_state.get('edit_commission_new_rate', 0)
+                    renewal_rate = st.session_state.get('edit_commission_renewal_rate', new_rate)
+                    
+                    # Determine which rate to use based on transaction type and prior policy
+                    if current_transaction_type == 'NEW':
+                        # NEW transactions always use new rate
+                        value = new_rate
+                        help_text = f"New business rate (Transaction Type: NEW)"
+                    elif current_transaction_type == 'RWL':
+                        # RWL transactions always use renewal rate
+                        value = renewal_rate
+                        help_text = f"Renewal rate (Transaction Type: RWL)"
+                    else:
+                        # For all other transaction types, check Prior Policy Number
+                        if prior_policy and str(prior_policy).strip():
+                            # Has prior policy = this is a renewal policy
+                            value = renewal_rate
+                            help_text = f"Renewal rate (Has Prior Policy: {prior_policy})"
+                        else:
+                            # No prior policy = this is a new policy
+                            value = new_rate
+                            help_text = f"New business rate (No Prior Policy)"
+                else:
+                    # Use existing value
+                    value = modal_data.get('Policy Gross Comm %', 0)
+                    if is_renewal:
+                        value = 0
+                    help_text = "Enter commission rate manually (no rule found)"
+                
                 try:
                     numeric_value = float(value) if pd.notna(value) else 0.0
                     updated_data['Policy Gross Comm %'] = st.number_input(
@@ -2842,13 +3189,15 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         value=numeric_value,
                         step=0.01,
                         format="%.2f",
-                        key="modal_Policy Gross Comm %"
+                        key="modal_Policy Gross Comm %",
+                        help=help_text
                     )
                 except:
                     updated_data['Policy Gross Comm %'] = st.text_input(
                         'Policy Gross Comm %',
                         value=str(value),
-                        key="modal_Policy Gross Comm %"
+                        key="modal_Policy Gross Comm %",
+                        help=help_text
                     )
         
         with col10:
@@ -2875,28 +3224,58 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         with col11:
             if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
-                value = modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0)
-                if is_renewal:
-                    value = 25.0  # Default to 25% for renewals
-                try:
-                    numeric_value = float(value) if pd.notna(value) else 0.0
-                    updated_data['Agent Comm (NEW 50% RWL 25%)'] = st.number_input(
-                        'Agent Comm (NEW 50% RWL 25%)',
-                        value=numeric_value,
-                        step=0.01,
-                        format="%.2f",
-                        key="modal_Agent Comm %"
-                    )
-                except:
-                    updated_data['Agent Comm (NEW 50% RWL 25%)'] = st.text_input(
-                        'Agent Comm (NEW 50% RWL 25%)',
-                        value=str(value),
-                        key="modal_Agent Comm %"
-                    )
+                # Get the current transaction type to determine agent rate
+                current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
+                
+                # Get Prior Policy Number - check session state first, then updated data, then modal data
+                # This ensures we get the most current value even if field hasn't been rendered yet
+                prior_policy = st.session_state.get('modal_Prior Policy Number', 
+                                updated_data.get('Prior Policy Number', 
+                                modal_data.get('Prior Policy Number', '')))
+                
+                # Determine agent commission rate based on transaction type and prior policy
+                if current_transaction_type == "NEW":
+                    # NEW transactions always get 50%
+                    agent_rate = 50.0
+                elif current_transaction_type == "RWL":
+                    # RWL transactions always get 25%
+                    agent_rate = 25.0
+                elif current_transaction_type in ["NBS", "STL", "BoR"]:
+                    # These are typically new business
+                    agent_rate = 50.0
+                elif current_transaction_type in ["CAN", "XCL"]:
+                    # Cancellations get 0%
+                    agent_rate = 0.0
+                else:
+                    # For all other transaction types (END, PCH, REWRITE), check Prior Policy Number
+                    if prior_policy and str(prior_policy).strip():
+                        # Has prior policy = this is a renewal policy
+                        agent_rate = 25.0
+                    else:
+                        # No prior policy = this is a new policy
+                        agent_rate = 50.0
+                
+                # Display as read-only field since it's calculated
+                help_text = f"Transaction Type: {current_transaction_type}"
+                if current_transaction_type not in ["NEW", "RWL", "NBS", "STL", "BoR", "CAN", "XCL"]:
+                    if prior_policy and str(prior_policy).strip():
+                        help_text += f" | Has Prior Policy: {prior_policy} → Renewal rate (25%)"
+                    else:
+                        help_text += f" | No Prior Policy → New business rate (50%)"
+                
+                st.text_input(
+                    'Agent Comm (NEW 50% RWL 25%)',
+                    value=f"{agent_rate}%",
+                    key="modal_Agent Comm %_display",
+                    disabled=True,
+                    help=help_text
+                )
+                updated_data['Agent Comm (NEW 50% RWL 25%)'] = agent_rate
         
         with col12:
             # Agent Estimated Comm $ (calculated)
-            agent_comm_pct = updated_data.get('Agent Comm (NEW 50% RWL 25%)', modal_data.get('Agent Comm (NEW 50% RWL 25%)', 0))
+            # Use the agent_rate calculated above
+            agent_comm_pct = agent_rate if 'agent_rate' in locals() else updated_data.get('Agent Comm (NEW 50% RWL 25%)', 0)
             try:
                 agent_comm_pct = float(agent_comm_pct) if pd.notna(agent_comm_pct) else 0.0
                 agent_comm = agency_comm * (agent_comm_pct / 100)
@@ -3004,7 +3383,11 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         )
         
         # Calculate button - make it prominent
-        if st.form_submit_button("🧮 Calculate", type="primary", help="Click to verify all commission calculations"):
+        if st.form_submit_button("🧮 Calculate", type="primary", help="Click to update commission rates and verify all calculations"):
+            # Check if we need to update commission rate from carrier selection
+            if st.session_state.get('edit_commission_rate') is not None and 'Policy Gross Comm %' in updated_data:
+                # The commission rate has already been set from the carrier selection above
+                pass
             st.success("✅ Calculations updated! Review the amounts above before saving.")
         
         # Internal Fields (collapsed by default)
@@ -3041,6 +3424,45 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 if isinstance(value, datetime.date):
                     updated_data[field] = value.strftime('%m/%d/%Y')
             
+            # Add commission rule tracking
+            commission_rule_id = st.session_state.get('edit_commission_rule_id')
+            if commission_rule_id:
+                updated_data['commission_rule_id'] = commission_rule_id
+            
+            # Track carrier and MGA IDs
+            carrier_id = st.session_state.get('edit_selected_carrier_id')
+            mga_id = st.session_state.get('edit_selected_mga_id')
+            if carrier_id:
+                updated_data['carrier_id'] = carrier_id
+            if mga_id:
+                updated_data['mga_id'] = mga_id
+            
+            # Check if commission rate was overridden
+            has_rule = st.session_state.get('edit_has_commission_rule', False)
+            if has_rule:
+                # Determine which rate should have been used based on transaction type and prior policy
+                transaction_type = updated_data.get('Transaction Type', 'NEW')
+                prior_policy = updated_data.get('Prior Policy Number', '')
+                new_rate = st.session_state.get('edit_commission_new_rate', 0)
+                renewal_rate = st.session_state.get('edit_commission_renewal_rate', new_rate)
+                
+                # Apply same logic as display
+                if transaction_type == 'NEW':
+                    expected_rate = new_rate
+                elif transaction_type == 'RWL':
+                    expected_rate = renewal_rate
+                else:
+                    # For all other transaction types, check Prior Policy Number
+                    if prior_policy and str(prior_policy).strip():
+                        expected_rate = renewal_rate
+                    else:
+                        expected_rate = new_rate
+                
+                actual_rate = updated_data.get('Policy Gross Comm %', 0)
+                if float(actual_rate) != float(expected_rate):
+                    updated_data['commission_rate_override'] = actual_rate
+                    # You could prompt for override reason here if needed
+            
             # Merge updated data with original data
             final_data = modal_data.copy()
             final_data.update(updated_data)
@@ -3070,6 +3492,7 @@ def main():
             "Search & Filter",
             "Reconciliation",
             "Admin Panel",
+            "Contacts",
             "Tools",
             "Accounting",
             "Help",
@@ -3122,15 +3545,24 @@ def main():
             
             st.divider()
             
-            # Financial Summary
-            st.subheader("💰 FINANCIAL SUMMARY")
-            col1, col2, col3 = st.columns(3)
+            # Financial Summary - YTD 2025
+            st.subheader("💰 FINANCIAL SUMMARY - YTD 2025")
+            
+            # Reconciled (Paid) Metrics
+            st.markdown("**Reconciled (Paid)**")
+            col1, col2 = st.columns(2)
             with col1:
-                st.metric("Premium Sold", f"${metrics['total_premium']:,.2f}")
+                st.metric("Premium Sold", f"${metrics['premium_reconciled_ytd']:,.2f}")
             with col2:
-                st.metric("Agency Commission", f"${metrics['total_agency_comm']:,.2f}")
+                st.metric("Agent Commission Paid", f"${metrics['agent_comm_paid_ytd']:,.2f}")
+            
+            # Unreconciled (Estimated) Metrics
+            st.markdown("**Unreconciled (Estimated)**")
+            col3, col4 = st.columns(2)
             with col3:
-                st.metric("Agent Commission", f"${metrics['total_agent_comm']:,.2f}")
+                st.metric("Premium Estimated", f"${metrics['premium_unreconciled_ytd']:,.2f}")
+            with col4:
+                st.metric("Agent Commission Estimated", f"${metrics['agent_comm_estimated_ytd']:,.2f}")
             
             st.divider()
             
@@ -3374,6 +3806,11 @@ def main():
                 st.subheader("Custom Reports")
                 st.info("Custom report builder - Select criteria to generate custom reports")
                 
+                # Initialize variables
+                start_date = None
+                end_date = None
+                policy_types = []
+                
                 # Date range filter
                 if 'Effective_Date' in all_data.columns:
                     date_col = st.columns(2)
@@ -3397,7 +3834,7 @@ def main():
                             (filtered_data['Effective_Date'] <= pd.Timestamp(end_date))
                         ]
                     
-                    if policy_types:
+                    if policy_types and 'Policy_Type' in all_data.columns:
                         filtered_data = filtered_data[filtered_data['Policy_Type'].isin(policy_types)]
                     
                     st.write(f"**Custom Report Results ({len(filtered_data)} records):**")
@@ -4228,6 +4665,145 @@ def main():
                                 
                                 modal_data = st.session_state.get('edit_modal_data', {})
                                 
+                                # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
+                                st.subheader("Carrier & MGA Selection 🏢")
+                                st.info("💡 Select carrier first to see available MGAs. This will auto-populate commission rates.")
+                                
+                                # Get current values from modal data
+                                current_carrier = modal_data.get('Carrier Name', '')
+                                current_mga = modal_data.get('MGA Name', '')
+                                
+                                # Load carriers for dropdown
+                                carriers_list = load_carriers_for_dropdown()
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    # Carrier dropdown with search capability
+                                    carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
+                                    
+                                    # Find index of current carrier
+                                    carrier_index = 0
+                                    if current_carrier and current_carrier in carrier_options:
+                                        carrier_index = carrier_options.index(current_carrier)
+                                    
+                                    selected_carrier_name = st.selectbox(
+                                        "Carrier Name*",
+                                        options=carrier_options,
+                                        index=carrier_index,
+                                        format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
+                                        help="Select carrier to auto-populate commission rates",
+                                        key="edit_policy_carrier_outside"
+                                    )
+                                    
+                                    # Get carrier_id for selected carrier
+                                    selected_carrier_id = None
+                                    if selected_carrier_name:
+                                        selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
+                                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
+                                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                                    
+                                    # Fallback text input for manual entry
+                                    if not selected_carrier_name:
+                                        carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
+                                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
+                                
+                                with col2:
+                                    # MGA dropdown (filtered by carrier) - Updates immediately!
+                                    mga_options = ["Direct Appointment"]
+                                    selected_mga_id = None
+                                    
+                                    if selected_carrier_id:
+                                        mgas_list = load_mgas_for_carrier(selected_carrier_id)
+                                        mga_options.extend([m['mga_name'] for m in mgas_list])
+                                    
+                                    # Find index of current MGA
+                                    mga_index = 0
+                                    if current_mga:
+                                        if current_mga in mga_options:
+                                            mga_index = mga_options.index(current_mga)
+                                        elif "Direct Appointment" in mga_options:
+                                            mga_index = mga_options.index("Direct Appointment")
+                                    
+                                    selected_mga_name = st.selectbox(
+                                        "MGA/Appointment",
+                                        options=mga_options,
+                                        index=mga_index,
+                                        format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
+                                        help="MGA options update automatically when you select a carrier",
+                                        key="edit_policy_mga_outside"
+                                    )
+                                    
+                                    # Get mga_id for selected MGA
+                                    if selected_mga_name != "Direct Appointment" and selected_carrier_id:
+                                        mgas_list = load_mgas_for_carrier(selected_carrier_id) 
+                                        selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
+                                        st.session_state['edit_selected_mga_id'] = selected_mga_id
+                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                    else:
+                                        st.session_state['edit_selected_mga_id'] = None
+                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                    
+                                    # Fallback text input for manual entry
+                                    if not selected_carrier_name:
+                                        mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
+                                        st.session_state['edit_mga_name_manual'] = mga_name_manual
+                                
+                                # Store final values for form submission
+                                if selected_carrier_name:
+                                    final_carrier_name = selected_carrier_name
+                                    final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
+                                else:
+                                    final_carrier_name = st.session_state.get('edit_carrier_name_manual', '')
+                                    final_mga_name = st.session_state.get('edit_mga_name_manual', '')
+                                
+                                # Store in session state for form to access
+                                st.session_state['edit_final_carrier_name'] = final_carrier_name
+                                st.session_state['edit_final_mga_name'] = final_mga_name
+                                
+                                # Display selection status and commission info
+                                if selected_carrier_name and selected_carrier_id:
+                                    # Look up commission rule
+                                    commission_rule = None
+                                    policy_type = modal_data.get('Policy Type', '')
+                                    
+                                    if selected_mga_id:
+                                        # Try carrier + MGA + policy type first
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, policy_type)
+                                        if not commission_rule:
+                                            # Try carrier + MGA without policy type
+                                            commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
+                                    
+                                    if not commission_rule:
+                                        # Try carrier + policy type without MGA
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, None, policy_type)
+                                    
+                                    if not commission_rule:
+                                        # Try carrier default
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
+                                    
+                                    if commission_rule:
+                                        # Store both rates and let the form decide which to use based on transaction type
+                                        new_rate = commission_rule.get('new_rate', 0)
+                                        renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
+                                        
+                                        st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
+                                        st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
+                                        st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
+                                        
+                                        # Store both rates in session state
+                                        st.session_state['edit_commission_new_rate'] = new_rate
+                                        st.session_state['edit_commission_renewal_rate'] = renewal_rate
+                                        st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
+                                        st.session_state['edit_has_commission_rule'] = True
+                                    else:
+                                        st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
+                                        st.session_state['edit_commission_new_rate'] = None
+                                        st.session_state['edit_commission_renewal_rate'] = None
+                                        st.session_state['edit_commission_rule_id'] = None
+                                        st.session_state['edit_has_commission_rule'] = False
+                                
+                                st.markdown("---")
+                                
                                 # Use the reusable edit transaction form
                                 result = edit_transaction_form(modal_data, source_page="edit_policies")
                                 
@@ -4578,6 +5154,87 @@ def main():
         if 'selected_customer_name' in st.session_state:
             selected_customer_name = st.session_state['selected_customer_name']
         
+        # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
+        st.subheader("Carrier & MGA Selection 🏢")
+        st.info("💡 Select carrier first to see available MGAs")
+        
+        # Load carriers for dropdown
+        carriers_list = load_carriers_for_dropdown()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            # Carrier dropdown with search capability
+            carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
+            selected_carrier_name = st.selectbox(
+                "Carrier Name*",
+                options=carrier_options,
+                format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
+                help="Select carrier to auto-populate commission rates",
+                key="add_policy_carrier_outside"
+            )
+            
+            # Get carrier_id for selected carrier
+            selected_carrier_id = None
+            if selected_carrier_name:
+                selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
+                st.session_state['selected_carrier_id'] = selected_carrier_id
+                st.session_state['selected_carrier_name'] = selected_carrier_name
+            
+            # Fallback text input for manual entry
+            if not selected_carrier_name:
+                carrier_name_manual = st.text_input("Or enter carrier name manually", placeholder="Type carrier name", key="carrier_manual_outside")
+                st.session_state['carrier_name_manual'] = carrier_name_manual
+        
+        with col2:
+            # MGA dropdown (filtered by carrier) - Updates immediately!
+            mga_options = ["Direct Appointment"]
+            selected_mga_id = None
+            
+            if selected_carrier_id:
+                mgas_list = load_mgas_for_carrier(selected_carrier_id)
+                mga_options.extend([m['mga_name'] for m in mgas_list])
+            
+            selected_mga_name = st.selectbox(
+                "MGA/Appointment",
+                options=mga_options,
+                format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
+                help="MGA options update automatically when you select a carrier",
+                key="add_policy_mga_outside"
+            )
+            
+            # Get mga_id for selected MGA
+            if selected_mga_name != "Direct Appointment" and selected_carrier_id:
+                mgas_list = load_mgas_for_carrier(selected_carrier_id) 
+                selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
+                st.session_state['selected_mga_id'] = selected_mga_id
+                st.session_state['selected_mga_name'] = selected_mga_name
+            else:
+                st.session_state['selected_mga_id'] = None
+                st.session_state['selected_mga_name'] = selected_mga_name
+            
+            # Fallback text input for manual entry
+            if not selected_carrier_name:
+                mga_name_manual = st.text_input("Or enter MGA name manually", placeholder="Type MGA name or leave blank", key="mga_manual_outside")
+                st.session_state['mga_name_manual'] = mga_name_manual
+        
+        # Store final values for form submission
+        if selected_carrier_name:
+            final_carrier_name = selected_carrier_name
+            final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
+        else:
+            final_carrier_name = st.session_state.get('carrier_name_manual', '')
+            final_mga_name = st.session_state.get('mga_name_manual', '')
+        
+        # Store in session state for form to access
+        st.session_state['final_carrier_name'] = final_carrier_name
+        st.session_state['final_mga_name'] = final_mga_name
+        
+        # Display selection status
+        if selected_carrier_name:
+            st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name}")
+        
+        st.markdown("---")
+        
         # Main Form
         with st.form("add_policy_form"):
             # Client Information Section
@@ -4630,14 +5287,13 @@ def main():
                 key="add_prior_policy_number"
             )
             
-            # Row 2: Carrier Name and MGA Name
-            col1, col2 = st.columns(2)
-            with col1:
-                carrier_name = st.text_input("Carrier Name", placeholder="Enter carrier name")
-            with col2:
-                mga_name = st.text_input("MGA Name", placeholder="Enter MGA name")
+            # Get carrier/MGA values from session state (selected outside the form)
+            final_carrier_name = st.session_state.get('final_carrier_name', '')
+            final_mga_name = st.session_state.get('final_mga_name', '')
+            selected_carrier_id = st.session_state.get('selected_carrier_id')
+            selected_mga_id = st.session_state.get('selected_mga_id')
             
-            # Row 2.5: Transaction Type and Policy Term
+            # Row 2: Transaction Type and Policy Term
             col1, col2 = st.columns(2)
             with col1:
                 transaction_type = st.selectbox("Transaction Type", ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"])
@@ -4726,22 +5382,118 @@ def main():
                 st.text_input("Commissionable Premium ($)", value=f"{commissionable_premium:.2f}", disabled=True, 
                              help=f"Premium minus Carrier Taxes & Fees | {calc_source}")
             
-            # Commission Details Section
-            st.subheader("Commission Details")
+            # Commission Details Section (Enhanced with Auto-Population)
+            st.subheader("Commission Details 💰")
+            
+            # Look up commission rule if carrier is selected
+            applied_rule = None
+            suggested_rate = 10.0  # Default fallback
+            rule_info_text = "Manual entry (no carrier selected)"
+            
+            if selected_carrier_id:
+                # Look up commission rule - don't pass transaction type, we'll determine rate here
+                commission_rule = lookup_commission_rule(
+                    carrier_id=selected_carrier_id,
+                    mga_id=selected_mga_id,
+                    policy_type=policy_type
+                )
+                
+                if commission_rule:
+                    # Determine which rate to use based on transaction type and prior policy
+                    new_rate = commission_rule.get('new_rate', 10.0)
+                    renewal_rate = commission_rule.get('renewal_rate', new_rate)
+                    
+                    # Apply Prior Policy Number logic
+                    if transaction_type == 'NEW':
+                        # NEW transactions always use new rate
+                        suggested_rate = new_rate
+                        rule_info_text = f"✅ New business rate from: {commission_rule['rule_description']} - {new_rate}%"
+                    elif transaction_type == 'RWL':
+                        # RWL transactions always use renewal rate
+                        suggested_rate = renewal_rate
+                        rule_info_text = f"✅ Renewal rate from: {commission_rule['rule_description']} - {renewal_rate}%"
+                    else:
+                        # For all other transaction types, check Prior Policy Number
+                        if prior_policy_number and str(prior_policy_number).strip():
+                            # Has prior policy = this is a renewal policy
+                            suggested_rate = renewal_rate
+                            rule_info_text = f"✅ Renewal rate (Has Prior Policy: {prior_policy_number}) from: {commission_rule['rule_description']} - {renewal_rate}%"
+                        else:
+                            # No prior policy = this is a new policy
+                            suggested_rate = new_rate
+                            rule_info_text = f"✅ New business rate (No Prior Policy) from: {commission_rule['rule_description']} - {new_rate}%"
+                    
+                    applied_rule = commission_rule
+                    applied_rule['rate_to_use'] = suggested_rate
+                else:
+                    rule_info_text = f"⚠️ No rule found for {final_carrier_name} - using manual entry"
+                    applied_rule = None
+            
+            # Rule application info
+            st.info(f"**Applied Rule:** {rule_info_text}")
+            
+            # Commission override section
+            col_override, col_reason = st.columns([1, 2])
+            with col_override:
+                use_override = st.checkbox("Override Commission Rate", 
+                                         help="Check to manually enter a different rate than the rule", 
+                                         key="add_policy_override")
+            
+            override_reason = ""
+            if use_override:
+                with col_reason:
+                    override_reason = st.text_input("Override Reason*", 
+                                                  placeholder="e.g., Special client rate, promotional rate", 
+                                                  help="Required when overriding commission rate",
+                                                  key="add_policy_override_reason")
+            
             col1, col2 = st.columns(2)
             with col1:
-                # Default commission rate
-                policy_gross_comm_input = st.number_input("Policy Gross Comm %", value=10.0, format="%.2f", min_value=0.0, max_value=100.0, key="policy_gross_comm_details")
+                # Commission rate input
+                if use_override:
+                    policy_gross_comm_input = st.number_input(
+                        "Policy Gross Comm % (OVERRIDE)", 
+                        value=suggested_rate, 
+                        format="%.2f", 
+                        min_value=0.0, 
+                        max_value=100.0, 
+                        key="policy_gross_comm_details",
+                        help="⚠️ You are overriding the rule-based rate"
+                    )
+                    if policy_gross_comm_input != suggested_rate:
+                        st.warning(f"⚠️ Override: {policy_gross_comm_input}% vs Rule: {suggested_rate}%")
+                else:
+                    policy_gross_comm_input = st.number_input(
+                        "Policy Gross Comm %", 
+                        value=suggested_rate, 
+                        format="%.2f", 
+                        min_value=0.0, 
+                        max_value=100.0, 
+                        key="policy_gross_comm_details",
+                        help="Rate from commission rule" if applied_rule else "Manual entry rate"
+                    )
                 
-                # Determine agent commission rate based on transaction type
-                if transaction_type in ["NEW", "NBS", "STL", "BoR"]:
+                # Determine agent commission rate based on transaction type and prior policy
+                if transaction_type == "NEW":
+                    # NEW transactions always get 50%
                     agent_comm_rate = 50.0
-                elif transaction_type in ["RWL", "REWRITE"]:
+                elif transaction_type == "RWL":
+                    # RWL transactions always get 25%
                     agent_comm_rate = 25.0
+                elif transaction_type in ["NBS", "STL", "BoR"]:
+                    # These are typically new business
+                    agent_comm_rate = 50.0
                 elif transaction_type in ["CAN", "XCL"]:
+                    # Cancellations get 0%
                     agent_comm_rate = 0.0
-                else:  # END, PCH - will check dates after form loads
-                    agent_comm_rate = 50.0  # Default, will be updated based on dates
+                else:
+                    # For all other transaction types (END, PCH, REWRITE), check Prior Policy Number
+                    if prior_policy_number and str(prior_policy_number).strip():
+                        # Has prior policy = this is a renewal policy
+                        agent_comm_rate = 25.0
+                    else:
+                        # No prior policy = this is a new policy
+                        agent_comm_rate = 50.0
                 
                 st.text_input("Agent Comm (NEW 50% RWL 25%)", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
                 
@@ -4761,6 +5513,14 @@ def main():
                 # Calculate total agent commission
                 total_agent_comm = agent_est_comm + broker_fee_agent_comm
                 st.text_input("Total Agent Comm", value=f"${total_agent_comm:.2f}", disabled=True, help="Policy commission plus broker fee commission")
+                
+                # Show rule ID if available (for tracking)
+                if applied_rule:
+                    st.caption(f"Rule ID: {applied_rule['rule_id'][:8]}...")
+            
+            # Validation for override
+            if use_override and not override_reason:
+                st.error("⚠️ Override reason is required when using a custom commission rate.")
             
             # Form buttons
             col1, col2 = st.columns(2)
@@ -4776,21 +5536,27 @@ def main():
             
             # Handle Save button
             elif submitted:
-                if customer and policy_number:
+                # Validate override requirements
+                if use_override and not override_reason.strip():
+                    st.error("❌ Override reason is required when using a custom commission rate.")
+                elif customer and policy_number:
                     try:
-                        # Adjust agent rate for END/PCH based on dates
-                        if transaction_type in ["END", "PCH"]:
-                            agent_comm_rate = 50.0 if policy_orig_date == effective_date else 25.0
-                            agent_est_comm = agency_est_comm * (agent_comm_rate / 100)
-                            total_agent_comm = agent_est_comm + broker_fee_agent_comm
+                        # Agent rate is already correctly set based on Prior Policy Number
+                        # No need to adjust for END/PCH here since we already handled it above
                         
-                        # Prepare the new policy record
+                        # Prepare the new policy record with commission rule integration
                         new_policy = {
                             "Client ID": client_id,
                             "Transaction ID": transaction_id,
                             "Customer": customer,
-                            "Carrier Name": carrier_name,
-                            "MGA Name": mga_name,
+                            "Carrier Name": final_carrier_name,
+                            "MGA Name": final_mga_name,
+                            # NEW: Commission integration fields
+                            "carrier_id": selected_carrier_id,
+                            "mga_id": selected_mga_id,
+                            "commission_rule_id": applied_rule['rule_id'] if applied_rule else None,
+                            "commission_rate_override": policy_gross_comm_input if use_override else None,
+                            "override_reason": override_reason if use_override else None,
                             "Policy Type": policy_type,
                             "Policy Number": policy_number,
                             "Prior Policy Number": prior_policy_number if prior_policy_number else None,
@@ -4841,7 +5607,15 @@ def main():
                             'new_policy_type',
                             'add_policy_number',
                             'add_x_date',
-                            'add_policy_orig_date'
+                            'add_policy_orig_date',
+                            # NEW: Commission integration form keys
+                            'add_policy_carrier',
+                            'add_policy_carrier_manual',
+                            'add_policy_mga',
+                            'add_policy_mga_manual',
+                            'add_policy_override',
+                            'add_policy_override_reason',
+                            'policy_gross_comm_details'
                         ]
                         for key in keys_to_clear:
                             if key in st.session_state:
@@ -6173,6 +6947,16 @@ def main():
                             
                             styled_df = display_recon[display_columns].sort_values('STMT DATE', ascending=False).style.apply(highlight_void_status, axis=1)
                             
+                            # Calculate height to show all rows plus 2 extra
+                            num_rows = len(display_recon[display_columns])
+                            row_height = 35  # Approximate height per row in pixels
+                            header_height = 35  # Header row height
+                            extra_rows = 2  # Number of extra blank rows to show
+                            calculated_height = header_height + (num_rows + extra_rows) * row_height
+                            # Cap the height at a reasonable maximum
+                            max_height = 800
+                            display_height = min(calculated_height, max_height)
+                            
                             st.dataframe(
                                 styled_df,
                                 column_config={
@@ -6192,7 +6976,8 @@ def main():
                                     )
                                 },
                                 use_container_width=True,
-                                hide_index=True
+                                hide_index=True,
+                                height=display_height
                             )
                     else:
                         st.info("No reconciliations found in the selected date range")
@@ -7332,81 +8117,763 @@ SOLUTION NEEDED:
                 """)
         
         with tab8:
-            st.subheader("📋 Manage Policy Types")
+            st.subheader("📋 Policy Types Configuration")
             
-            # Load current policy types
-            policy_types, allow_custom = load_policy_types()
+            # Try to load policy types from configuration file
+            try:
+                # Load from the updated config file if it exists
+                config_path = "config_files/policy_types_updated.json"
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        config_data = json.load(f)
+                        policy_types_data = config_data.get("policy_types", [])
+                else:
+                    # Fall back to existing method
+                    policy_types, allow_custom = load_policy_types()
+                    policy_types_data = [{"code": pt["name"], "name": pt["name"], "active": pt.get("active", True)} for pt in policy_types]
+                
+                # Create a modern, compact display
+                with st.container():
+                    
+                    # Summary metrics in a compact row
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        active_count = sum(1 for pt in policy_types_data if pt.get('active', True))
+                        st.metric("Active Types", active_count)
+                    with col2:
+                        st.metric("Total Types", len(policy_types_data))
+                    with col3:
+                        st.metric("Categories", len(set(pt.get('category', 'Other') for pt in policy_types_data)))
+                    
+                    st.divider()
+                    
+                    # Display policy types in a grid format
+                    st.markdown("### Active Policy Types")
+                    
+                    # Group by category
+                    categories = {}
+                    for pt in policy_types_data:
+                        if pt.get('active', True):
+                            category = pt.get('category', 'Other')
+                            if category not in categories:
+                                categories[category] = []
+                            categories[category].append(pt)
+                    
+                    # Display each category
+                    for category, types in categories.items():
+                        st.markdown(f"**{category}**")
+                        
+                        # Create a grid of policy types
+                        cols = st.columns(4)
+                        for idx, policy_type in enumerate(types):
+                            with cols[idx % 4]:
+                                # Display as a compact card
+                                st.success(f"✅ {policy_type.get('code', policy_type.get('name'))}")
+                    
+                    st.divider()
+                    
+                    # Add/Edit Policy Types Section
+                    st.markdown("### ➕ Add New Policy Type")
+                    
+                    with st.form("add_policy_type_form"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            new_code = st.text_input("Code", placeholder="e.g., EPL", max_chars=10)
+                            new_category = st.selectbox(
+                                "Category",
+                                options=["Personal", "Commercial", "Specialty", "Other"]
+                            )
+                        with col2:
+                            new_name = st.text_input("Name", placeholder="e.g., Employment Practices Liability")
+                            new_active = st.checkbox("Active", value=True)
+                        
+                        submitted = st.form_submit_button("Add Policy Type", type="primary")
+                        
+                        if submitted and new_code and new_name:
+                            # Add the new policy type
+                            new_policy_type = {
+                                "code": new_code.upper(),
+                                "name": new_name,
+                                "active": new_active,
+                                "category": new_category
+                            }
+                            
+                            # Check if policy type already exists
+                            existing_codes = [pt.get('code', '').upper() for pt in policy_types_data]
+                            if new_code.upper() in existing_codes:
+                                st.error(f"Policy type with code '{new_code}' already exists!")
+                            else:
+                                # Add to the list
+                                policy_types_data.append(new_policy_type)
+                                
+                                # Update the configuration file
+                                try:
+                                    config_data['policy_types'] = policy_types_data
+                                    os.makedirs("config_files", exist_ok=True)
+                                    with open(config_path, 'w') as f:
+                                        json.dump(config_data, f, indent=2)
+                                    st.success(f"✅ Added policy type: {new_code} - {new_name}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error saving configuration: {e}")
+                    
+                    # Edit/Delete existing policy types
+                    st.markdown("### 📝 Edit Policy Types")
+                    
+                    # Create an editable dataframe
+                    if policy_types_data:
+                        # Convert to DataFrame for easier editing
+                        df = pd.DataFrame(policy_types_data)
+                        
+                        # Add a delete column
+                        df['Delete'] = False
+                        
+                        # Display editable dataframe
+                        edited_df = st.data_editor(
+                            df,
+                            column_config={
+                                "code": st.column_config.TextColumn("Code", width="small"),
+                                "name": st.column_config.TextColumn("Name", width="medium"),
+                                "category": st.column_config.SelectboxColumn(
+                                    "Category",
+                                    options=["Personal", "Commercial", "Specialty", "Other"],
+                                    width="small"
+                                ),
+                                "active": st.column_config.CheckboxColumn("Active", width="small"),
+                                "Delete": st.column_config.CheckboxColumn("Delete", width="small")
+                            },
+                            hide_index=True,
+                            use_container_width=True
+                        )
+                        
+                        # Save changes button
+                        if st.button("💾 Save Changes", type="primary"):
+                            try:
+                                # Filter out deleted items
+                                updated_policy_types = []
+                                for _, row in edited_df.iterrows():
+                                    if not row.get('Delete', False):
+                                        updated_policy_types.append({
+                                            "code": row.get('code', ''),
+                                            "name": row.get('name', ''),
+                                            "active": row.get('active', True),
+                                            "category": row.get('category', 'Other')
+                                        })
+                                
+                                # Update configuration
+                                config_data['policy_types'] = updated_policy_types
+                                os.makedirs("config_files", exist_ok=True)
+                                with open(config_path, 'w') as f:
+                                    json.dump(config_data, f, indent=2)
+                                
+                                st.success("✅ Policy types updated successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving changes: {e}")
+                    
+                    # Backup/Download section
+                    st.divider()
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if 'config_data' in locals():
+                            config_json = json.dumps(config_data, indent=2)
+                            st.download_button(
+                                label="📥 Download Current Configuration",
+                                data=config_json,
+                                file_name=f"policy_types_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                                mime="application/json"
+                            )
+                    with col2:
+                        st.info("💡 Download a backup before making major changes")
+                    
+            except Exception as e:
+                st.error(f"Error loading policy types configuration: {e}")
+                st.info("Using fallback policy types display")
+                
+                # Fallback to basic display
+                policy_types, allow_custom = load_policy_types()
+                if policy_types:
+                    st.dataframe(pd.DataFrame(policy_types), use_container_width=True)
+    
+    # --- Contacts ---
+    elif page == "Contacts":
+        # Modern SaaS-style header
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.title("Commission Management")
+        with col2:
+            # Quick stats
+            if 'carriers_data' in st.session_state:
+                st.metric("Active Carriers", len([c for c in st.session_state.get('carriers_data', []) if c.get('status') == 'Active']))
+        
+        # Load fresh data for this page (island architecture)
+        all_data = load_policies_data()
+        
+        # Initialize session state for Contacts page
+        if 'carriers_data' not in st.session_state:
+            st.session_state.carriers_data = []
+        if 'mgas_data' not in st.session_state:
+            st.session_state.mgas_data = []
+        if 'commission_rules' not in st.session_state:
+            st.session_state.commission_rules = []
+        if 'selected_carrier_id' not in st.session_state:
+            st.session_state.selected_carrier_id = None
+        if 'search_mode' not in st.session_state:
+            st.session_state.search_mode = 'carriers'
+        
+        # Load carriers, MGAs, and commission rules from database
+        try:
+            # Check if tables exist first
+            supabase = get_supabase_client()
             
-            col1, col2 = st.columns([2, 1])
+            # Try to load carriers
+            try:
+                response = supabase.table('carriers').select("*").execute()
+                st.session_state.carriers_data = response.data if response.data else []
+            except Exception as e:
+                if "relation" in str(e) and "does not exist" in str(e):
+                    st.warning("⚠️ Commission structure tables not found. Please run the SQL script to create them.")
+                    with st.expander("View SQL Script"):
+                        st.code("""
+-- Run this SQL in your Supabase SQL editor:
+-- /sql_scripts/create_commission_structure_tables.sql
+                        """)
+                    st.stop()
+                else:
+                    st.error(f"Error loading carriers: {e}")
+            
+            # Try to load MGAs
+            try:
+                response = supabase.table('mgas').select("*").execute()
+                st.session_state.mgas_data = response.data if response.data else []
+            except Exception:
+                pass
+            
+            # Try to load commission rules
+            try:
+                response = supabase.table('commission_rules').select("*").execute()
+                st.session_state.commission_rules = response.data if response.data else []
+            except Exception:
+                pass
+                
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
+        
+        # Modern Command Palette Style Search
+        st.markdown("### 🔍 Search")
+        search_container = st.container()
+        
+        with search_container:
+            col1, col2 = st.columns([3, 1])
             
             with col1:
-                st.markdown("### Current Policy Types")
-                
-                # Create editable dataframe
-                policy_df = pd.DataFrame(policy_types)
-                
-                # Configure column settings
-                column_config = {
-                    "name": st.column_config.TextColumn("Policy Type Name", help="Name of the policy type"),
-                    "active": st.column_config.CheckboxColumn("Active", help="Whether this type is available for selection"),
-                    "default": st.column_config.CheckboxColumn("Default", help="Set as default selection in forms")
-                }
-                
-                # Edit policy types
-                edited_df = st.data_editor(
-                    policy_df,
-                    column_config=column_config,
-                    use_container_width=True,
-                    num_rows="dynamic",
-                    key="policy_types_editor"
+                search_query = st.text_input(
+                    "",
+                    placeholder="Search carriers, MGAs, or commission rules... (Try: Progressive, 12%, Auto)",
+                    label_visibility="collapsed",
+                    key="commission_search"
                 )
-                
-                # Save changes button
-                if st.button("💾 Save Policy Type Changes", type="primary"):
-                    # Ensure only one default
-                    if edited_df['default'].sum() > 1:
-                        st.error("Only one policy type can be set as default")
-                    else:
-                        # Convert dataframe back to list of dicts
-                        updated_types = edited_df.to_dict('records')
-                        if save_policy_types(updated_types, allow_custom):
-                            st.success("Policy types saved successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Error saving policy types")
             
             with col2:
-                st.markdown("### Quick Add New Type")
-                
-                new_type_name = st.text_input("New Policy Type Name")
-                if st.button("➕ Add Policy Type", type="primary", disabled=not new_type_name):
-                    success, message = add_policy_type(new_type_name)
-                    if success:
-                        st.success(message)
-                        st.rerun()
-                    else:
-                        st.error(message)
-                
-                st.markdown("### Settings")
-                
-                # Allow custom toggle
-                new_allow_custom = st.checkbox(
-                    "Allow Custom Types", 
-                    value=allow_custom,
-                    help="Allow users to add new policy types directly from forms"
+                quick_add = st.selectbox(
+                    "",
+                    ["Quick Add ➕", "Add Carrier", "Add MGA", "Add Rule"],
+                    label_visibility="collapsed",
+                    key="quick_add_select"
                 )
                 
-                if new_allow_custom != allow_custom:
-                    if save_policy_types(policy_types, new_allow_custom):
-                        st.success("Settings updated!")
-                        st.rerun()
+                if quick_add == "Add Carrier":
+                    st.session_state['show_add_carrier'] = True
+                elif quick_add == "Add MGA":
+                    st.session_state['show_add_mga'] = True
+        
+        # Detailed Instructions and Help
+        with st.expander("ℹ️ How Commission Rules Work", expanded=False):
+            st.info("""
+            **Important Information About Commission Rules:**
+            
+            🔹 **Rules are for future transactions only** - They will auto-populate rates when adding new policies
+            
+            🔹 **Existing transactions are NOT affected** - Deleting or changing rules does NOT modify any existing commission data in your policies
+            
+            🔹 **Your historical data is safe** - All past transactions keep their original commission calculations
+            
+            🔹 **Think of it like store prices** - Changing today's price doesn't affect what customers paid yesterday
+            
+            **📅 NEW! Effective Date Tracking:**
+            
+            🔸 **Set effective dates** - Schedule rate changes in advance (e.g., rate increases on Sept 1st)
+            
+            🔸 **End date rules** - Click "📅 End Date" to expire a rule instead of deleting it
+            
+            🔸 **Complete history** - View all historical rates in the "📜 Historical Rules" section
+            
+            🔸 **Backdate changes** - Found out about a rate change late? Set the effective date to when it actually changed
+            
+            🔸 **Track rate changes** - Know exactly when each rate was active and why it changed
+            
+            **To Handle Rate Changes:**
+            1. Find the current rule and click "📅 End Date"
+            2. Set the last day of the old rate
+            3. Add reason (e.g., "Rate increase to 14%")
+            4. Create new rule with new rate and next day as effective date
+            
+            **Example**: Progressive Auto changing from 12% to 14% on Sept 1st
+            - End current rule on Aug 31st
+            - Add new rule with 14% effective Sept 1st
+            - Both rules are preserved for historical reference
+            
+            **🚀 NEW! Add/Edit Policy Integration:**
+            - ✅ Carrier dropdown auto-populates available carriers
+            - ✅ MGA dropdown shows only relevant MGAs for selected carrier
+            - ✅ Commission rates automatically filled based on rules
+            - ✅ Override capability with required reason tracking
+            - ✅ Shows which rule is being applied (e.g., "Progressive (Direct) - Auto - 12%")
+            
+            **Search Tips:**
+            - Search by carrier name: "Progressive", "Citizens"
+            - Search by rate: "12", "15" (finds all rules with that rate)
+            - Search by policy type: "Auto", "Home", "BOP"
+            - Search by MGA: "Advantage", "TWFG"
+            """)
+        
+        # Filter and search results
+        filtered_carriers = []
+        filtered_mgas = []
+        filtered_rules = []
+        
+        if search_query:
+            search_lower = search_query.lower()
+            
+            # Search carriers
+            filtered_carriers = [
+                c for c in st.session_state.carriers_data
+                if search_lower in (c.get('carrier_name') or '').lower() or
+                   search_lower in (c.get('notes') or '').lower()
+            ]
+            
+            # Search MGAs
+            filtered_mgas = [
+                m for m in st.session_state.mgas_data
+                if search_lower in (m.get('mga_name') or '').lower() or
+                   search_lower in (m.get('notes') or '').lower()
+            ]
+            
+            # Search commission rules by rate or policy type
+            for rule in st.session_state.commission_rules:
+                # Check if search matches rate
+                if (str(rule.get('new_rate', '')).startswith(search_query) or 
+                    str(rule.get('renewal_rate', '')).startswith(search_query) or
+                    search_lower in (rule.get('policy_type', '') or '').lower() or
+                    search_lower in (rule.get('rule_description', '') or '').lower()):
+                    filtered_rules.append(rule)
+        
+        # Show search results in modern cards
+        if search_query:
+            if filtered_carriers or filtered_mgas or filtered_rules:
+                st.markdown("### Search Results")
                 
-                st.markdown("### Info")
-                st.info(f"""
-                **Active Types**: {sum(1 for pt in policy_types if pt.get('active', True))}  
-                **Total Types**: {len(policy_types)}  
-                **Custom Types Allowed**: {'Yes' if allow_custom else 'No'}
+                # Carriers results
+                if filtered_carriers:
+                    st.markdown("#### Carriers")
+                    for carrier in filtered_carriers[:5]:  # Show top 5
+                        if st.button(f"🏢 {carrier['carrier_name']}", key=f"search_carrier_{carrier['carrier_id']}", use_container_width=True):
+                            st.session_state.selected_carrier_id = carrier['carrier_id']
+                            st.session_state.search_mode = 'carrier_detail'
+                            st.rerun()
+                
+                # MGAs results
+                if filtered_mgas:
+                    st.markdown("#### MGAs")
+                    for mga in filtered_mgas[:5]:
+                        st.button(f"🤝 {mga['mga_name']}", key=f"search_mga_{mga['mga_id']}", use_container_width=True)
+                
+                # Rules results
+                if filtered_rules:
+                    st.markdown("#### Commission Rules")
+                    for rule in filtered_rules[:5]:
+                        carrier = next((c for c in st.session_state.carriers_data if c['carrier_id'] == rule['carrier_id']), None)
+                        if carrier:
+                            mga_name = "Direct"
+                            if rule.get('mga_id'):
+                                mga = next((m for m in st.session_state.mgas_data if m['mga_id'] == rule['mga_id']), None)
+                                if mga:
+                                    mga_name = mga['mga_name']
+                            
+                            rule_text = f"💰 {carrier['carrier_name']} ({mga_name})"
+                            if rule.get('policy_type'):
+                                rule_text += f" - {rule['policy_type']}"
+                            rule_text += f": {rule['new_rate']}% / {rule.get('renewal_rate', rule['new_rate'])}%"
+                            
+                            if st.button(rule_text, key=f"search_rule_{rule['rule_id']}", use_container_width=True):
+                                st.session_state.selected_carrier_id = rule['carrier_id']
+                                st.session_state.search_mode = 'carrier_detail'
+                                st.rerun()
+            else:
+                st.info("No results found. Try a different search term.")
+        
+        # Main content area
+        st.markdown("---")
+        
+        # Show carrier detail view if selected
+        if st.session_state.get('search_mode') == 'carrier_detail' and st.session_state.get('selected_carrier_id'):
+            selected_carrier = next((c for c in st.session_state.carriers_data if c['carrier_id'] == st.session_state.selected_carrier_id), None)
+            
+            if selected_carrier:
+                # Back button
+                if st.button("← Back to Search", key="back_to_search"):
+                    st.session_state.search_mode = 'carriers'
+                    st.session_state.selected_carrier_id = None
+                    st.rerun()
+                
+                # Carrier detail card
+                st.markdown(f"## {selected_carrier['carrier_name']}")
+                
+                # Carrier info in modern layout
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"**Status:** {'✅ Active' if selected_carrier.get('status') == 'Active' else '⚠️ Inactive'}")
+                with col2:
+                    if selected_carrier.get('naic_code'):
+                        st.markdown(f"**NAIC:** {selected_carrier['naic_code']}")
+                with col3:
+                    if selected_carrier.get('producer_code'):
+                        st.markdown(f"**Producer Code:** {selected_carrier['producer_code']}")
+                
+                if selected_carrier.get('notes'):
+                    st.info(f"📝 {selected_carrier['notes']}")
+                
+                # Commission rules section with inline editing feel
+                st.markdown("### Commission Rules")
+                
+                # Quick help for this carrier
+                with st.expander("💡 Quick Tips", expanded=False):
+                    st.markdown("""
+                    **Managing Commission Rules:**
+                    - **Direct vs MGA**: Direct appointments don't use an MGA
+                    - **Policy Types**: Comma-separated (e.g., "Auto, Boat")
+                    - **Effective Dates**: Rules apply from this date forward
+                    - **End Dating**: Better than deleting - preserves history
+                    - **Payment Terms**: Advanced = paid upfront, As Earned = over time
+                    
+                    **Rate Changes:**
+                    1. End-date the current rule (preserves history)
+                    2. Add new rule with new rates starting next day
+                    3. Both rules are kept for audit trail
+                    
+                    **Integration with Policies:**
+                    - These rules auto-fill commission rates in Add/Edit Policy
+                    - You can always override with a reason
+                    - Historical policies are NOT affected by rule changes
+                    """)
+                
+                # Quick add rule button
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    if st.button("➕ Add Rule", key="inline_add_rule", type="primary"):
+                        st.session_state['show_inline_add_rule'] = True
+                
+                # Inline add rule form
+                if st.session_state.get('show_inline_add_rule'):
+                    with st.container():
+                        st.markdown("#### New Commission Rule")
+                        with st.form("inline_rule_form"):
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                mga_options = ["Direct Appointment"] + [m['mga_name'] for m in st.session_state.mgas_data]
+                                selected_mga = st.selectbox("MGA", options=mga_options)
+                                policy_type = st.text_input("Policy Type(s)", placeholder="Auto, HO3, etc.")
+                            
+                            with col2:
+                                new_rate = st.number_input("NEW %", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
+                                renewal_rate = st.number_input("RWL %", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
+                            
+                            with col3:
+                                effective_date = st.date_input("Effective", value=datetime.date.today())
+                                payment_terms = st.selectbox("Terms", ["", "Advanced", "As Earned"])
+                            
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                rule_description = st.text_input("Description", placeholder="e.g., Standard rate effective Jan 2025")
+                            with col2:
+                                st.write("")  # Spacer
+                                if st.form_submit_button("Save", type="primary"):
+                                    try:
+                                        mga_id = None
+                                        if selected_mga != "Direct Appointment":
+                                            mga_id = next((m['mga_id'] for m in st.session_state.mgas_data if m['mga_name'] == selected_mga), None)
+                                        
+                                        new_rule = {
+                                            "carrier_id": selected_carrier['carrier_id'],
+                                            "mga_id": mga_id,
+                                            "policy_type": policy_type if policy_type else None,
+                                            "new_rate": new_rate,
+                                            "renewal_rate": renewal_rate,
+                                            "payment_terms": payment_terms if payment_terms else None,
+                                            "rule_description": rule_description if rule_description else None,
+                                            "state": "FL",
+                                            "effective_date": effective_date.isoformat(),
+                                            "is_active": True
+                                        }
+                                        
+                                        response = supabase.table('commission_rules').insert(new_rule).execute()
+                                        st.success("✅ Rule added")
+                                        del st.session_state['show_inline_add_rule']
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                                
+                                if st.form_submit_button("Cancel"):
+                                    del st.session_state['show_inline_add_rule']
+                                    st.rerun()
+                
+                # Display rules in modern card style
+                carrier_rules = [r for r in st.session_state.commission_rules if r.get('carrier_id') == selected_carrier['carrier_id']]
+                active_rules = [r for r in carrier_rules if r.get('is_active', True) and not r.get('end_date')]
+                inactive_rules = [r for r in carrier_rules if not r.get('is_active', True) or r.get('end_date')]
+                
+                # Active rules as cards
+                for rule in sorted(active_rules, key=lambda x: x.get('effective_date', ''), reverse=True):
+                    with st.container():
+                        # Rule card with modern design
+                        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                        
+                        with col1:
+                            mga_name = "Direct"
+                            if rule.get('mga_id'):
+                                mga_name = next((m['mga_name'] for m in st.session_state.mgas_data if m['mga_id'] == rule['mga_id']), "Unknown")
+                            
+                            rule_title = f"**{mga_name}**"
+                            if rule.get('policy_type'):
+                                rule_title += f" - {rule['policy_type']}"
+                            st.markdown(rule_title)
+                            
+                            if rule.get('rule_description'):
+                                st.caption(rule['rule_description'])
+                        
+                        with col2:
+                            st.markdown(f"**NEW:** {rule['new_rate']}%  \n**RWL:** {rule.get('renewal_rate', rule['new_rate'])}%")
+                        
+                        with col3:
+                            effective_date = rule.get('effective_date', 'Unknown')
+                            if effective_date and effective_date != 'Unknown':
+                                try:
+                                    date_obj = datetime.datetime.strptime(effective_date[:10], '%Y-%m-%d')
+                                    formatted_date = date_obj.strftime('%m/%d/%Y')
+                                    st.markdown(f"**Effective:** {formatted_date}")
+                                except:
+                                    st.markdown(f"**Effective:** Current")
+                            
+                            if rule.get('payment_terms'):
+                                st.caption(rule['payment_terms'])
+                        
+                        with col4:
+                            # Action menu
+                            action = st.selectbox(
+                                "",
+                                ["Actions", "End Date", "Delete"],
+                                key=f"action_{rule['rule_id']}",
+                                label_visibility="collapsed"
+                            )
+                            
+                            if action == "End Date":
+                                st.session_state[f'end_date_{rule["rule_id"]}'] = True
+                                st.rerun()
+                            elif action == "Delete":
+                                st.session_state[f'delete_{rule["rule_id"]}'] = True
+                                st.rerun()
+                        
+                        # Inline end date form
+                        if st.session_state.get(f'end_date_{rule["rule_id"]}'):
+                            with st.form(f"end_form_{rule['rule_id']}"):
+                                col1, col2, col3 = st.columns([2, 2, 2])
+                                with col1:
+                                    end_date = st.date_input("End Date", value=datetime.date.today())
+                                with col2:
+                                    reason = st.text_input("Reason", placeholder="Rate increase")
+                                with col3:
+                                    if st.form_submit_button("Confirm"):
+                                        try:
+                                            update_data = {
+                                                "end_date": end_date.isoformat(),
+                                                "is_active": False
+                                            }
+                                            if reason:
+                                                current_desc = rule.get('rule_description', '')
+                                                update_data['rule_description'] = f"{current_desc} | Ended: {reason}"
+                                            
+                                            supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
+                                            del st.session_state[f'end_date_{rule["rule_id"]}']
+                                            st.success("Rule updated")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error: {e}")
+                                    
+                                    if st.form_submit_button("Cancel"):
+                                        del st.session_state[f'end_date_{rule["rule_id"]}']
+                                        st.rerun()
+                        
+                        # Inline delete confirmation
+                        if st.session_state.get(f'delete_{rule["rule_id"]}'):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.warning("Are you sure you want to delete this rule?")
+                            with col2:
+                                if st.button("Delete", type="primary", key=f"confirm_delete_{rule['rule_id']}"):
+                                    try:
+                                        supabase.table('commission_rules').delete().eq('rule_id', rule['rule_id']).execute()
+                                        del st.session_state[f'delete_{rule["rule_id"]}']
+                                        st.success("Rule deleted")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                                
+                                if st.button("Cancel", key=f"cancel_delete_{rule['rule_id']}"):
+                                    del st.session_state[f'delete_{rule["rule_id"]}']
+                                    st.rerun()
+                        
+                        st.markdown("---")
+                
+                # Historical rules
+                if inactive_rules:
+                    if st.checkbox("Show Historical Rules", key="show_historical"):
+                        st.markdown("#### Historical Rules")
+                        for rule in sorted(inactive_rules, key=lambda x: x.get('effective_date', ''), reverse=True):
+                            col1, col2, col3 = st.columns([3, 2, 3])
+                            
+                            with col1:
+                                mga_name = "Direct"
+                                if rule.get('mga_id'):
+                                    mga_name = next((m['mga_name'] for m in st.session_state.mgas_data if m['mga_id'] == rule['mga_id']), "Unknown")
+                                
+                                st.text(f"{mga_name} - {rule.get('policy_type', 'All')}")
+                            
+                            with col2:
+                                st.text(f"{rule['new_rate']}% / {rule.get('renewal_rate', rule['new_rate'])}%")
+                            
+                            with col3:
+                                date_range = ""
+                                if rule.get('effective_date'):
+                                    try:
+                                        eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').strftime('%m/%d/%Y')
+                                        date_range = f"{eff_date}"
+                                    except:
+                                        date_range = "Unknown"
+                                
+                                if rule.get('end_date'):
+                                    try:
+                                        end_date = datetime.datetime.strptime(rule['end_date'][:10], '%Y-%m-%d').strftime('%m/%d/%Y')
+                                        date_range += f" - {end_date}"
+                                    except:
+                                        pass
+                                
+                                st.text(date_range)
+                
+                if not carrier_rules:
+                    st.info("No commission rules yet. Click '➕ Add Rule' to create one.")
+        
+        # Default view - Recent carriers
+        else:
+            st.markdown("### Recent Carriers")
+            
+            # Show recent carriers as cards
+            recent_carriers = sorted(
+                [c for c in st.session_state.carriers_data if c.get('status') == 'Active'],
+                key=lambda x: x.get('updated_at', ''),
+                reverse=True
+            )[:6]  # Show top 6
+            
+            if recent_carriers:
+                cols = st.columns(3)
+                for idx, carrier in enumerate(recent_carriers):
+                    with cols[idx % 3]:
+                        # Count rules for this carrier
+                        rule_count = len([r for r in st.session_state.commission_rules 
+                                        if r.get('carrier_id') == carrier['carrier_id'] 
+                                        and r.get('is_active', True)])
+                        
+                        # Carrier card
+                        if st.button(
+                            f"**{carrier['carrier_name']}**\n\n{rule_count} active rules",
+                            key=f"carrier_card_{carrier['carrier_id']}",
+                            use_container_width=True,
+                            help=carrier.get('notes', '')
+                        ):
+                            st.session_state.selected_carrier_id = carrier['carrier_id']
+                            st.session_state.search_mode = 'carrier_detail'
+                            st.rerun()
+            else:
+                st.info("No carriers found. Use Quick Add to create your first carrier.")
+                
+                # Getting started guide
+                st.markdown("""
+                ### 🚀 Getting Started with Commission Management
+                
+                **Step 1: Add Your Carriers**
+                - Click "Quick Add → Add Carrier" above
+                - Enter carrier names (e.g., Progressive, Citizens, AAA)
+                - NAIC and Producer codes are optional
+                
+                **Step 2: Add MGAs (if applicable)**
+                - Many carriers work through MGAs (Managing General Agencies)
+                - Click "Quick Add → Add MGA" to add them
+                - Examples: Advantage Partners, TWFG, Burns & Wilcox
+                
+                **Step 3: Create Commission Rules**
+                - Click on a carrier card to open it
+                - Add rules for different policy types and rates
+                - Set NEW and RWL (renewal) rates separately
+                
+                **Step 4: Integration with Policies**
+                - When adding new policies, select carrier from dropdown
+                - Commission rates auto-populate from your rules
+                - Override when needed with reason tracking
+                
+                **Need Help?**
+                - Check the "ℹ️ How Commission Rules Work" section above
+                - SQL scripts available at: `/sql_scripts/populate_initial_carriers_mgas.sql`
                 """)
+        
+        # Add carrier modal
+        if st.session_state.get('show_add_carrier'):
+            with st.form("add_carrier_form_modal"):
+                st.markdown("### Add New Carrier")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    carrier_name = st.text_input("Carrier Name*", placeholder="e.g., Progressive Insurance")
+                    naic_code = st.text_input("NAIC Code", placeholder="Optional")
+                
+                with col2:
+                    producer_code = st.text_input("Producer Code", placeholder="Optional")
+                    notes = st.text_area("Notes", placeholder="Optional notes")
+                
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    if st.form_submit_button("Add Carrier", type="primary"):
+                        if carrier_name:
+                            try:
+                                new_carrier = {
+                                    "carrier_name": carrier_name,
+                                    "naic_code": naic_code if naic_code else None,
+                                    "producer_code": producer_code if producer_code else None,
+                                    "status": "Active",
+                                    "notes": notes if notes else None
+                                }
+                                
+                                response = supabase.table('carriers').insert(new_carrier).execute()
+                                st.success(f"✅ Added {carrier_name}")
+                                del st.session_state['show_add_carrier']
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        else:
+                            st.error("Carrier name is required")
+                    
+                    if st.form_submit_button("Cancel"):
+                        del st.session_state['show_add_carrier']
+                        st.rerun()
     
     # --- Tools ---
     elif page == "Tools":

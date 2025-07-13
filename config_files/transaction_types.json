@@ -1,0 +1,21 @@
+{
+  "transaction_types": [
+    {"code": "NEW", "name": "New Business", "commission_rate": 0.50, "active": true},
+    {"code": "NBS", "name": "New Business (Special)", "commission_rate": 0.50, "active": true},
+    {"code": "STL", "name": "Still (Continuing)", "commission_rate": 0.50, "active": true},
+    {"code": "BoR", "name": "Book of Renewals", "commission_rate": 0.50, "active": true},
+    {"code": "RWL", "name": "Renewal", "commission_rate": 0.25, "active": true},
+    {"code": "REWRITE", "name": "Rewrite", "commission_rate": 0.25, "active": true},
+    {"code": "END", "name": "Endorsement", "commission_rate": "variable", "active": true},
+    {"code": "PCH", "name": "Policy Change", "commission_rate": "variable", "active": true},
+    {"code": "CAN", "name": "Cancellation", "commission_rate": 0.00, "active": true},
+    {"code": "XCL", "name": "Excluded", "commission_rate": 0.00, "active": true}
+  ],
+  "default": "NEW",
+  "version": "1.0.0",
+  "last_updated": "2025-01-13",
+  "notes": {
+    "END": "Commission rate depends on date check: NEW (50%) if Policy Origination Date = Effective Date, else RENEWAL (25%)",
+    "PCH": "Commission rate depends on date check: NEW (50%) if Policy Origination Date = Effective Date, else RENEWAL (25%)"
+  }
+}
