@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 13, 2025  
-**Current Version**: 3.6.0
+**Current Version**: 3.6.1
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,20 +13,25 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.6.0)
-1. **NEW: Contacts & Commission Structure**: Complete carrier and MGA management system
+## Recent Major Changes (v3.6.1)
+1. **NEW: Client ID Generation in Edit Transaction Form**: Generate missing Client IDs
+   - "Generate Client ID" button appears when Client ID field is empty
+   - Generates unique CL-XXXXXXXX format ID
+   - Updates database immediately without requiring form save
+   - Available in both Edit Policy Transactions page and modal forms
+2. **Prior Release (v3.6.0) - Contacts & Commission Structure**: Complete carrier and MGA management system
    - Dedicated Contacts page with Carriers and MGAs tabs
    - Commission rules engine with carrier/MGA/policy type specific rates
    - Support for NEW and RWL (renewal) commission rates
    - Payment terms tracking (Advanced vs As Earned)
    - Rule priority system for complex scenarios
    - Initial data import: 22 carriers and 11 MGAs from Excel
-2. **Island Architecture**: Contacts page fully isolated following app architecture principles
+3. **Island Architecture**: Contacts page fully isolated following app architecture principles
    - Complete error containment within module
    - Independent data loading per page
    - No cross-page dependencies
    - Prepared for future modular architecture
-3. **Modern Policy Types UI**: Redesigned Admin Panel with compact grid layout
+4. **Modern Policy Types UI**: Redesigned Admin Panel with compact grid layout
    - Visual category grouping (Personal, Commercial, Specialty)
    - Configuration file-based management for safety
    - Download configuration option for backup

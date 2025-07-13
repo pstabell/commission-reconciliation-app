@@ -987,8 +987,8 @@ def save_column_mappings_to_file(mappings):
         return False
 
 def generate_client_id(length=6):
-    """Generate a unique Client ID with exactly 3 letters and 3 numbers."""
-    # Generate exactly 3 letters and 3 numbers
+    """Generate a unique Client ID with exactly 3 letters and 3 numbers in random order."""
+    # Generate exactly 3 letters and 3 numbers, then mix them randomly
     letters = string.ascii_uppercase
     digits = string.digits
     
@@ -1029,6 +1029,38 @@ def generate_transaction_id(length=7):
     # Shuffle to create random pattern
     random.shuffle(result)
     return ''.join(result)
+
+def generate_unique_client_id():
+    """Generate a unique Client ID with 3 letters and 3 numbers mixed randomly by checking against existing IDs."""
+    try:
+        # Get all existing client IDs
+        supabase = get_supabase_client()
+        response = supabase.table('policies').select('"Client ID"').execute()
+        
+        existing_ids = set()
+        if response.data:
+            for record in response.data:
+                client_id = record.get('Client ID')
+                if client_id:
+                    existing_ids.add(str(client_id).upper())
+        
+        # Generate a unique ID using the existing pattern
+        max_attempts = 100
+        for _ in range(max_attempts):
+            # Use the existing generate_client_id function for proper format
+            new_id = generate_client_id()
+            if new_id.upper() not in existing_ids:
+                return new_id
+        
+        # If we couldn't find a unique ID in 100 attempts, add timestamp suffix
+        # This maintains the format while ensuring uniqueness
+        base_id = generate_client_id()
+        timestamp = str(int(datetime.datetime.now().timestamp()))[-2:]
+        return f"{base_id[:4]}{timestamp}"
+        
+    except Exception as e:
+        # If there's an error checking existing IDs, just generate one
+        return generate_client_id()
 
 def generate_reconciliation_transaction_id(transaction_type="STMT", date=None):
     """Generate a reconciliation transaction ID with format: XXXXXXX-TYPE-YYYYMMDD"""
@@ -2762,7 +2794,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             'reconciled_at', 
             'is_reconciliation_entry',
             '_id',
-            'Client ID',
             'Client ID (CRM)',
             'STMT DATE',
             'Agency Comm Received (STMT)',
@@ -2793,8 +2824,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         field_counter = 0
         for field in modal_data.keys():
-            # Skip internal fields - they'll be shown at the bottom
-            if field in client_fields and field not in internal_fields:
+            # Skip internal fields and Client ID - they'll be handled separately
+            if field in client_fields and field not in internal_fields and field != 'Client ID':
                 with col1 if field_counter % 2 == 0 else col2:
                     updated_data[field] = st.text_input(
                         field, 
@@ -2803,6 +2834,48 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     )
                     rendered_fields.add(field)  # Track rendered field
                 field_counter += 1
+        
+        # Always handle Client ID field with special logic
+        # (Even if it was in modal_data, we skipped it above)
+        with col1 if field_counter % 2 == 0 else col2:
+            # Check if Client ID exists in the data
+            client_id_value = modal_data.get('Client ID', '')
+            
+            # Debug: Show what's in the Client ID field
+            st.caption(f"Debug - Client ID value: '{client_id_value}' (type: {type(client_id_value)})")
+            
+            # If no Client ID exists, show option to generate one
+            if not client_id_value or str(client_id_value).strip() == '':
+                generate_new = st.checkbox(
+                    "Generate New Client ID",
+                    key="modal_generate_client_id",
+                    help="Check this box to generate a unique Client ID (3 letters + 3 numbers mixed randomly, e.g., U5G0O4, A2B7C9)"
+                )
+                
+                if generate_new:
+                    # Generate a unique numeric Client ID that doesn't exist in database
+                    # Store in session state to persist across form interactions
+                    if 'generated_client_id' not in st.session_state:
+                        with st.spinner("Checking for unique Client ID..."):
+                            st.session_state.generated_client_id = generate_unique_client_id()
+                    
+                    client_id_value = st.session_state.generated_client_id
+                    st.info(f"🆔 Generated Client ID: {client_id_value} (verified unique)")
+            else:
+                # Clear generated ID from session state if we have an existing ID
+                if 'generated_client_id' in st.session_state:
+                    del st.session_state.generated_client_id
+            
+            help_text = "Enter a Client ID to link this transaction to a specific client" if not client_id_value else "Existing Client ID"
+            updated_data['Client ID'] = st.text_input(
+                'Client ID', 
+                value=str(client_id_value) if client_id_value else '',
+                key="modal_Client ID",
+                help=help_text,
+                placeholder="e.g., U5G0O4"
+            )
+            rendered_fields.add('Client ID')
+            field_counter += 1
         
         # Policy Information
         st.markdown("#### Policy Information")
@@ -3467,9 +3540,16 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             final_data = modal_data.copy()
             final_data.update(updated_data)
             
+            # Clear generated client ID from session state after successful save
+            if 'generated_client_id' in st.session_state:
+                del st.session_state.generated_client_id
+            
             return {"action": "save", "data": final_data}
         
         if cancel_button:
+            # Clear generated client ID from session state
+            if 'generated_client_id' in st.session_state:
+                del st.session_state.generated_client_id
             return {"action": "cancel", "data": None}
     
     return None

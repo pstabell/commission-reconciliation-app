@@ -5,6 +5,26 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.1] - 2025-07-13 - Client ID Generation in Edit Transaction Form
+
+### Added
+- **Generate Client ID Button in Edit Transaction Form**
+  - New "Generate Client ID" button appears when Client ID field is empty
+  - Automatically generates unique 8-character ID in format CL-XXXXXXXX
+  - Updates both the form field and database immediately
+  - Button disappears after successful generation
+  - Maintains data integrity by ensuring unique Client IDs
+  - Available in both Edit Policy Transactions page and modal forms
+
+### Technical
+- Client ID generation uses same logic as Add New Policy form
+- Real-time database update without requiring form save
+- Session state synchronization for immediate UI updates
+- Prevents duplicate Client ID generation
+
+### Impact
+Users can now generate Client IDs for existing transactions that are missing them, ensuring all transactions have proper client identification for reporting and data integrity.
+
 ## [3.6.0] - 2025-07-13 - Contacts & Commission Structure Management
 
 ### Added

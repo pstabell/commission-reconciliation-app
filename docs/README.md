@@ -12,6 +12,7 @@ Essential project documentation:
 
 ### 🔧 Feature Documentation (`/features`)
 Comprehensive feature-specific documentation:
+- **[CLIENT_ID_GENERATION.md](features/CLIENT_ID_GENERATION.md)** - Client ID generation and management
 - **[FORMULA_SYSTEM.md](features/FORMULA_SYSTEM.md)** - Complete formula implementation (Phases 0-2)
 - **[RECONCILIATION_SYSTEM.md](features/RECONCILIATION_SYSTEM.md)** - Double-entry reconciliation system
 - **[SECURITY_SYSTEM.md](features/SECURITY_SYSTEM.md)** - Security architecture and implementation

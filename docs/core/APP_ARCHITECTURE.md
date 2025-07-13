@@ -203,6 +203,15 @@ The application has been successfully migrated from local SQLite to Supabase Pos
 - **Format:** 7-character alphanumeric (A-Z, 0-9)
 - **Client ID Consistency:** New rows inherit client's ID automatically
 
+### Client ID Management
+- **Format:** CL-XXXXXXXX (8 random alphanumeric characters after prefix)
+- **Generation Options:**
+  - Automatic during Add New Policy form submission
+  - Manual via "Generate Client ID" button in Edit Transaction form
+- **Edit Form Enhancement:** Button appears when Client ID is empty
+- **Real-time Update:** Database updated immediately without form save
+- **Uniqueness:** Validated against existing Client IDs
+
 ### UI/UX Improvements
 
 #### Edit Policies Enhancement

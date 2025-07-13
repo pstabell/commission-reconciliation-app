@@ -609,6 +609,23 @@ Critical improvement to data integrity - all new transactions now have proper Cl
 
 ---
 
+## ✅ COMPLETED: Client ID Generation in Edit Transaction Form (Completed July 13, 2025)
+
+### Quick Enhancement
+Added Generate Client ID button to Edit Transaction form for existing transactions missing Client IDs.
+
+### Implementation:
+- ✅ Button appears only when Client ID field is empty
+- ✅ Generates unique CL-XXXXXXXX format ID
+- ✅ Updates database immediately without requiring form save
+- ✅ Button disappears after successful generation
+- ✅ Works in both Edit Policy Transactions page and modal forms
+
+### Impact:
+Ensures all transactions can have proper Client IDs for reporting and data integrity, even if they were created before Client ID was required.
+
+---
+
 ## ✅ COMPLETED: Contacts & Commission Structure Management (Completed July 13, 2025)
 
 ### Major Achievement
@@ -663,4 +680,4 @@ Transforms commission management from manual entry to intelligent automation. Th
 ---
 
 *Last Updated: July 13, 2025*  
-*Current Application Version: 3.6.0*
+*Current Application Version: 3.6.1*
