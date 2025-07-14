@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 13, 2025  
-**Current Version**: 3.6.1
+**Last Updated**: July 14, 2025  
+**Current Version**: 3.6.3
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,13 +13,23 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.6.1)
-1. **NEW: Client ID Generation in Edit Transaction Form**: Generate missing Client IDs
+## Recent Major Changes (v3.6.3)
+1. **Checkbox Performance Fix for Regular Search**: Extended performance optimization to all search results
+   - Fixed 7-second delay after clicking checkbox before Edit button becomes available
+   - Implemented cached selection state to avoid recalculation on every render
+   - Regular search results now have same instant response as attention filter
+   - Edit button state updates immediately upon checkbox selection
+2. **Prior Release (v3.6.2) - Performance & Bug Fixes**: Major performance improvements and critical error fixes
+   - Fixed Wright Flood MGA loading error (UUID parsing issue) - MGA data now loads correctly
+   - Optimized checkbox performance in Edit Policy Transactions (6-7 second delay eliminated)
+   - Fixed IndexError when selecting transactions after edits
+   - Repositioned Client ID debug caption for better UI flow
+2. **Prior Release (v3.6.1) - Client ID Generation**: Generate missing Client IDs
    - "Generate Client ID" button appears when Client ID field is empty
    - Generates unique CL-XXXXXXXX format ID
    - Updates database immediately without requiring form save
    - Available in both Edit Policy Transactions page and modal forms
-2. **Prior Release (v3.6.0) - Contacts & Commission Structure**: Complete carrier and MGA management system
+3. **Prior Release (v3.6.0) - Contacts & Commission Structure**: Complete carrier and MGA management system
    - Dedicated Contacts page with Carriers and MGAs tabs
    - Commission rules engine with carrier/MGA/policy type specific rates
    - Support for NEW and RWL (renewal) commission rates
@@ -194,6 +204,17 @@ supabase.table('policies').select('"Transaction ID"')
 **Cause**: Created during reconciliation without complete information
 **Solution**: Added "Show Transactions Requiring Attention" filter on Edit Policies page
 **Impact**: Easy identification and completion of incomplete transaction data
+
+### 24. Import-Created Transactions Not Protected (FIXED in v3.6.3)
+**Issue**: Transactions created during import could be deleted, breaking reconciliation
+**Cause**: No special identification or protection for import-created transactions
+**Solution**: 
+- Added -IMPORT suffix to transaction IDs (e.g., D5D19K7-IMPORT)
+- Implemented partial edit restrictions (payment fields read-only)
+- Added delete protection with clear error messages
+- Created comprehensive explanation box in edit form
+**Migration**: Updated database validation function and migrated 45 existing transactions
+**Impact**: Import transactions now protected while allowing commission data completion
 
 ## Development Guidelines
 

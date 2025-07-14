@@ -335,6 +335,80 @@ ALTER TABLE policies
 RENAME COLUMN "Policy Checklist Complete" TO "NEW BIZ CHECKLIST COMPLETE";
 ```
 
+### v3.6.3 - Import Transaction Protection (July 14, 2025)
+
+**Purpose**: Protect import-created transactions from accidental deletion while allowing data completion
+
+#### Database Function Update
+
+Updated the transaction ID validation function to accept -IMPORT suffix:
+
+```sql
+-- Update validation function to accept -IMPORT pattern
+CREATE OR REPLACE FUNCTION validate_transaction_id_format(trans_id TEXT) RETURNS BOOLEAN AS $$
+BEGIN
+    -- Existing validation logic...
+    
+    ELSIF trans_id LIKE '%-IMPORT' THEN
+        -- Format: XXXXXXX-IMPORT (for import-created transactions)
+        RETURN LENGTH(SPLIT_PART(trans_id, '-', 1)) = 7
+           AND SPLIT_PART(trans_id, '-', 2) = 'IMPORT';
+    
+    -- Rest of function...
+END;
+$$ LANGUAGE plpgsql;
+```
+
+#### Data Migration
+
+Migrated existing import-created transactions to new format:
+
+```sql
+-- Update existing import-created transactions to use -IMPORT suffix
+UPDATE policies
+SET "Transaction ID" = "Transaction ID" || '-IMPORT'
+WHERE "DESCRIPTION" LIKE '%Created from statement import%'
+  AND "Transaction ID" NOT LIKE '%-IMPORT'
+  AND "Transaction ID" !~ '-[A-Z]+-[0-9]{8}$';
+
+-- Total: 45 transactions migrated
+```
+
+#### Application Changes
+
+1. **Transaction ID Generation**:
+   - Updated `generate_transaction_id()` to accept optional suffix parameter
+   - New imports automatically use -IMPORT suffix
+
+2. **Edit Protection**:
+   - Payment fields moved to Internal Fields as read-only
+   - Premium/commission fields remain editable
+   - Comprehensive explanation box at top of form
+
+3. **Delete Protection**:
+   - Cannot be deleted from Edit Policy Transactions
+   - Clear error message explaining why
+
+#### Impact Assessment
+
+**Risk Level**: Low
+- Function update is backward compatible
+- Migration only affects specific transactions
+- No impact on existing functionality
+- Full rollback possible if needed
+
+#### Rollback Script
+
+```sql
+-- Remove -IMPORT suffix from transaction IDs
+UPDATE policies
+SET "Transaction ID" = SPLIT_PART("Transaction ID", '-IMPORT', 1)
+WHERE "Transaction ID" LIKE '%-IMPORT';
+
+-- Revert validation function (if needed)
+-- Note: Function remains backward compatible, so revert may not be necessary
+```
+
 ## Migration Best Practices
 
 ### Before Running Migrations
@@ -439,6 +513,7 @@ ROLLBACK TO before_rules;
 
 | Version | Date | Description | Risk Level |
 |---------|------|-------------|------------|
+| v3.6.3 | 2025-07-14 | Added Import Transaction Protection | Low |
 | v3.6.0 | 2025-07-13 | Added Contacts & Commission Structure | Low |
 | v3.5.0 | 2025-07-10 | Added Prior Policy Number tracking | Low |
 | v3.0.0 | 2025-07-03 | Initial Supabase migration | High |

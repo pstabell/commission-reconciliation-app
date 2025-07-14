@@ -1,5 +1,5 @@
 # Known Issues and Fixes - Consolidated
-**Last Updated**: July 7, 2025  
+**Last Updated**: July 13, 2025  
 **Purpose**: Central repository for all technical issues, bugs, and their resolutions
 
 ## Table of Contents
@@ -73,6 +73,49 @@ elif isinstance(value, float) and (value == float('inf') or value == float('-inf
 - Fixed 34 duplicate IDs
 - Updated format validation
 - Added ID generation for missing entries
+
+### 4. Wright Flood MGA Loading Error
+**Date**: July 13, 2025  
+**Severity**: HIGH  
+**Status**: ✅ RESOLVED
+
+**Issue**: 500 error when loading Wright Flood MGA records
+**Root Cause**: UUID values in database couldn't be parsed during data display
+**Solution**: Implemented safe UUID conversion with error handling
+```python
+try:
+    # Attempt UUID conversion
+    value = str(value)
+except:
+    # Fallback to safe string conversion
+    value = str(value) if value is not None else ''
+```
+
+### 5. Edit Policy Transactions Checkbox Performance
+**Date**: July 13-14, 2025  
+**Severity**: HIGH  
+**Status**: ✅ RESOLVED
+
+**Issue**: 6-7 second delay when clicking checkboxes before Edit button becomes available
+**Root Cause**: Session state updates triggering full DataFrame refresh and recalculation
+**Solutions**: 
+- v3.6.2: Optimized checkbox handling for attention filter results
+- v3.6.3: Extended fix to regular search results with cached selection state
+**Implementation**: Cache selected count and index, only recalculate when selection changes
+**Impact**: All checkbox interactions now instant, Edit button responds immediately
+
+### 6. IndexError on Transaction Selection
+**Date**: July 13, 2025  
+**Severity**: MEDIUM  
+**Status**: ✅ RESOLVED
+
+**Issue**: "IndexError: index 0 is out of bounds" after editing transactions
+**Root Cause**: Row indices changing after edits caused selection misalignment
+**Solution**: Added bounds checking before index access
+```python
+if 0 <= idx < len(df):
+    # Safe to access index
+```
 
 ---
 
@@ -231,6 +274,24 @@ Solution:
 Code Changes:
 Testing:
 ```
+
+---
+
+### 7. Import-Created Transactions Not Protected
+**Date**: July 14, 2025  
+**Severity**: CRITICAL  
+**Status**: ✅ RESOLVED
+
+**Issue**: Transactions created during import could be deleted, breaking reconciliation links
+**Root Cause**: No special identification or protection for import-created transactions
+**Solution**: 
+- Added -IMPORT suffix pattern (e.g., D5D19K7-IMPORT)
+- Updated database validation function to accept new pattern
+- Implemented partial edit restrictions (payment fields read-only)
+- Added delete protection with error messages
+- Created comprehensive explanation box in edit form
+- Migrated 45 existing transactions to new format
+**Impact**: Import transactions now protected while allowing commission data completion
 
 ---
 

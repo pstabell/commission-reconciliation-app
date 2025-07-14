@@ -343,6 +343,17 @@ def is_reconciliation_transaction(transaction_id):
     
     return any(suffix in transaction_id_str for suffix in reconciliation_types)
 
+def is_import_transaction(transaction_id):
+    """
+    Check if transaction is an import-created entry that should have restricted editing.
+    Returns True for -IMPORT transactions.
+    """
+    if not transaction_id:
+        return False
+    
+    transaction_id_str = str(transaction_id)
+    return '-IMPORT' in transaction_id_str
+
 def clean_data_for_database(data):
     """
     Remove UI-only fields from data dictionary before database insertion.
@@ -1005,8 +1016,13 @@ def generate_client_id(length=6):
     random.shuffle(result)
     return ''.join(result)
 
-def generate_transaction_id(length=7):
-    """Generate a unique Transaction ID with at least 3 letters and 3 numbers."""
+def generate_transaction_id(length=7, suffix=None):
+    """Generate a unique Transaction ID with at least 3 letters and 3 numbers.
+    
+    Args:
+        length: Length of the base ID (default 7)
+        suffix: Optional suffix to append (e.g., '-IMPORT', '-STMT')
+    """
     # Ensure at least 3 letters and 3 numbers for 7-character ID
     letters = string.ascii_uppercase
     digits = string.digits
@@ -1028,7 +1044,12 @@ def generate_transaction_id(length=7):
     
     # Shuffle to create random pattern
     random.shuffle(result)
-    return ''.join(result)
+    base_id = ''.join(result)
+    
+    # Append suffix if provided
+    if suffix:
+        return f"{base_id}{suffix}"
+    return base_id
 
 def generate_unique_client_id():
     """Generate a unique Client ID with 3 letters and 3 numbers mixed randomly by checking against existing IDs."""
@@ -1240,36 +1261,26 @@ def load_mgas_for_carrier(carrier_id):
             pass
         
         # Fallback: Get MGAs that have commission rules with this carrier
-        response = supabase.table('commission_rules').select("""
-            mga_id,
-            mgas!inner(mga_name, status)
-        """).eq('carrier_id', carrier_id).neq('mga_id', 'null').execute()
+        # First get commission rules for this carrier
+        response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
         
-        # Extract unique MGAs
-        mgas = []
-        seen_mga_ids = set()
-        
+        # Filter out null mga_ids and get unique MGA details
+        mga_ids = []
         for rule in response.data:
-            if rule['mga_id'] not in seen_mga_ids and rule.get('mgas'):
-                # Only include active MGAs
-                if rule['mgas'].get('status') == 'Active':
-                    mgas.append({
-                        'mga_id': rule['mga_id'],
-                        'mga_name': rule['mgas']['mga_name']
-                    })
-                    seen_mga_ids.add(rule['mga_id'])
+            if rule.get('mga_id') and rule['mga_id'] not in mga_ids:
+                mga_ids.append(rule['mga_id'])
         
-        # If no MGAs found through rules, load all active MGAs as an option
-        if not mgas:
-            # Get all active MGAs
-            all_mgas_response = supabase.table('mgas').select('mga_id, mga_name').eq('status', 'Active').execute()
-            if all_mgas_response.data:
-                mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in all_mgas_response.data]
+        # Get MGA details for valid mga_ids
+        if mga_ids:
+            mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', mga_ids).eq('status', 'Active').execute()
+            if mga_response.data:
+                mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in mga_response.data]
+                mgas.sort(key=lambda x: x['mga_name'])
+                return mgas
         
-        # Sort by name
-        mgas.sort(key=lambda x: x['mga_name'])
-        
-        return mgas
+        # If no MGAs found through commission rules, return empty list
+        # Wright Flood and other carriers might not have MGAs
+        return []
         
     except Exception as e:
         st.error(f"Error loading MGAs for carrier: {e}")
@@ -2544,8 +2555,8 @@ def show_import_results(statement_date, all_data):
                             should_create = create_df.loc[idx, 'Create'] if idx < len(create_df) else True
                         
                         if should_create:
-                            # Generate new transaction ID
-                            new_trans_id = generate_transaction_id()
+                            # Generate new transaction ID with -IMPORT suffix
+                            new_trans_id = generate_transaction_id(suffix='-IMPORT')
                             
                             # Check if this item has client info from manual matching
                             client_id_to_use = None
@@ -2768,6 +2779,46 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             return {"action": "close", "data": None}
         return None
     
+    # Check if this is an import-created transaction
+    is_import = is_import_transaction(transaction_id)
+    if is_import:
+        # Show comprehensive explanation for import transactions
+        with st.expander("📥 **Import-Created Transaction** - Click to understand this transaction", expanded=True):
+            st.markdown("""
+            **What is this transaction?**  
+            This transaction was automatically created during reconciliation because:
+            - A payment was recorded in your commission statement
+            - No matching policy transaction existed in the system
+            - The system created this placeholder to record the payment
+            
+            **Why do you need to complete it?**  
+            To properly track commissions, you need to add:
+            - Premium information (Premium Sold, Taxes & Fees)
+            - Commission rates (Policy Gross Comm %, Agent Comm %)
+            - This creates the "credit" side to match the "debit" (payment) already recorded
+            
+            **What are the limitations?**  
+            🔒 **Protected fields** (cannot be edited):
+            - Transaction ID (ends with -IMPORT)
+            - Payment amounts (Agent Paid, Agency Comm Received)
+            - Statement date
+            - Customer information
+            
+            ✏️ **Editable fields** (please complete):
+            - Premium Sold ← Enter the premium amount
+            - Policy Taxes & Fees ← Enter taxes/fees
+            - Commission rates ← Will auto-populate if carrier/MGA selected
+            - Policy details (Policy Number, Dates, etc.)
+            
+            📊 **Calculated fields** (auto-update):
+            - Commissionable Premium
+            - Agency/Agent Estimated Commission
+            
+            ⚠️ **Important**: This transaction cannot be deleted to preserve payment history.
+            """)
+        
+        st.markdown("---")
+    
     # Form title based on context
     if is_renewal:
         st.info(f"**Reviewing renewal for Policy:** {modal_data.get('Policy Number', 'Unknown')} | **Customer:** {customer_name}")
@@ -2841,9 +2892,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             # Check if Client ID exists in the data
             client_id_value = modal_data.get('Client ID', '')
             
-            # Debug: Show what's in the Client ID field
-            st.caption(f"Debug - Client ID value: '{client_id_value}' (type: {type(client_id_value)})")
-            
             # If no Client ID exists, show option to generate one
             if not client_id_value or str(client_id_value).strip() == '':
                 generate_new = st.checkbox(
@@ -2874,6 +2922,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 help=help_text,
                 placeholder="e.g., U5G0O4"
             )
+            
+            # Debug: Show what's in the Client ID field
+            st.caption(f"Debug - Client ID value: '{client_id_value}' (type: {type(client_id_value)})")
+            
             rendered_fields.add('Client ID')
             field_counter += 1
         
@@ -3209,7 +3261,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         if st.session_state.get('edit_has_commission_rule', False):
             current_trans_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
             if current_trans_type not in ['NEW', 'RWL', 'CAN', 'XCL']:
-                st.info("💡 For END, PCH, and REWRITE transactions: Commission rates depend on Prior Policy Number. If present, renewal rates apply. Save the form to update rates after changing Prior Policy Number.")
+                st.info("💡 For END, PCH, and REWRITE transactions: Commission rates depend on Prior Policy Number. If present, renewal rates apply. Click the Calculate button to update rates after changing Prior Policy Number.")
         
         # Row 1: Policy Gross Comm % and Agency Estimated Comm/Revenue
         col9, col10 = st.columns(2)
@@ -3464,19 +3516,28 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             st.success("✅ Calculations updated! Review the amounts above before saving.")
         
         # Internal Fields (collapsed by default)
+        # For -IMPORT transactions, also show payment fields as read-only here
         with st.expander("Internal Fields", expanded=False):
             internal_col1, internal_col2 = st.columns(2)
             
+            # Define payment fields that should be protected for import transactions
+            payment_fields = ['Agent Paid Amount (STMT)', 'Agency Comm Received (STMT)', 'STMT DATE']
+            
             field_counter = 0
             for field in modal_data.keys():
-                if field in internal_fields or field.startswith('_') or field in ['reconciliation_status', 'reconciliation_id', 'reconciled_at']:
+                # Show internal fields and payment fields (for import transactions)
+                if (field in internal_fields or field.startswith('_') or 
+                    field in ['reconciliation_status', 'reconciliation_id', 'reconciled_at'] or
+                    (is_import and field in payment_fields)):
                     with internal_col1 if field_counter % 2 == 0 else internal_col2:
                         value = modal_data.get(field, '')
+                        help_text = "Protected payment data from import" if is_import and field in payment_fields else None
                         st.text_input(
                             field,
                             value=str(value) if value is not None else '',
                             key=f"modal_{field}_internal",
-                            disabled=True
+                            disabled=True,
+                            help=help_text
                         )
                         updated_data[field] = value  # Preserve internal field values
                     field_counter += 1
@@ -4341,6 +4402,42 @@ def main():
                         edit_results_with_selection = edit_results.copy()
                         edit_results_with_selection.insert(0, 'Select', False)
                         
+                        # Reorder columns to place date columns after Policy Number
+                        # First, identify all columns
+                        all_cols = list(edit_results_with_selection.columns)
+                        
+                        # Define the desired order for the beginning columns
+                        priority_cols = ['Select']
+                        
+                        # Find Transaction ID and Client ID columns
+                        if transaction_id_col and transaction_id_col in all_cols:
+                            priority_cols.append(transaction_id_col)
+                        if client_id_col and client_id_col in all_cols:
+                            priority_cols.append(client_id_col)
+                        
+                        # Add Customer if exists
+                        if 'Customer' in all_cols:
+                            priority_cols.append('Customer')
+                        
+                        # Add Policy Number
+                        if 'Policy Number' in all_cols:
+                            priority_cols.append('Policy Number')
+                        
+                        # Add the three date columns immediately after Policy Number
+                        date_cols_ordered = ['Policy Origination Date', 'Effective Date', 'X-DATE']
+                        for col in date_cols_ordered:
+                            if col in all_cols:
+                                priority_cols.append(col)
+                        
+                        # Add remaining columns that aren't in priority list
+                        remaining_cols = [col for col in all_cols if col not in priority_cols]
+                        
+                        # Combine all columns in the desired order
+                        final_col_order = priority_cols + remaining_cols
+                        
+                        # Reorder the dataframe
+                        edit_results_with_selection = edit_results_with_selection[final_col_order]
+                        
                         # DO NOT format dates here - keep original values
                     
                         # Configure column settings for the data editor
@@ -4433,12 +4530,15 @@ def main():
                         edit_position_key = f"edit_position_{editor_key}"
                         unsaved_changes_key = f"unsaved_changes_{editor_key}"
                         
-                        # Initialize if not exists or reset if new search
+                        # Create a unique search identifier that includes both search term and filter state
+                        current_search_state = f"{edit_search_term}_{show_attention_filter}"
+                        
+                        # Initialize if not exists or reset if search criteria changed
                         if (editor_key not in st.session_state or 
                             search_key not in st.session_state or 
-                            st.session_state[search_key] != edit_search_term):
+                            st.session_state[search_key] != current_search_state):
                             st.session_state[editor_key] = edit_results_with_selection.copy()
-                            st.session_state[search_key] = edit_search_term
+                            st.session_state[search_key] = current_search_state
                             # Clear position tracking on new search
                             if edit_position_key in st.session_state:
                                 del st.session_state[edit_position_key]
@@ -4494,6 +4594,11 @@ def main():
                             num_data_rows = len(st.session_state[editor_key])
                             calculated_height = min(50 + (num_data_rows + 2) * 35, 600)  # +2 for the extra rows you want
                             
+                            # Track only Select column changes for performance
+                            select_column_key = f"{editor_key}_select_only"
+                            if select_column_key not in st.session_state:
+                                st.session_state[select_column_key] = st.session_state[editor_key]['Select'].copy() if 'Select' in st.session_state[editor_key].columns else pd.Series()
+                            
                             # Editable data grid with selection column
                             edited_data = st.data_editor(
                                 st.session_state[editor_key],
@@ -4506,12 +4611,22 @@ def main():
                             )
                                 
                                 
-                            # Detect changes and auto-save
-                            if not edited_data.equals(st.session_state[editor_key]):
+                            # Detect changes and auto-save - skip if only Select column changed
+                            data_changed = False
+                            if 'Select' in edited_data.columns:
+                                # Compare dataframes excluding the Select column for performance
+                                cols_to_check = [col for col in edited_data.columns if col != 'Select']
+                                if cols_to_check:
+                                    data_changed = not edited_data[cols_to_check].equals(st.session_state[editor_key][cols_to_check])
+                            else:
+                                data_changed = not edited_data.equals(st.session_state[editor_key])
+                            
+                            if data_changed:
                                 changes_detected = []
                                 for idx in edited_data.index:
                                     for col in edited_data.columns:
-                                        if edited_data.loc[idx, col] != st.session_state[editor_key].loc[idx, col]:
+                                        # Skip the Select column to avoid triggering saves on checkbox clicks
+                                        if col != 'Select' and edited_data.loc[idx, col] != st.session_state[editor_key].loc[idx, col]:
                                             changes_detected.append((idx, col, edited_data.loc[idx, col]))
                                 
                                 if changes_detected and st.session_state[auto_save_key]:
@@ -4549,11 +4664,16 @@ def main():
                                 elif changes_detected and not st.session_state[auto_save_key]:
                                     status_container.info(f"📝 {len(changes_detected)} unsaved changes")
                                     st.session_state[unsaved_changes_key] = changes_detected
+                                
                             
-                            else:
-                                # No changes
-                                if st.session_state[auto_save_key]:
-                                    status_container.success("✅ All changes auto-saved")
+                            # Always update session state for Select column changes
+                            # This prevents the equals() check from triggering on checkbox clicks
+                            if 'Select' in edited_data.columns:
+                                st.session_state[editor_key]['Select'] = edited_data['Select'].copy()
+                            
+                            # Handle no data changes case
+                            if not data_changed and st.session_state[auto_save_key]:
+                                status_container.success("✅ All changes auto-saved")
                             
                             # Update session state without rerun
                             st.session_state[editor_key] = edited_data
@@ -4599,18 +4719,43 @@ def main():
                                         st.error("Session state not initialized. Please try searching again.")
                             
                             with button_col2:
-                                # Check for selected rows for edit button
-                                selected_rows = edited_data[edited_data['Select'] == True].copy()
-                                selected_count = len(selected_rows)
-                                
-                                if selected_count == 1:
-                                    if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
-                                        st.session_state['show_edit_modal'] = True
-                                        st.session_state['edit_modal_data'] = selected_rows.iloc[0].to_dict()
-                                elif selected_count == 0:
-                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
+                                # Check for selected rows for edit button - use only the Select column for performance
+                                if 'Select' in edited_data.columns:
+                                    # Track selected count in session state for performance
+                                    selected_count_key = f"{editor_key}_selected_count"
+                                    
+                                    # Only recalculate if the Select column has changed
+                                    if 'Select' in edited_data.columns:
+                                        current_selected = edited_data['Select'].tolist()
+                                        prev_selected_key = f"{editor_key}_prev_selected"
+                                        
+                                        if (prev_selected_key not in st.session_state or 
+                                            st.session_state[prev_selected_key] != current_selected):
+                                            # Calculate selected count only when selection changes
+                                            selected_mask = edited_data['Select'] == True
+                                            selected_count = selected_mask.sum()
+                                            st.session_state[selected_count_key] = selected_count
+                                            st.session_state[prev_selected_key] = current_selected
+                                            if selected_count == 1:
+                                                # Cache the selected index too
+                                                st.session_state[f"{editor_key}_selected_idx"] = edited_data[selected_mask].index[0]
+                                        else:
+                                            # Use cached values
+                                            selected_count = st.session_state.get(selected_count_key, 0)
+                                    
+                                    if selected_count == 1:
+                                        if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
+                                            st.session_state['show_edit_modal'] = True
+                                            # Use cached index
+                                            selected_idx = st.session_state.get(f"{editor_key}_selected_idx")
+                                            if selected_idx is not None:
+                                                st.session_state['edit_modal_data'] = edited_data.loc[selected_idx].to_dict()
+                                    elif selected_count == 0:
+                                        st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
+                                    else:
+                                        st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help=f"{selected_count} selected - please select only ONE transaction")
                                 else:
-                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help=f"{selected_count} selected - please select only ONE transaction")
+                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="No selection column available")
                             
                             # Save and Delete buttons with status
                             st.markdown("---")
@@ -4745,6 +4890,9 @@ def main():
                                 
                                 modal_data = st.session_state.get('edit_modal_data', {})
                                 
+                                # Add an anchor point to prevent scroll jumping
+                                st.empty()  # This helps maintain scroll position
+                                
                                 # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
                                 st.subheader("Carrier & MGA Selection 🏢")
                                 st.info("💡 Select carrier first to see available MGAs. This will auto-populate commission rates.")
@@ -4756,72 +4904,75 @@ def main():
                                 # Load carriers for dropdown
                                 carriers_list = load_carriers_for_dropdown()
                                 
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    # Carrier dropdown with search capability
-                                    carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
+                                # Use container to better control rendering
+                                carrier_container = st.container()
+                                with carrier_container:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        # Carrier dropdown with search capability
+                                        carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
+                                        
+                                        # Find index of current carrier
+                                        carrier_index = 0
+                                        if current_carrier and current_carrier in carrier_options:
+                                            carrier_index = carrier_options.index(current_carrier)
+                                        
+                                        selected_carrier_name = st.selectbox(
+                                            "Carrier Name*",
+                                            options=carrier_options,
+                                            index=carrier_index,
+                                            format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
+                                            help="Select carrier to auto-populate commission rates",
+                                            key="edit_policy_carrier_outside"
+                                        )
+                                        
+                                        # Get carrier_id for selected carrier
+                                        selected_carrier_id = None
+                                        if selected_carrier_name:
+                                            selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
+                                            st.session_state['edit_selected_carrier_id'] = selected_carrier_id
+                                            st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                                        
+                                        # Fallback text input for manual entry
+                                        if not selected_carrier_name:
+                                            carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
+                                            st.session_state['edit_carrier_name_manual'] = carrier_name_manual
                                     
-                                    # Find index of current carrier
-                                    carrier_index = 0
-                                    if current_carrier and current_carrier in carrier_options:
-                                        carrier_index = carrier_options.index(current_carrier)
-                                    
-                                    selected_carrier_name = st.selectbox(
-                                        "Carrier Name*",
-                                        options=carrier_options,
-                                        index=carrier_index,
-                                        format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
-                                        help="Select carrier to auto-populate commission rates",
-                                        key="edit_policy_carrier_outside"
-                                    )
-                                    
-                                    # Get carrier_id for selected carrier
-                                    selected_carrier_id = None
-                                    if selected_carrier_name:
-                                        selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
-                                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
-                                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
-                                    
-                                    # Fallback text input for manual entry
-                                    if not selected_carrier_name:
-                                        carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
-                                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
-                                
-                                with col2:
-                                    # MGA dropdown (filtered by carrier) - Updates immediately!
-                                    mga_options = ["Direct Appointment"]
-                                    selected_mga_id = None
-                                    
-                                    if selected_carrier_id:
-                                        mgas_list = load_mgas_for_carrier(selected_carrier_id)
-                                        mga_options.extend([m['mga_name'] for m in mgas_list])
-                                    
-                                    # Find index of current MGA
-                                    mga_index = 0
-                                    if current_mga:
-                                        if current_mga in mga_options:
-                                            mga_index = mga_options.index(current_mga)
-                                        elif "Direct Appointment" in mga_options:
-                                            mga_index = mga_options.index("Direct Appointment")
-                                    
-                                    selected_mga_name = st.selectbox(
-                                        "MGA/Appointment",
-                                        options=mga_options,
-                                        index=mga_index,
-                                        format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
-                                        help="MGA options update automatically when you select a carrier",
-                                        key="edit_policy_mga_outside"
-                                    )
-                                    
-                                    # Get mga_id for selected MGA
-                                    if selected_mga_name != "Direct Appointment" and selected_carrier_id:
-                                        mgas_list = load_mgas_for_carrier(selected_carrier_id) 
-                                        selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
-                                        st.session_state['edit_selected_mga_id'] = selected_mga_id
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
-                                    else:
-                                        st.session_state['edit_selected_mga_id'] = None
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                    with col2:
+                                        # MGA dropdown (filtered by carrier) - Updates immediately!
+                                        mga_options = ["Direct Appointment"]
+                                        selected_mga_id = None
+                                        
+                                        if selected_carrier_id:
+                                            mgas_list = load_mgas_for_carrier(selected_carrier_id)
+                                            mga_options.extend([m['mga_name'] for m in mgas_list])
+                                        
+                                        # Find index of current MGA
+                                        mga_index = 0
+                                        if current_mga:
+                                            if current_mga in mga_options:
+                                                mga_index = mga_options.index(current_mga)
+                                            elif "Direct Appointment" in mga_options:
+                                                mga_index = mga_options.index("Direct Appointment")
+                                        
+                                        selected_mga_name = st.selectbox(
+                                            "MGA/Appointment",
+                                            options=mga_options,
+                                            index=mga_index,
+                                            format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
+                                            help="MGA options update automatically when you select a carrier",
+                                            key="edit_policy_mga_outside"
+                                        )
+                                        
+                                        # Get mga_id for selected MGA
+                                        if selected_mga_name != "Direct Appointment" and selected_carrier_id:
+                                            mgas_list = load_mgas_for_carrier(selected_carrier_id) 
+                                            selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
+                                            st.session_state['edit_selected_mga_id'] = selected_mga_id
+                                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                        else:
+                                            st.session_state['edit_selected_mga_id'] = None
+                                            st.session_state['edit_selected_mga_name'] = selected_mga_name
                                     
                                     # Fallback text input for manual entry
                                     if not selected_carrier_name:
@@ -4975,6 +5126,7 @@ def main():
                             # Collect transaction IDs to delete BEFORE any modifications
                             transaction_ids_to_delete = []
                             reconciliation_attempts = []
+                            import_attempts = []
                             if not selected_rows_for_delete.empty and transaction_id_col:
                                 for idx, row in selected_rows_for_delete.iterrows():
                                     tid = row[transaction_id_col]
@@ -4982,6 +5134,9 @@ def main():
                                         # Check if this is a reconciliation transaction
                                         if is_reconciliation_transaction(tid):
                                             reconciliation_attempts.append(str(tid))
+                                        # Check if this is an import-created transaction
+                                        elif is_import_transaction(tid):
+                                            import_attempts.append(str(tid))
                                         else:
                                             transaction_ids_to_delete.append(str(tid))
                             
@@ -4991,6 +5146,17 @@ def main():
                                 for tid in reconciliation_attempts:
                                     st.write(f"- {tid}")
                                 st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
+                            
+                            # Show error if trying to delete import-created transactions
+                            if import_attempts:
+                                st.error(f"📥 Cannot delete {len(import_attempts)} import-created transaction(s):")
+                                for tid in import_attempts:
+                                    # Find the customer name for this transaction ID
+                                    customer_row = edited_data[edited_data[transaction_id_col] == tid]
+                                    if not customer_row.empty:
+                                        customer = customer_row.iloc[0].get('Customer', 'Unknown')
+                                        st.write(f"- {tid} - {customer}")
+                                st.info("Import transactions (-IMPORT suffix) contain payment records from statements and cannot be deleted. Complete the premium/commission fields instead.")
                             
                             if transaction_ids_to_delete:
                                 st.warning(f"⚠️ You have selected {len(transaction_ids_to_delete)} record(s) for deletion:")

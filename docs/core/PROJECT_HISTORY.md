@@ -904,6 +904,58 @@ The fix ensures:
 
 ---
 
+### Version 3.6.1 (July 13, 2025) - Client ID Generation in Edit Transaction Form
+
+Quick enhancement adding Client ID generation capability to the edit transaction form:
+
+#### Client ID Generation Button
+- **New Feature**: "Generate Client ID" button in edit forms
+- **Smart Visibility**: Only appears when Client ID field is empty
+- **Format**: Generates unique 8-character ID (CL-XXXXXXXX)
+- **Real-time Update**: Updates database immediately without form save
+- **UI Enhancement**: Button disappears after successful generation
+- **Availability**: Works in both Edit Policy Transactions page and modal forms
+
+**Impact**: Ensures all transactions can have proper Client IDs for reporting and data integrity, even for legacy transactions created before Client ID was required.
+
+---
+
+### Version 3.6.2 (July 13, 2025) - Performance Optimization & Bug Fixes
+
+Major performance improvements and critical bug fixes:
+
+#### Wright Flood MGA Loading Error
+- **Issue**: 500 error when loading Wright Flood records due to UUID parsing
+- **Root Cause**: Database contained UUID values that couldn't be parsed
+- **Solution**: Implemented safe UUID conversion with comprehensive error handling
+- **Result**: Wright Flood commission rules now load and display correctly
+
+#### Edit Policy Transactions Performance
+- **Issue**: 6-7 second delay when clicking checkboxes
+- **Root Cause**: Session state updates triggering full DataFrame refresh on every click
+- **Solution**: Optimized checkbox handling to update only necessary state
+- **Result**: Checkbox interactions now instant - dramatic UX improvement
+
+#### IndexError on Transaction Selection
+- **Issue**: "IndexError: index 0 is out of bounds" after editing transactions
+- **Root Cause**: Row indices changing after edits caused selection misalignment
+- **Solution**: Added validation to ensure indices within bounds before access
+- **Result**: Transaction selection works reliably after any edits
+
+#### UI Improvements
+- **Client ID Debug Caption**: Repositioned from above to below field
+- **Form Layout**: Better field relationships and readability
+
+#### Technical Enhancements
+- Comprehensive error handling for UUID operations
+- Optimized session state management for checkbox operations
+- Bounds checking for all DataFrame index operations
+- Improved debug information positioning
+
+**Impact**: Significant performance improvements in Edit Policy Transactions page, eliminated critical errors preventing MGA data access, and enhanced overall application stability. Users experience faster, more reliable operation with better error resilience.
+
+---
+
 ### Version 3.6.0 (July 13, 2025) - Contacts & Commission Structure Management
 
 Major feature addition implementing comprehensive carrier and MGA management with automated commission rate calculations:
@@ -987,4 +1039,4 @@ Major feature addition implementing comprehensive carrier and MGA management wit
 
 *Document Created: July 3, 2025*  
 *Last Updated: July 13, 2025*  
-*Current Application Version: 3.6.0*
+*Current Application Version: 3.6.2*

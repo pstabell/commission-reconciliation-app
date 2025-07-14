@@ -146,6 +146,17 @@ Error Details: {
 2. Enable caching (already implemented for 5 minutes)
 3. Add indexes to frequently queried columns
 
+### Checkbox Performance in Edit Policy Transactions (FIXED in v3.6.2-3.6.3)
+**Symptoms**:
+- 6-7 second delay when clicking checkboxes
+- UI freezes while processing checkbox clicks
+- Edit button not becoming available immediately after selection
+
+**Previous Cause**: Session state updates triggering full DataFrame refresh
+**Solutions**: 
+- v3.6.2: Optimized checkbox interactions for attention filter
+- v3.6.3: Extended optimization to regular search results with cached selection state
+
 ### Session State Errors
 **Error**: `st.session_state has no key 'X'`
 
@@ -154,6 +165,18 @@ Error Details: {
 if 'key_name' not in st.session_state:
     st.session_state.key_name = default_value
 ```
+
+### UUID Parsing Errors (FIXED in v3.6.2)
+**Error**: 500 error when loading certain MGA records (e.g., Wright Flood)
+
+**Previous Cause**: UUID values in database couldn't be parsed
+**Solution**: Implemented safe UUID conversion with error handling
+
+### IndexError After Edits (FIXED in v3.6.2)
+**Error**: `IndexError: index 0 is out of bounds for axis 0 with size 0`
+
+**Previous Cause**: Row indices changing after edits
+**Solution**: Added bounds checking before index access
 
 ---
 

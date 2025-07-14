@@ -5,6 +5,52 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.3] - 2025-07-14 - Extended Checkbox Performance Fix
+
+### Fixed
+- **Regular Search Checkbox Performance**
+  - Extended checkbox performance optimization to regular search results
+  - Previously only attention filter had instant response
+  - Issue: 7-second delay after clicking checkbox before Edit button became available
+  - Solution: Implemented cached selection state that only recalculates when selection changes
+  - Technical: Caches selected count and index in session state for immediate access
+  - Impact: All checkbox interactions now instant across entire Edit Policy Transactions page
+
+## [3.6.2] - 2025-07-13 - Performance Optimization & Bug Fixes
+
+### Fixed
+- **Wright Flood MGA Loading Error**
+  - Fixed UUID parsing error causing 500 error when loading Wright Flood records
+  - Issue: Database contained UUID values that couldn't be parsed in data display
+  - Solution: Implemented safe UUID conversion with error handling
+  - Impact: Wright Flood commission rules now load and display correctly
+
+- **Edit Policy Transactions Checkbox Performance**
+  - Fixed 6-7 second delay when clicking checkboxes due to DataFrame operations
+  - Root cause: Session state updates triggering full data refresh with every click
+  - Solution: Optimized checkbox handling to update only necessary state
+  - Impact: Checkbox interactions now instant, dramatically improved user experience
+
+- **IndexError on Transaction Selection**
+  - Fixed "IndexError: index 0 is out of bounds" when selecting edited transactions
+  - Issue: Row indices changing after edits caused selection misalignment
+  - Solution: Added validation to ensure indices are within bounds before access
+  - Impact: Transaction selection now works reliably after any edits
+
+- **Client ID Debug Caption Position**
+  - Repositioned debug caption for Client ID field from above to below the field
+  - Improved form layout and readability
+  - Better user experience with clearer field relationships
+
+### Technical
+- Added comprehensive error handling for UUID operations throughout the application
+- Optimized session state management for checkbox operations
+- Implemented bounds checking for all DataFrame index operations
+- Improved debug information positioning in forms
+
+### Impact
+Significant performance improvements in the Edit Policy Transactions page, eliminated critical errors preventing MGA data access, and enhanced overall application stability. Users experience faster, more reliable operation with better error resilience.
+
 ## [3.6.1] - 2025-07-13 - Client ID Generation in Edit Transaction Form
 
 ### Added

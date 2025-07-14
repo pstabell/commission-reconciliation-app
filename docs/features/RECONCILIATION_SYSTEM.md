@@ -66,12 +66,24 @@ The system successfully implements professional accounting principles while rema
   - Agency Comm Received (STMT): Audit verification field
 - **Behavior**: Permanently locked, grouped by batch
 
-### 3. Adjustment Transactions
+### 3. Import-Created Transactions (NEW in v3.6.3)
+- **Transaction ID**: `D5D19K7-IMPORT`
+- **Purpose**: Placeholder for payments without matching policy transactions
+- **Created**: Automatically during reconciliation when payment has no match
+- **Behavior**: 
+  - Partially editable (premium/commission fields only)
+  - Payment fields protected (read-only)
+  - Cannot be deleted to preserve payment history
+  - Shows comprehensive explanation box when editing
+  - Description contains "Created from statement import"
+- **Use Case**: Complete premium and commission data to calculate expected vs actual
+
+### 4. Adjustment Transactions
 - **Transaction ID**: `M3N4P5R-ADJ-20250715`
 - **Purpose**: Correct errors without modifying originals
 - **Behavior**: Creates audit trail, locked once created
 
-### 4. Void Transactions
+### 5. Void Transactions
 - **Transaction ID**: `K9L8M7N-VOID-20250720`
 - **Purpose**: Reverse entire reconciliation batch
 - **Behavior**: Creates negative entries, maintains integrity
