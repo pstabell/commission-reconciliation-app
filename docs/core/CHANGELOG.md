@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows commission rule description when rate found
   - Consistent with Edit Policy Transactions functionality
 
+- **Policy Revenue Ledger "All Dates" Option**
+  - Added "All Dates" option to Effective Date filter dropdown
+  - Allows viewing all policies regardless of effective date
+  - Helps handle date format issues without requiring immediate fixes
+  - Maintains backward compatibility with specific date selection
+
 ### Changed
 - Pending renewals now sorted by Days Until Expiration (ascending)
 - Updated empty state messages to be more informative based on filters

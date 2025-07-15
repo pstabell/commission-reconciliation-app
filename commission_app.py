@@ -10102,14 +10102,14 @@ SOLUTION NEEDED:
             filtered_data = filtered_data[filtered_data["Policy Type"] == selected_policy_type]
 
         effective_dates = filtered_data["Effective Date"].dropna().unique().tolist() if "Effective Date" in filtered_data.columns else []
-        selected_effective_date = st.selectbox("Select Policy Effective Date:", ["Select..."] + sorted(effective_dates), key="ledger_effectivedate_select")
-        if selected_effective_date and selected_effective_date != "Select...":
+        selected_effective_date = st.selectbox("Select Policy Effective Date:", ["Select...", "All Dates"] + sorted(effective_dates), key="ledger_effectivedate_select")
+        if selected_effective_date and selected_effective_date not in ["Select...", "All Dates"]:
             filtered_data = filtered_data[filtered_data["Effective Date"] == selected_effective_date]
 
-        # Only show policy number select if all three are chosen
+        # Show policy number select if customer and policy type are chosen (and optionally effective date)
         policy_numbers = filtered_data["Policy Number"].dropna().unique().tolist() if "Policy Number" in filtered_data.columns else []
         selected_policy = None
-        if selected_customer != "Select..." and selected_policy_type != "Select..." and selected_effective_date != "Select...":
+        if selected_customer != "Select..." and selected_policy_type != "Select..." and (selected_effective_date != "Select..."):
             selected_policy = st.selectbox("Select Policy Number:", ["Select..."] + sorted(policy_numbers), key="ledger_policy_select")
 
         if selected_policy and selected_policy != "Select...":
@@ -10423,7 +10423,7 @@ SOLUTION NEEDED:
             st.write("**📈 Reports & Analytics**")
             st.write("- **Reports**: Generate summary and commission analysis reports")
             st.write("- **Search & Filter**: Advanced filtering with multiple criteria")
-            st.write("- **Policy Revenue Ledger**: Detailed revenue tracking and calculations")
+            st.write("- **Policy Revenue Ledger**: Detailed revenue tracking with 'All Dates' option for date issues")
             
             st.divider()
             

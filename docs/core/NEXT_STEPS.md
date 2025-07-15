@@ -857,7 +857,7 @@ Users can now calculate endorsement premiums directly in the edit form, and the 
 
 ---
 
-## 🐛 Recent Bug Fixes (July 15, 2025 - Evening)
+## 🐛 Recent Bug Fixes & Enhancements (July 15, 2025 - Evening)
 
 ### Fixed Issues:
 1. **Days Until Expiration Database Error**
@@ -874,3 +874,10 @@ Users can now calculate endorsement premiums directly in the edit form, and the 
    - Issue: Date fields retained previous values after saving
    - Solution: Changed date defaults from today's date to None, added missing keys to clear list
    - Impact: All Policy Information fields now start empty for each new transaction
+
+### New Features:
+1. **Policy Revenue Ledger "All Dates" Option**
+   - Added "All Dates" option to Effective Date filter dropdown
+   - Allows viewing all policies for a customer/policy type regardless of effective date
+   - Helps work around date format issues without requiring immediate fixes
+   - Filter logic updated to skip date filtering when "All Dates" is selected
