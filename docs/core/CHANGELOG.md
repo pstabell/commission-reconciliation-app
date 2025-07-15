@@ -24,14 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Past-due renewals sorted first for immediate attention
   - CAN and XCL transactions continue to exclude policies from renewals
 
+- **Carrier Commission Rate Loading in Pending Renewals**
+  - Added carrier/MGA selection UI to Edit Renewal Transaction form
+  - Commission rates automatically populate when carrier/MGA selected
+  - Renewal rates applied based on RWL transaction type
+  - Visual tip reminder to select carrier from dropdown
+  - Shows commission rule description when rate found
+  - Consistent with Edit Policy Transactions functionality
+
 ### Changed
 - Pending renewals now sorted by Days Until Expiration (ascending)
 - Updated empty state messages to be more informative based on filters
+
+### Fixed
+- Removed debug caption from carrier commission lookup
 
 ### Technical
 - Enhanced `get_pending_renewals()` to show all past-due with no lower limit
 - Added `style_renewal_rows()` function (ready for future styling support)
 - Added status icon column as visual workaround for st.data_editor limitations
+- Integrated carrier/MGA selection UI into renewal edit workflow
 
 ## [3.6.5] - 2025-07-15 - Void Date Extraction Fix
 

@@ -840,8 +840,15 @@ Complete overhaul of Pending Policy Renewals page and enhancement of Edit Transa
    - ✅ ✅ OK - for 8+ days until expiration
    - ✅ Status legend for clarity
 
+5. **Carrier Commission Rate Loading**:
+   - ✅ Added carrier/MGA selection UI to Edit Renewal Transaction form
+   - ✅ Automatic commission rate population when carrier selected
+   - ✅ Visual tip reminder to select from dropdown
+   - ✅ Debug messages removed after successful implementation
+   - ✅ Consistent with Edit Policy Transactions functionality
+
 ### Impact:
-Users can now calculate endorsement premiums directly in the edit form, and the enhanced renewals page ensures no renewal is missed. Past-due renewals are immediately visible with clear urgency indicators, and flexible filtering allows focus on specific time ranges.
+Users can now calculate endorsement premiums directly in the edit form, and the enhanced renewals page ensures no renewal is missed. Past-due renewals are immediately visible with clear urgency indicators, and flexible filtering allows focus on specific time ranges. Commission rates automatically load for renewals, reducing manual entry errors.
 
 ---
 

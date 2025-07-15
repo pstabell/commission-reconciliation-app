@@ -3359,6 +3359,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         # Commission Details
         st.markdown("#### Commission Details")
         
+        # Debug commission rule status
+        if is_renewal:
+            st.caption(f"Debug - Has commission rule: {st.session_state.get('edit_has_commission_rule', False)}, New rate: {st.session_state.get('edit_commission_new_rate', 'None')}, Renewal rate: {st.session_state.get('edit_commission_renewal_rate', 'None')}")
+        
         # Add info about Prior Policy Number affecting rates
         if st.session_state.get('edit_has_commission_rule', False):
             current_trans_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
@@ -10410,6 +10414,17 @@ SOLUTION NEEDED:
             
             st.divider()
             
+            # Pending Renewals
+            st.write("**📅 Pending Policy Renewals**")
+            st.write("- **Time Range Filters**: View all renewals or filter by Past Due, This Week, 30/60/90 days")
+            st.write("- **Visual Indicators**: 🔴 Past Due, 🟡 Urgent (0-7 days), ✅ OK")
+            st.write("- **Summary Metrics**: Quick counts of past due, due this week, and total pending")
+            st.write("- **Carrier Commission Rates**: Automatically loads rates when carrier/MGA selected")
+            st.write("- **Premium Calculator**: Built-in endorsement calculator for premium changes")
+            st.write("- **Smart Filtering**: Cancelled and excluded policies automatically hidden")
+            
+            st.divider()
+            
             # Cancel/Rewrite Scenario Guide
             st.write("**🔄 Cancel/Rewrite Scenario Guide**")
             st.info("**Important**: This section explains how to handle mid-term policy cancellations that are immediately rewritten (common for rate reductions).")
@@ -10991,6 +11006,19 @@ TO "New Column Name";
             st.session_state.editing_renewal = False
         if 'renewal_to_edit' not in st.session_state:
             st.session_state.renewal_to_edit = None
+        
+        # Clear carrier/commission related session state to avoid stale data
+        keys_to_clear = [
+            'edit_selected_carrier_id', 'edit_selected_carrier_name',
+            'edit_selected_mga_id', 'edit_selected_mga_name',
+            'edit_carrier_name_manual', 'edit_mga_name_manual',
+            'edit_final_carrier_name', 'edit_final_mga_name',
+            'edit_commission_new_rate', 'edit_commission_renewal_rate',
+            'edit_commission_rule_id', 'edit_has_commission_rule'
+        ]
+        for key in keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
 
         pending_renewals_df = get_pending_renewals(all_data)
         # Don't use duplicate_for_renewal for display - it modifies the transaction type!
@@ -11136,15 +11164,179 @@ TO "New Column Name";
                 st.divider()
                 st.markdown("### 📝 Edit Renewal Transaction")
                 
-                # Important reminder for user
-                st.info("💡 **Note**: To edit a different transaction, click the **Cancel** button below to return to the selection table.")
+                # Important reminder for user with better visibility
+                st.warning("⚠️ **Currently Editing**: To select a different renewal, scroll down and click the **Cancel** button at the bottom of this form.")
                 
                 # Prepare renewal data (pre-populate with calculated values)
                 renewal_data = st.session_state.renewal_to_edit.copy()
                 
+                # Add Carrier and MGA selection UI (similar to Edit Policy Transactions)
+                st.markdown("#### Carrier & MGA Selection")
+                
+                # Add attention-grabbing reminder
+                st.success("💡 **TIP**: Select a carrier from the dropdown below to automatically load commission rates! ⬇️")
+                
+                # Get current carrier and MGA
+                current_carrier = renewal_data.get('Carrier Name', '')
+                current_mga = renewal_data.get('MGA Name', '')
+                
+                # Show current transaction data
+                st.info(f"📋 Current Transaction Data - Carrier: '{current_carrier}' | MGA: '{current_mga}' | Policy Type: '{renewal_data.get('Policy Type', '')}')")
+                
+                col_carrier, col_mga = st.columns(2)
+                
+                with col_carrier:
+                    # Load carriers list
+                    carriers_list = load_carriers_for_dropdown()
+                    carrier_names = [c['carrier_name'] for c in carriers_list if c.get('status', 'Active') == 'Active']
+                    carrier_names.insert(0, "")  # Add empty option
+                    
+                    # Get index of current carrier
+                    carrier_index = 0
+                    if current_carrier and current_carrier in carrier_names:
+                        carrier_index = carrier_names.index(current_carrier)
+                    
+                    selected_carrier_name = st.selectbox(
+                        "Select Carrier",
+                        options=carrier_names,
+                        index=carrier_index,
+                        key="renewal_carrier_select",
+                        placeholder="Choose a carrier..."
+                    )
+                    
+                    # Store carrier ID if selected
+                    selected_carrier_id = None
+                    if selected_carrier_name:
+                        selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
+                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
+                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                    
+                    # Fallback text input for manual entry
+                    if not selected_carrier_name:
+                        carrier_name_manual = st.text_input(
+                            "Or enter carrier name manually", 
+                            value=current_carrier, 
+                            placeholder="Type carrier name", 
+                            key="renewal_carrier_manual"
+                        )
+                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
+                
+                with col_mga:
+                    # Load MGAs based on selected carrier
+                    if selected_carrier_name and selected_carrier_id:
+                        mgas_list = load_mgas_for_carrier(selected_carrier_id)
+                        mga_names = ["Direct Appointment"] + [m['mga_name'] for m in mgas_list]
+                        
+                        # Get index of current MGA
+                        mga_index = 0
+                        if current_mga:
+                            if current_mga in mga_names:
+                                mga_index = mga_names.index(current_mga)
+                            elif current_mga == "" and "Direct Appointment" in mga_names:
+                                mga_index = mga_names.index("Direct Appointment")
+                        
+                        selected_mga_name = st.selectbox(
+                            "Select MGA",
+                            options=mga_names,
+                            index=mga_index,
+                            key="renewal_mga_select",
+                            placeholder="Choose an MGA...",
+                            help="Select 'Direct Appointment' if no MGA is involved"
+                        )
+                        
+                        # Store MGA ID if selected
+                        if selected_mga_name != "Direct Appointment" and selected_carrier_id:
+                            selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
+                            st.session_state['edit_selected_mga_id'] = selected_mga_id
+                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                        else:
+                            st.session_state['edit_selected_mga_id'] = None
+                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                    
+                    # Fallback text input for manual entry
+                    if not selected_carrier_name:
+                        mga_name_manual = st.text_input(
+                            "Or enter MGA name manually", 
+                            value=current_mga, 
+                            placeholder="Type MGA name or leave blank", 
+                            key="renewal_mga_manual"
+                        )
+                        st.session_state['edit_mga_name_manual'] = mga_name_manual
+                
+                # Store final values for form submission
+                if selected_carrier_name:
+                    final_carrier_name = selected_carrier_name
+                    final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
+                else:
+                    final_carrier_name = st.session_state.get('edit_carrier_name_manual', '')
+                    final_mga_name = st.session_state.get('edit_mga_name_manual', '')
+                
+                # Store in session state for form to access
+                st.session_state['edit_final_carrier_name'] = final_carrier_name
+                st.session_state['edit_final_mga_name'] = final_mga_name
+                
+                # Display selection status and commission info
+                if selected_carrier_name and selected_carrier_id:
+                    # Look up commission rule
+                    commission_rule = None
+                    policy_type = renewal_data.get('Policy Type', '')
+                    
+                    if st.session_state.get('edit_selected_mga_id'):
+                        # Try carrier + MGA + policy type first
+                        commission_rule = lookup_commission_rule(
+                            selected_carrier_id, 
+                            st.session_state.get('edit_selected_mga_id'), 
+                            policy_type
+                        )
+                        if not commission_rule:
+                            # Try carrier + MGA without policy type
+                            commission_rule = lookup_commission_rule(
+                                selected_carrier_id, 
+                                st.session_state.get('edit_selected_mga_id'), 
+                                None
+                            )
+                    
+                    if not commission_rule:
+                        # Try carrier + policy type without MGA
+                        commission_rule = lookup_commission_rule(selected_carrier_id, None, policy_type)
+                    
+                    if not commission_rule:
+                        # Try carrier default
+                        commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
+                    
+                    if commission_rule:
+                        # Store both rates and let the form decide which to use based on transaction type
+                        new_rate = commission_rule.get('new_rate', 0)
+                        renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
+                        
+                        st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
+                        st.success(f"✅ Renewal rate will be applied: {renewal_rate}%")
+                        
+                        # Store both rates in session state
+                        st.session_state['edit_commission_new_rate'] = new_rate
+                        st.session_state['edit_commission_renewal_rate'] = renewal_rate
+                        st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
+                        st.session_state['edit_has_commission_rule'] = True
+                    else:
+                        st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
+                        st.session_state['edit_commission_new_rate'] = None
+                        st.session_state['edit_commission_renewal_rate'] = None
+                        st.session_state['edit_commission_rule_id'] = None
+                        st.session_state['edit_has_commission_rule'] = False
+                else:
+                    # No carrier selected
+                    if not selected_carrier_name and not st.session_state.get('edit_carrier_name_manual'):
+                        st.info("ℹ️ No carrier selected. Commission rates must be entered manually.")
+                    else:
+                        st.info(f"ℹ️ Carrier '{final_carrier_name}' is not in the system. Commission rates must be entered manually.")
+                    st.session_state['edit_has_commission_rule'] = False
+                
+                st.markdown("---")
+                
                 # Generate new unique Transaction ID
                 # Try up to 10 times to generate a unique ID
                 unique_id_found = False
+                supabase = get_supabase_client()  # Get supabase client
                 for attempt in range(10):
                     new_id = generate_transaction_id()
                     # Check if this ID already exists
@@ -11309,10 +11501,14 @@ TO "New Column Name";
             else:
                 # Edit button below the table
                 st.markdown("---")
+                st.markdown("### Select a Renewal to Edit")
                 
                 # Check for Edit selections
                 edit_selected_rows = edited_df[edited_df["Edit"] == True]
                 selected_count = len(edit_selected_rows)
+                
+                # Debug info
+                st.caption(f"Debug: {len(edited_df)} total renewals, {selected_count} selected")
                 
                 if selected_count == 1:
                     if st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True):
@@ -11320,7 +11516,7 @@ TO "New Column Name";
                         row_to_edit = edit_selected_rows.iloc[0]
                         renewal_dict = row_to_edit.to_dict()
                         # Remove UI-only columns
-                        ui_only_columns = ['Edit', 'Select', 'Action', 'Details']
+                        ui_only_columns = ['Edit', 'Select', 'Action', 'Details', 'Status']
                         for col in ui_only_columns:
                             if col in renewal_dict:
                                 del renewal_dict[col]

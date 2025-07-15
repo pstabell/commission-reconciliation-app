@@ -21,6 +21,8 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Visual status indicators: 🔴 Past Due, 🟡 Urgent, ✅ OK
    - Summary metrics for quick overview
    - Past-due renewals sorted first for immediate attention
+   - Added carrier/MGA commission rate loading to Edit Renewal Transaction form
+   - Green tip reminder to select carrier from dropdown for automatic rate loading
 2. **Prior Release (v3.6.5) - Void Date Extraction Fix**: Fixed void transactions using current date instead of statement date
    - Issue: Void transactions created with current date, making them invisible in historical views
    - Cause: Code only handled IMPORT- prefix, not REC- or MNL- prefixes
