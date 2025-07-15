@@ -373,7 +373,10 @@ def clean_data_for_database(data):
         'Details',
         'new_effective_date',
         'new_expiration_date',
-        'expiration_date'  # This maps to X-DATE in the database
+        'expiration_date',  # This maps to X-DATE in the database
+        'Days Until Expiration',  # Calculated field
+        'Status',  # UI display field
+        '_id'  # Internal row identifier
     }
     
     # Create a copy of the data to avoid modifying the original
@@ -3359,10 +3362,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         # Commission Details
         st.markdown("#### Commission Details")
         
-        # Debug commission rule status
-        if is_renewal:
-            st.caption(f"Debug - Has commission rule: {st.session_state.get('edit_has_commission_rule', False)}, New rate: {st.session_state.get('edit_commission_new_rate', 'None')}, Renewal rate: {st.session_state.get('edit_commission_renewal_rate', 'None')}")
-        
         # Add info about Prior Policy Number affecting rates
         if st.session_state.get('edit_has_commission_rule', False):
             current_trans_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
@@ -5485,16 +5484,25 @@ def main():
         
         selected_client_id = None
         if client_search:
-            # Search for matching clients
-            matching_clients = all_data[all_data['Customer'].str.contains(client_search, case=False, na=False)][['Client ID', 'Customer']].drop_duplicates()
+            # Search for matching clients, filtering out those without Client IDs
+            matching_clients = all_data[
+                (all_data['Customer'].str.contains(client_search, case=False, na=False)) & 
+                (all_data['Client ID'].notna()) & 
+                (all_data['Client ID'] != '')
+            ][['Client ID', 'Customer']].drop_duplicates()
+            
             if not matching_clients.empty:
                 st.info(f"Found {len(matching_clients)} matching clients:")
                 # Display options
                 for idx, client in matching_clients.iterrows():
-                    if st.button(f"Use {client['Client ID']} - {client['Customer']}", key=f"select_client_{idx}"):
-                        selected_client_id = client['Client ID']
-                        st.session_state['selected_client_id'] = selected_client_id
-                        st.session_state['selected_customer_name'] = client['Customer']
+                    client_id = client['Client ID']
+                    customer_name = client['Customer']
+                    # Only show button if client has a valid ID
+                    if client_id and str(client_id).strip():
+                        if st.button(f"Use {client_id} - {customer_name}", key=f"select_client_{idx}"):
+                            selected_client_id = client_id
+                            st.session_state['selected_client_id'] = selected_client_id
+                            st.session_state['selected_customer_name'] = customer_name
             else:
                 st.warning("No matching clients found")
         
@@ -5660,18 +5668,29 @@ def main():
             # Row 3: Effective Date and Policy Origination Date
             col1, col2 = st.columns(2)
             with col1:
-                effective_date = st.date_input("Effective Date", value=datetime.date.today(), format="MM/DD/YYYY")
+                # Use session state for Effective Date to allow clearing
+                effective_date_default = st.session_state.get('add_effective_date', None)
+                if effective_date_default is None:
+                    effective_date = st.date_input("Effective Date", value=None, format="MM/DD/YYYY", key="add_effective_date")
+                else:
+                    effective_date = st.date_input("Effective Date", value=effective_date_default, format="MM/DD/YYYY", key="add_effective_date")
             with col2:
                 # Use session state for Policy Origination Date to allow clearing
-                policy_orig_date_default = st.session_state.get('add_policy_orig_date', datetime.date.today())
-                policy_orig_date = st.date_input("Policy Origination Date", value=policy_orig_date_default, format="MM/DD/YYYY", key="add_policy_orig_date")
+                policy_orig_date_default = st.session_state.get('add_policy_orig_date', None)
+                if policy_orig_date_default is None:
+                    policy_orig_date = st.date_input("Policy Origination Date", value=None, format="MM/DD/YYYY", key="add_policy_orig_date")
+                else:
+                    policy_orig_date = st.date_input("Policy Origination Date", value=policy_orig_date_default, format="MM/DD/YYYY", key="add_policy_orig_date")
             
             # Row 4: X-DATE and Payment Type
             col1, col2 = st.columns(2)
             with col1:
                 # Use session state for X-DATE to allow clearing
-                x_date_default = st.session_state.get('add_x_date', datetime.date.today() + datetime.timedelta(days=180))
-                x_date = st.date_input("X-DATE", value=x_date_default, format="MM/DD/YYYY", help="Expiration date", key="add_x_date")
+                x_date_default = st.session_state.get('add_x_date', None)
+                if x_date_default is None:
+                    x_date = st.date_input("X-DATE", value=None, format="MM/DD/YYYY", help="Expiration date", key="add_x_date")
+                else:
+                    x_date = st.date_input("X-DATE", value=x_date_default, format="MM/DD/YYYY", help="Expiration date", key="add_x_date")
             with col2:
                 full_or_monthly = st.selectbox("FULL OR MONTHLY PMTS", ["FULL", "MONTHLY", ""])
             
@@ -5958,6 +5977,8 @@ def main():
                             'new_carrier_name',
                             'new_policy_type',
                             'add_policy_number',
+                            'add_prior_policy_number',
+                            'add_effective_date',
                             'add_x_date',
                             'add_policy_orig_date',
                             # NEW: Commission integration form keys
@@ -11405,11 +11426,8 @@ TO "New Column Name";
                             # Convert timestamps to strings for JSON serialization
                             new_renewal = convert_timestamps_for_json(new_renewal)
                             
-                            # Remove UI-only columns and fields that shouldn't be duplicated
-                            ui_only_columns = ['Edit', 'Select', 'Action', 'Details', 'new_effective_date', 'new_expiration_date', '_id']
-                            for col in ui_only_columns:
-                                if col in new_renewal:
-                                    del new_renewal[col]
+                            # Remove UI-only fields using the centralized function
+                            new_renewal = clean_data_for_database(new_renewal)
                             
                             # Handle column name changes
                             if 'NEW BIZ CHECKLIST COMPLETE' in new_renewal:

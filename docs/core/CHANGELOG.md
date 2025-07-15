@@ -37,13 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated empty state messages to be more informative based on filters
 
 ### Fixed
-- Removed debug caption from carrier commission lookup
+- Removed debug captions from carrier commission lookup
+- Fixed "Days Until Expiration" database error when creating renewals
+- Fixed redundant "Use None" button in client search results
+- Made all Policy Information fields start empty in Add New Policy form
 
 ### Technical
 - Enhanced `get_pending_renewals()` to show all past-due with no lower limit
 - Added `style_renewal_rows()` function (ready for future styling support)
 - Added status icon column as visual workaround for st.data_editor limitations
 - Integrated carrier/MGA selection UI into renewal edit workflow
+- Updated `clean_data_for_database()` to include 'Days Until Expiration' and 'Status' fields
+- Enhanced client search to filter out entries without valid Client IDs
+- Changed date field defaults from today's date to None for cleaner form resets
 
 ## [3.6.5] - 2025-07-15 - Void Date Extraction Fix
 

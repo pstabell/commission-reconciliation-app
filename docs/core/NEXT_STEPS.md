@@ -854,3 +854,23 @@ Users can now calculate endorsement premiums directly in the edit form, and the 
 
 *Last Updated: July 15, 2025*  
 *Current Application Version: 3.7.0*
+
+---
+
+## 🐛 Recent Bug Fixes (July 15, 2025 - Evening)
+
+### Fixed Issues:
+1. **Days Until Expiration Database Error**
+   - Issue: Creating renewals failed with "Could not find 'Days Until Expiration' column" 
+   - Solution: Updated `clean_data_for_database()` to remove calculated UI fields
+   - Impact: Renewal creation now works without database errors
+
+2. **Redundant Client Search Results**
+   - Issue: "Use None - [Customer Name]" buttons appeared for clients without IDs
+   - Solution: Enhanced client search to filter out entries without valid Client IDs
+   - Impact: Cleaner client selection interface
+
+3. **Add New Policy Form Fields Not Clearing**
+   - Issue: Date fields retained previous values after saving
+   - Solution: Changed date defaults from today's date to None, added missing keys to clear list
+   - Impact: All Policy Information fields now start empty for each new transaction

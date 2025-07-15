@@ -103,6 +103,9 @@ supabase.table('policies').select('"Transaction ID"')
 - new_effective_date, new_expiration_date (renewal helpers)
 - expiration_date (maps to X-DATE in database)
 - Rate (commission rate from statement - display only)
+- Days Until Expiration (calculated field)
+- Status (UI display field for renewals)
+- _id (internal row identifier)
 **Solution**: Use `clean_data_for_database()` function before any insert operations
 
 ### 4. Date Format Standardization
