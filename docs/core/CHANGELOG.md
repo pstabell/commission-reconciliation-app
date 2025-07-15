@@ -5,6 +5,37 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.5] - 2025-07-15 - Void Date Extraction Fix
+
+### Fixed
+- **Void Transactions Date Issue**
+  - Fixed void transactions using current date instead of statement date
+  - Issue: Void entries created with today's date, making them invisible in historical views
+  - Root cause: Date extraction only handled IMPORT- prefix, not REC- or MNL- formats
+  - Solution: Enhanced to use regex pattern `-(\d{8})-` to extract date from any batch ID
+  - Now supports all batch formats: IMPORT-YYYYMMDD-X, REC-YYYYMMDD-X, MNL-YYYYMMDD-X
+  - Both Transaction ID suffix and STMT DATE now use correct statement date
+  - Impact: Void transactions appear in correct time period in reconciliation history
+
+### Technical
+- Replaced hardcoded prefix checks with flexible regex pattern matching
+- Extracts YYYYMMDD pattern from any position in batch ID
+- Maintains backward compatibility with all existing batch formats
+
+## [3.6.4] - 2025-07-15 - Search & Filter Column Name Fix
+
+### Fixed
+- **Search & Filter KeyError**
+  - Fixed KeyError: 'Transaction_ID' preventing filter functionality
+  - Issue: Code used underscore-separated column names but database has space-separated
+  - Solution: Updated all column references to use correct names
+  - Changes:
+    - Text filters: Transaction ID, Policy Number, Client ID
+    - Dropdown filters: Policy Type, Transaction Type
+    - Date filter: Effective Date
+    - Numeric filters: Agent Paid Amount (STMT), Policy Balance Due
+  - Impact: Search & Filter page now fully functional
+
 ## [3.6.3] - 2025-07-14 - Extended Checkbox Performance Fix
 
 ### Fixed

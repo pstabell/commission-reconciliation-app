@@ -293,6 +293,58 @@ Testing:
 - Migrated 45 existing transactions to new format
 **Impact**: Import transactions now protected while allowing commission data completion
 
+### 8. Search & Filter Column Name Errors
+**Date**: July 15, 2025  
+**Severity**: HIGH  
+**Status**: ✅ RESOLVED
+
+**Issue**: KeyError: 'Transaction_ID' when clicking "Apply Filters" on Search & Filter page
+**Root Cause**: Code used underscore-separated column names but database has space-separated
+**Solution**: Updated all column references to use correct names:
+```python
+# Wrong
+filtered_data['Transaction_ID']
+filtered_data['Policy_Number']
+filtered_data['Client_ID']
+
+# Correct
+filtered_data['Transaction ID']
+filtered_data['Policy Number']
+filtered_data['Client ID']
+```
+**Code Changes**: commission_app.py lines 5940-5981
+- Fixed text search filters: Transaction ID, Policy Number, Client ID
+- Fixed dropdown filters: Policy Type, Transaction Type  
+- Fixed date filter: Effective Date
+- Fixed numeric filters: Agent Paid Amount (STMT), Policy Balance Due
+**Impact**: Search & Filter functionality restored and working correctly
+
+### 9. Void Transactions Using Current Date Instead of Statement Date
+**Date**: July 15, 2025  
+**Severity**: CRITICAL  
+**Status**: ✅ RESOLVED
+
+**Issue**: Void transactions created with current date, making them invisible in historical reconciliation views
+**Root Cause**: Date extraction only handled IMPORT- prefix batch IDs, not REC- or MNL- formats
+**Example**: Voiding batch REC-20240831-8D80F141 created transactions with date 20250715
+**Solution**: Enhanced date extraction to handle all batch ID formats:
+```python
+# Old code - only handled IMPORT- prefix
+if selected_batch.startswith('IMPORT-') and len(selected_batch) >= 15:
+    date_str = selected_batch[7:15]
+
+# New code - handles any format with -YYYYMMDD- pattern
+import re
+date_match = re.search(r'-(\d{8})-', selected_batch)
+if date_match:
+    date_str = date_match.group(1)
+```
+**Code Changes**: commission_app.py lines 7449-7465
+- Uses regex to find YYYYMMDD pattern in any batch ID
+- Supports IMPORT-, REC-, MNL- and any future formats
+- Sets both Transaction ID suffix and STMT DATE correctly
+**Impact**: Void transactions now appear in correct time period with proper dates
+
 ---
 
 *This document consolidates issues from APP_ISSUES_AND_FIXES.md, transaction_id_fixes.md, TERMINAL_PROBLEMS.md, PHASE0_CRITICAL_BUG.md, and various implementation files.*

@@ -255,7 +255,7 @@ def calculate_dashboard_metrics(df):
             # These use STMT DATE for when payment was made
             df_stmt_2025_by_stmt_date = pd.DataFrame()
             if 'STMT DATE' in df_stmt_all.columns:
-                df_stmt_all['STMT DATE'] = pd.to_datetime(df_stmt_all['STMT DATE'], errors='coerce')
+                df_stmt_all['STMT DATE'] = pd.to_datetime(df_stmt_all['STMT DATE'], errors='coerce', format='mixed')
                 df_stmt_2025_by_stmt_date = df_stmt_all[df_stmt_all['STMT DATE'].dt.year == 2025]
             
             # If no STMT DATE column, fall back to Effective Date
@@ -1735,6 +1735,22 @@ def calculate_transaction_balances(all_data):
     if original_trans.empty:
         return pd.DataFrame()
     
+    # Normalize effective dates for comparison
+    # Convert all dates to a consistent format for comparison
+    all_data_normalized = all_data.copy()
+    try:
+        # Try to parse dates with mixed formats
+        all_data_normalized['_normalized_date'] = pd.to_datetime(all_data['Effective Date'], format='mixed', errors='coerce')
+    except:
+        # Fallback to coerce if mixed format fails
+        all_data_normalized['_normalized_date'] = pd.to_datetime(all_data['Effective Date'], errors='coerce')
+    
+    original_trans_normalized = original_trans.copy()
+    try:
+        original_trans_normalized['_normalized_date'] = pd.to_datetime(original_trans['Effective Date'], format='mixed', errors='coerce')
+    except:
+        original_trans_normalized['_normalized_date'] = pd.to_datetime(original_trans['Effective Date'], errors='coerce')
+    
     # Calculate balance for each transaction
     for idx, row in original_trans.iterrows():
         # Calculate credits (commission owed)
@@ -1742,15 +1758,26 @@ def calculate_transaction_balances(all_data):
         
         # Calculate debits (total paid for this policy)
         policy_num = row['Policy Number']
-        effective_date = row['Effective Date']
+        
+        # Get normalized date for comparison
+        effective_date_normalized = original_trans_normalized.at[idx, '_normalized_date']
         
         # Get all STMT and VOID entries for this specific policy and date
         # Include -VOID- entries since they have negative amounts that reduce the debit
-        recon_entries = all_data[
-            (all_data['Policy Number'] == policy_num) &
-            (all_data['Effective Date'] == effective_date) &
-            (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
-        ]
+        if pd.notna(effective_date_normalized):
+            recon_entries = all_data_normalized[
+                (all_data_normalized['Policy Number'] == policy_num) &
+                (all_data_normalized['_normalized_date'] == effective_date_normalized) &
+                (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+            ]
+        else:
+            # Fallback to string comparison if date parsing failed
+            effective_date = row['Effective Date']
+            recon_entries = all_data[
+                (all_data['Policy Number'] == policy_num) &
+                (all_data['Effective Date'] == effective_date) &
+                (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+            ]
         
         debit = 0
         if not recon_entries.empty:
@@ -3188,18 +3215,60 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         # Premium Information
         st.markdown("#### Premium Information")
+        
+        # Premium Sold Calculator for Endorsements
+        st.markdown("##### Premium Sold Calculator (for Endorsements)")
+        
+        col_calc1, col_calc2, col_calc3 = st.columns(3)
+        with col_calc1:
+            existing_premium = st.number_input(
+                "Existing Premium", 
+                value=0.00, 
+                format="%.2f", 
+                step=100.0,
+                key="modal_existing_premium",
+                help="Enter the current/existing premium amount"
+            )
+        with col_calc2:
+            new_premium = st.number_input(
+                "New/Revised Premium", 
+                value=0.00, 
+                format="%.2f", 
+                step=100.0,
+                key="modal_new_premium",
+                help="Enter the new/revised premium amount"
+            )
+        with col_calc3:
+            premium_sold_calc = new_premium - existing_premium
+            st.metric(
+                "Premium Sold (New - Existing):", 
+                f"${premium_sold_calc:+,.2f}",
+                help="Calculated endorsement premium (can be positive or negative)"
+            )
+        
+        # Regular Premium Sold field
+        st.markdown("##### New Policy Premium")
         if 'Premium Sold' in modal_data.keys():
             value = modal_data.get('Premium Sold', 0)
             if is_renewal:
                 value = value if value else 0
             try:
                 numeric_value = float(value) if pd.notna(value) else 0.0
+                
+                # If endorsement calculator has values, use that
+                if (existing_premium != 0.0 or new_premium != 0.0) and premium_sold_calc != 0.0:
+                    numeric_value = premium_sold_calc
+                    help_text = "Using value from Endorsement Calculator above"
+                else:
+                    help_text = "Enter the total premium for new policies (not endorsements)"
+                
                 updated_data['Premium Sold'] = st.number_input(
-                    'Premium Sold',
+                    'New Policy Premium',
                     value=numeric_value,
                     step=0.01,
                     format="%.2f",
-                    key="modal_Premium Sold"
+                    key="modal_Premium Sold",
+                    help=help_text
                 )
             except:
                 updated_data['Premium Sold'] = st.text_input(
@@ -5901,14 +5970,14 @@ def main():
                 
                 with search_col2:
                     # Dropdown filters
-                    if 'Policy_Type' in all_data.columns:
-                        policy_type_filter = st.multiselect("Policy Type", all_data['Policy_Type'].unique())
+                    if 'Policy Type' in all_data.columns:
+                        policy_type_filter = st.multiselect("Policy Type", all_data['Policy Type'].unique())
                     
-                    if 'Transaction_Type' in all_data.columns:
-                        transaction_type_filter = st.multiselect("Transaction Type", all_data['Transaction_Type'].unique())
+                    if 'Transaction Type' in all_data.columns:
+                        transaction_type_filter = st.multiselect("Transaction Type", all_data['Transaction Type'].unique())
                     
                     # Date range
-                    if 'Effective_Date' in all_data.columns:
+                    if 'Effective Date' in all_data.columns:
                         date_from = st.date_input("Effective Date From", value=None)
                         date_to = st.date_input("Effective Date To", value=None)
                 
@@ -5917,14 +5986,14 @@ def main():
                 numeric_col1, numeric_col2 = st.columns(2)
                 
                 with numeric_col1:
-                    if 'Commission_Paid' in all_data.columns:
-                        commission_min = st.number_input("Min Commission Paid", value=0.0, format="%.2f")
-                        commission_max = st.number_input("Max Commission Paid", value=float(all_data['Commission_Paid'].max() if all_data['Commission_Paid'].max() > 0 else 999999), format="%.2f")
+                    if 'Agent Paid Amount (STMT)' in all_data.columns:
+                        commission_min = st.number_input("Min Agent Paid Amount", value=0.0, format="%.2f")
+                        commission_max = st.number_input("Max Agent Paid Amount", value=float(all_data['Agent Paid Amount (STMT)'].max() if all_data['Agent Paid Amount (STMT)'].max() > 0 else 999999), format="%.2f")
                 
                 with numeric_col2:
-                    if 'Balance_Due' in all_data.columns:
+                    if 'Policy Balance Due' in all_data.columns:
                         balance_min = st.number_input("Min Balance Due", value=0.0, format="%.2f")
-                        balance_max = st.number_input("Max Balance Due", value=float(all_data['Balance_Due'].max() if all_data['Balance_Due'].max() > 0 else 999999), format="%.2f")
+                        balance_max = st.number_input("Max Balance Due", value=float(all_data['Policy Balance Due'].max() if all_data['Policy Balance Due'].max() > 0 else 999999), format="%.2f")
                 
                 # Submit search
                 search_submitted = st.form_submit_button("🔍 Apply Filters", type="primary")
@@ -5942,42 +6011,42 @@ def main():
                     filtered_data = filtered_data[filtered_data['Customer'].str.contains(customer_search, case=False, na=False)]
                 
                 if policy_number_search:
-                    filtered_data = filtered_data[filtered_data['Policy_Number'].str.contains(policy_number_search, case=False, na=False)]
+                    filtered_data = filtered_data[filtered_data['Policy Number'].str.contains(policy_number_search, case=False, na=False)]
                 
                 if client_id_search:
-                    filtered_data = filtered_data[filtered_data['Client_ID'].str.contains(client_id_search, case=False, na=False)]
+                    filtered_data = filtered_data[filtered_data['Client ID'].str.contains(client_id_search, case=False, na=False)]
                 
                 if transaction_id_search:
-                    filtered_data = filtered_data[filtered_data['Transaction_ID'].str.contains(transaction_id_search, case=False, na=False)]
+                    filtered_data = filtered_data[filtered_data['Transaction ID'].str.contains(transaction_id_search, case=False, na=False)]
                 
                 # Apply dropdown filters
-                if 'Policy_Type' in all_data.columns and policy_type_filter:
-                    filtered_data = filtered_data[filtered_data['Policy_Type'].isin(policy_type_filter)]
+                if 'Policy Type' in all_data.columns and policy_type_filter:
+                    filtered_data = filtered_data[filtered_data['Policy Type'].isin(policy_type_filter)]
                 
-                if 'Transaction_Type' in all_data.columns and transaction_type_filter:
-                    filtered_data = filtered_data[filtered_data['Transaction_Type'].isin(transaction_type_filter)]
+                if 'Transaction Type' in all_data.columns and transaction_type_filter:
+                    filtered_data = filtered_data[filtered_data['Transaction Type'].isin(transaction_type_filter)]
                 
                 # Apply date filters
-                if 'Effective_Date' in all_data.columns and (date_from or date_to):
-                    filtered_data['Effective_Date'] = pd.to_datetime(filtered_data['Effective_Date'], errors='coerce')
+                if 'Effective Date' in all_data.columns and (date_from or date_to):
+                    filtered_data['Effective Date'] = pd.to_datetime(filtered_data['Effective Date'], errors='coerce')
                     
                     if date_from:
-                        filtered_data = filtered_data[filtered_data['Effective_Date'] >= pd.Timestamp(date_from)]
+                        filtered_data = filtered_data[filtered_data['Effective Date'] >= pd.Timestamp(date_from)]
                     
                     if date_to:
-                        filtered_data = filtered_data[filtered_data['Effective_Date'] <= pd.Timestamp(date_to)]
+                        filtered_data = filtered_data[filtered_data['Effective Date'] <= pd.Timestamp(date_to)]
                 
                 # Apply numeric filters
-                if 'Commission_Paid' in all_data.columns:
+                if 'Agent Paid Amount (STMT)' in all_data.columns:
                     filtered_data = filtered_data[
-                        (filtered_data['Commission_Paid'] >= commission_min) &
-                        (filtered_data['Commission_Paid'] <= commission_max)
+                        (filtered_data['Agent Paid Amount (STMT)'] >= commission_min) &
+                        (filtered_data['Agent Paid Amount (STMT)'] <= commission_max)
                     ]
                 
-                if 'Balance_Due' in all_data.columns:
+                if 'Policy Balance Due' in all_data.columns:
                     filtered_data = filtered_data[
-                        (filtered_data['Balance_Due'] >= balance_min) &
-                        (filtered_data['Balance_Due'] <= balance_max)
+                        (filtered_data['Policy Balance Due'] >= balance_min) &
+                        (filtered_data['Policy Balance Due'] <= balance_max)
                     ]
                 
                 # Show results
@@ -6491,7 +6560,7 @@ def main():
                                                 
                                                 if not payment_history.empty:
                                                     payment_df = payment_history[['Transaction ID', 'STMT DATE', 'Agent Paid Amount (STMT)']].copy()
-                                                    payment_df['STMT DATE'] = pd.to_datetime(payment_df['STMT DATE']).dt.strftime('%m/%d/%Y')
+                                                    payment_df['STMT DATE'] = pd.to_datetime(payment_df['STMT DATE'], format='mixed').dt.strftime('%m/%d/%Y')
                                                     payment_df = payment_df.rename(columns={
                                                         'Transaction ID': 'Reconciliation ID',
                                                         'STMT DATE': 'Statement Date',
@@ -6952,7 +7021,8 @@ def main():
                     
                     # Filter by date range
                     if 'STMT DATE' in recon_entries.columns:
-                        recon_entries['STMT DATE'] = pd.to_datetime(recon_entries['STMT DATE'])
+                        # Handle mixed date formats
+                        recon_entries['STMT DATE'] = pd.to_datetime(recon_entries['STMT DATE'], format='mixed')
                         mask = (recon_entries['STMT DATE'].dt.date >= start_date) & (recon_entries['STMT DATE'].dt.date <= end_date)
                         filtered_recon = recon_entries[mask]
                     else:
@@ -7120,7 +7190,7 @@ def main():
                                 
                                 # Format dates
                                 if 'STMT DATE' in batch_details.columns:
-                                    batch_details['STMT DATE'] = pd.to_datetime(batch_details['STMT DATE']).dt.strftime('%m/%d/%Y')
+                                    batch_details['STMT DATE'] = pd.to_datetime(batch_details['STMT DATE'], format='mixed').dt.strftime('%m/%d/%Y')
                                 
                                 st.dataframe(
                                     batch_details[[
@@ -7139,7 +7209,7 @@ def main():
                             # Format dates
                             if 'STMT DATE' in filtered_recon.columns:
                                 display_recon = filtered_recon.copy()
-                                display_recon['STMT DATE'] = pd.to_datetime(display_recon['STMT DATE']).dt.strftime('%m/%d/%Y')
+                                display_recon['STMT DATE'] = pd.to_datetime(display_recon['STMT DATE'], format='mixed').dt.strftime('%m/%d/%Y')
                             else:
                                 display_recon = filtered_recon.copy()
                             
@@ -7380,7 +7450,7 @@ def main():
                                     batch_total = batch_details['Agent Paid Amount (STMT)'].sum()
                                     st.metric("Batch Total", f"${batch_total:,.2f}")
                                 with col3:
-                                    stmt_date = pd.to_datetime(batch_details['STMT DATE'].iloc[0]).strftime('%m/%d/%Y')
+                                    stmt_date = pd.to_datetime(batch_details['STMT DATE'].iloc[0], format='mixed').strftime('%m/%d/%Y')
                                     st.metric("Statement Date", stmt_date)
                                 
                                 # Show transactions that will be voided
@@ -7417,12 +7487,29 @@ def main():
                                         if st.button("🗑️ Void Batch", type="secondary"):
                                             try:
                                                 void_count = 0
-                                                void_date = datetime.datetime.now()
+                                                
+                                                # Extract the statement date from the batch ID
+                                                # Formats: IMPORT-YYYYMMDD-XXXXXXXX, REC-YYYYMMDD-XXXXXXXX, MNL-YYYYMMDD-XXXXXXXX
+                                                statement_date = None
+                                                
+                                                # Try to find YYYYMMDD pattern in the batch ID
+                                                import re
+                                                date_match = re.search(r'-(\d{8})-', selected_batch)
+                                                if date_match:
+                                                    date_str = date_match.group(1)
+                                                    try:
+                                                        statement_date = datetime.datetime.strptime(date_str, '%Y%m%d')
+                                                    except:
+                                                        pass
+                                                
+                                                # If we couldn't extract date from batch ID, fallback to current date
+                                                if statement_date is None:
+                                                    statement_date = datetime.datetime.now()
                                                 
                                                 # Create void entries for each transaction in the batch
                                                 for idx, row in batch_details.iterrows():
-                                                    # Generate void transaction ID
-                                                    void_id = generate_reconciliation_transaction_id("VOID", void_date.date())
+                                                    # Generate void transaction ID with statement date
+                                                    void_id = generate_reconciliation_transaction_id("VOID", statement_date.date())
                                                     
                                                     # Create void entry (negative amounts)
                                                     void_entry = {
@@ -7441,10 +7528,10 @@ def main():
                                                         'Agency Comm Received (STMT)': -float(row.get('Agency Comm Received (STMT)', 0)),  # Negative
                                                         'Agent Estimated Comm $': 0,
                                                         'Agent Paid Amount (STMT)': -float(row.get('Agent Paid Amount (STMT)', 0)),  # Negative
-                                                        'STMT DATE': void_date.strftime('%Y-%m-%d'),
+                                                        'STMT DATE': statement_date.strftime('%m/%d/%Y'),  # Use statement date in MM/DD/YYYY format
                                                         'reconciliation_status': 'void',
                                                         'reconciliation_id': f"VOID-{selected_batch}",
-                                                        'reconciled_at': void_date.isoformat(),
+                                                        'reconciled_at': datetime.datetime.now().isoformat(),  # Current timestamp for when void occurred
                                                         'is_reconciliation_entry': True,
                                                         'NOTES': f"VOID: {void_reason}"
                                                     }
@@ -7472,7 +7559,7 @@ def main():
                                                 
                                                 # Log the void in reconciliations table
                                                 void_log = {
-                                                    'reconciliation_date': void_date.date().isoformat(),
+                                                    'reconciliation_date': datetime.datetime.now().date().isoformat(),  # Current date for when void occurred
                                                     'statement_date': batch_details['STMT DATE'].iloc[0],
                                                     'carrier_name': 'VOID',
                                                     'total_amount': -batch_total,

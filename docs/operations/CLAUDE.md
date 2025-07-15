@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 14, 2025  
-**Current Version**: 3.6.3
+**Last Updated**: July 15, 2025  
+**Current Version**: 3.6.5
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,13 +13,24 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.6.3)
-1. **Checkbox Performance Fix for Regular Search**: Extended performance optimization to all search results
-   - Fixed 7-second delay after clicking checkbox before Edit button becomes available
-   - Implemented cached selection state to avoid recalculation on every render
-   - Regular search results now have same instant response as attention filter
-   - Edit button state updates immediately upon checkbox selection
-2. **Prior Release (v3.6.2) - Performance & Bug Fixes**: Major performance improvements and critical error fixes
+## Recent Major Changes (v3.6.5)
+1. **Void Date Extraction Fix**: Fixed void transactions using current date instead of statement date
+   - Issue: Void transactions created with current date, making them invisible in historical views
+   - Cause: Code only handled IMPORT- prefix, not REC- or MNL- prefixes
+   - Solution: Enhanced regex pattern to extract YYYYMMDD from any batch ID format
+   - Now supports: IMPORT-YYYYMMDD-X, REC-YYYYMMDD-X, MNL-YYYYMMDD-X
+   - Void transactions now appear in correct time period with proper dates
+   - Fixed Transaction ID suffix and STMT DATE to use statement date
+2. **Prior Release (v3.6.4) - Search & Filter Fix**: Fixed column name references
+   - Updated all column references from underscore to space-separated names
+   - Fixed KeyError preventing filter functionality
+   - Search & Filter page now fully functional
+3. **Prior Release (v3.6.3) - Import Transaction Protection**: Protected import-created transactions
+   - Added -IMPORT suffix to transaction IDs
+   - Implemented partial edit restrictions and delete protection
+   - Migrated 45 existing transactions to new format
+   - Extended checkbox performance optimization to regular search results
+3. **Prior Release (v3.6.2) - Performance & Bug Fixes**: Major performance improvements and critical error fixes
    - Fixed Wright Flood MGA loading error (UUID parsing issue) - MGA data now loads correctly
    - Optimized checkbox performance in Edit Policy Transactions (6-7 second delay eliminated)
    - Fixed IndexError when selecting transactions after edits
@@ -215,6 +226,30 @@ supabase.table('policies').select('"Transaction ID"')
 - Created comprehensive explanation box in edit form
 **Migration**: Updated database validation function and migrated 45 existing transactions
 **Impact**: Import transactions now protected while allowing commission data completion
+
+### 25. Search & Filter Column Name Errors (FIXED in v3.6.4)
+**Issue**: KeyError: 'Transaction_ID' when using Search & Filter page
+**Cause**: Code used underscore-separated column names but database has space-separated
+**Solution**: Updated all column references to use correct names:
+- `Transaction_ID` → `Transaction ID`
+- `Policy_Number` → `Policy Number`
+- `Client_ID` → `Client ID`
+- `Policy_Type` → `Policy Type`
+- `Transaction_Type` → `Transaction Type`
+- `Effective_Date` → `Effective Date`
+- `Commission_Paid` → `Agent Paid Amount (STMT)`
+- `Balance_Due` → `Policy Balance Due`
+**Impact**: Search & Filter functionality now works correctly
+
+### 26. Void Transactions Using Current Date (FIXED in v3.6.5)
+**Issue**: Void transactions created with current date instead of statement date
+**Cause**: Date extraction only handled IMPORT- prefix, not REC- or MNL- formats
+**Example**: Voiding REC-20240831-XXX created transactions with 20250715 dates
+**Solution**: 
+- Enhanced date extraction using regex pattern `-(\d{8})-` 
+- Extracts YYYYMMDD from any batch ID format
+- Sets both Transaction ID suffix and STMT DATE to statement date
+**Impact**: Void transactions now appear in correct historical period
 
 ## Development Guidelines
 

@@ -768,5 +768,43 @@ Significant performance improvements and enhanced stability. Users experience fa
 
 ---
 
-*Last Updated: July 14, 2025*  
-*Current Application Version: 3.6.3*
+## ✅ COMPLETED: Search & Filter Column Name Fix (Completed July 15, 2025)
+
+### Issue Resolved
+Fixed KeyError preventing Search & Filter page from functioning.
+
+### Implementation:
+- Updated all column references from underscore to space-separated names
+- Fixed text search filters: Transaction ID, Policy Number, Client ID
+- Fixed dropdown filters: Policy Type, Transaction Type
+- Fixed date filter: Effective Date
+- Fixed numeric filters: Agent Paid Amount (STMT), Policy Balance Due
+
+### Impact:
+Search & Filter functionality fully restored. Users can now filter transactions by multiple criteria without errors.
+
+---
+
+## ✅ COMPLETED: Void Date Extraction Fix (Completed July 15, 2025)
+
+### Critical Issue Resolved
+Fixed void transactions using current date instead of statement date, making them invisible in historical views.
+
+### Problem:
+- Void transactions created with date suffix -VOID-20250715 instead of -VOID-20240831
+- STMT DATE set to current date instead of statement date
+- Only worked for IMPORT- prefix, failed for REC- and MNL- batch IDs
+
+### Solution:
+- Enhanced date extraction using regex pattern `-(\d{8})-`
+- Now extracts YYYYMMDD from any batch ID format
+- Supports IMPORT-, REC-, MNL- and future formats
+- Both Transaction ID and STMT DATE use correct statement date
+
+### Impact:
+Void transactions now appear in the correct time period in reconciliation history. Users can properly track voided reconciliations without date confusion.
+
+---
+
+*Last Updated: July 15, 2025*  
+*Current Application Version: 3.6.5*
