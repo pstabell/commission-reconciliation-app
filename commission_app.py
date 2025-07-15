@@ -1549,6 +1549,7 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Identifies and generates a DataFrame of policies pending renewal.
     Excludes policies that have already been renewed (appear in Prior Policy Number of another policy).
+    Shows ALL past-due renewals (no lower limit) and future renewals up to 90 days.
     """
     # Filter for relevant transaction types
     renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL"])].copy()
@@ -1562,9 +1563,16 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     # Get the most recent transaction for each policy
     latest_renewals = renewal_candidates.drop_duplicates(subset="Policy Number", keep="first")
     
-    # Filter for policies that are expired or expiring soon (e.g., within 60 days)
+    # Calculate days until expiration for each policy
     today = pd.to_datetime(datetime.date.today())
-    pending_renewals = latest_renewals[latest_renewals['expiration_date'] < (today + pd.DateOffset(days=60))]
+    latest_renewals['Days Until Expiration'] = (latest_renewals['expiration_date'] - today).dt.days
+    
+    # Filter for policies expiring within 90 days OR already expired (no lower limit on past due)
+    # This will show ALL past-due renewals and future renewals up to 90 days
+    pending_renewals = latest_renewals[latest_renewals['Days Until Expiration'] <= 90].copy()
+    
+    # Optional: Add a safeguard for very old policies (e.g., more than 1 year past due)
+    # Uncomment if needed: pending_renewals = pending_renewals[pending_renewals['Days Until Expiration'] > -365]
     
     # Get list of policy numbers that have been renewed (appear in Prior Policy Number field)
     prior_policy_col = get_mapped_column("Prior Policy Number")
@@ -1574,16 +1582,41 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(renewed_policies)]
     
-    # Exclude policies that have been cancelled
-    # Check if any transaction for a policy number has type "CAN"
+    # Exclude policies that have been cancelled or excluded
+    # Check if any transaction for a policy number has type "CAN" or "XCL"
     transaction_type_col = get_mapped_column("Transaction Type")
     if transaction_type_col and transaction_type_col in df.columns:
-        # Get all policy numbers that have a CAN transaction
-        cancelled_policies = df[df[transaction_type_col] == "CAN"]["Policy Number"].unique()
+        # Get all policy numbers that have a CAN or XCL transaction
+        cancelled_policies = df[df[transaction_type_col].isin(["CAN", "XCL"])]["Policy Number"].unique()
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
     
+    # Sort by Days Until Expiration (ascending, so most past-due show first)
+    pending_renewals = pending_renewals.sort_values('Days Until Expiration', ascending=True)
+    
     return pending_renewals
+
+def style_renewal_rows(row):
+    """
+    Style renewal rows based on days until expiration.
+    - Red background for past due (negative days)
+    - Yellow background for urgent (0-7 days)
+    - Normal for 8+ days
+    """
+    days_until = row.get('Days Until Expiration', 0)
+    
+    if pd.isna(days_until):
+        return [''] * len(row)
+    
+    if days_until < 0:
+        # Past due - light red background
+        return ['background-color: #ffcccc'] * len(row)
+    elif days_until <= 7:
+        # Urgent (0-7 days) - light yellow background
+        return ['background-color: #fff3cd'] * len(row)
+    else:
+        # Normal (8+ days) - no special styling
+        return [''] * len(row)
 
 def normalize_business_name(name):
     """
@@ -10970,6 +11003,55 @@ TO "New Column Name";
         else:
             display_df = pd.DataFrame()
 
+        # Add summary metrics at the top
+        if not display_df.empty:
+            # Calculate summary statistics
+            past_due_count = len(display_df[display_df['Days Until Expiration'] < 0])
+            this_week_count = len(display_df[(display_df['Days Until Expiration'] >= 0) & (display_df['Days Until Expiration'] <= 7)])
+            this_month_count = len(display_df[(display_df['Days Until Expiration'] >= 0) & (display_df['Days Until Expiration'] <= 30)])
+            total_count = len(display_df)
+            
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("🔴 Past Due", past_due_count, help="Policies already expired")
+            with col2:
+                st.metric("🟡 Due This Week", this_week_count, help="Expiring in 0-7 days")
+            with col3:
+                st.metric("📅 Due This Month", this_month_count, help="Expiring in 0-30 days")
+            with col4:
+                st.metric("📊 Total Pending", total_count, help="All pending renewals")
+            
+            # Add time range filter
+            st.markdown("### Filter Options")
+            col_filter1, col_filter2 = st.columns([2, 3])
+            
+            with col_filter1:
+                filter_option = st.radio(
+                    "Show Renewals:",
+                    ["All Renewals", "Past Due Only", "Due This Week", "Due in 30 Days", "Due in 60 Days", "Due in 90 Days"],
+                    help="Filter renewals by time range"
+                )
+            
+            # Apply filter based on selection
+            filtered_df = display_df.copy()
+            if filter_option == "Past Due Only":
+                filtered_df = filtered_df[filtered_df['Days Until Expiration'] < 0]
+            elif filter_option == "Due This Week":
+                filtered_df = filtered_df[filtered_df['Days Until Expiration'] <= 7]
+            elif filter_option == "Due in 30 Days":
+                filtered_df = filtered_df[filtered_df['Days Until Expiration'] <= 30]
+            elif filter_option == "Due in 60 Days":
+                filtered_df = filtered_df[filtered_df['Days Until Expiration'] <= 60]
+            elif filter_option == "Due in 90 Days":
+                filtered_df = filtered_df[filtered_df['Days Until Expiration'] <= 90]
+            # "All Renewals" shows everything (no additional filter needed)
+            
+            st.divider()
+            
+            # Use filtered dataframe for display
+            display_df = filtered_df
+
         if not display_df.empty:
             # Format dates to MM/DD/YYYY before displaying
             date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE']
@@ -10993,21 +11075,60 @@ TO "New Column Name";
             # Configure numeric columns
             numeric_cols = [
                 'Premium Sold', 'Agency Estimated Comm/Revenue (CRM)', 
-                'Policy Gross Comm %', 'Agent Estimated Comm $'
+                'Policy Gross Comm %', 'Agent Estimated Comm $', 'Days Until Expiration'
             ]
             for col in numeric_cols:
                 if col in display_df.columns:
-                    column_config[col] = st.column_config.NumberColumn(
-                        col,
-                        format="$%.2f" if '$' in col else "%.2f",
-                        step=0.01
-                    )
+                    if col == 'Days Until Expiration':
+                        column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            format="%d days",
+                            help="Negative values indicate past due"
+                        )
+                    else:
+                        column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            format="$%.2f" if '$' in col else "%.2f",
+                            step=0.01
+                        )
+            
+            # Add visual indicators for past due and urgent renewals
+            st.markdown("#### Renewal Status Legend")
+            col_legend1, col_legend2, col_legend3, col_legend4 = st.columns(4)
+            with col_legend1:
+                st.markdown("🔴 **Past Due** - Already expired")
+            with col_legend2:
+                st.markdown("🟡 **Urgent** - Due in 0-7 days")
+            with col_legend3:
+                st.markdown("⚪ **Normal** - Due in 8+ days")
+            
+            # Add status indicator column based on days until expiration
+            def get_status_icon(days):
+                if pd.isna(days):
+                    return "❓"
+                elif days < 0:
+                    return "🔴 Past Due"
+                elif days <= 7:
+                    return "🟡 Urgent"
+                else:
+                    return "✅ OK"
+            
+            # Insert status column after Edit column
+            display_df.insert(1, "Status", display_df['Days Until Expiration'].apply(get_status_icon))
+            
+            # Update column config for status
+            column_config["Status"] = st.column_config.TextColumn(
+                "Status",
+                help="Renewal urgency status",
+                width="small"
+            )
             
             edited_df = st.data_editor(
                 display_df,
                 column_config=column_config,
                 hide_index=True,
-                key="pending_renewals_editor"
+                key="pending_renewals_editor",
+                disabled=["Days Until Expiration", "Status"]  # Make these columns read-only
             )
             
             # Show the edit form if we're in editing mode
@@ -11213,6 +11334,10 @@ TO "New Column Name";
                     st.button("✏️ Edit Selected Pending Renewal", type="primary", use_container_width=True, 
                              disabled=True, help=f"{selected_count} selected - please select only ONE renewal to edit")
         else:
-            st.info("No policies are pending renewal at this time.")
+            if pending_renewals_df.empty:
+                st.info("No policies are pending renewal at this time.")
+            else:
+                st.info(f"No policies match the selected filter: {filter_option}")
+                st.caption("Try selecting 'All Renewals' or a different time range.")
 # Call main function
 main()

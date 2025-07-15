@@ -806,5 +806,44 @@ Void transactions now appear in the correct time period in reconciliation histor
 
 ---
 
+## ✅ COMPLETED: Enhanced Pending Renewals & Premium Calculator (Completed July 15, 2025)
+
+### Major Features Added
+Complete overhaul of Pending Policy Renewals page and enhancement of Edit Transaction form.
+
+### Implementation Complete:
+
+1. **Premium Sold Calculator for Endorsements**:
+   - ✅ Added to Edit Transaction form matching Add New Policy form
+   - ✅ Three-column layout: Existing Premium, New/Revised Premium, Calculated Difference
+   - ✅ Auto-populates Premium Sold field when calculator is used
+   - ✅ Changed section title to "New Policy Premium" for consistency
+   - ✅ Shows positive/negative values with proper formatting
+
+2. **Enhanced Pending Policy Renewals Page**:
+   - ✅ Shows ALL past-due renewals (no lower limit) 
+   - ✅ Summary metrics: Past Due, Due This Week, Due This Month, Total Pending
+   - ✅ Time range filtering with radio buttons
+   - ✅ Visual status indicators using emojis
+   - ✅ Status column for at-a-glance urgency
+   - ✅ Sorted by Days Until Expiration (most urgent first)
+
+3. **Filter Options**:
+   - ✅ All Renewals - shows everything
+   - ✅ Past Due Only - only expired policies
+   - ✅ Due This Week - expiring in 0-7 days
+   - ✅ Due in 30/60/90 Days - cumulative filters
+
+4. **Visual Indicators**:
+   - ✅ 🔴 Past Due - for expired policies
+   - ✅ 🟡 Urgent - for 0-7 days until expiration
+   - ✅ ✅ OK - for 8+ days until expiration
+   - ✅ Status legend for clarity
+
+### Impact:
+Users can now calculate endorsement premiums directly in the edit form, and the enhanced renewals page ensures no renewal is missed. Past-due renewals are immediately visible with clear urgency indicators, and flexible filtering allows focus on specific time ranges.
+
+---
+
 *Last Updated: July 15, 2025*  
-*Current Application Version: 3.6.5*
+*Current Application Version: 3.7.0*

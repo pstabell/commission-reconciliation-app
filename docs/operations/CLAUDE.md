@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 15, 2025  
-**Current Version**: 3.6.5
+**Current Version**: 3.7.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,8 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.6.5)
-1. **Void Date Extraction Fix**: Fixed void transactions using current date instead of statement date
+## Recent Major Changes (v3.7.0)
+1. **Enhanced Pending Renewals & Premium Calculator**: Major improvements to renewal tracking and endorsement handling
+   - Added Premium Sold Calculator for Endorsements to Edit Transaction form
+   - Shows ALL past-due renewals (removed -30 day limit)
+   - Added time range filtering (All, Past Due, This Week, 30/60/90 days)
+   - Visual status indicators: 🔴 Past Due, 🟡 Urgent, ✅ OK
+   - Summary metrics for quick overview
+   - Past-due renewals sorted first for immediate attention
+2. **Prior Release (v3.6.5) - Void Date Extraction Fix**: Fixed void transactions using current date instead of statement date
    - Issue: Void transactions created with current date, making them invisible in historical views
    - Cause: Code only handled IMPORT- prefix, not REC- or MNL- prefixes
    - Solution: Enhanced regex pattern to extract YYYYMMDD from any batch ID format

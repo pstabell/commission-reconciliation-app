@@ -5,6 +5,34 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2025-07-15 - Enhanced Pending Renewals & Premium Calculator
+
+### Added
+- **Premium Sold Calculator for Endorsements in Edit Transaction Form**
+  - Added endorsement calculator with Existing Premium and New/Revised Premium fields
+  - Automatically calculates difference (positive or negative)
+  - Changed "Direct Premium Entry" to "New Policy Premium" to match Add New Policy form
+  - Premium Sold field auto-populates from calculator when used
+  - Helpful text indicates when calculator value is being used
+
+- **Enhanced Pending Policy Renewals**
+  - Shows ALL past-due renewals (removed -30 day limit)
+  - Summary metrics: Past Due, Due This Week, Due This Month, Total Pending
+  - Time range filtering: All, Past Due Only, This Week, 30/60/90 days
+  - Visual status indicators: 🔴 Past Due, 🟡 Urgent (0-7 days), ✅ OK
+  - Status column added for at-a-glance renewal urgency
+  - Past-due renewals sorted first for immediate attention
+  - CAN and XCL transactions continue to exclude policies from renewals
+
+### Changed
+- Pending renewals now sorted by Days Until Expiration (ascending)
+- Updated empty state messages to be more informative based on filters
+
+### Technical
+- Enhanced `get_pending_renewals()` to show all past-due with no lower limit
+- Added `style_renewal_rows()` function (ready for future styling support)
+- Added status icon column as visual workaround for st.data_editor limitations
+
 ## [3.6.5] - 2025-07-15 - Void Date Extraction Fix
 
 ### Fixed
