@@ -2673,10 +2673,26 @@ def show_import_results(statement_date, all_data):
                             if client_id_to_use:
                                 new_trans['Client ID'] = client_id_to_use
                             
-                            # Add other mapped fields
+                            # Add other mapped fields with special handling for Policy Type
                             for sys_field, stmt_field in st.session_state.column_mapping.items():
                                 if sys_field not in new_trans and stmt_field in item['statement_data']:
-                                    new_trans[sys_field] = item['statement_data'][stmt_field]
+                                    value = item['statement_data'][stmt_field]
+                                    
+                                    # Apply policy type mapping if it's the Policy Type field
+                                    if sys_field == 'Policy Type' and value:
+                                        # Load policy type mappings
+                                        mapping_file = "config_files/policy_type_mappings.json"
+                                        try:
+                                            if os.path.exists(mapping_file):
+                                                with open(mapping_file, 'r') as f:
+                                                    type_mappings = json.load(f)
+                                                # Check if this statement value has a mapping
+                                                if str(value) in type_mappings:
+                                                    value = type_mappings[str(value)]
+                                        except:
+                                            pass  # If mapping fails, use original value
+                                    
+                                    new_trans[sys_field] = value
                             
                             # Clean data before queueing for insertion
                             cleaned_trans = clean_data_for_database(new_trans)
@@ -4386,26 +4402,24 @@ def main():
             if edit_search_term or edit_search_button or show_attention_filter:
                 if show_attention_filter:
                     # Filter for transactions requiring attention
-                    # These are transactions that have payments but missing premium/commission data
+                    # These are transactions that have payments but no total agent commission
                     mask = (
                         # Has a payment recorded
                         (all_data['Agent Paid Amount (STMT)'].notna() & (all_data['Agent Paid Amount (STMT)'] > 0)) &
-                        # But missing critical data
+                        # But missing total agent commission
                         (
-                            # Missing premium
-                            (all_data['Premium Sold'].isna() | (all_data['Premium Sold'] == 0)) |
-                            # Missing estimated commission
-                            (all_data['Agent Estimated Comm $'].isna() | (all_data['Agent Estimated Comm $'] == 0))
+                            (all_data['Total Agent Comm'].isna()) | 
+                            (all_data['Total Agent Comm'] == 0)
                         )
                     )
                     
                     edit_results = all_data[mask].copy()
                     
                     if not edit_results.empty:
-                        st.warning(f"⚠️ Found {len(edit_results)} transactions with payments but missing premium/commission data")
-                        st.info("These transactions need premium and commission information to ensure accurate ledger reports.")
+                        st.warning(f"⚠️ Found {len(edit_results)} transactions with payments but no total agent commission")
+                        st.info("These transactions need commission data (either policy commission or broker fees) to ensure accurate ledger reports.")
                     else:
-                        st.success("✅ All transactions with payments have complete premium and commission data!")
+                        st.success("✅ All transactions with payments have total agent commission calculated!")
                         # Continue to show empty result to user
                         
                 elif edit_search_term:
@@ -6933,6 +6947,65 @@ def main():
                             # Process and match transactions
                             if st.button("🔍 Process & Match Transactions", type="primary"):
                                 with st.spinner("Matching transactions..."):
+                                    # First check for unmapped policy types if Policy Type column is mapped
+                                    unmapped_policy_types = []
+                                    if 'Policy Type' in st.session_state.column_mapping:
+                                        policy_type_col = st.session_state.column_mapping['Policy Type']
+                                        
+                                        # Load policy type mappings
+                                        mapping_file = "config_files/policy_type_mappings.json"
+                                        type_mappings = {}
+                                        try:
+                                            if os.path.exists(mapping_file):
+                                                with open(mapping_file, 'r') as f:
+                                                    type_mappings = json.load(f)
+                                        except:
+                                            pass
+                                        
+                                        # Get unique policy types from statement (excluding null/empty)
+                                        statement_types = df[policy_type_col].dropna().unique()
+                                        statement_types = [str(t) for t in statement_types if str(t).strip()]
+                                        
+                                        # Check each type
+                                        for stmt_type in statement_types:
+                                            # Skip if it's already mapped or if it's a known type in our system
+                                            if stmt_type not in type_mappings:
+                                                # Also check if this type already exists in our policy types
+                                                # Load policy types configuration
+                                                policy_types_file = "config_files/policy_types_updated.json"
+                                                existing_types = []
+                                                try:
+                                                    if os.path.exists(policy_types_file):
+                                                        with open(policy_types_file, 'r') as f:
+                                                            policy_types_config = json.load(f)
+                                                            existing_types = policy_types_config.get('policy_types', [])
+                                                except:
+                                                    pass
+                                                
+                                                # If not in mappings and not in existing types, it's unmapped
+                                                if stmt_type not in existing_types:
+                                                    unmapped_policy_types.append(stmt_type)
+                                    
+                                    # If unmapped types found, show error and stop
+                                    if unmapped_policy_types:
+                                        st.error("❌ **Unmapped Policy Types Found**")
+                                        st.warning("The following policy types from your statement are not mapped to existing policy types:")
+                                        
+                                        # Show unmapped types in a nice format
+                                        for unmapped_type in unmapped_policy_types:
+                                            st.write(f"• **{unmapped_type}**")
+                                        
+                                        st.info("👉 **Next Steps:**")
+                                        st.write("1. Go to **Admin Panel** → **Policy Type Mapping** tab")
+                                        st.write("2. Add mappings for the policy types listed above")
+                                        st.write("3. Return here and try the import again")
+                                        
+                                        # Provide helpful instructions
+                                        st.markdown("**💡 Quick Tip:** Use the navigation menu on the left sidebar to go to Admin Panel.")
+                                        
+                                        # Stop processing
+                                        st.stop()
+                                    
                                     # Calculate statement total from all rows (including totals row)
                                     # This gives us the check-and-balance figure
                                     statement_total_amount = 0
@@ -7653,7 +7726,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping"])
         
         with tab1:
             st.subheader("Database Information")
@@ -8685,6 +8758,166 @@ SOLUTION NEEDED:
                 policy_types, allow_custom = load_policy_types()
                 if policy_types:
                     st.dataframe(pd.DataFrame(policy_types), use_container_width=True)
+        
+        with tab9:
+            st.subheader("🔄 Policy Type Mapping")
+            st.info("Map policy types from reconciliation statements to your standardized policy types")
+            
+            # Load or initialize mappings
+            mapping_file = "config_files/policy_type_mappings.json"
+            try:
+                if os.path.exists(mapping_file):
+                    with open(mapping_file, 'r') as f:
+                        mappings = json.load(f)
+                else:
+                    mappings = {}
+            except Exception as e:
+                st.error(f"Error loading mappings: {e}")
+                mappings = {}
+            
+            # Get list of active policy types for dropdown
+            active_types = []
+            try:
+                config_path = "config_files/policy_types_updated.json"
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        config_data = json.load(f)
+                        policy_types_data = config_data.get("policy_types", [])
+                        active_types = [pt['name'] for pt in policy_types_data if pt.get('active', True)]
+                else:
+                    # Fallback to load_policy_types
+                    policy_types, _ = load_policy_types()
+                    active_types = [pt['name'] for pt in policy_types if pt.get('active', True)]
+                
+                # Sort for better display
+                active_types.sort()
+            except:
+                st.error("Could not load policy types")
+                active_types = []
+            
+            # Display current mappings
+            st.markdown("### Current Mappings")
+            if mappings:
+                # Create editable dataframe for mappings
+                mapping_data = []
+                for statement_value, mapped_to in mappings.items():
+                    mapping_data.append({
+                        "Statement Value": statement_value,
+                        "Maps To": mapped_to,
+                        "Delete": False
+                    })
+                
+                mapping_df = pd.DataFrame(mapping_data)
+                edited_df = st.data_editor(
+                    mapping_df,
+                    column_config={
+                        "Maps To": st.column_config.SelectboxColumn(
+                            "Maps To",
+                            options=active_types,
+                            required=True
+                        ),
+                        "Delete": st.column_config.CheckboxColumn(
+                            "Delete",
+                            help="Check to delete this mapping"
+                        )
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed"
+                )
+                
+                # Save changes button
+                if st.button("💾 Save Mapping Changes", type="primary"):
+                    # Update mappings based on edits
+                    new_mappings = {}
+                    for idx, row in edited_df.iterrows():
+                        if not row["Delete"]:
+                            new_mappings[row["Statement Value"]] = row["Maps To"]
+                    
+                    # Save to file
+                    try:
+                        os.makedirs("config_files", exist_ok=True)
+                        with open(mapping_file, 'w') as f:
+                            json.dump(new_mappings, f, indent=2)
+                        st.success("✅ Mappings saved successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving mappings: {e}")
+            else:
+                st.info("No mappings configured yet. Add your first mapping below.")
+            
+            st.divider()
+            
+            # Add new mapping
+            st.markdown("### Add New Mapping")
+            with st.form("add_mapping_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_statement_value = st.text_input(
+                        "Statement Value",
+                        placeholder="e.g., AUTO, HO3, CONDO",
+                        help="The policy type as it appears in your reconciliation statements"
+                    )
+                with col2:
+                    new_maps_to = st.selectbox(
+                        "Maps To",
+                        options=[""] + active_types,
+                        help="Your standardized policy type"
+                    )
+                
+                submitted = st.form_submit_button("➕ Add Mapping", type="primary")
+                
+                if submitted:
+                    if new_statement_value and new_maps_to:
+                        # Check if mapping already exists
+                        if new_statement_value in mappings:
+                            st.error(f"Mapping for '{new_statement_value}' already exists!")
+                        else:
+                            # Add new mapping
+                            mappings[new_statement_value] = new_maps_to
+                            
+                            # Save to file
+                            try:
+                                os.makedirs("config_files", exist_ok=True)
+                                with open(mapping_file, 'w') as f:
+                                    json.dump(mappings, f, indent=2)
+                                st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving mapping: {e}")
+                    else:
+                        st.error("Please fill in both fields")
+            
+            st.divider()
+            
+            # Mapping summary
+            st.markdown("### Mapping Summary")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Mappings", len(mappings))
+            with col2:
+                st.metric("Active Policy Types", len(active_types))
+            
+            # Help text
+            with st.expander("ℹ️ How Policy Type Mapping Works"):
+                st.markdown("""
+                **Purpose**: Prevent duplicate policy types during reconciliation by mapping statement values to your standardized types.
+                
+                **How it works**:
+                1. During reconciliation import, the system checks each policy type against these mappings
+                2. If a mapping exists, it automatically uses your standardized type
+                3. If no mapping exists, the import will stop and ask you to add the mapping
+                
+                **Example**:
+                - Statement has "AUTO" → Maps to "Private Passenger Auto"
+                - Statement has "HO3" → Maps to "Homeowners"
+                - Statement has "DWELLING" → Maps to "Dwelling Fire"
+                
+                **Benefits**:
+                - No more duplicate policy types
+                - Consistent data across all imports
+                - Easy to maintain and update
+                """)
     
     # --- Contacts ---
     elif page == "Contacts":

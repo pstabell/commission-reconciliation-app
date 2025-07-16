@@ -5,6 +5,23 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] - 2025-07-15 - Policy Type Mapping Validation
+
+### Added
+- **Policy Type Mapping Validation During Import**
+  - Reconciliation import now checks for unmapped policy types before processing
+  - Shows clear error message listing all unmapped types found in statement
+  - Prevents import until mappings are configured in Admin Panel
+  - Protects data integrity by ensuring all policy types map to standardized values
+  - Helpful instructions guide users to Policy Type Mapping tab
+
+### Technical
+- Added validation check after clicking "Process & Match Transactions"
+- Loads both policy_type_mappings.json and policy_types_updated.json
+- Checks statement policy types against both mappings and existing types
+- Uses st.stop() to halt processing if unmapped types found
+- Maintains existing mapping application during transaction creation
+
 ## [3.7.0] - 2025-07-15 - Enhanced Pending Renewals & Premium Calculator
 
 ### Added

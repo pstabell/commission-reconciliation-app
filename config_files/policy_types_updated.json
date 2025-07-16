@@ -1,31 +1,136 @@
 {
   "policy_types": [
-    {"code": "HO3", "name": "Homeowners 3", "active": true, "category": "Personal Property"},
-    {"code": "HO6", "name": "Homeowners 6 (Condo)", "active": true, "category": "Personal Property"},
-    {"code": "DP1", "name": "Dwelling Property 1", "active": true, "category": "Personal Property"},
-    {"code": "DP3", "name": "Dwelling Property 3", "active": true, "category": "Personal Property"},
-    {"code": "Auto", "name": "Personal Auto", "active": true, "category": "Personal Auto"},
-    {"code": "Motorcycle", "name": "Motorcycle", "active": true, "category": "Personal Auto"},
-    {"code": "RV", "name": "Recreational Vehicle", "active": true, "category": "Personal Auto"},
-    {"code": "Boat", "name": "Boat/Watercraft", "active": true, "category": "Specialty"},
-    {"code": "BOP", "name": "Business Owners Policy", "active": true, "category": "Commercial"},
-    {"code": "CPP", "name": "Commercial Package Policy", "active": true, "category": "Commercial"},
-    {"code": "CGL", "name": "Commercial General Liability", "active": true, "category": "Commercial"},
-    {"code": "GL", "name": "General Liability", "active": true, "category": "Commercial"},
-    {"code": "WC", "name": "Workers Compensation", "active": true, "category": "Commercial"},
-    {"code": "Flood", "name": "Flood Insurance", "active": true, "category": "Specialty"},
-    {"code": "Wind", "name": "Wind/Hurricane", "active": true, "category": "Specialty"},
-    {"code": "Umbrella", "name": "Personal Umbrella Policy", "active": true, "category": "Personal"},
-    {"code": "PUP", "name": "Personal Umbrella Policy", "active": true, "category": "Personal"},
-    {"code": "Renters", "name": "Renters Insurance", "active": true, "category": "Personal Property"},
-    {"code": "Cyber", "name": "Cyber Liability", "active": true, "category": "Commercial"},
-    {"code": "MHO3", "name": "Mobile Home", "active": true, "category": "Personal Property"},
-    {"code": "MDP3", "name": "Mobile Home DP3", "active": true, "category": "Personal Property"}
+    {
+      "code": "HO3",
+      "name": "HOME",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "HO6",
+      "name": "CONDO",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "DP1",
+      "name": "DP1",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "DP3",
+      "name": "DP3",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "Auto",
+      "name": "AUTO",
+      "active": true,
+      "category": "Personal Auto"
+    },
+    {
+      "code": "Motorcycle",
+      "name": "CYCLE",
+      "active": true,
+      "category": "Personal Auto"
+    },
+    {
+      "code": "RV",
+      "name": "RV",
+      "active": true,
+      "category": "Personal Auto"
+    },
+    {
+      "code": "Boat",
+      "name": "BOAT",
+      "active": true,
+      "category": "Specialty"
+    },
+    {
+      "code": "BOP",
+      "name": "BOP",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "CPP",
+      "name": "C-PACKAGE",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "CGL",
+      "name": "COMMERCIAL GENERAL LIABILITY",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "GL",
+      "name": "CENERAL LIABILTY",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "WC",
+      "name": "WORKERS COMP",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "Flood",
+      "name": "FLOOD",
+      "active": true,
+      "category": "Specialty"
+    },
+    {
+      "code": "Wind",
+      "name": "WIND",
+      "active": true,
+      "category": "Specialty"
+    },
+    {
+      "code": "Umbrella",
+      "name": "UMBRELLA",
+      "active": true,
+      "category": "Personal"
+    },
+    {
+      "code": "PUP",
+      "name": "UMBRELLA-PUP",
+      "active": true,
+      "category": "Personal"
+    },
+    {
+      "code": "Renters",
+      "name": "RENTERS",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "Cyber",
+      "name": "CYBER",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "MHO3",
+      "name": "MOBILE",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "MDP3",
+      "name": "MOBILE DP3",
+      "active": true,
+      "category": "Personal Property"
+    }
   ],
   "default": "HO3",
   "categories": [
     "Personal Property",
-    "Personal Auto", 
+    "Personal Auto",
     "Commercial",
     "Specialty",
     "Personal"

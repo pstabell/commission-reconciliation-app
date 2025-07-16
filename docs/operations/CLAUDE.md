@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 15, 2025  
-**Current Version**: 3.7.0
+**Last Updated**: July 15, 2025 (Late Evening)  
+**Current Version**: 3.7.1
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,14 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.7.0)
+## Recent Major Changes (v3.7.1)
+1. **Policy Type Mapping Validation**: Added import validation for unmapped policy types
+   - Reconciliation import now validates all policy types before processing
+   - Shows error with list of unmapped types if found
+   - Prevents import until mappings are configured in Admin Panel
+   - Ensures data consistency by requiring all types to be mapped
+   - User-friendly error messages with clear next steps
+2. **Prior Release (v3.7.0)
 1. **Enhanced Pending Renewals & Premium Calculator**: Major improvements to renewal tracking and endorsement handling
    - Added Premium Sold Calculator for Endorsements to Edit Transaction form
    - Shows ALL past-due renewals (removed -30 day limit)
