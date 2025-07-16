@@ -8795,7 +8795,7 @@ SOLUTION NEEDED:
                                     if merge_from and merge_to and merge_from != merge_to:
                                         try:
                                             # Update all transactions with the merge_from type to use merge_to
-                                            update_response = supabase.table('policies').update({'"Policy Type"': merge_to}).eq('"Policy Type"', merge_from).execute()
+                                            update_response = supabase.table('policies').update({'Policy Type': merge_to}).eq('"Policy Type"', merge_from).execute()
                                             
                                             if update_response.data:
                                                 updated_count = len(update_response.data)
@@ -8902,7 +8902,7 @@ SOLUTION NEEDED:
                                         else:
                                             try:
                                                 # Update all transactions with the new name
-                                                update_response = supabase.table('policies').update({'"Policy Type"': rename_to}).eq('"Policy Type"', rename_from).execute()
+                                                update_response = supabase.table('policies').update({'Policy Type': rename_to}).eq('"Policy Type"', rename_from).execute()
                                                 
                                                 if update_response.data:
                                                     updated_count = len(update_response.data)
