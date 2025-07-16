@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 15, 2025 (Late Evening)  
-**Current Version**: 3.7.3
+**Last Updated**: July 16, 2025  
+**Current Version**: 3.7.5
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,33 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.7.3)
+## Recent Major Changes (v3.7.5)
+1. **Fixed Cancellation Commission Calculations**: CAN/XCL now calculate chargebacks
+   - Fixed CAN and XCL transactions showing $0 instead of negative commissions
+   - Properly calculates negative amounts for both Agency and Agent commissions
+   - Uses Prior Policy Number to determine chargeback rate (25% or 50%)
+   - Added clear "(CHARGEBACK)" labels in help text
+2. **Fixed Edit Transaction Update Error**: Resolved "no data returned" issue
+   - Added `.select()` to Supabase update operation
+   - Supabase doesn't return data after UPDATE by default
+   - Now properly confirms successful updates
+   - Fixed inline-added transaction edit workflow
+2. **Removed All Date Format Overrides**: Let Streamlit handle dates naturally
+   - Removed format_dates_mmddyyyy() function entirely
+   - Removed all format="MM/DD/YYYY" from date_input widgets
+   - Updated convert_timestamps_for_json to use ISO format
+   - Removed date formatter tool from Tools page
+   - Dates now display in ISO format (YYYY-MM-DD) consistently
+   - Resolves ongoing date reversal issues
+   - Simplifies codebase significantly
+2. **Prior Release (v3.7.4)
+1. **Contacts Page Forms Above the Fold**: Improved UX by moving Add Carrier/MGA forms
+   - Add Carrier form now appears immediately after Quick Add dropdown
+   - Implemented missing Add MGA form functionality  
+   - Both forms appear above the fold without scrolling
+   - Users can now see forms are working without confusion
+   - Added complete MGA fields: name, contact, phone, email, website, notes
+2. **Prior Release (v3.7.3)
 1. **Policy Type Rename Feature**: Added ability to rename policy types
    - New section in Admin Panel → Policy Types tab
    - Text input for new name (can rename to any name not already in use)
@@ -132,9 +158,9 @@ supabase.table('policies').select('"Transaction ID"')
 - _id (internal row identifier)
 **Solution**: Use `clean_data_for_database()` function before any insert operations
 
-### 4. Date Format Standardization
-**Standard**: MM/DD/YYYY throughout the application
-**Function**: `format_dates_mmddyyyy()` handles conversions
+### 4. Date Format Standardization (REMOVED in v3.7.5)
+**Standard**: ISO format (YYYY-MM-DD) - Streamlit's natural handling
+**Note**: All date formatting overrides have been removed to let Streamlit handle dates naturally
 
 ### 5. Data Loading & Caching (v3.5.1)
 **Issue**: Stale data between page navigation

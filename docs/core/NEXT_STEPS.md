@@ -909,8 +909,48 @@ Users can now calculate endorsement premiums directly in the edit form, and the 
 
 ---
 
-*Last Updated: July 15, 2025*  
-*Current Application Version: 3.7.0*
+*Last Updated: July 16, 2025*  
+*Current Application Version: 3.7.5*
+
+---
+
+## ✅ COMPLETED: Version 3.7.5 Major Fixes (July 16, 2025)
+
+### Completed Enhancements:
+1. **Contacts Page UX Improvements**
+   - Moved Add Carrier and Add MGA forms above the fold
+   - Implemented missing Add MGA form functionality
+   - Fixed database schema mismatch (contact_info as JSONB)
+   - Users can now see forms immediately without scrolling
+
+2. **Date Format Simplification**
+   - Removed ALL date format overrides
+   - Let Streamlit handle dates naturally (ISO format)
+   - Deleted format_dates_mmddyyyy() function
+   - Removed all format="MM/DD/YYYY" parameters
+   - Simplified convert_timestamps_for_json to use isoformat()
+   - Resolves persistent date reversal issues
+
+3. **Edit Transaction Form Fixes**
+   - Fixed "Update may have failed - no data returned" error
+   - Removed incorrect .select() from update operation
+   - Properly handles Supabase update response without data
+   - Fixed inline-added transaction edit workflow
+
+4. **Cancellation Commission Calculations**
+   - Fixed CAN/XCL transactions showing $0 instead of chargebacks
+   - Now calculates negative commissions for both Agency and Agent
+   - Uses Prior Policy Number to determine chargeback rate:
+     - With Prior Policy: 25% chargeback (was renewal)
+     - No Prior Policy: 50% chargeback (was new business)
+   - Added "(CHARGEBACK)" labels in help text
+   - Fixed session state reading for real-time calculation updates
+
+### Technical Improvements:
+- Better session state management for form calculations
+- Cleaner error handling for database operations
+- Reduced code complexity by ~100 lines
+- Improved international date compatibility
 
 ---
 

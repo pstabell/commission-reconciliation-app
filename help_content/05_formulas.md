@@ -15,10 +15,11 @@
 | PCH | 50% or 25% | Policy changes* |
 | RWL | 25% | Renewals |
 | REWRITE | 25% | Policy rewrites |
-| CAN | 0% | Cancellations |
-| XCL | 0% | Cancellations (alternative) |
+| CAN | -50% or -25% | Cancellations (chargeback)** |
+| XCL | -50% or -25% | Cancellations (chargeback)** |
 
 *For END and PCH: 50% if Policy Origination Date = Effective Date, otherwise 25%
+**For CAN and XCL: -50% if no Prior Policy Number (was new business), -25% if has Prior Policy Number (was renewal)
 
 ### Commission Dollar Calculations
 

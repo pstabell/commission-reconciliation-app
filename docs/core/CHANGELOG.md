@@ -5,6 +5,69 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.5] - 2025-07-16 - Date Format Simplification & Update Fix
+
+### Fixed
+- **Cancellation Commission Calculations (CAN/XCL)**
+  - Fixed CAN and XCL transactions not calculating negative commissions
+  - Now properly calculates chargebacks based on original commission rate
+  - Uses Prior Policy Number to determine if chargeback is at 25% (renewal) or 50% (new)
+  - Both Agency and Agent commissions show as negative amounts
+  - Added "(CHARGEBACK)" label to help text for clarity
+
+### Fixed
+- **Edit Transaction Form Update Error**
+  - Fixed "Update may have failed - no data returned" error
+  - Added `.select()` to update operation to return data
+  - Supabase doesn't return data after UPDATE by default
+  - Now properly confirms successful updates
+  - Changed error message to warning for edge cases
+
+### Changed
+- **Removed All Date Format Overrides**
+  - Deleted format_dates_mmddyyyy() function completely
+  - Removed all format="MM/DD/YYYY" parameters from st.date_input() widgets
+  - Updated convert_timestamps_for_json() to use ISO format (isoformat())
+  - Removed date formatter tool from Tools page
+  - Let Streamlit handle all date formatting naturally
+
+### Impact
+- Dates now display consistently in ISO format (YYYY-MM-DD)
+- Resolves persistent date reversal issues
+- Significantly simplifies codebase
+- Better international compatibility
+- More reliable date handling
+- Database dates stored in standard format
+
+### Technical
+- Removed ~50 lines of date formatting code
+- Eliminated format override conflicts with Streamlit
+- Cleaner JSON serialization with ISO dates
+- No more MM/DD/YYYY vs YYYY-MM-DD confusion
+
+## [3.7.4] - 2025-07-16 - Contacts Page UX Improvements
+
+### Added
+- **Add MGA Form Implementation**
+  - Created missing MGA form functionality
+  - Added fields: MGA Name*, Contact Name, Phone, Email, Website, Notes
+  - Form appears when "Add MGA" selected from Quick Add dropdown
+  - Saves new MGAs to database with Active status
+
+### Changed
+- **Form Positioning for Better UX**
+  - Moved Add Carrier form to appear immediately after Quick Add dropdown
+  - Add MGA form appears right after Add Carrier form
+  - Both forms now "above the fold" - visible without scrolling
+  - Removed duplicate Add Carrier form from bottom of page
+  - Better user experience - users can see forms are working
+
+### Technical
+- Forms appear conditionally based on session state
+- Consistent form styling with two-column layout
+- Primary action buttons with Cancel option
+- Auto-clear session state and rerun after successful submission
+
 ## [3.7.3] - 2025-07-15 - Policy Type Rename Feature
 
 ### Added

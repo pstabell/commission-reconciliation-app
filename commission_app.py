@@ -920,30 +920,17 @@ def clean_numeric_value(value):
     except (ValueError, TypeError):
         return value
 
-def format_dates_mmddyyyy(df):
-    """Format date columns in MM/DD/YYYY format using mapped column names."""
-    date_field_names = ["Policy Origination Date", "Effective Date", "X-Date", "X-DATE", "Statement Date", "STMT DATE"]
-    
-    for ui_field in date_field_names:
-        # Try mapped column first, then fallback to exact match
-        mapped_col = get_mapped_column(ui_field)
-        target_col = mapped_col if mapped_col and mapped_col in df.columns else ui_field
-        
-        if target_col in df.columns:
-            df[target_col] = pd.to_datetime(df[target_col], errors="coerce")
-            df[target_col] = df[target_col].dt.strftime("%m/%d/%Y")
-    return df
 
 def convert_timestamps_for_json(data):
     """Convert any Timestamp objects in data to strings for JSON serialization."""
     cleaned_data = {}
     for key, value in data.items():
         if isinstance(value, pd.Timestamp):
-            cleaned_data[key] = value.strftime('%m/%d/%Y')
+            cleaned_data[key] = value.isoformat()
         elif isinstance(value, datetime.datetime):
-            cleaned_data[key] = value.strftime('%m/%d/%Y %H:%M:%S')
+            cleaned_data[key] = value.isoformat()
         elif isinstance(value, datetime.date):
-            cleaned_data[key] = value.strftime('%m/%d/%Y')
+            cleaned_data[key] = value.isoformat()
         elif pd.isna(value):
             cleaned_data[key] = None
         else:
@@ -3154,7 +3141,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             'Effective Date',
                             value=parsed_date.date(),
                             key="modal_Effective Date",
-                            format="MM/DD/YYYY"
                         )
                         rendered_fields.add('Effective Date')
                     except:
@@ -3169,7 +3155,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         'Effective Date',
                         value=None,
                         key="modal_Effective Date",
-                        format="MM/DD/YYYY"
                     )
                 rendered_fields.add('Effective Date')
             
@@ -3195,8 +3180,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                 'Policy Origination Date',
                                 value=parsed_date.date(),
                                 key="modal_Policy Origination Date",
-                                format="MM/DD/YYYY"
-                            )
+                                )
                         except:
                             updated_data['Policy Origination Date'] = st.text_input(
                                 'Policy Origination Date',
@@ -3209,7 +3193,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             'Policy Origination Date',
                             value=None,
                             key="modal_Policy Origination Date",
-                            format="MM/DD/YYYY"
                         )
         
         # Right column - X-DATE only (aligned with Effective Date)
@@ -3224,7 +3207,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             'X-DATE (Expiration)',
                             value=parsed_date.date(),
                             key="modal_X-DATE",
-                            format="MM/DD/YYYY"
                         )
                     except:
                         updated_data['X-DATE'] = st.text_input(
@@ -3238,7 +3220,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         'X-DATE (Expiration)',
                         value=None,
                         key="modal_X-DATE",
-                        format="MM/DD/YYYY"
                     )
         
         # Add Policy Term after Policy Origination Date
@@ -3393,8 +3374,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 has_rule = st.session_state.get('edit_has_commission_rule', False)
                 
                 if has_rule:
-                    # Get the current transaction type and prior policy number
-                    current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
+                    # Get the current transaction type from session state (most current value)
+                    current_transaction_type = st.session_state.get('modal_Transaction Type', 
+                                            updated_data.get('Transaction Type', 
+                                            modal_data.get('Transaction Type', 'NEW')))
                     # Check session state first for the most current value
                     prior_policy = st.session_state.get('modal_Prior Policy Number', 
                                     updated_data.get('Prior Policy Number', 
@@ -3452,6 +3435,15 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             try:
                 gross_comm_pct = float(gross_comm_pct) if pd.notna(gross_comm_pct) else 0.0
                 agency_comm = commissionable_premium * (gross_comm_pct / 100)
+                
+                # Get current transaction type for cancellation check
+                current_trans_type_for_agency = st.session_state.get('modal_Transaction Type', 
+                                        updated_data.get('Transaction Type', 
+                                        modal_data.get('Transaction Type', 'NEW')))
+                
+                # For cancellations (CAN/XCL), make the commission negative (chargeback)
+                if current_trans_type_for_agency in ["CAN", "XCL"]:
+                    agency_comm = -abs(agency_comm)  # Ensure it's negative
             except:
                 agency_comm = 0.0
             
@@ -3461,7 +3453,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 format="%.2f",
                 key="modal_Agency Estimated Comm_display",
                 disabled=True,
-                help=f"Commissionable Premium × Policy Gross Comm % = ${commissionable_premium:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}"
+                help=f"Commissionable Premium × Policy Gross Comm % = ${commissionable_premium:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}" + (" (CHARGEBACK)" if current_transaction_type in ["CAN", "XCL"] else "")
             )
             updated_data['Agency Estimated Comm/Revenue (CRM)'] = agency_comm
         
@@ -3470,8 +3462,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         with col11:
             if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
-                # Get the current transaction type to determine agent rate
-                current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', 'NEW'))
+                # Get the current transaction type from session state (most current value)
+                current_transaction_type = st.session_state.get('modal_Transaction Type', 
+                                        updated_data.get('Transaction Type', 
+                                        modal_data.get('Transaction Type', 'NEW')))
                 
                 # Get Prior Policy Number - check session state first, then updated data, then modal data
                 # This ensures we get the most current value even if field hasn't been rendered yet
@@ -3490,8 +3484,13 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     # These are typically new business
                     agent_rate = 50.0
                 elif current_transaction_type in ["CAN", "XCL"]:
-                    # Cancellations get 0%
-                    agent_rate = 0.0
+                    # Cancellations - determine the original rate based on Prior Policy Number
+                    if prior_policy and str(prior_policy).strip():
+                        # Has prior policy = this was a renewal, so chargeback at 25%
+                        agent_rate = 25.0
+                    else:
+                        # No prior policy = this was new business, so chargeback at 50%
+                        agent_rate = 50.0
                 else:
                     # For all other transaction types (END, PCH, REWRITE), check Prior Policy Number
                     if prior_policy and str(prior_policy).strip():
@@ -3503,7 +3502,12 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 
                 # Display as read-only field since it's calculated
                 help_text = f"Transaction Type: {current_transaction_type}"
-                if current_transaction_type not in ["NEW", "RWL", "NBS", "STL", "BoR", "CAN", "XCL"]:
+                if current_transaction_type in ["CAN", "XCL"]:
+                    if prior_policy and str(prior_policy).strip():
+                        help_text += f" | CANCELLATION - Chargeback at renewal rate (25%)"
+                    else:
+                        help_text += f" | CANCELLATION - Chargeback at new business rate (50%)"
+                elif current_transaction_type not in ["NEW", "RWL", "NBS", "STL", "BoR"]:
                     if prior_policy and str(prior_policy).strip():
                         help_text += f" | Has Prior Policy: {prior_policy} → Renewal rate (25%)"
                     else:
@@ -3525,6 +3529,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             try:
                 agent_comm_pct = float(agent_comm_pct) if pd.notna(agent_comm_pct) else 0.0
                 agent_comm = agency_comm * (agent_comm_pct / 100)
+                
+                # For cancellations (CAN/XCL), make the commission negative (chargeback)
+                if current_transaction_type in ["CAN", "XCL"]:
+                    agent_comm = -abs(agent_comm)  # Ensure it's negative
             except:
                 agent_comm = 0.0
             
@@ -3534,7 +3542,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 format="%.2f",
                 key="modal_Agent Estimated Comm_display",
                 disabled=True,
-                help=f"Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_pct:.2f}% = ${agent_comm:.2f}"
+                help=f"Agency Comm × Agent Rate = ${agency_comm:.2f} × {agent_comm_pct:.2f}% = ${agent_comm:.2f}" + (" (CHARGEBACK)" if current_transaction_type in ["CAN", "XCL"] else "")
             )
             updated_data['Agent Estimated Comm $'] = agent_comm
         
@@ -3858,7 +3866,6 @@ def main():
                         st.success(f"Found {len(search_results)} matching records")
                         
                         # Format dates to strings before displaying
-                        search_results = format_dates_mmddyyyy(search_results)
                         
                         # Configure column settings for proper numeric display
                         column_config = {}
@@ -5179,7 +5186,7 @@ def main():
                                             if transaction_id:
                                                 try:
                                                     check_response = supabase.table('policies').select('_id').eq(
-                                                        f'"{get_mapped_column("Transaction ID")}"', transaction_id
+                                                        get_mapped_column("Transaction ID"), transaction_id
                                                     ).execute()
                                                     if check_response.data and len(check_response.data) > 0:
                                                         existing_record = check_response.data[0]
@@ -5193,8 +5200,9 @@ def main():
                                                 if '_id' in save_data:
                                                     del save_data['_id']
                                                 
+                                                # For Supabase Python client, we need to specify select parameter in update
                                                 response = supabase.table('policies').update(save_data).eq(
-                                                    f'"{get_mapped_column("Transaction ID")}"', transaction_id
+                                                    get_mapped_column("Transaction ID"), transaction_id
                                                 ).execute()
                                             else:
                                                 # New record - INSERT
@@ -5206,7 +5214,9 @@ def main():
                                                 cleaned_save = clean_data_for_database(save_data)
                                                 response = supabase.table('policies').insert(cleaned_save).execute()
                                             
-                                            if response.data:
+                                            # Check if we have a response - for updates, data might be None but operation succeeded
+                                            # For inserts, we should have data
+                                            if response is not None and (response.data or existing_record or record_id):
                                                 st.success("✅ Transaction updated successfully!")
                                                 clear_policies_cache()
                                                 
@@ -5223,7 +5233,7 @@ def main():
                                                 time.sleep(1)
                                                 st.rerun()
                                             else:
-                                                st.error("❌ Update may have failed - no data returned")
+                                                st.error("❌ Update failed - no response from database")
                                         
                                         except Exception as e:
                                             st.error(f"Error updating transaction: {str(e)}")
@@ -5685,16 +5695,16 @@ def main():
                 # Use session state for Effective Date to allow clearing
                 effective_date_default = st.session_state.get('add_effective_date', None)
                 if effective_date_default is None:
-                    effective_date = st.date_input("Effective Date", value=None, format="MM/DD/YYYY", key="add_effective_date")
+                    effective_date = st.date_input("Effective Date", value=None, key="add_effective_date")
                 else:
-                    effective_date = st.date_input("Effective Date", value=effective_date_default, format="MM/DD/YYYY", key="add_effective_date")
+                    effective_date = st.date_input("Effective Date", value=effective_date_default, key="add_effective_date")
             with col2:
                 # Use session state for Policy Origination Date to allow clearing
                 policy_orig_date_default = st.session_state.get('add_policy_orig_date', None)
                 if policy_orig_date_default is None:
-                    policy_orig_date = st.date_input("Policy Origination Date", value=None, format="MM/DD/YYYY", key="add_policy_orig_date")
+                    policy_orig_date = st.date_input("Policy Origination Date", value=None, key="add_policy_orig_date")
                 else:
-                    policy_orig_date = st.date_input("Policy Origination Date", value=policy_orig_date_default, format="MM/DD/YYYY", key="add_policy_orig_date")
+                    policy_orig_date = st.date_input("Policy Origination Date", value=policy_orig_date_default, key="add_policy_orig_date")
             
             # Row 4: X-DATE and Payment Type
             col1, col2 = st.columns(2)
@@ -5702,9 +5712,9 @@ def main():
                 # Use session state for X-DATE to allow clearing
                 x_date_default = st.session_state.get('add_x_date', None)
                 if x_date_default is None:
-                    x_date = st.date_input("X-DATE", value=None, format="MM/DD/YYYY", help="Expiration date", key="add_x_date")
+                    x_date = st.date_input("X-DATE", value=None, help="Expiration date", key="add_x_date")
                 else:
-                    x_date = st.date_input("X-DATE", value=x_date_default, format="MM/DD/YYYY", help="Expiration date", key="add_x_date")
+                    x_date = st.date_input("X-DATE", value=x_date_default, help="Expiration date", key="add_x_date")
             with col2:
                 full_or_monthly = st.selectbox("FULL OR MONTHLY PMTS", ["FULL", "MONTHLY", ""])
             
@@ -5869,8 +5879,13 @@ def main():
                     # These are typically new business
                     agent_comm_rate = 50.0
                 elif transaction_type in ["CAN", "XCL"]:
-                    # Cancellations get 0%
-                    agent_comm_rate = 0.0
+                    # Cancellations - determine the original rate based on Prior Policy Number
+                    if prior_policy_number and str(prior_policy_number).strip():
+                        # Has prior policy = this was a renewal, so chargeback at 25%
+                        agent_comm_rate = 25.0
+                    else:
+                        # No prior policy = this was new business, so chargeback at 50%
+                        agent_comm_rate = 50.0
                 else:
                     # For all other transaction types (END, PCH, REWRITE), check Prior Policy Number
                     if prior_policy_number and str(prior_policy_number).strip():
@@ -6244,8 +6259,7 @@ def main():
                     "",  # Empty label since we have the custom header above
                     value=datetime.date.today(),
                     help="The date on the commission statement",
-                    format="MM/DD/YYYY",
-                    key="statement_date_input"
+                                        key="statement_date_input"
                 )
             
             with col2:
@@ -7140,14 +7154,12 @@ def main():
                         start_date = st.date_input(
                             "From Date",
                             value=datetime.date.today() - datetime.timedelta(days=30),
-                            format="MM/DD/YYYY"
                         )
                     
                     with col2:
                         end_date = st.date_input(
                             "To Date",
                             value=datetime.date.today(),
-                            format="MM/DD/YYYY"
                         )
                     
                     # Filter by date range
@@ -9221,6 +9233,98 @@ SOLUTION NEEDED:
                 elif quick_add == "Add MGA":
                     st.session_state['show_add_mga'] = True
         
+        # Add carrier modal - MOVED TO TOP FOR VISIBILITY
+        if st.session_state.get('show_add_carrier'):
+            with st.form("add_carrier_form_modal"):
+                st.markdown("### Add New Carrier")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    carrier_name = st.text_input("Carrier Name*", placeholder="e.g., Progressive Insurance")
+                    naic_code = st.text_input("NAIC Code", placeholder="Optional")
+                
+                with col2:
+                    producer_code = st.text_input("Producer Code", placeholder="Optional")
+                    notes = st.text_area("Notes", placeholder="Optional notes")
+                
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    if st.form_submit_button("Add Carrier", type="primary"):
+                        if carrier_name:
+                            try:
+                                new_carrier = {
+                                    "carrier_name": carrier_name,
+                                    "naic_code": naic_code if naic_code else None,
+                                    "producer_code": producer_code if producer_code else None,
+                                    "status": "Active",
+                                    "notes": notes if notes else None
+                                }
+                                
+                                response = supabase.table('carriers').insert(new_carrier).execute()
+                                st.success(f"✅ Added {carrier_name}")
+                                del st.session_state['show_add_carrier']
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        else:
+                            st.error("Carrier name is required")
+                    
+                    if st.form_submit_button("Cancel"):
+                        del st.session_state['show_add_carrier']
+                        st.rerun()
+        
+        # Add MGA modal - NEW IMPLEMENTATION
+        if st.session_state.get('show_add_mga'):
+            with st.form("add_mga_form_modal"):
+                st.markdown("### Add New MGA")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    mga_name = st.text_input("MGA Name*", placeholder="e.g., Advantage Partners LLC")
+                    contact_name = st.text_input("Contact Name", placeholder="Optional")
+                    phone = st.text_input("Phone", placeholder="Optional")
+                
+                with col2:
+                    email = st.text_input("Email", placeholder="Optional")
+                    website = st.text_input("Website", placeholder="Optional")
+                    notes = st.text_area("Notes", placeholder="Optional notes")
+                
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    if st.form_submit_button("Add MGA", type="primary"):
+                        if mga_name:
+                            try:
+                                # Build contact_info as JSONB
+                                contact_info = {}
+                                if contact_name:
+                                    contact_info["contact_name"] = contact_name
+                                if phone:
+                                    contact_info["phone"] = phone
+                                if email:
+                                    contact_info["email"] = email
+                                if website:
+                                    contact_info["website"] = website
+                                
+                                new_mga = {
+                                    "mga_name": mga_name,
+                                    "contact_info": contact_info,
+                                    "status": "Active",
+                                    "notes": notes if notes else None
+                                }
+                                
+                                response = supabase.table('mgas').insert(new_mga).execute()
+                                st.success(f"✅ Added {mga_name}")
+                                del st.session_state['show_add_mga']
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        else:
+                            st.error("MGA name is required")
+                    
+                    if st.form_submit_button("Cancel"):
+                        del st.session_state['show_add_mga']
+                        st.rerun()
+        
         # Detailed Instructions and Help
         with st.expander("ℹ️ How Commission Rules Work", expanded=False):
             st.info("""
@@ -9669,45 +9773,6 @@ SOLUTION NEEDED:
                 - SQL scripts available at: `/sql_scripts/populate_initial_carriers_mgas.sql`
                 """)
         
-        # Add carrier modal
-        if st.session_state.get('show_add_carrier'):
-            with st.form("add_carrier_form_modal"):
-                st.markdown("### Add New Carrier")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    carrier_name = st.text_input("Carrier Name*", placeholder="e.g., Progressive Insurance")
-                    naic_code = st.text_input("NAIC Code", placeholder="Optional")
-                
-                with col2:
-                    producer_code = st.text_input("Producer Code", placeholder="Optional")
-                    notes = st.text_area("Notes", placeholder="Optional notes")
-                
-                col1, col2 = st.columns([3, 1])
-                with col2:
-                    if st.form_submit_button("Add Carrier", type="primary"):
-                        if carrier_name:
-                            try:
-                                new_carrier = {
-                                    "carrier_name": carrier_name,
-                                    "naic_code": naic_code if naic_code else None,
-                                    "producer_code": producer_code if producer_code else None,
-                                    "status": "Active",
-                                    "notes": notes if notes else None
-                                }
-                                
-                                response = supabase.table('carriers').insert(new_carrier).execute()
-                                st.success(f"✅ Added {carrier_name}")
-                                del st.session_state['show_add_carrier']
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                        else:
-                            st.error("Carrier name is required")
-                    
-                    if st.form_submit_button("Cancel"):
-                        del st.session_state['show_add_carrier']
-                        st.rerun()
     
     # --- Tools ---
     elif page == "Tools":
@@ -9758,13 +9823,6 @@ SOLUTION NEEDED:
             formatted_currency = format_currency(currency_input)
             st.write(f"Formatted: {formatted_currency}")
             
-            st.divider()
-            
-            # Date formatter
-            st.write("**Date Formatter**")
-            date_input = st.date_input("Date to format")
-            formatted_date = date_input.strftime('%m/%d/%Y')
-            st.write(f"Formatted (MM/DD/YYYY): {formatted_date}")
         
         with tab3:
             st.subheader("Import/Export Tools")
@@ -10034,8 +10092,7 @@ SOLUTION NEEDED:
             st.session_state["recon_stmt_date"] = st.date_input(
                 "Commission Statement Date (applies to all entries below)",
                 value=st.session_state["recon_stmt_date"] or None,
-                format="MM/DD/YYYY",
-                key="recon_stmt_date_input_global"
+                                key="recon_stmt_date_input_global"
             )
             statement_date = st.session_state["recon_stmt_date"]
             agency_comm_received = st.number_input("Agency Comm Received (STMT)", min_value=0.0, step=0.01, format="%.2f", key="recon_agency_comm_received_input")
@@ -10200,8 +10257,7 @@ SOLUTION NEEDED:
                     statement_date = st.date_input(
                         "Statement Date",
                         value=datetime.date.today(),
-                        format="MM/DD/YYYY",
-                        key="reconcile_statement_date_v2"
+                                                key="reconcile_statement_date_v2"
                     )
                 with col2:
                     statement_description = st.text_input(
