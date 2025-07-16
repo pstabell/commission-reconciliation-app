@@ -8744,7 +8744,7 @@ SOLUTION NEEDED:
                     try:
                         # Get unique policy types from the database
                         supabase = get_supabase_client()
-                        response = supabase.table('policies').select('Policy Type').execute()
+                        response = supabase.table('policies').select('"Policy Type"').execute()
                         
                         if response.data:
                             db_policy_types = set()
@@ -8755,7 +8755,7 @@ SOLUTION NEEDED:
                             # Count transactions for each policy type
                             type_counts = {}
                             for pt in db_policy_types:
-                                count_response = supabase.table('policies').select('count', count='exact').eq('Policy Type', pt).execute()
+                                count_response = supabase.table('policies').select('count', count='exact').eq('"Policy Type"', pt).execute()
                                 type_counts[pt] = count_response.count if count_response else 0
                             
                             # Sort by name for better display
@@ -8795,7 +8795,7 @@ SOLUTION NEEDED:
                                     if merge_from and merge_to and merge_from != merge_to:
                                         try:
                                             # Update all transactions with the merge_from type to use merge_to
-                                            update_response = supabase.table('policies').update({'Policy Type': merge_to}).eq('Policy Type', merge_from).execute()
+                                            update_response = supabase.table('policies').update({'"Policy Type"': merge_to}).eq('"Policy Type"', merge_from).execute()
                                             
                                             if update_response.data:
                                                 updated_count = len(update_response.data)
