@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 15, 2025 (Late Evening)  
-**Current Version**: 3.7.1
+**Current Version**: 3.7.2
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.7.1)
+## Recent Major Changes (v3.7.2)
+1. **Policy Type Merge Feature**: Added ability to merge duplicate policy types
+   - New section in Admin Panel → Policy Types tab
+   - Select source and target policy types for merging
+   - Shows transaction counts before merging
+   - Updates all affected transactions automatically
+   - Also updates policy type mappings if needed
+   - Includes clear warnings about irreversible action
+2. **Prior Release (v3.7.1)
 1. **Policy Type Mapping Validation**: Added import validation for unmapped policy types
    - Reconciliation import now validates all policy types before processing
    - Shows error with list of unmapped types if found

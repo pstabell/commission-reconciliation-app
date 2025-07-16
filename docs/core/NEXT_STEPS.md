@@ -806,6 +806,32 @@ Void transactions now appear in the correct time period in reconciliation histor
 
 ---
 
+## ✅ COMPLETED: Policy Type Merge Feature (Completed July 15, 2025 - Late Evening)
+
+### Major Achievement
+Added merge functionality to Policy Types tab to consolidate duplicate policy types.
+
+### Implementation Complete:
+1. **Merge Policy Types Section**
+   - ✅ Added new section in Policy Types tab after Edit section
+   - ✅ Two dropdowns: "Merge From" and "Merge Into"
+   - ✅ Shows transaction count for each policy type
+   - ✅ Updates all transactions to use the target type
+   - ✅ Also updates policy type mappings if needed
+   - ✅ Clear warnings about irreversible action
+
+### Technical Details:
+- Queries database for unique policy types
+- Counts transactions for each type
+- Uses Supabase batch update for all matching transactions
+- Automatically updates policy_type_mappings.json
+- Clears cache after merge for immediate reflection
+
+### Impact:
+Users can now clean up duplicate policy types by merging them together. Example: "Personal Auto" can be merged into "Personal Automobile", updating all transactions automatically. This completes the full policy type management suite.
+
+---
+
 ## ✅ COMPLETED: Policy Type Mapping Validation (Completed July 15, 2025 - Late Evening)
 
 ### Major Achievement

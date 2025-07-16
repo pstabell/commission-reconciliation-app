@@ -8735,6 +8735,109 @@ SOLUTION NEEDED:
                             except Exception as e:
                                 st.error(f"Error saving changes: {e}")
                     
+                    # Merge Policy Types Section
+                    st.divider()
+                    st.markdown("### 🔀 Merge Policy Types")
+                    st.info("Merge duplicate policy types into a single type. All transactions will be updated to use the target type.")
+                    
+                    # Check for any policy types in the database
+                    try:
+                        # Get unique policy types from the database
+                        supabase = get_supabase_client()
+                        response = supabase.table('policies').select('Policy Type').execute()
+                        
+                        if response.data:
+                            db_policy_types = set()
+                            for record in response.data:
+                                if record.get('Policy Type'):
+                                    db_policy_types.add(record['Policy Type'])
+                            
+                            # Count transactions for each policy type
+                            type_counts = {}
+                            for pt in db_policy_types:
+                                count_response = supabase.table('policies').select('count', count='exact').eq('Policy Type', pt).execute()
+                                type_counts[pt] = count_response.count if count_response else 0
+                            
+                            # Sort by name for better display
+                            sorted_types = sorted(list(db_policy_types))
+                            
+                            with st.form("merge_policy_types_form"):
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    merge_from = st.selectbox(
+                                        "Merge From (will be deleted)",
+                                        options=[""] + sorted_types,
+                                        help="Select the policy type to merge FROM (this type will be removed)"
+                                    )
+                                    if merge_from:
+                                        st.caption(f"📊 {type_counts.get(merge_from, 0)} transactions use this type")
+                                
+                                with col2:
+                                    # Filter out the selected merge_from option
+                                    merge_to_options = [""] + [pt for pt in sorted_types if pt != merge_from]
+                                    merge_to = st.selectbox(
+                                        "Merge Into (will be kept)",
+                                        options=merge_to_options,
+                                        help="Select the policy type to merge INTO (all transactions will use this type)"
+                                    )
+                                    if merge_to:
+                                        st.caption(f"📊 {type_counts.get(merge_to, 0)} transactions use this type")
+                                
+                                # Show preview of what will happen
+                                if merge_from and merge_to:
+                                    st.warning(f"⚠️ This will update {type_counts.get(merge_from, 0)} transactions from '{merge_from}' to '{merge_to}'")
+                                    st.info("💡 This action cannot be undone. Make sure to backup your data first!")
+                                
+                                merge_submitted = st.form_submit_button("🔀 Merge Policy Types", type="primary")
+                                
+                                if merge_submitted:
+                                    if merge_from and merge_to and merge_from != merge_to:
+                                        try:
+                                            # Update all transactions with the merge_from type to use merge_to
+                                            update_response = supabase.table('policies').update({'Policy Type': merge_to}).eq('Policy Type', merge_from).execute()
+                                            
+                                            if update_response.data:
+                                                updated_count = len(update_response.data)
+                                                st.success(f"✅ Successfully merged '{merge_from}' into '{merge_to}'. Updated {updated_count} transactions.")
+                                                
+                                                # Clear the cache to reflect changes
+                                                clear_policies_cache()
+                                                
+                                                # Also update the policy type mappings if the merged type was mapped
+                                                mapping_file = "config_files/policy_type_mappings.json"
+                                                if os.path.exists(mapping_file):
+                                                    try:
+                                                        with open(mapping_file, 'r') as f:
+                                                            mappings = json.load(f)
+                                                        
+                                                        # Update any mappings that pointed to the merged type
+                                                        updated_mappings = False
+                                                        for key, value in mappings.items():
+                                                            if value == merge_from:
+                                                                mappings[key] = merge_to
+                                                                updated_mappings = True
+                                                        
+                                                        if updated_mappings:
+                                                            with open(mapping_file, 'w') as f:
+                                                                json.dump(mappings, f, indent=2)
+                                                            st.info("📝 Also updated policy type mappings to use the merged type")
+                                                    except:
+                                                        pass
+                                                
+                                                st.rerun()
+                                            else:
+                                                st.info("No transactions were updated (the types may have already been merged)")
+                                        except Exception as e:
+                                            st.error(f"Error merging policy types: {e}")
+                                    else:
+                                        st.error("Please select two different policy types to merge")
+                        else:
+                            st.info("No policy types found in the database")
+                    
+                    except Exception as e:
+                        st.error(f"Error loading policy types from database: {e}")
+                    
                     # Backup/Download section
                     st.divider()
                     col1, col2 = st.columns(2)

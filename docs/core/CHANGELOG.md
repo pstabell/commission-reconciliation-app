@@ -5,6 +5,25 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.2] - 2025-07-15 - Policy Type Merge Feature
+
+### Added
+- **Merge Policy Types Feature in Admin Panel**
+  - New "Merge Policy Types" section in Policy Types tab
+  - Select source type (to be merged from) and target type (to be merged into)
+  - Shows transaction count for each policy type before merging
+  - Updates all transactions to use the target type
+  - Automatically updates policy type mappings if merged type was mapped
+  - Clear warning about irreversible action
+  - Clears cache after merge to reflect changes immediately
+
+### Technical
+- Queries database for unique policy types and transaction counts
+- Uses Supabase update to change all matching transactions
+- Updates config_files/policy_type_mappings.json if needed
+- Prevents merging a type into itself
+- Shows helpful preview of what will happen
+
 ## [3.7.1] - 2025-07-15 - Policy Type Mapping Validation
 
 ### Added
