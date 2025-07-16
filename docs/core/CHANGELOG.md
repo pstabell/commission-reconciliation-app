@@ -5,6 +5,26 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.3] - 2025-07-15 - Policy Type Rename Feature
+
+### Added
+- **Rename Policy Types Feature in Admin Panel**
+  - New "Rename Policy Types" section in Policy Types tab
+  - Allows renaming existing policy types to new standardized names
+  - Text input for new name (e.g., rename "Auto" to "AUTO")
+  - Shows transaction count for the type being renamed
+  - Validates that new name doesn't already exist
+  - Updates all transactions to use the new name
+  - Automatically updates policy type mappings if renamed type was mapped
+  - Clear success feedback showing number of updated transactions
+
+### Technical
+- Positioned between Merge and Backup sections
+- Reuses policy type data from merge section when available
+- Prevents renaming to existing names (suggests merge instead)
+- Updates config_files/policy_type_mappings.json automatically
+- Clears cache after rename for immediate updates
+
 ## [3.7.2] - 2025-07-15 - Policy Type Merge Feature
 
 ### Added

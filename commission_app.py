@@ -8838,6 +8838,113 @@ SOLUTION NEEDED:
                     except Exception as e:
                         st.error(f"Error loading policy types from database: {e}")
                     
+                    # Rename Policy Types Section
+                    st.divider()
+                    st.markdown("### ✏️ Rename Policy Types")
+                    st.info("Rename existing policy types to new standardized names. All transactions will be updated.")
+                    
+                    try:
+                        # Get unique policy types from the database (reuse from merge section if available)
+                        if 'db_policy_types' not in locals() or 'type_counts' not in locals():
+                            supabase = get_supabase_client()
+                            response = supabase.table('policies').select('"Policy Type"').execute()
+                            
+                            if response.data:
+                                db_policy_types = set()
+                                for record in response.data:
+                                    if record.get('Policy Type'):
+                                        db_policy_types.add(record['Policy Type'])
+                                
+                                # Count transactions for each policy type
+                                type_counts = {}
+                                for pt in db_policy_types:
+                                    count_response = supabase.table('policies').select('count', count='exact').eq('"Policy Type"', pt).execute()
+                                    type_counts[pt] = count_response.count if count_response else 0
+                        
+                        if db_policy_types:
+                            sorted_types = sorted(list(db_policy_types))
+                            
+                            with st.form("rename_policy_type_form"):
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    rename_from = st.selectbox(
+                                        "Current Name",
+                                        options=[""] + sorted_types,
+                                        help="Select the policy type to rename"
+                                    )
+                                    if rename_from:
+                                        st.caption(f"📊 {type_counts.get(rename_from, 0)} transactions use this type")
+                                
+                                with col2:
+                                    rename_to = st.text_input(
+                                        "New Name",
+                                        placeholder="Enter new name (e.g., AUTO, HOME, CONDO)",
+                                        help="Enter the new standardized name"
+                                    )
+                                    if rename_to and rename_from:
+                                        # Check if new name already exists
+                                        if rename_to in db_policy_types and rename_to != rename_from:
+                                            st.error(f"⚠️ '{rename_to}' already exists! Use Merge instead.")
+                                        elif rename_to == rename_from:
+                                            st.warning("New name is the same as current name")
+                                
+                                # Show preview
+                                if rename_from and rename_to and rename_to != rename_from and rename_to not in db_policy_types:
+                                    st.success(f"✅ Will rename '{rename_from}' to '{rename_to}' in {type_counts.get(rename_from, 0)} transactions")
+                                
+                                rename_submitted = st.form_submit_button("✏️ Rename Policy Type", type="primary")
+                                
+                                if rename_submitted:
+                                    if rename_from and rename_to and rename_to != rename_from:
+                                        if rename_to in db_policy_types:
+                                            st.error(f"'{rename_to}' already exists in the database. Use the Merge feature instead.")
+                                        else:
+                                            try:
+                                                # Update all transactions with the new name
+                                                update_response = supabase.table('policies').update({'"Policy Type"': rename_to}).eq('"Policy Type"', rename_from).execute()
+                                                
+                                                if update_response.data:
+                                                    updated_count = len(update_response.data)
+                                                    st.success(f"✅ Successfully renamed '{rename_from}' to '{rename_to}'. Updated {updated_count} transactions.")
+                                                    
+                                                    # Clear the cache to reflect changes
+                                                    clear_policies_cache()
+                                                    
+                                                    # Also update the policy type mappings if the renamed type was mapped
+                                                    mapping_file = "config_files/policy_type_mappings.json"
+                                                    if os.path.exists(mapping_file):
+                                                        try:
+                                                            with open(mapping_file, 'r') as f:
+                                                                mappings = json.load(f)
+                                                            
+                                                            # Update any mappings that pointed to the old name
+                                                            updated_mappings = False
+                                                            for key, value in mappings.items():
+                                                                if value == rename_from:
+                                                                    mappings[key] = rename_to
+                                                                    updated_mappings = True
+                                                            
+                                                            if updated_mappings:
+                                                                with open(mapping_file, 'w') as f:
+                                                                    json.dump(mappings, f, indent=2)
+                                                                st.info("📝 Also updated policy type mappings to use the new name")
+                                                        except:
+                                                            pass
+                                                    
+                                                    st.rerun()
+                                                else:
+                                                    st.info("No transactions were updated")
+                                            except Exception as e:
+                                                st.error(f"Error renaming policy type: {e}")
+                                    else:
+                                        st.error("Please select a policy type and enter a new name")
+                        else:
+                            st.info("No policy types found in the database")
+                    
+                    except Exception as e:
+                        st.error(f"Error loading policy types: {e}")
+                    
                     # Backup/Download section
                     st.divider()
                     col1, col2 = st.columns(2)
