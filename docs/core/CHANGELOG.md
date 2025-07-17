@@ -5,6 +5,16 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.3] - 2025-07-17 - Enable IMPORT Transaction Deletion
+
+### Changed
+- **IMPORT Transaction Deletion**
+  - Enabled deletion of IMPORT transactions (transactions with -IMPORT suffix)
+  - Previously, IMPORT transactions were protected from deletion
+  - Reconciliation transactions (-STMT-, -VOID-, -ADJ-) remain protected
+  - Added informational message when deleting IMPORT transactions
+  - Useful for cleaning up duplicate or erroneous import records
+
 ## [3.8.2] - 2025-07-17 - Table Width Fix
 
 ### Fixed

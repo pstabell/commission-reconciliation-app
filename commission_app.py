@@ -5513,7 +5513,6 @@ def main():
                         # Collect transaction IDs to delete BEFORE any modifications
                         transaction_ids_to_delete = []
                         reconciliation_attempts = []
-                        import_attempts = []
                         if not selected_rows_for_delete.empty and transaction_id_col:
                             for idx, row in selected_rows_for_delete.iterrows():
                                 tid = row[transaction_id_col]
@@ -5521,9 +5520,7 @@ def main():
                                     # Check if this is a reconciliation transaction
                                     if is_reconciliation_transaction(tid):
                                         reconciliation_attempts.append(str(tid))
-                                    # Check if this is an import-created transaction
-                                    elif is_import_transaction(tid):
-                                        import_attempts.append(str(tid))
+                                    # IMPORT transactions can now be deleted - add them to delete list
                                     else:
                                         transaction_ids_to_delete.append(str(tid))
                         
@@ -5534,19 +5531,12 @@ def main():
                                 st.write(f"- {tid}")
                             st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
                         
-                        # Show error if trying to delete import-created transactions
-                        if import_attempts:
-                            st.error(f"📥 Cannot delete {len(import_attempts)} import-created transaction(s):")
-                            for tid in import_attempts:
-                                # Find the customer name for this transaction ID
-                                customer_row = edited_data[edited_data[transaction_id_col] == tid]
-                                if not customer_row.empty:
-                                    customer = customer_row.iloc[0].get('Customer', 'Unknown')
-                                    st.write(f"- {tid} - {customer}")
-                            st.info("Import transactions (-IMPORT suffix) contain payment records from statements and cannot be deleted. Complete the premium/commission fields instead.")
-                        
                         if transaction_ids_to_delete:
                             st.warning(f"⚠️ You have selected {len(transaction_ids_to_delete)} record(s) for deletion:")
+                            # Check if any are IMPORT transactions
+                            import_count = sum(1 for tid in transaction_ids_to_delete if '-IMPORT' in str(tid))
+                            if import_count > 0:
+                                st.info(f"ℹ️ Note: {import_count} of these are IMPORT transactions that can now be deleted.")
                             # Show which records are selected
                             for tid in transaction_ids_to_delete:
                                 # Find the customer name for this transaction ID
@@ -5620,12 +5610,12 @@ def main():
                             with col2:
                                 st.info("Click 'Confirm Delete' to permanently remove the selected records.")
                         else:
-                            # Only show error if we haven't already handled the rows as import/reconciliation transactions
-                            if not selected_rows_for_delete.empty and not reconciliation_attempts and not import_attempts and not transaction_id_col:
+                            # Only show error if we haven't already handled the rows as reconciliation transactions
+                            if not selected_rows_for_delete.empty and not reconciliation_attempts and not transaction_id_col:
                                 st.error("Could not identify transaction IDs for selected rows. Make sure the Transaction ID column is properly identified.")
                             elif selected_rows_for_delete.empty:
                                 st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
-                            # If we processed import/reconciliation transactions, don't show any additional message
+                            # If we processed reconciliation transactions, don't show any additional message
                 else:
                     if show_attention_filter:
                         # Already showed the success message above
