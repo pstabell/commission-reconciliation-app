@@ -5,6 +5,22 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.2] - 2025-07-17 - Table Width Fix
+
+### Fixed
+- **Edit Policy Transactions Table Width**
+  - Fixed table not using full screen width
+  - Issue: st.data_editor was inside a column context limiting its width
+  - Solution: Moved table outside column structure to page level
+  - Table now matches width of "Find Policies to Edit" section
+  - All features preserved: checkboxes, buttons, edit modal, delete functionality
+  - Fixed multiple indentation errors that resulted from the restructuring
+
+### Technical
+- Restructured approximately 650 lines of code to fix indentation
+- Removed redundant else/elif statements causing syntax errors
+- Table now uses use_container_width=True at page level
+
 ## [3.8.1] - 2025-07-17 - Enhanced Policy Term & Origination Date Features
 
 ### Added

@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 17, 2025  
-**Current Version**: 3.8.1
+**Current Version**: 3.8.2
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,13 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.8.1)
+## Recent Major Changes (v3.8.2)
+1. **Table Width Fix in Edit Policy Transactions**:
+   - Fixed table not using full screen width
+   - Moved st.data_editor outside column context to page level
+   - Fixed 650+ lines of indentation issues from restructuring
+   - All features preserved and working correctly
+2. **Prior Changes (v3.8.1)
 1. **Enhanced Policy Term & Origination Features**:
    - NEW/RWL transactions (except AUTO) auto-populate 12-month term and X-DATE
    - END transactions properly trace back to NEW for origination date
