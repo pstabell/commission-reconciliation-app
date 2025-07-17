@@ -91,7 +91,7 @@ To change these values, modify the underlying data (Premium Sold, Commission %, 
 ## 💼 Business Workflow
 
 ### Q: How do I reconcile my commission statement?
-**A**: Use the Accounting section:
+**A**: Use the Reconciliation section:
 1. Choose "Manual Entry" or "Upload File"
 2. Enter each commission from your statement
 3. Review totals to ensure they match your statement
@@ -100,7 +100,7 @@ To change these values, modify the underlying data (Premium Sold, Commission %, 
 
 ### Q: How do I track payments from the insurance company?
 **A**: 
-1. Use "Accounting" for commission statement reconciliation
+1. Use "Reconciliation" for commission statement import and matching
 2. Enter "Agent Paid Amount (STMT)" for each policy
 3. The system automatically calculates Policy Balance Due
 4. Use reports to track outstanding balances

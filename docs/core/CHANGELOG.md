@@ -5,6 +5,37 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.6] - 2025-07-17 - Policy Type Consistency & Accounting Page Removal
+
+### Fixed
+- **Policy Type Consistency**
+  - Edit Transaction and Add New Policy forms now use same policy types as Admin Panel
+  - Both forms load from `policy_types_updated.json` instead of old `policy_types.json`
+  - Shows HOME, CONDO, DP1, AUTO etc. instead of old hardcoded list
+  - Added proper format conversion for compatibility
+
+- **Delete Error Message Logic**
+  - Fixed "Could not identify transaction IDs" appearing for import transactions
+  - Error only shows when Transaction ID column truly can't be found
+  - Properly handles protected transaction warnings without duplicate errors
+
+- **UnboundLocalError in Edit Form**
+  - Fixed `current_transaction_type` variable scope issue
+  - Variable now defined before column creation
+  - Available in both col11 and col12 for calculations and help text
+
+### Removed
+- **Accounting Page**
+  - Safely removed redundant Accounting page from navigation
+  - All functionality already exists in enhanced Reconciliation page
+  - No broken dependencies or references
+  - Cleaner, more focused navigation menu
+
+### Technical
+- Updated `load_policy_types()` and `load_policy_types_config()` functions
+- Improved error handling for transaction deletion
+- Better variable scoping in commission calculations
+
 ## [3.7.5] - 2025-07-16 - Date Format Simplification & Update Fix
 
 ### Fixed

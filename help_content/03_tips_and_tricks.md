@@ -26,7 +26,7 @@
 
 ### Monthly Commission Reconciliation
 1. **Prepare**: Gather commission statements and backup database
-2. **Enter**: Use Accounting section to input statement data
+2. **Enter**: Use Reconciliation section to import statement data
 3. **Review**: Check totals against your statement
 4. **Reconcile**: Save to history and mark complete
 5. **Report**: Generate Policy Revenue Ledger Reports for analysis
@@ -81,7 +81,7 @@
 
 ### Data Flow
 1. **Policy Entry** → Add New Policy Transaction
-2. **Statement Receipt** → Accounting Reconciliation
+2. **Statement Receipt** → Reconciliation Import & Match
 3. **Monthly Review** → Reports and Dashboard
 4. **Analysis** → Policy Revenue Ledger Reports
 

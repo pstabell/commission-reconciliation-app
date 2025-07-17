@@ -170,23 +170,24 @@
 
 ---
 
-## 💰 Accounting
+## 💰 Reconciliation
 
-**What it does**: Comprehensive commission reconciliation and accounting tools
+**What it does**: Comprehensive commission reconciliation and payment tracking
 
 **Key Features**:
-- **Statement Reconciliation**: Match commission statements to database
-- **Manual Entry**: Add commission entries individually
-- **File Upload**: Import commission statements from files
+- **Statement Import**: Upload commission statements from Excel/CSV files
+- **Smart Matching**: Automatically match statement entries to database transactions
+- **Manual Adjustments**: Add individual entries or adjustments
 - **Payment History**: Track all payments and reconciliations
-- **Audit Trail**: Complete history of all accounting activities
+- **Void Management**: Void and reprocess batches as needed
+- **Audit Trail**: Complete history of all reconciliation activities
 
 **Reconciliation Process**:
-1. **Choose Entry Method**: Manual entry or file upload
-2. **Enter Statement Data**: Add each commission entry
-3. **Review Entries**: Check totals and details
-4. **Reconcile**: Save to history and mark as complete
-5. **View History**: Review past reconciliations
+1. **Import Statement**: Upload Excel/CSV file with commission data
+2. **Map Columns**: Map statement columns to database fields
+3. **Match Transactions**: Review automated matches and handle exceptions
+4. **Process Batch**: Save matched transactions as reconciliation batch
+5. **View History**: Review past reconciliations and payment history
 
 ---
 

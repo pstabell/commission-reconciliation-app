@@ -909,8 +909,31 @@ Users can now calculate endorsement premiums directly in the edit form, and the 
 
 ---
 
-*Last Updated: July 16, 2025*  
-*Current Application Version: 3.7.5*
+*Last Updated: July 17, 2025*  
+*Current Application Version: 3.7.6*
+
+---
+
+## ✅ COMPLETED: Version 3.7.6 Consistency & Cleanup (July 17, 2025)
+
+### Completed Enhancements:
+1. **Policy Type Consistency**
+   - Fixed Edit Transaction and Add New Policy forms showing different policy types than Admin Panel
+   - Both forms now load from `policy_types_updated.json` 
+   - Users see consistent policy types across all forms (HOME, CONDO, DP1, etc.)
+   
+2. **Delete Logic Improvements**
+   - Fixed confusing "Could not identify transaction IDs" error for import transactions
+   - Error messages now properly distinguish between protected transactions and missing columns
+   
+3. **Code Quality Fixes**
+   - Resolved UnboundLocalError in edit transaction form
+   - Improved variable scoping for commission calculations
+   
+4. **Navigation Cleanup**
+   - Removed redundant Accounting page
+   - All functionality preserved in Reconciliation page
+   - Cleaner, more intuitive navigation
 
 ---
 

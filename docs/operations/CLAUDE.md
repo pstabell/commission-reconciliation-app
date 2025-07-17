@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 16, 2025  
-**Current Version**: 3.7.5
+**Last Updated**: July 17, 2025  
+**Current Version**: 3.7.6
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,23 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.7.5)
+## Recent Major Changes (v3.7.6)
+1. **Policy Type Consistency Fix**: Fixed Edit Transaction and Add New Policy forms to use same policy types as Admin Panel
+   - Both forms now load from `policy_types_updated.json` instead of old `policy_types.json`
+   - Shows types like HOME, CONDO, DP1, AUTO instead of old hardcoded list
+   - Proper conversion handling for different file formats
+2. **Delete Logic Fix**: Fixed "Could not identify transaction IDs" error when selecting import transactions
+   - Error now only shows when truly can't find Transaction ID column
+   - Properly handles import and reconciliation transaction warnings
+3. **Variable Scope Fix**: Fixed UnboundLocalError in edit transaction form
+   - `current_transaction_type` now properly scoped for both columns
+   - Available for chargeback calculations and help text
+4. **Accounting Page Removal**: Safely removed redundant Accounting page
+   - All functionality already exists in Reconciliation page
+   - No dependencies or broken links
+   - Cleaner navigation menu
+
+## Prior Release (v3.7.5)
 1. **Fixed Cancellation Commission Calculations**: CAN/XCL now calculate chargebacks
    - Fixed CAN and XCL transactions showing $0 instead of negative commissions
    - Properly calculates negative amounts for both Agency and Agent commissions

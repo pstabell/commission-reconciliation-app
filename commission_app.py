@@ -391,7 +391,7 @@ def clean_data_for_database(data):
 
 def load_policy_types():
     """Load policy types from configuration file."""
-    policy_types_file = "config_files/policy_types.json"
+    policy_types_file = "config_files/policy_types_updated.json"
     default_types = [
         {"name": "Auto", "active": True, "default": False},
         {"name": "Home", "active": True, "default": False},
@@ -406,14 +406,22 @@ def load_policy_types():
     try:
         with open(policy_types_file, 'r') as f:
             config = json.load(f)
-            return config.get('policy_types', default_types), config.get('allow_custom', True)
+            # Convert from new format to old format for compatibility
+            policy_types = []
+            for pt in config.get('policy_types', []):
+                policy_types.append({
+                    "name": pt.get('name', pt.get('code', '')),
+                    "active": pt.get('active', True),
+                    "default": pt.get('name') == config.get('default', 'HOME')
+                })
+            return policy_types, True  # Always allow custom for now
     except:
         # If file doesn't exist or is corrupted, return defaults
         return default_types, True
 
 def load_policy_types_config():
     """Load the full policy types configuration as a dictionary."""
-    policy_types_file = "config_files/policy_types.json"
+    policy_types_file = "config_files/policy_types_updated.json"
     default_config = {
         "policy_types": [
             {"name": "Auto", "active": True, "default": False},
@@ -431,19 +439,26 @@ def load_policy_types_config():
     try:
         with open(policy_types_file, 'r') as f:
             config = json.load(f)
-            # Ensure required keys exist
-            if 'policy_types' not in config:
-                config['policy_types'] = default_config['policy_types']
-            if 'allow_custom' not in config:
-                config['allow_custom'] = True
-            return config
+            # Convert from new format to old format for compatibility
+            converted_config = {
+                "policy_types": [],
+                "allow_custom": True,
+                "last_updated": config.get('last_updated', '')
+            }
+            for pt in config.get('policy_types', []):
+                converted_config['policy_types'].append({
+                    "name": pt.get('name', pt.get('code', '')),
+                    "active": pt.get('active', True),
+                    "default": pt.get('name') == config.get('default', 'HOME')
+                })
+            return converted_config
     except:
         # If file doesn't exist or is corrupted, return defaults
         return default_config
 
 def save_policy_types(policy_types, allow_custom=True):
     """Save policy types to configuration file."""
-    policy_types_file = "config_files/policy_types.json"
+    policy_types_file = "config_files/policy_types_updated.json"
     config = {
         "policy_types": policy_types,
         "allow_custom": allow_custom,
@@ -3453,20 +3468,21 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 format="%.2f",
                 key="modal_Agency Estimated Comm_display",
                 disabled=True,
-                help=f"Commissionable Premium × Policy Gross Comm % = ${commissionable_premium:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}" + (" (CHARGEBACK)" if current_transaction_type in ["CAN", "XCL"] else "")
+                help=f"Commissionable Premium × Policy Gross Comm % = ${commissionable_premium:.2f} × {gross_comm_pct:.2f}% = ${agency_comm:.2f}" + (" (CHARGEBACK)" if current_trans_type_for_agency in ["CAN", "XCL"] else "")
             )
             updated_data['Agency Estimated Comm/Revenue (CRM)'] = agency_comm
         
         # Row 2: Agent Comm % and Agent Estimated Comm $
         col11, col12 = st.columns(2)
         
+        # Get the current transaction type from session state (most current value)
+        # Define this before columns to ensure it's available in both
+        current_transaction_type = st.session_state.get('modal_Transaction Type', 
+                                updated_data.get('Transaction Type', 
+                                modal_data.get('Transaction Type', 'NEW')))
+        
         with col11:
             if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
-                # Get the current transaction type from session state (most current value)
-                current_transaction_type = st.session_state.get('modal_Transaction Type', 
-                                        updated_data.get('Transaction Type', 
-                                        modal_data.get('Transaction Type', 'NEW')))
-                
                 # Get Prior Policy Number - check session state first, then updated data, then modal data
                 # This ensures we get the most current value even if field hasn't been rendered yet
                 prior_policy = st.session_state.get('modal_Prior Policy Number', 
@@ -3764,7 +3780,6 @@ def main():
             "Admin Panel",
             "Contacts",
             "Tools",
-            "Accounting",
             "Help",
             "Policy Revenue Ledger",
             "Policy Revenue Ledger Reports",
@@ -4516,13 +4531,18 @@ def main():
                     # Only proceed if we have editable transactions
                     if not edit_results.empty:
                         # Find the actual column names dynamically
-                        transaction_id_col = None
+                        # Note: transaction_id_col was already found above using robust methods, only search if not found
+                        if not transaction_id_col:
+                            for col in edit_results.columns:
+                                if 'transaction' in col.lower() and 'id' in col.lower():
+                                    transaction_id_col = col
+                                    break
+                        
                         client_id_col = None
                         for col in edit_results.columns:
-                            if 'transaction' in col.lower() and 'id' in col.lower():
-                                transaction_id_col = col
                             if 'client' in col.lower() and 'id' in col.lower():
                                 client_id_col = col
+                                break
                         
                         # Add a selection column for deletion
                         edit_results_with_selection = edit_results.copy()
@@ -5362,10 +5382,12 @@ def main():
                                 with col2:
                                     st.info("Click 'Confirm Delete' to permanently remove the selected records.")
                             else:
-                                if not selected_rows_for_delete.empty:
+                                # Only show error if we haven't already handled the rows as import/reconciliation transactions
+                                if not selected_rows_for_delete.empty and not reconciliation_attempts and not import_attempts and not transaction_id_col:
                                     st.error("Could not identify transaction IDs for selected rows. Make sure the Transaction ID column is properly identified.")
-                                else:
+                                elif selected_rows_for_delete.empty:
                                     st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
+                                # If we processed import/reconciliation transactions, don't show any additional message
                     else:
                         if show_attention_filter:
                             # Already showed the success message above
@@ -6462,7 +6484,7 @@ def main():
                 
                 st.divider()
                 
-                # Precise drill-down selection (from Accounting page)
+                # Precise drill-down selection
                 st.markdown("### Select Transaction to Add to Batch")
                 
                 # Initialize session state for selections if not exists
@@ -9970,610 +9992,6 @@ SOLUTION NEEDED:
                     if file_type in ['xlsx', 'xls']:
                         st.info("💡 Tip: Ensure your Excel file is not corrupted and contains data in the first sheet.")
     
-    # --- Accounting ---
-    elif page == "Accounting":
-        st.subheader("Accounting")
-        st.info("This section provides accounting summaries, reconciliation tools, and export options. Use the reconciliation tool below to match your commission statement to your database and mark payments as received.")
-        
-        # Load fresh data for this page
-        all_data = load_policies_data()
-
-        # --- Tables are already created in Supabase ---
-        # No need to create tables as they were created during schema setup        # --- Load manual entries from DB if session state is empty ---
-        if "manual_commission_rows" not in st.session_state:
-            st.session_state["manual_commission_rows"] = []
-            
-        # Only reload from DB if session state is completely empty (not after deletions)
-        if not st.session_state["manual_commission_rows"] and "deletion_performed" not in st.session_state:
-            try:
-                response = supabase.table('manual_commission_entries').select("*").execute()
-                manual_entries_df = pd.DataFrame(response.data) if response.data else pd.DataFrame()
-            except Exception as e:
-                st.error(f"Error loading manual entries: {e}")
-                manual_entries_df = pd.DataFrame()
-            if not manual_entries_df.empty:
-                # Convert DB rows to dicts for session state
-                st.session_state["manual_commission_rows"] = [
-                    {
-                        "Customer": row["customer"],
-                        "Policy Type": row["policy_type"],
-                        "Policy Number": row["policy_number"],
-                        "Effective Date": row["effective_date"],
-                        "Transaction Type": row["transaction_type"],
-                        "Commission Paid": row["commission_paid"],
-                        "Agency Comm Received (STMT)": row["agency_commission_received"],
-                        "Statement Date": row["statement_date"],
-                        "Client ID": row.get("client_id", ""),
-                        "Transaction ID": row.get("transaction_id", "")
-                    }
-                    for _, row in manual_entries_df.iterrows()
-                ]
-
-        # --- Accounting UI code continues here ---
-        st.markdown("## Reconcile Commission Statement")
-        entry_mode = st.radio("How would you like to enter your commission statement?", ["Manual Entry", "Upload File"], key="reconcile_entry_mode")
-        statement_df = None
-        if entry_mode == "Upload File":
-            uploaded_statement = st.file_uploader(
-                "Upload your commission statement (CSV, Excel, or PDF)",
-                type=["csv", "xlsx", "xls", "pdf"],
-                key="reconcile_statement_upload"
-            )
-            if uploaded_statement:
-                if uploaded_statement.name.endswith(".csv"):
-                    statement_df = pd.read_csv(uploaded_statement)
-                elif uploaded_statement.name.endswith(".xlsx") or uploaded_statement.name.endswith(".xls"):
-                    statement_df = pd.read_excel(uploaded_statement)
-                elif uploaded_statement.name.endswith(".pdf"):
-                    with pdfplumber.open(uploaded_statement) as pdf:
-                        all_tables = []
-                        for page in pdf.pages:
-                            tables = page.extract_tables()
-                            for table in tables:
-                                temp_df = pd.DataFrame(table[1:], columns=table[0])
-                                all_tables.append(temp_df)
-                        if all_tables:
-                            statement_df = pd.concat(all_tables, ignore_index=True)
-                        else:
-                            st.error("No tables found in PDF.")
-                            st.stop()
-        elif entry_mode == "Manual Entry":
-            st.markdown("### Manually Enter Commission Statement Data")
-            if "manual_commission_rows" not in st.session_state:
-                st.session_state["manual_commission_rows"] = []
-            customers = sorted(all_data["Customer"].dropna().unique().tolist())
-            selected_customer = st.selectbox("Select Customer", ["Select..."] + customers, key="recon_customer_select")
-            # Initialize variables for policy selections
-            policy_types = []
-            policy_numbers = []
-            effective_dates = []
-            selected_policy_type = None
-            selected_policy_number = None
-            selected_effective_date = None
-            client_id = None
-            
-            if selected_customer and selected_customer != "Select...":
-                policy_types = sorted(all_data[all_data["Customer"] == selected_customer]["Policy Type"].dropna().unique().tolist())
-                selected_policy_type = st.selectbox("Select Policy Type", ["Select..."] + policy_types, key="recon_policy_type_select")
-                if selected_policy_type and selected_policy_type != "Select...":
-                    policy_numbers = sorted(all_data[(all_data["Customer"] == selected_customer) & (all_data["Policy Type"] == selected_policy_type)]["Policy Number"].dropna().unique().tolist())
-                    selected_policy_number = st.selectbox("Select Policy Number", ["Select..."] + policy_numbers, key="recon_policy_number_select")
-                    if selected_policy_number and selected_policy_number != "Select...":
-                        effective_dates = sorted(all_data[(all_data["Customer"] == selected_customer) & (all_data["Policy Type"] == selected_policy_type) & (all_data["Policy Number"] == selected_policy_number)]["Effective Date"].dropna().unique().tolist())
-                        selected_effective_date = st.selectbox("Select Effective Date", ["Select..."] + effective_dates, key="recon_effective_date_select")
-                        
-                        # Lookup Client ID using exact match of all selected fields
-                        if selected_effective_date and selected_effective_date != "Select...":
-                            exact_match = all_data[
-                                (all_data["Customer"] == selected_customer) &
-                                (all_data["Policy Type"] == selected_policy_type) &
-                                (all_data["Policy Number"] == selected_policy_number) &
-                                (all_data["Effective Date"] == selected_effective_date)
-                            ]
-                            if not exact_match.empty and "Client ID" in exact_match.columns:
-                                client_id = exact_match.iloc[0]["Client ID"]
-                                st.success(f"✅ Client ID found: {client_id}")
-                            else:
-                                st.warning("⚠️ Client ID not found for this exact combination")
-            transaction_types = ["NEW", "NBS", "STL", "BoR", "END", "PCH", "RWL", "REWRITE", "CAN", "XCL"]
-            transaction_type = st.selectbox("Transaction Type", transaction_types, key="recon_transaction_type_select")
-            # Auto-calculate Agent Comm (New 50% RWL 25%) based on Transaction Type
-            def calc_agent_comm_pct(tx_type):
-                if tx_type == "NEW":
-                    return 50.0
-                elif tx_type in ["RWL", "RENEWAL"]:
-                    return 25.0
-                else:
-                    return 0.0
-            agent_comm_new_rwl = calc_agent_comm_pct(transaction_type)
-            # --- Enter statement date ONCE for all entries in this session ---
-            if "recon_stmt_date" not in st.session_state:
-                st.session_state["recon_stmt_date"] = None
-            st.session_state["recon_stmt_date"] = st.date_input(
-                "Commission Statement Date (applies to all entries below)",
-                value=st.session_state["recon_stmt_date"] or None,
-                                key="recon_stmt_date_input_global"
-            )
-            statement_date = st.session_state["recon_stmt_date"]
-            agency_comm_received = st.number_input("Agency Comm Received (STMT)", min_value=0.0, step=0.01, format="%.2f", key="recon_agency_comm_received_input")
-            amount_paid = st.number_input("Agent Paid Amount (STMT)", min_value=0.0, step=0.01, format="%.2f", key="recon_amount_paid_input")
-            if st.button("Add Entry", key="recon_add_entry_btn"):
-                # Use the same transaction ID rules as new policy transaction: 7 chars, uppercase letters and digits
-                transaction_id = generate_transaction_id()  # 7 chars, uppercase letters and digits
-                # Use the global statement date for all entries
-                stmt_date_str = ""
-                if statement_date is None or statement_date == "":
-                    stmt_date_str = ""
-                elif isinstance(statement_date, datetime.date):
-                    stmt_date_str = statement_date.strftime("%m/%d/%Y")
-                else:
-                    try:
-                        stmt_date_str = pd.to_datetime(statement_date).strftime("%m/%d/%Y")
-                    except Exception:
-                        stmt_date_str = ""
-                entry = {
-                    "Client ID": client_id if client_id else "",
-                    "Transaction ID": transaction_id,
-                    "Customer": selected_customer,
-                    "Policy Type": selected_policy_type if selected_policy_type else "",
-                    "Policy Number": selected_policy_number if selected_policy_number else "",
-                    "Effective Date": selected_effective_date if selected_effective_date else "",
-                    "Transaction Type": transaction_type,
-                    "Agent Comm (New 50% RWL 25%)": agent_comm_new_rwl,
-                    "Agency Comm Received (STMT)": agency_comm_received,
-                    "Agent Paid Amount (STMT)": amount_paid,
-                    "Statement Date": stmt_date_str
-                }
-                # Insert new row into DB (non-destructive, always insert)
-                # Insert into Supabase
-                entry_data = {
-                    "client_id": client_id if client_id else "",
-                    "transaction_id": transaction_id,
-                    "customer": selected_customer,
-                    "policy_type": selected_policy_type if selected_policy_type else "",
-                    "policy_number": selected_policy_number if selected_policy_number else "",
-                    "effective_date": selected_effective_date if selected_effective_date else "",
-                    "transaction_type": transaction_type,
-                    "commission_paid": amount_paid,
-                    "agency_commission_received": agency_comm_received,
-                    "statement_date": stmt_date_str
-                }
-                try:
-                    supabase.table('manual_commission_entries').insert(entry_data).execute()
-                except Exception as e:
-                    st.error(f"Error saving manual entry: {e}")
-                st.session_state["manual_commission_rows"].append(entry)
-                st.success("Entry added (non-destructive, unique 7-character Transaction ID). You can review and edit below.")        # Show manual entries for editing/management if any exist        if st.session_state.get("manual_commission_rows"):
-            st.markdown("### Manual Commission Entries")
-              # Show persistent deletion success message
-            if "deletion_success_msg" in st.session_state:
-                st.success(st.session_state["deletion_success_msg"])
-                del st.session_state["deletion_success_msg"]  # Clear after showing
-            
-            st.info("Manual entries are non-destructive and saved to database. Use controls below to manage entries.")
-              # Display summary of entries
-            total_entries = len(st.session_state["manual_commission_rows"])
-            total_paid = sum(float(row.get("Agent Paid Amount (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
-            total_received = sum(float(row.get("Agency Comm Received (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Entries", total_entries)
-            with col2:
-                st.metric("Total Agency Comm", f"${total_received:,.2f}")
-            with col3:
-                st.metric("Total Agent Comm Paid", f"${total_paid:,.2f}")
-            
-            # Show entries in an editable table with selection capability
-            df_display = pd.DataFrame(st.session_state["manual_commission_rows"])
-            df_display.insert(0, "Select", False)  # Add selection column at the beginning
-            
-            edited_df = st.data_editor(
-                df_display, 
-                use_container_width=True, 
-                height=max(400, 40 + 40 * len(df_display)),
-                column_config={
-                    "Select": st.column_config.CheckboxColumn("Select", help="Check to select rows for deletion")
-                },
-                disabled=[col for col in df_display.columns if col != "Select"],  # Only allow editing the Select column
-                key="manual_entries_editor"            )
-            
-            # Delete selected rows functionality
-            selected_indices = edited_df[edited_df["Select"] == True].index.tolist()
-            if selected_indices:
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    if st.button("🗑️ Delete Selected", type="secondary", key="delete_selected_entries"):
-                        # Remove selected entries from session state
-                        original_count = len(st.session_state["manual_commission_rows"])
-                          # Get the transaction IDs of rows to delete BEFORE removing from session state
-                        transaction_ids_to_delete = []
-                        for idx in selected_indices:
-                            if idx < len(st.session_state["manual_commission_rows"]):
-                                entry = st.session_state["manual_commission_rows"][idx]
-                                transaction_id = entry.get("Transaction ID", "")
-                                transaction_ids_to_delete.append(transaction_id)
-                        
-                        # Remove from session state
-                        st.session_state["manual_commission_rows"] = [
-                            entry for i, entry in enumerate(st.session_state["manual_commission_rows"]) 
-                            if i not in selected_indices
-                        ]
-                        deleted_count = original_count - len(st.session_state["manual_commission_rows"])
-                          # Delete from database using the collected transaction IDs
-                        db_deleted_count = 0
-                        failed_deletions = []
-                        for transaction_id in transaction_ids_to_delete:
-                            if transaction_id and transaction_id.strip():  # Only if transaction_id is not empty
-                                try:
-                                    # Delete from Supabase
-                                    result = supabase.table('manual_commission_entries').delete().eq('transaction_id', transaction_id).execute()
-                                    if result.data:
-                                        db_deleted_count += 1
-                                    else:
-                                        # Check if record exists
-                                        check_result = supabase.table('manual_commission_entries').select("*").eq('transaction_id', transaction_id).execute()
-                                        if not check_result.data:
-                                            failed_deletions.append(f"No DB row found for ID: {transaction_id}")
-                                        else:
-                                            db_deleted_count += 1  # Delete was successful even if no data returned
-                                except Exception as e:
-                                    failed_deletions.append(f"Error deleting {transaction_id}: {str(e)}")
-                            else:
-                                failed_deletions.append("Empty transaction ID")
-                         # Get mapped column names
-                        customer_col = get_mapped_column("Customer")
-                        policy_type_col = get_mapped_column("Policy Type")
-                        policy_number_col = get_mapped_column("Policy Number")
-                        effective_date_col = get_mapped_column("Effective Date")
-                        transaction_type_col = get_mapped_column("Transaction Type")
-                        agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)")
-                        agency_comm_col = get_mapped_column("Agency Comm Received (STMT)")
-                        client_id_col = get_mapped_column("Client ID")
-                        transaction_id_col = get_mapped_column("Transaction ID")
-                        
-                       
-                        # Set flag to prevent automatic reload from database
-                        st.session_state["deletion_performed"] = True
-                          # Create success message
-                        success_msg = f"Deleted {deleted_count} entries from session and {db_deleted_count} from database."
-                        if failed_deletions:
-                            success_msg += f" Issues: {'; '.join(failed_deletions[:3])}"  # Show first 3 issues
-                        elif db_deleted_count == 0 and transaction_ids_to_delete:
-                            success_msg += f" (Transaction IDs attempted: {transaction_ids_to_delete})"
-                        
-                        st.session_state["deletion_success_msg"] = success_msg
-                        st.rerun()
-                with col2:
-                    st.info(f"📋 {len(selected_indices)} row(s) selected for deletion")
-            else:
-                st.info("💡 Tip: Check the 'Select' boxes next to entries you want to delete, then click the delete button.")
-              # --- Reconcile Button to Save Statement to History ---
-            st.markdown("---")
-            if st.session_state["manual_commission_rows"]:
-                st.markdown("#### Reconcile Commission Statement")
-                col1, col2 = st.columns([2, 3])
-                with col1:
-                    statement_date = st.date_input(
-                        "Statement Date",
-                        value=datetime.date.today(),
-                                                key="reconcile_statement_date_v2"
-                    )
-                with col2:
-                    statement_description = st.text_input(
-                        "Statement Description (optional)",
-                        placeholder="e.g., Monthly Commission Statement - December 2024",
-                        key="reconcile_description"                    )
-                  # Calculate totals for the statement
-                total_commission_paid = sum(float(row.get("Agent Paid Amount (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
-                total_agency_received = sum(float(row.get("Agency Comm Received (STMT)", 0)) for row in st.session_state["manual_commission_rows"])
-                
-                st.markdown(f"**Statement Summary:** {len(st.session_state['manual_commission_rows'])} entries | Amount Paid: ${total_commission_paid:,.2f} | Agency Received: ${total_agency_received:,.2f}")
-                
-                if st.button("💾 Reconcile & Save to History", type="primary", key="reconcile_statement_btn"):
-                    error_placeholder = st.empty()
-                    try:
-                        # Debug: Check statement date
-                        log_debug(f"Starting reconciliation process with statement date: {statement_date}", "INFO")
-                        st.info(f"Using statement date: {statement_date}")
-                        if not statement_date:
-                            log_debug("No statement date selected", "ERROR")
-                            st.error("⚠️ No statement date selected! Please select a date above.")
-                            st.stop()
-                        
-                        # Prepare statement details for JSON storage
-                        statement_details = []
-                        for row in st.session_state["manual_commission_rows"]:
-                            statement_details.append({
-                                "Customer": row.get("Customer", ""),
-                                "Policy Type": row.get("Policy Type", ""),
-                                "Policy Number": row.get("Policy Number", ""),
-                                "Effective Date": row.get("Effective Date", ""),
-                                "Transaction Type": row.get("Transaction Type", ""),
-                                "Agent Paid Amount (STMT)": row.get("Agent Paid Amount (STMT)", 0),
-                                "Agency Comm Received (STMT)": row.get("Agency Comm Received (STMT)", 0),
-                                "Client ID": row.get("Client ID", ""),
-                                "Transaction ID": row.get("Transaction ID", "")
-                            })
-                        
-                        # PHASE 1: Existing audit/history functionality (preserved exactly)
-                        # Save to commission_payments table
-                        log_debug(f"Phase 1: Saving to commission_payments table. Total paid: {total_commission_paid}, Total received: {total_agency_received}", "INFO")
-                        try:
-                            # Prepare commission payment data
-                            payment_data = {
-                                "policy_number": "STMT-" + datetime.datetime.now().strftime('%Y%m%d'),
-                                "customer": "Statement Reconciliation",
-                                "payment_amount": float(total_commission_paid),  # Ensure it's a float
-                                "statement_date": statement_date.strftime('%Y-%m-%d') if statement_date else None,
-                                "payment_timestamp": datetime.datetime.now().isoformat(),
-                                "statement_details": json.dumps({
-                                    "description": statement_description,
-                                    "total_commission_paid": float(total_commission_paid),
-                                    "total_agency_received": float(total_agency_received),
-                                    "entries": statement_details
-                                })
-                            }
-                            # Debug: Show what we're trying to save
-                            st.info("Attempting to save payment record...")
-                            st.json(payment_data)
-                            log_debug(f"Saving payment data: {json.dumps(payment_data, indent=2)}", "DEBUG")
-                            
-                            result = supabase.table('commission_payments_simple').insert(payment_data).execute()
-                            log_debug("Payment record saved successfully to commission_payments_simple", "INFO")
-                            st.success("Payment record saved successfully!")
-                        except Exception as e:
-                            log_debug(f"Error saving payment record: {str(e)}", "ERROR", e)
-                            st.error(f"Error saving payment record: {e}")
-                            st.error(f"Payment data that failed: {payment_data}")
-                            raise  # Re-raise to trigger outer exception handler
-                        
-                        # Save individual entries to manual_commission_entries table as well
-                        st.info("💾 Saving individual entries to manual_commission_entries table...")
-                        for row in st.session_state["manual_commission_rows"]:
-                            try:
-                                entry_data = {
-                                    "client_id": row.get("Client ID", ""),
-                                    "transaction_id": row.get("Transaction ID", ""),
-                                    "customer": row.get("Customer", ""),
-                                    "policy_type": row.get("Policy Type", ""),
-                                    "policy_number": row.get("Policy Number", ""),
-                                    "effective_date": row.get("Effective Date", ""),
-                                    "transaction_type": row.get("Transaction Type", ""),
-                                    "commission_paid": float(row.get("Agent Paid Amount (STMT)", 0)),
-                                    "agency_commission_received": float(row.get("Agency Comm Received (STMT)", 0)),
-                                    "statement_date": statement_date.strftime('%Y-%m-%d')
-                                }
-                                # Check if entry already exists
-                                existing = supabase.table('manual_commission_entries').select("*").eq('transaction_id', entry_data['transaction_id']).execute()
-                                if existing.data:
-                                    # Update existing entry
-                                    supabase.table('manual_commission_entries').update(entry_data).eq('transaction_id', entry_data['transaction_id']).execute()
-                                else:
-                                    # Insert new entry
-                                    supabase.table('manual_commission_entries').insert(entry_data).execute()
-                            except Exception as e:
-                                st.error(f"Error saving manual entry: {e}")
-                        
-                        # PHASE 2: NEW - Add reconciled transactions to main policies database
-                        try:
-                            log_debug("Phase 2: Starting to add transactions to policies database", "INFO")
-                            st.info("📊 Phase 2: Adding transactions to main policies database...")
-                            
-                            # Debug: Show what columns are being mapped
-                            with st.expander("Debug: Column Mapping", expanded=True):
-                                st.write("Column mappings being used:")
-                                debug_mappings = {
-                                    "Transaction ID": get_mapped_column("Transaction ID") or "Transaction ID",
-                                    "Customer": get_mapped_column("Customer") or "Customer",
-                                    "Policy Type": get_mapped_column("Policy Type") or "Policy Type",
-                                    "Policy Number": get_mapped_column("Policy Number") or "Policy Number",
-                                    "STMT DATE": get_mapped_column("STMT DATE") or "STMT DATE"
-                                }
-                                st.json(debug_mappings)
-                                log_debug(f"Column mappings: {json.dumps(debug_mappings, indent=2)}", "DEBUG")
-                            
-                            new_main_db_transactions = []
-                            for idx, row in enumerate(st.session_state["manual_commission_rows"]):
-                                # Create new transaction record for main policies table using centralized mapping
-                                new_transaction = {}
-                                
-                                # Use centralized mapping to ensure field consistency
-                                transaction_id_col = get_mapped_column("Transaction ID") or "Transaction ID"
-                                customer_col = get_mapped_column("Customer") or "Customer"
-                                policy_type_col = get_mapped_column("Policy Type") or "Policy Type"
-                                policy_number_col = get_mapped_column("Policy Number") or "Policy Number"
-                                effective_date_col = get_mapped_column("Effective Date") or "Effective Date"
-                                transaction_type_col = get_mapped_column("Transaction Type") or "Transaction Type"
-                                stmt_date_col = get_mapped_column("STMT DATE") or "STMT DATE"
-                                agency_comm_col = get_mapped_column("Agency Comm Received (STMT)") or "Agency Comm Received (STMT)"
-                                agent_paid_col = get_mapped_column("Agent Paid Amount (STMT)") or "Agent Paid Amount (STMT)"
-                                client_id_col = get_mapped_column("Client ID") or "Client ID"
-                                
-                                # Debug: Show what we're building
-                                st.write(f"Building transaction {idx + 1}...")
-                                log_debug(f"Building transaction {idx + 1} for {row.get('Customer', 'Unknown')}", "DEBUG")
-                                
-                                # Populate with reconciliation data using flexible transaction types
-                                if transaction_id_col:
-                                    # Generate new unique transaction ID for main DB to avoid conflicts
-                                    new_transaction[transaction_id_col] = generate_transaction_id()
-                                    st.write(f"- {transaction_id_col}: {new_transaction[transaction_id_col]}")
-                                if customer_col:
-                                    new_transaction[customer_col] = row.get("Customer", "")
-                                if policy_type_col:
-                                    new_transaction[policy_type_col] = row.get("Policy Type", "")
-                                if policy_number_col:
-                                    new_transaction[policy_number_col] = row.get("Policy Number", "")
-                                if effective_date_col:
-                                    new_transaction[effective_date_col] = row.get("Effective Date", "")
-                                if transaction_type_col:
-                                    # PRESERVE USER'S TRANSACTION TYPE FLEXIBILITY - use exactly what they entered
-                                    new_transaction[transaction_type_col] = row.get("Transaction Type", "")
-                                if stmt_date_col:
-                                    new_transaction[stmt_date_col] = statement_date.strftime('%m/%d/%Y')
-                                if agency_comm_col:
-                                    new_transaction[agency_comm_col] = float(row.get("Agency Comm Received (STMT)", 0))
-                                if agent_paid_col:
-                                    new_transaction[agent_paid_col] = float(row.get("Agent Paid Amount (STMT)", 0))
-                                if client_id_col:
-                                    new_transaction[client_id_col] = row.get("Client ID", "")
-                                
-                                # Add notes field to identify reconciled transactions
-                                notes_col = get_mapped_column("NOTES") or "NOTES"
-                                if notes_col:
-                                    new_transaction[notes_col] = f"Reconciled Statement - {statement_date.strftime('%m/%d/%Y')}"
-                                
-                                new_main_db_transactions.append(new_transaction)
-                                log_debug(f"Transaction {idx + 1} built: {json.dumps(new_transaction, default=str)}", "DEBUG")
-                            
-                            # Insert new transactions into main policies table
-                            main_db_added_count = 0
-                            failed_insertions = []
-                            if new_main_db_transactions:
-                                try:
-                                    st.info(f"Attempting to add {len(new_main_db_transactions)} transactions to main database...")
-                                    new_df = pd.DataFrame(new_main_db_transactions)
-                                    
-                                    # Show what we're trying to insert
-                                    with st.expander("Debug: Data being added to policies table"):
-                                        st.dataframe(new_df)
-                                    
-                                    # Insert via Supabase in batches
-                                    for idx, row in new_df.iterrows():
-                                        policy_data = row.to_dict()
-                                        # Handle NaN values
-                                        for key, value in policy_data.items():
-                                            if pd.isna(value):
-                                                policy_data[key] = None
-                                        try:
-                                            log_debug(f"Attempting to insert policy row {idx}: {json.dumps(policy_data, default=str)}", "DEBUG")
-                                            result = supabase.table('policies').insert(policy_data).execute()
-                                            main_db_added_count += 1
-                                            log_debug(f"Successfully inserted policy row {idx}", "INFO")
-                                        except Exception as e:
-                                            error_msg = f"Row {idx}: {str(e)}"
-                                            failed_insertions.append(error_msg)
-                                            log_debug(f"Error inserting policy row {idx}: {str(e)}", "ERROR", e)
-                                            st.error(f"Error inserting policy: {e}")
-                                            # Show the problematic data
-                                            st.error("Failed data:")
-                                            st.json(policy_data)
-                                    
-                                    if failed_insertions:
-                                        st.error(f"❌ Failed to insert {len(failed_insertions)} records to main database:")
-                                        for err in failed_insertions:
-                                            st.write(f"- {err}")
-                                    
-                                    clear_policies_cache()
-                                except Exception as e:
-                                    st.error(f"⚠️ Reconciliation saved to history, but could not add to main database: {str(e)}")
-                                    st.error("Full error details:")
-                                    st.code(str(e))
-                                    # Make the error persistent
-                                    st.stop()
-                                
-                        except Exception as phase2_error:
-                            log_debug(f"Error in Phase 2: {str(phase2_error)}", "ERROR", phase2_error)
-                            st.error(f"❌ Error in Phase 2 (Adding to policies table): {str(phase2_error)}")
-                            st.error("This error occurred while trying to add transactions to the main database")
-                            st.code(str(phase2_error))
-                            # Don't clear entries on phase 2 error
-                            st.stop()
-                        
-                        # Only clear entries and show success if we get here without errors
-                        # Enhanced success message showing both operations
-                        log_debug(f"Reconciliation completed successfully. Added {main_db_added_count} transactions to policies table", "INFO")
-                        success_msg = f"✅ Commission statement reconciled and saved to history! Statement date: {statement_date.strftime('%m/%d/%Y')}"
-                        if main_db_added_count > 0:
-                            success_msg += f"\n💾 Added {main_db_added_count} new policy transactions to main policies database"
-                            success_msg += f"\n🔍 View in 'All Policy Transactions' or 'Policy Revenue Ledger' pages"
-                        st.success(success_msg)
-                        
-                        # Clear the manual entries ONLY after showing success message
-                        st.session_state["manual_commission_rows"] = []
-                        st.rerun()
-                        
-                    except Exception as e:
-                        log_debug(f"Unexpected error during reconciliation: {str(e)}", "ERROR", e)
-                        # Create a persistent error container
-                        with error_placeholder.container():
-                            st.error(f"❌ Error saving commission statement: {str(e)}")
-                            st.error("Full error details:")
-                            st.code(str(e))
-                            
-                            # Show the statement date that was being used
-                            st.error(f"Statement date being used: {statement_date}")
-                            
-                            # Don't clear the manual entries on error - preserve user's work
-                            st.warning("⚠️ Your entries have been preserved. Please try again or contact support.")
-                            
-                            # Show the data that was attempted to be saved
-                            with st.expander("Debug Information - Click to expand", expanded=True):
-                                st.write("**Manual entries that were attempted to be saved:**")
-                                st.json(st.session_state.get("manual_commission_rows", []))
-                                st.write("**Statement date from session:**")
-                                st.write(st.session_state.get("recon_stmt_date", "Not set"))
-                        
-                        # Stop execution to prevent the error from being cleared
-                        st.stop()
-            else:
-                st.info("ℹ️ Add manual commission entries above to reconcile a statement.")
-
-        # --- Payment/Reconciliation History Viewer ---
-        st.markdown("---")
-        st.markdown("### Payment/Reconciliation History")
-        try:
-            response = supabase.table('commission_payments_simple').select("*").order('payment_timestamp', desc=True).execute()
-            payment_history = pd.DataFrame(response.data) if response.data else pd.DataFrame()
-        except Exception as e:
-            st.error(f"Error loading payment history: {e}")
-            payment_history = pd.DataFrame()
-        if not payment_history.empty:
-            payment_history["statement_date"] = pd.to_datetime(payment_history["statement_date"], errors="coerce").dt.strftime("%m/%d/%Y").fillna("")
-            payment_history["payment_timestamp"] = pd.to_datetime(payment_history["payment_timestamp"], errors="coerce").dt.strftime("%m/%d/%Y %I:%M %p").fillna("")
-
-            for idx, row in payment_history.iterrows():
-                col1, col2 = st.columns([0.9, 0.1])
-                with col1:
-                    with st.expander(f"Statement Date: {row['statement_date']} | Customer: {row['customer']} | Amount: ${row['payment_amount']:,.2f} | Time: {row['payment_timestamp']}"):
-                        # Show the full commission statement as a locked table
-                        try:
-                            details = json.loads(row.get('statement_details', '[]'))
-                            if details:
-                                df_details = pd.DataFrame(details)
-                                st.dataframe(df_details, use_container_width=True, height=min(400, 40 + 40 * len(df_details)))
-                            else:
-                                st.info("No statement details available for this record.")
-                        except Exception:
-                            st.info("No statement details available or could not parse.")
-                with col2:
-                    if 'id' in row and pd.notna(row['id']):
-                        if st.button("Delete", key=f"delete_history_{row['id']}"):
-                            st.session_state['pending_delete_history_id'] = row['id']
-                            st.rerun()
-                    else:
-                        st.warning("Cannot delete row without a valid ID.")
-        
-        if 'pending_delete_history_id' in st.session_state:
-            st.warning(f"Are you sure you want to delete this history record? This cannot be undone.")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Confirm Delete", key="confirm_delete_history"):
-                    try:
-                        supabase.table('commission_payments_simple').delete().eq('id', st.session_state['pending_delete_history_id']).execute()
-                        st.success("History record deleted.")
-                        del st.session_state['pending_delete_history_id']
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error deleting record: {e}")
-            with col2:
-                if st.button("Cancel", key="cancel_delete_history"):
-                    del st.session_state['pending_delete_history_id']
-                    st.rerun()
-        else:
-            st.info("No payment/reconciliation history found.")
-    
     # --- Policy Revenue Ledger ---
     elif page == "Policy Revenue Ledger":
         st.subheader("Policy Revenue Ledger")
@@ -10894,7 +10312,7 @@ SOLUTION NEEDED:
             1. **Add Policy Data**: Use "Add New Policy Transaction" to input your policy information
             2. **View Data**: Navigate to "All Policy Transactions" to see your complete dataset
             3. **Generate Reports**: Visit the "Reports" section for analytics and summaries
-            4. **Manage Accounting**: Use "Accounting" for commission reconciliation and payments
+            4. **Manage Reconciliation**: Use "Reconciliation" for commission matching and payments
             """)
             
             st.info("💡 **Tip**: Start by adding a few sample policies to explore all features!")
@@ -10930,7 +10348,7 @@ SOLUTION NEEDED:
             st.write("**⚙️ Administrative Tools**")
             st.write("- **Admin Panel**: Database management and system tools")
             st.write("- **Tools**: Utilities for calculations and data formatting")
-            st.write("- **Accounting**: Commission reconciliation and payment tracking")
+            st.write("- **Reconciliation**: Commission matching, payment tracking, and statement imports")
             
             st.divider()
             
