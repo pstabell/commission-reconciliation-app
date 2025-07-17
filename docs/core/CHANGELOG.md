@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2025-07-17 - Enhanced Policy Term & Origination Date Features
+
+### Added
+- **Auto-populate 12-month Policy Term for NEW/RWL**
+  - NEW and RWL transactions (except AUTO) automatically get 12-month term
+  - X-DATE auto-calculates as Effective Date + 12 months
+  - Visual feedback before saving with info messages
+  - Works on form load and when pressing Enter
+  - Fallback on Save button ensures values are always set
+
+- **Enhanced Policy Origination Date for Endorsements**
+  - END transactions now properly trace back to NEW transaction
+  - Fixed policy number lookup to use user's input instead of original data
+  - Improved auto-population for continuation transactions
+  - More aggressive population for END, RWL, PCH, REWRITE types
+
+### Fixed
+- Policy Term dropdown not displaying calculated value
+- Session state conflicts with Policy Term widget
+- Policy number format mismatch preventing origination date lookup
+- Debug messages removed after successful testing
+
 ## [3.8.0] - 2025-07-17 - Policy Origination Date Auto-Population
 
 ### Added

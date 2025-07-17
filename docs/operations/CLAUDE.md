@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 17, 2025  
-**Current Version**: 3.8.0
+**Current Version**: 3.8.1
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,13 +13,14 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.8.0)
-1. **Policy Origination Date Auto-Population**: Added intelligent auto-population for Policy Origination Date field
-   - NEW transactions use Effective Date
-   - BoR transactions use Effective Date (new relationship)
-   - Other types trace back to original NEW transaction via Prior Policy Number chains
-   - Added batch update tool in Tools → Data Tools to populate existing missing dates
-2. **Policy Term Auto-Calculation**: Added automatic Policy Term calculation based on date difference
+## Recent Major Changes (v3.8.1)
+1. **Enhanced Policy Term & Origination Features**:
+   - NEW/RWL transactions (except AUTO) auto-populate 12-month term and X-DATE
+   - END transactions properly trace back to NEW for origination date
+   - Fixed policy number lookup to use user's current input
+   - Session state handling improved for Policy Term dropdown
+   - Visual feedback shows auto-calculated values before saving
+2. **Prior Changes (v3.8.0)**: Initial Policy Origination Date auto-population and batch tool
 3. **Prior Changes (v3.7.6)**: Fixed policy type consistency across forms
 2. **Delete Logic Fix**: Fixed "Could not identify transaction IDs" error when selecting import transactions
    - Error now only shows when truly can't find Transaction ID column

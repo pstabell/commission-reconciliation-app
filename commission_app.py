@@ -3183,7 +3183,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 
                 # Get current transaction type
                 current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
-                policy_number = modal_data.get('Policy Number', '')
+                # Get policy number from updated_data first (user's input), then fall back to modal_data
+                policy_number = updated_data.get('Policy Number', modal_data.get('Policy Number', ''))
                 
                 # Only auto-populate if current date_value is empty
                 if not date_value or pd.isna(date_value):
@@ -3260,11 +3261,16 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             # If lookup fails, just continue without auto-population
                             pass
                 
-                # Use auto-populated date if available and no existing value
-                if auto_populated_date and (not date_value or pd.isna(date_value)):
-                    date_value = auto_populated_date
-                    if auto_populate_message:
-                        st.info(auto_populate_message)
+                # Use auto-populated date if available
+                # For END, RWL, and other continuation transactions, always show what we found
+                if auto_populated_date:
+                    if not date_value or pd.isna(date_value) or (current_transaction_type in ['END', 'RWL', 'PCH', 'REWRITE'] and date_value != auto_populated_date):
+                        date_value = auto_populated_date
+                        if auto_populate_message:
+                            st.info(auto_populate_message)
+                    elif date_value != auto_populated_date and current_transaction_type in ['END', 'RWL', 'PCH', 'REWRITE']:
+                        # Show what we found even if not updating
+                        st.warning(f"Found origination date {auto_populated_date} from NEW transaction, but keeping existing value {date_value}")
                 
                 if is_renewal:
                     # For renewals, show as read-only text
@@ -3307,6 +3313,25 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             # X-DATE
             if 'X-DATE' in modal_data.keys():
                 date_value = modal_data.get('X-DATE')
+                
+                # Check if we should auto-populate X-DATE for NEW/RWL (except AUTO)
+                transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
+                policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
+                effective_date = updated_data.get('Effective Date', modal_data.get('Effective Date'))
+                
+                if (transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO' and 
+                    effective_date and (not date_value or pd.isna(date_value))):
+                    try:
+                        # Parse the effective date
+                        if not isinstance(effective_date, pd.Timestamp):
+                            effective_date = pd.to_datetime(effective_date)
+                        
+                        # Calculate X-DATE (12 months later)
+                        date_value = effective_date + pd.DateOffset(months=12)
+                        st.info("📅 X-DATE auto-populated as Effective Date + 12 months for NEW/RWL policy")
+                    except Exception as e:
+                        pass
+                
                 if date_value and pd.notna(date_value):
                     try:
                         parsed_date = pd.to_datetime(date_value)
@@ -3340,7 +3365,35 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 effective_date = updated_data.get('Effective Date')
                 x_date = updated_data.get('X-DATE')
                 
-                if effective_date and x_date:
+                # Auto-populate 12-month term for NEW and RWL (except AUTO)
+                transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
+                policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
+                
+                if transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO' and effective_date:
+                    # If no X-DATE is set, calculate it as Effective Date + 12 months
+                    if not x_date or pd.isna(x_date):
+                        try:
+                            # Parse the effective date
+                            if not isinstance(effective_date, pd.Timestamp):
+                                effective_date = pd.to_datetime(effective_date)
+                            
+                            # Calculate X-DATE (12 months later)
+                            x_date_calculated = effective_date + pd.DateOffset(months=12)
+                            updated_data['X-DATE'] = x_date_calculated.date()
+                            x_date = x_date_calculated
+                            
+                            # Update the X-DATE field in session state to reflect the change
+                            if 'modal_X-DATE' in st.session_state:
+                                st.session_state['modal_X-DATE'] = x_date_calculated.date()
+                            
+                            st.info("📅 X-DATE auto-populated as Effective Date + 12 months for NEW/RWL policy")
+                        except Exception as e:
+                            st.warning(f"Could not calculate X-DATE: {str(e)}")
+                    
+                    # Set calculated term to 12 months
+                    calculated_term = 12
+                
+                elif effective_date and x_date:
                     try:
                         # Convert to datetime if needed
                         if not isinstance(effective_date, pd.Timestamp):
@@ -3379,11 +3432,22 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     except (ValueError, TypeError):
                         selected_index = 0
                 
+                # Force the calculated term to be selected if we have one
+                if calculated_term is not None:
+                    try:
+                        selected_index = policy_terms.index(int(calculated_term)) + 1
+                        # Update session state to ensure the widget reflects the calculated value
+                        if 'modal_Policy Term' not in st.session_state or st.session_state.get('modal_Policy Term') != calculated_term:
+                            st.session_state['modal_Policy Term'] = calculated_term
+                    except (ValueError, TypeError):
+                        selected_index = 0
+                
                 # Show info message if we auto-calculated
                 if calculated_term:
                     st.info(f"📊 Policy Term auto-calculated as {calculated_term} months based on dates")
                 
-                updated_data['Policy Term'] = st.selectbox(
+                # Set the selectbox with the calculated value
+                selectbox_value = st.selectbox(
                     'Policy Term',
                     options=[None] + policy_terms,
                     format_func=lambda x: "" if x is None else f"{x} months",
@@ -3391,6 +3455,12 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     key="modal_Policy Term",
                     help="Auto-populated based on Effective Date and X-DATE when available"
                 )
+                
+                # If we calculated a term, use that; otherwise use what the user selected
+                if calculated_term is not None:
+                    updated_data['Policy Term'] = calculated_term
+                else:
+                    updated_data['Policy Term'] = selectbox_value
         
         # Premium Information
         st.markdown("#### Premium Information")
@@ -3833,6 +3903,45 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             for field, value in updated_data.items():
                 if isinstance(value, datetime.date):
                     updated_data[field] = value.strftime('%m/%d/%Y')
+            
+            # Auto-populate 12-month term for NEW and RWL (except AUTO)
+            transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
+            policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
+            
+            if transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO':
+                # Set Policy Term to 12 months
+                updated_data['Policy Term'] = 12
+                
+                # Calculate X-DATE as Effective Date + 12 months
+                effective_date = updated_data.get('Effective Date', modal_data.get('Effective Date'))
+                if effective_date:
+                    try:
+                        # Parse the effective date
+                        if isinstance(effective_date, str):
+                            # Try different date formats
+                            for fmt in ['%m/%d/%Y', '%Y-%m-%d']:
+                                try:
+                                    eff_date = datetime.datetime.strptime(effective_date, fmt)
+                                    break
+                                except:
+                                    continue
+                        elif isinstance(effective_date, (datetime.date, datetime.datetime)):
+                            eff_date = effective_date
+                        else:
+                            eff_date = pd.to_datetime(effective_date)
+                        
+                        # Add 12 months
+                        if isinstance(eff_date, datetime.date) and not isinstance(eff_date, datetime.datetime):
+                            eff_date = datetime.datetime.combine(eff_date, datetime.time())
+                        
+                        # Calculate X-DATE (12 months later)
+                        x_date = eff_date + pd.DateOffset(months=12)
+                        
+                        # Format as string
+                        updated_data['X-DATE'] = x_date.strftime('%m/%d/%Y')
+                    except Exception as e:
+                        # If date calculation fails, just set the term without X-DATE
+                        st.warning(f"Could not calculate X-DATE: {str(e)}")
             
             # Add commission rule tracking
             commission_rule_id = st.session_state.get('edit_commission_rule_id')
