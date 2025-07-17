@@ -3176,6 +3176,96 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             # Policy Origination Date (read-only for renewals)
             if 'Policy Origination Date' in modal_data.keys():
                 date_value = modal_data.get('Policy Origination Date')
+                
+                # Auto-populate logic based on transaction type
+                auto_populated_date = None
+                auto_populate_message = None
+                
+                # Get current transaction type
+                current_transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
+                policy_number = modal_data.get('Policy Number', '')
+                
+                # Only auto-populate if current date_value is empty
+                if not date_value or pd.isna(date_value):
+                    if current_transaction_type == 'NEW':
+                        # For NEW transactions, copy from Effective Date
+                        effective_date = updated_data.get('Effective Date')
+                        if effective_date:
+                            auto_populated_date = effective_date
+                            auto_populate_message = "📅 Auto-populated from Effective Date (NEW transaction)"
+                    
+                    elif current_transaction_type == 'BoR':
+                        # For BoR, use Effective Date (new relationship)
+                        effective_date = updated_data.get('Effective Date')
+                        if effective_date:
+                            auto_populated_date = effective_date
+                            auto_populate_message = "🤝 Auto-populated from Effective Date (new BoR relationship)"
+                    
+                    elif current_transaction_type in ['RWL', 'END', 'PCH', 'CAN', 'XCL', 'REWRITE', 'NBS', 'STL'] and policy_number:
+                        # For these types, look up the original NEW transaction
+                        try:
+                            # Load all policies data
+                            all_data = load_policies_data()
+                            
+                            # Function to trace back to original NEW transaction
+                            def find_origination_date(policy_num, visited=None):
+                                if visited is None:
+                                    visited = set()
+                                
+                                if policy_num in visited:
+                                    return None, None  # Circular reference protection
+                                visited.add(policy_num)
+                                
+                                # Find transactions for this policy number
+                                policy_transactions = all_data[all_data['Policy Number'] == policy_num].copy()
+                                
+                                if not policy_transactions.empty:
+                                    # Sort by transaction date/effective date to get earliest
+                                    if 'Effective Date' in policy_transactions.columns:
+                                        policy_transactions = policy_transactions.sort_values('Effective Date')
+                                    
+                                    # Check for NEW transaction
+                                    new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
+                                    if len(new_transactions) > 1:
+                                        # Multiple NEW transactions warning
+                                        return None, "⚠️ Multiple NEW transactions found for this policy"
+                                    elif len(new_transactions) == 1:
+                                        # Found the NEW transaction
+                                        orig_date = new_transactions.iloc[0].get('Policy Origination Date')
+                                        if orig_date and pd.notna(orig_date):
+                                            return orig_date, "📊 Auto-populated from original NEW transaction"
+                                        # If NEW transaction has no origination date, use its effective date
+                                        eff_date = new_transactions.iloc[0].get('Effective Date')
+                                        if eff_date and pd.notna(eff_date):
+                                            return eff_date, "📊 Auto-populated from NEW transaction's Effective Date"
+                                    
+                                    # No NEW transaction, check for Prior Policy Number
+                                    for _, trans in policy_transactions.iterrows():
+                                        prior_policy = trans.get('Prior Policy Number')
+                                        if prior_policy and pd.notna(prior_policy) and str(prior_policy).strip():
+                                            # Recursively follow the chain
+                                            result_date, result_msg = find_origination_date(prior_policy, visited)
+                                            if result_date:
+                                                return result_date, result_msg
+                                
+                                return None, None
+                            
+                            # Find the origination date
+                            found_date, message = find_origination_date(policy_number)
+                            if found_date:
+                                auto_populated_date = found_date
+                                auto_populate_message = message
+                            
+                        except Exception as e:
+                            # If lookup fails, just continue without auto-population
+                            pass
+                
+                # Use auto-populated date if available and no existing value
+                if auto_populated_date and (not date_value or pd.isna(date_value)):
+                    date_value = auto_populated_date
+                    if auto_populate_message:
+                        st.info(auto_populate_message)
+                
                 if is_renewal:
                     # For renewals, show as read-only text
                     st.text_input(
@@ -3195,6 +3285,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                 'Policy Origination Date',
                                 value=parsed_date.date(),
                                 key="modal_Policy Origination Date",
+                                help="Auto-populated based on transaction type and policy history"
                                 )
                         except:
                             updated_data['Policy Origination Date'] = st.text_input(
@@ -3208,6 +3299,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             'Policy Origination Date',
                             value=None,
                             key="modal_Policy Origination Date",
+                            help="Auto-populated based on transaction type and policy history"
                         )
         
         # Right column - X-DATE only (aligned with Effective Date)
@@ -3242,7 +3334,42 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             if 'Policy Term' in modal_data.keys():
                 # Policy Term dropdown
                 policy_terms = [3, 6, 9, 12]
-                current_term = modal_data.get('Policy Term', None)
+                
+                # Try to auto-calculate term based on Effective Date and X-DATE
+                calculated_term = None
+                effective_date = updated_data.get('Effective Date')
+                x_date = updated_data.get('X-DATE')
+                
+                if effective_date and x_date:
+                    try:
+                        # Convert to datetime if needed
+                        if not isinstance(effective_date, pd.Timestamp):
+                            effective_date = pd.to_datetime(effective_date)
+                        if not isinstance(x_date, pd.Timestamp):
+                            x_date = pd.to_datetime(x_date)
+                        
+                        # Calculate the difference in months
+                        months_diff = (x_date.year - effective_date.year) * 12 + (x_date.month - effective_date.month)
+                        
+                        # If we get a standard term, use it
+                        if months_diff in policy_terms:
+                            calculated_term = months_diff
+                        # If it's close to a standard term (within a few days), round to nearest
+                        elif months_diff > 0:
+                            # Check if it's close to any standard term
+                            for term in policy_terms:
+                                # Allow for dates that are a few days off (e.g., 11.9 months rounds to 12)
+                                days_diff = (x_date - effective_date).days
+                                expected_days = term * 30  # Approximate days in months
+                                if abs(days_diff - expected_days) <= 15:  # Within 15 days
+                                    calculated_term = term
+                                    break
+                    except:
+                        pass
+                
+                # Use calculated term if available, otherwise use existing value
+                current_term = calculated_term if calculated_term else modal_data.get('Policy Term', None)
+                
                 # Handle the display
                 if current_term is None or pd.isna(current_term):
                     selected_index = 0
@@ -3252,13 +3379,17 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     except (ValueError, TypeError):
                         selected_index = 0
                 
+                # Show info message if we auto-calculated
+                if calculated_term:
+                    st.info(f"📊 Policy Term auto-calculated as {calculated_term} months based on dates")
+                
                 updated_data['Policy Term'] = st.selectbox(
                     'Policy Term',
                     options=[None] + policy_terms,
                     format_func=lambda x: "" if x is None else f"{x} months",
                     index=selected_index,
                     key="modal_Policy Term",
-                    help="Select policy duration in months"
+                    help="Auto-populated based on Effective Date and X-DATE when available"
                 )
         
         # Premium Information
@@ -9835,6 +9966,254 @@ SOLUTION NEEDED:
                 if st.button("Generate Transaction ID"):
                     new_transaction_id = generate_transaction_id()
                     st.code(new_transaction_id)
+            
+            st.divider()
+            
+            # Policy Origination Date Population Tool
+            st.write("**🗓️ Populate Missing Policy Origination Dates**")
+            
+            st.info("""
+            This tool will automatically populate missing Policy Origination Dates using the following logic:
+            - **NEW transactions**: Use the Effective Date
+            - **BoR transactions**: Use the Effective Date (new relationship)
+            - **Other transactions**: Trace back through policy history to find the original NEW transaction
+            """)
+            
+            # Exclude reconciliation transactions (STMT, VOID, ADJ)
+            regular_transactions = all_data[~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False)].copy()
+            
+            # Find transactions missing Policy Origination Date
+            missing_origination = regular_transactions[
+                (regular_transactions['Policy Origination Date'].isna()) | 
+                (regular_transactions['Policy Origination Date'] == '')
+            ].copy()
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Transactions", len(all_data))
+            with col2:
+                st.metric("Regular Transactions", len(regular_transactions))
+            with col3:
+                st.metric("Missing Origination Date", len(missing_origination))
+            
+            if len(missing_origination) == 0:
+                st.success("✅ All transactions already have Policy Origination Date populated!")
+            else:
+                # Show preview
+                if st.checkbox("Show transactions that need origination dates"):
+                    st.dataframe(
+                        missing_origination[['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 'Effective Date']].head(20),
+                        use_container_width=True
+                    )
+                    if len(missing_origination) > 20:
+                        st.caption(f"Showing first 20 of {len(missing_origination)} transactions")
+                
+                # Process button
+                if st.button("🔍 Analyze Missing Dates", type="primary", key="analyze_origination_dates"):
+                    updates = []
+                    errors = []
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # Process each missing transaction
+                    for counter, (idx, row) in enumerate(missing_origination.iterrows()):
+                        progress = (counter + 1) / len(missing_origination)
+                        progress_bar.progress(progress)
+                        
+                        transaction_id = row.get('Transaction ID')
+                        transaction_type = row.get('Transaction Type')
+                        policy_number = row.get('Policy Number')
+                        effective_date = row.get('Effective Date')
+                        customer = row.get('Customer', 'Unknown')
+                        
+                        status_text.text(f"Processing {counter+1}/{len(missing_origination)}: {transaction_id}")
+                        
+                        auto_populated_date = None
+                        reason = ""
+                        
+                        # Apply the same logic as the form
+                        if transaction_type == 'NEW':
+                            if effective_date and pd.notna(effective_date):
+                                auto_populated_date = effective_date
+                                reason = "NEW transaction - using Effective Date"
+                        
+                        elif transaction_type == 'BoR':
+                            if effective_date and pd.notna(effective_date):
+                                auto_populated_date = effective_date
+                                reason = "BoR transaction - using Effective Date"
+                        
+                        elif transaction_type in ['RWL', 'END', 'PCH', 'CAN', 'XCL', 'REWRITE', 'NBS', 'STL'] and policy_number:
+                            # Use the same recursive function from the form
+                            def find_origination_date_tool(policy_num, visited=None):
+                                if visited is None:
+                                    visited = set()
+                                
+                                if policy_num in visited:
+                                    return None, None  # Circular reference protection
+                                visited.add(policy_num)
+                                
+                                # Find transactions for this policy number
+                                policy_transactions = all_data[all_data['Policy Number'] == policy_num].copy()
+                                
+                                if not policy_transactions.empty:
+                                    # Sort by transaction date/effective date to get earliest
+                                    if 'Effective Date' in policy_transactions.columns:
+                                        policy_transactions = policy_transactions.sort_values('Effective Date')
+                                    
+                                    # Check for NEW transaction
+                                    new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
+                                    if len(new_transactions) > 1:
+                                        # Multiple NEW transactions warning
+                                        return None, "Multiple NEW transactions found"
+                                    elif len(new_transactions) == 1:
+                                        # Found the NEW transaction
+                                        orig_date = new_transactions.iloc[0].get('Policy Origination Date')
+                                        if orig_date and pd.notna(orig_date):
+                                            return orig_date, "Found from NEW transaction"
+                                        # If NEW transaction has no origination date, use its effective date
+                                        eff_date = new_transactions.iloc[0].get('Effective Date')
+                                        if eff_date and pd.notna(eff_date):
+                                            return eff_date, "Found from NEW transaction's Effective Date"
+                                    
+                                    # No NEW transaction, check for Prior Policy Number
+                                    for _, trans in policy_transactions.iterrows():
+                                        prior_policy = trans.get('Prior Policy Number')
+                                        if prior_policy and pd.notna(prior_policy) and str(prior_policy).strip():
+                                            # Recursively follow the chain
+                                            result_date, result_msg = find_origination_date_tool(prior_policy, visited)
+                                            if result_date:
+                                                return result_date, f"{result_msg} (via Prior Policy: {prior_policy})"
+                                
+                                return None, None
+                            
+                            found_date, message = find_origination_date_tool(policy_number)
+                            if found_date:
+                                auto_populated_date = found_date
+                                reason = f"{transaction_type} - {message}"
+                        
+                        # Store results
+                        if auto_populated_date:
+                            updates.append({
+                                'Transaction ID': transaction_id,
+                                'Customer': customer,
+                                'Policy Number': policy_number,
+                                'Type': transaction_type,
+                                'New Origination Date': auto_populated_date,
+                                'Reason': reason
+                            })
+                        else:
+                            errors.append({
+                                'Transaction ID': transaction_id,
+                                'Customer': customer,
+                                'Policy Number': policy_number,
+                                'Type': transaction_type,
+                                'Reason': 'No origination date found'
+                            })
+                    
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    # Show results
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("✅ Can Update", len(updates))
+                    with col2:
+                        st.metric("❌ Cannot Update", len(errors))
+                    
+                    # Store results in session state
+                    st.session_state['origination_updates'] = updates
+                    st.session_state['origination_errors'] = errors
+                    
+                    # Show preview of updates
+                    if updates:
+                        st.success(f"Found {len(updates)} transactions that can be updated")
+                        
+                        # Convert dates to strings for display
+                        updates_df = pd.DataFrame(updates)
+                        
+                        st.dataframe(updates_df.head(10), use_container_width=True)
+                        if len(updates) > 10:
+                            st.caption(f"Showing first 10 of {len(updates)} updates")
+                    
+                    if errors:
+                        with st.expander(f"⚠️ {len(errors)} transactions cannot be updated"):
+                            errors_df = pd.DataFrame(errors)
+                            st.dataframe(errors_df, use_container_width=True)
+                
+                # Update button (only shows after analysis)
+                if 'origination_updates' in st.session_state and st.session_state['origination_updates']:
+                    st.divider()
+                    
+                    col1, col2, col3 = st.columns([2, 1, 2])
+                    with col2:
+                        if st.button("💾 Update Database", type="primary", use_container_width=True, key="update_origination_dates"):
+                            updates = st.session_state['origination_updates']
+                            success_count = 0
+                            error_count = 0
+                            
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            supabase = get_supabase_client()
+                            
+                            for idx, update in enumerate(updates):
+                                progress = (idx + 1) / len(updates)
+                                progress_bar.progress(progress)
+                                status_text.text(f"Updating {idx+1}/{len(updates)}: {update['Transaction ID']}")
+                                
+                                try:
+                                    # Update the record
+                                    supabase.table('policies').update({
+                                        'Policy Origination Date': update['New Origination Date']
+                                    }).eq('Transaction ID', update['Transaction ID']).execute()
+                                    
+                                    success_count += 1
+                                except Exception as e:
+                                    error_count += 1
+                                    st.error(f"Error updating {update['Transaction ID']}: {str(e)}")
+                            
+                            progress_bar.empty()
+                            status_text.empty()
+                            
+                            # Clear the updates from session state
+                            del st.session_state['origination_updates']
+                            if 'origination_errors' in st.session_state:
+                                del st.session_state['origination_errors']
+                            
+                            # Show results
+                            st.success(f"✅ Successfully updated {success_count} transactions!")
+                            if error_count > 0:
+                                st.error(f"❌ Failed to update {error_count} transactions")
+                            
+                            # Clear cache to show updated data
+                            clear_policies_cache()
+                            
+                            st.balloons()
+                            
+                            # Generate report
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            report_data = []
+                            for update in updates:
+                                report_data.append({
+                                    'Transaction ID': update['Transaction ID'],
+                                    'Customer': update['Customer'],
+                                    'Policy Number': update['Policy Number'],
+                                    'Transaction Type': update['Type'],
+                                    'New Origination Date': update['New Origination Date'],
+                                    'Reason': update['Reason'],
+                                    'Status': 'Updated'
+                                })
+                            
+                            report_df = pd.DataFrame(report_data)
+                            csv = report_df.to_csv(index=False)
+                            
+                            st.download_button(
+                                label="📥 Download Update Report",
+                                data=csv,
+                                file_name=f"origination_date_updates_{timestamp}.csv",
+                                mime="text/csv"
+                            )
         
         with tab2:
             st.subheader("Utility Functions")

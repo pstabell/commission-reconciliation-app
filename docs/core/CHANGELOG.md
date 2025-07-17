@@ -5,6 +5,42 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2025-07-17 - Policy Origination Date Auto-Population
+
+### Added
+- **Policy Term Auto-Population**
+  - Automatically calculates Policy Term based on Effective Date and X-DATE
+  - Rounds to standard terms (3, 6, 9, 12 months) with 15-day tolerance
+  - Updates in real-time as dates are changed
+
+- **Policy Origination Date Auto-Population**
+  - NEW transactions: Auto-populates from Effective Date
+  - BoR transactions: Uses Effective Date (new relationship)
+  - Other types: Traces back through policy chains to find original NEW transaction
+  - Follows Prior Policy Number chains recursively
+  - Circular reference protection
+  - Clear visual feedback with auto-populate messages
+
+- **Batch Update Tool for Policy Origination Dates**
+  - New tool in Tools → Data Tools
+  - Analyzes all transactions missing Policy Origination Date
+  - Excludes reconciliation transactions (-STMT-, -VOID-, -ADJ-)
+  - Preview changes before applying
+  - Progress tracking during updates
+  - Downloadable report of all changes
+  - Metrics show Total, Regular, and Missing counts
+
+### Fixed
+- Progress bar error when value exceeded 1.0
+- Date format handling for mixed date formats
+- Proper exclusion of reconciliation transactions from analysis
+
+### Technical
+- Added recursive `find_origination_date()` function
+- Improved date handling without forced formatting
+- Better progress tracking with enumerate()
+- Added filtering for reconciliation transactions
+
 ## [3.7.6] - 2025-07-17 - Policy Type Consistency & Accounting Page Removal
 
 ### Fixed

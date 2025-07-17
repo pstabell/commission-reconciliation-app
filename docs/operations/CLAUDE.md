@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 17, 2025  
-**Current Version**: 3.7.6
+**Current Version**: 3.8.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,11 +13,14 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.7.6)
-1. **Policy Type Consistency Fix**: Fixed Edit Transaction and Add New Policy forms to use same policy types as Admin Panel
-   - Both forms now load from `policy_types_updated.json` instead of old `policy_types.json`
-   - Shows types like HOME, CONDO, DP1, AUTO instead of old hardcoded list
-   - Proper conversion handling for different file formats
+## Recent Major Changes (v3.8.0)
+1. **Policy Origination Date Auto-Population**: Added intelligent auto-population for Policy Origination Date field
+   - NEW transactions use Effective Date
+   - BoR transactions use Effective Date (new relationship)
+   - Other types trace back to original NEW transaction via Prior Policy Number chains
+   - Added batch update tool in Tools → Data Tools to populate existing missing dates
+2. **Policy Term Auto-Calculation**: Added automatic Policy Term calculation based on date difference
+3. **Prior Changes (v3.7.6)**: Fixed policy type consistency across forms
 2. **Delete Logic Fix**: Fixed "Could not identify transaction IDs" error when selecting import transactions
    - Error now only shows when truly can't find Transaction ID column
    - Properly handles import and reconciliation transaction warnings
