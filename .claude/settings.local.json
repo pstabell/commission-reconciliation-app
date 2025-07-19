@@ -25,7 +25,8 @@
       "Bash(source:*)",
       "Bash(.venv/Scripts/python.exe utility_scripts/test_search_reconciliation.py:*)",
       "Bash(.venv/Scripts/python.exe utility_scripts/verify_search_fix.py:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
   }

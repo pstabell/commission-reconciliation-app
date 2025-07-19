@@ -5,6 +5,38 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.4] - 2025-07-19 - Balance Filters, Audit Help, and Date Formatting
+
+### Added
+- **Balance Filters in Policy Revenue Ledger Reports**
+  - New dropdown filter to show policies by balance status
+  - Options: All Balances, Positive Only (>$0), Zero Only (=$0), Negative Only (<$0), Non-Zero (≠$0)
+  - Filter selection included in export metadata
+  - Shows count of policies matching selected filter
+
+- **Policy Audit Strategy in Help Page**
+  - Comprehensive guide for auditing policy records
+  - Located in Help > Features Guide tab
+  - Includes prioritized approach, red flags, and daily strategies
+  - Expandable section for easy access
+
+### Changed
+- **Date Display Format**
+  - Removed date formatting overrides to show raw YYYY-MM-DD format
+  - Dates now display exactly as stored in database
+  - Updated date saves to consistently use YYYY-MM-DD format
+  - Changed help text to reflect correct date format
+
+- **Edit Renewal Transaction Form**
+  - NOTES field now clears when creating renewal transactions
+  - Prevents copying notes from original policy to renewal
+
+### Fixed
+- **Commission Rate Display**
+  - Fixed commission rates not showing next to carrier names
+  - Improved error handling for carrier data loading
+  - Added retry mechanism for database connections
+
 ## [3.8.3] - 2025-07-17 - Enable IMPORT Transaction Deletion
 
 ### Changed

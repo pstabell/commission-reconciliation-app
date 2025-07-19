@@ -2818,9 +2818,9 @@ def duplicate_for_renewal(df: pd.DataFrame) -> pd.DataFrame:
         axis=1
     )
     
-    # Update the relevant columns - Using YYYY-MM-DD format
-    renewed_df[get_mapped_column("Effective Date")] = renewed_df['new_effective_date'].dt.strftime('%Y-%m-%d')
-    renewed_df[get_mapped_column("X-DATE")] = renewed_df['new_expiration_date'].dt.strftime('%Y-%m-%d')
+    # Update the relevant columns
+    renewed_df[get_mapped_column("Effective Date")] = renewed_df['new_effective_date'].dt.strftime('%m/%d/%Y')
+    renewed_df[get_mapped_column("X-DATE")] = renewed_df['new_expiration_date'].dt.strftime('%m/%d/%Y')
     renewed_df[get_mapped_column("Transaction Type")] = "RWL"
     
     return renewed_df
@@ -3208,6 +3208,9 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             # Load all policies data
                             all_data = load_policies_data()
                             
+                            # Debug: Show what we're searching for
+                            st.caption(f"Debug: Searching for NEW transaction with Policy Number: {policy_number}")
+                            
                             # Function to trace back to original NEW transaction
                             def find_origination_date(policy_num, visited=None):
                                 if visited is None:
@@ -3220,6 +3223,13 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                 # Find transactions for this policy number
                                 policy_transactions = all_data[all_data['Policy Number'] == policy_num].copy()
                                 
+                                # Debug: Show what we found
+                                if len(policy_transactions) > 0:
+                                    st.caption(f"Debug: Found {len(policy_transactions)} transactions for policy {policy_num}")
+                                    # Show transaction types found
+                                    types_found = policy_transactions['Transaction Type'].unique()
+                                    st.caption(f"Debug: Transaction types found: {', '.join(types_found)}")
+                                
                                 if not policy_transactions.empty:
                                     # Sort by transaction date/effective date to get earliest
                                     if 'Effective Date' in policy_transactions.columns:
@@ -3227,6 +3237,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                     
                                     # Check for NEW transaction
                                     new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
+                                    st.caption(f"Debug: Found {len(new_transactions)} NEW transactions")
                                     if len(new_transactions) > 1:
                                         # Multiple NEW transactions warning
                                         return None, "⚠️ Multiple NEW transactions found for this policy"
@@ -3900,10 +3911,9 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         if save_button:
             # Convert date objects to strings
-            # REMOVED: Date formatting to preserve YYYY-MM-DD format
-            # for field, value in updated_data.items():
-            #     if isinstance(value, datetime.date):
-            #         updated_data[field] = value.strftime('%m/%d/%Y')
+            for field, value in updated_data.items():
+                if isinstance(value, datetime.date):
+                    updated_data[field] = value.strftime('%m/%d/%Y')
             
             # Auto-populate 12-month term for NEW and RWL (except AUTO)
             transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
@@ -3938,8 +3948,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         # Calculate X-DATE (12 months later)
                         x_date = eff_date + pd.DateOffset(months=12)
                         
-                        # Format as string - Using YYYY-MM-DD
-                        updated_data['X-DATE'] = x_date.strftime('%Y-%m-%d')
+                        # Format as string
+                        updated_data['X-DATE'] = x_date.strftime('%m/%d/%Y')
                     except Exception as e:
                         # If date calculation fails, just set the term without X-DATE
                         st.warning(f"Could not calculate X-DATE: {str(e)}")
@@ -4897,7 +4907,7 @@ def main():
                             if col in edit_results_with_selection.columns:
                                 column_config[col] = st.column_config.TextColumn(
                                     col,
-                                    help="Date format: YYYY-MM-DD",
+                                    help="Date format: MM/DD/YYYY",
                                     max_chars=10
                                 )
                         
@@ -4948,139 +4958,140 @@ def main():
                         col1, col2, col3 = st.columns([4, 1, 1])
                         with col1:
                             st.markdown("### Edit Policies")
-                        with col3:
-                            st.session_state[auto_save_key] = st.checkbox(
-                                "🔄 Auto-save", 
-                                value=st.session_state[auto_save_key],
-                                help="Automatically save changes as you type"
+                            with col3:
+                                st.session_state[auto_save_key] = st.checkbox(
+                                    "🔄 Auto-save", 
+                                    value=st.session_state[auto_save_key],
+                                    help="Automatically save changes as you type"
+                                )
+                            
+                            # Add a container for status messages
+                            status_container = st.empty()
+                            
+                            # Show editing tips
+                            with st.expander("💡 Editing Tips", expanded=False):
+                                st.markdown("""
+                                **Best editing experience:**
+                                - 🖥️ **Use Full Screen mode** (expand icon in top-right of table) to prevent screen jumping
+                                - Auto-save is enabled by default - changes save automatically
+                                - Full screen maintains your position while editing
+                                
+                                **To minimize data loss:**
+                                - Edit in Full Screen mode for best stability
+                                - For bulk edits: Export to Excel → Edit → Import back
+                                
+                                **Keyboard shortcuts:**
+                                - Tab: Move to next cell (may be limited)
+                                - Enter: Confirm edit and move down
+                                - Shift+Enter: Confirm edit and move up
+                                """)
+                            
+                            # Calculate height based on number of rows (35px per row + 50px for header)
+                            # Max height of 600px to prevent very tall tables
+                            num_data_rows = len(st.session_state[editor_key])
+                            calculated_height = min(50 + (num_data_rows + 2) * 35, 600)  # +2 for the extra rows you want
+                            
+                            # Track only Select column changes for performance
+                            select_column_key = f"{editor_key}_select_only"
+                            if select_column_key not in st.session_state:
+                                st.session_state[select_column_key] = st.session_state[editor_key]['Select'].copy() if 'Select' in st.session_state[editor_key].columns else pd.Series()
+                            
+                            # Editable data grid with selection column
+                            edited_data = st.data_editor(
+                                st.session_state[editor_key],
+                                use_container_width=True,
+                                height=calculated_height,
+                                key=f"{editor_key}_widget",
+                                num_rows="fixed",  # Back to fixed to prevent too many blank rows
+                                column_config=column_config,
+                                disabled=False
                             )
-                        
-                        # Add a container for status messages
-                        status_container = st.empty()
-                        
-                        # Show editing tips
-                        with st.expander("💡 Editing Tips", expanded=False):
-                            st.markdown("""
-                            **Best editing experience:**
-                            - 🖥️ **Use Full Screen mode** (expand icon in top-right of table) to prevent screen jumping
-                            - Auto-save is enabled by default - changes save automatically
-                            - Full screen maintains your position while editing
-                            
-                            **To minimize data loss:**
-                            - Edit in Full Screen mode for best stability
-                            - For bulk edits: Export to Excel → Edit → Import back
-                            
-                            **Keyboard shortcuts:**
-                            - Tab: Move to next cell (may be limited)
-                            - Enter: Confirm edit and move down
-                            - Shift+Enter: Confirm edit and move up
-                            """)
-                        
-                        # Calculate height based on number of rows (35px per row + 50px for header)
-                        # Max height of 600px to prevent very tall tables
-                        num_data_rows = len(st.session_state[editor_key])
-                        calculated_height = min(50 + (num_data_rows + 2) * 35, 600)  # +2 for the extra rows you want
-                        
-                        # Track only Select column changes for performance
-                        select_column_key = f"{editor_key}_select_only"
-                        if select_column_key not in st.session_state:
-                            st.session_state[select_column_key] = st.session_state[editor_key]['Select'].copy() if 'Select' in st.session_state[editor_key].columns else pd.Series()
-                        
-                        # Editable data grid with selection column
-                        edited_data = st.data_editor(
-                            st.session_state[editor_key],
-                            use_container_width=True,
-                            height=calculated_height,
-                            key=f"{editor_key}_widget",
-                            num_rows="fixed",  # Back to fixed to prevent too many blank rows
-                            column_config=column_config,
-                            disabled=False
-                        )
-                        
-                        # Detect changes and auto-save - skip if only Select column changed
-                        data_changed = False
-                        if 'Select' in edited_data.columns:
-                            # Compare dataframes excluding the Select column for performance
-                            cols_to_check = [col for col in edited_data.columns if col != 'Select']
-                            if cols_to_check:
-                                data_changed = not edited_data[cols_to_check].equals(st.session_state[editor_key][cols_to_check])
-                        else:
-                            data_changed = not edited_data.equals(st.session_state[editor_key])
-                        
-                        if data_changed:
-                            changes_detected = []
-                            for idx in edited_data.index:
-                                for col in edited_data.columns:
-                                    # Skip the Select column to avoid triggering saves on checkbox clicks
-                                    if col != 'Select' and edited_data.loc[idx, col] != st.session_state[editor_key].loc[idx, col]:
-                                        changes_detected.append((idx, col, edited_data.loc[idx, col]))
-                            
-                            if changes_detected and st.session_state[auto_save_key]:
-                                # Auto-save changes immediately
-                                status_container.info("💾 Auto-saving changes...")
                                 
-                                try:
-                                    # Get transaction ID column
-                                    transaction_id_col = None
+                                
+                            # Detect changes and auto-save - skip if only Select column changed
+                            data_changed = False
+                            if 'Select' in edited_data.columns:
+                                # Compare dataframes excluding the Select column for performance
+                                cols_to_check = [col for col in edited_data.columns if col != 'Select']
+                                if cols_to_check:
+                                    data_changed = not edited_data[cols_to_check].equals(st.session_state[editor_key][cols_to_check])
+                            else:
+                                data_changed = not edited_data.equals(st.session_state[editor_key])
+                            
+                            if data_changed:
+                                changes_detected = []
+                                for idx in edited_data.index:
                                     for col in edited_data.columns:
-                                        if 'transaction' in col.lower() and 'id' in col.lower():
-                                            transaction_id_col = col
-                                            break
-                                    
-                                    saved_count = 0
-                                    for idx, col_name, new_value in changes_detected:
-                                        if col_name != 'Select' and transaction_id_col:
-                                            transaction_id = edited_data.loc[idx, transaction_id_col]
-                                            if pd.notna(transaction_id) and str(transaction_id).strip():
-                                                # Update single cell
-                                                update_dict = {col_name: new_value if pd.notna(new_value) else None}
-                                                supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
-                                                saved_count += 1
-                                    
-                                    if saved_count > 0:
-                                        status_container.success(f"✅ Auto-saved {saved_count} changes")
-                                        # Update the base data to reflect saved changes
-                                        st.session_state[editor_key] = edited_data.copy()
-                                        # Don't rerun - just update state
+                                        # Skip the Select column to avoid triggering saves on checkbox clicks
+                                        if col != 'Select' and edited_data.loc[idx, col] != st.session_state[editor_key].loc[idx, col]:
+                                            changes_detected.append((idx, col, edited_data.loc[idx, col]))
                                 
-                                except Exception as e:
-                                    status_container.error(f"Auto-save error: {str(e)}")
-                                    log_debug(f"Auto-save error: {str(e)}", "ERROR", e)
-                            
-                            elif changes_detected and not st.session_state[auto_save_key]:
-                                status_container.info(f"📝 {len(changes_detected)} unsaved changes")
-                                st.session_state[unsaved_changes_key] = changes_detected
+                                if changes_detected and st.session_state[auto_save_key]:
+                                    # Auto-save changes immediately
+                                    status_container.info("💾 Auto-saving changes...")
+                                    
+                                    try:
+                                        # Get transaction ID column
+                                        transaction_id_col = None
+                                        for col in edited_data.columns:
+                                            if 'transaction' in col.lower() and 'id' in col.lower():
+                                                transaction_id_col = col
+                                                break
+                                        
+                                        saved_count = 0
+                                        for idx, col_name, new_value in changes_detected:
+                                            if col_name != 'Select' and transaction_id_col:
+                                                transaction_id = edited_data.loc[idx, transaction_id_col]
+                                                if pd.notna(transaction_id) and str(transaction_id).strip():
+                                                    # Update single cell
+                                                    update_dict = {col_name: new_value if pd.notna(new_value) else None}
+                                                    supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                                    saved_count += 1
+                                        
+                                        if saved_count > 0:
+                                            status_container.success(f"✅ Auto-saved {saved_count} changes")
+                                            # Update the base data to reflect saved changes
+                                            st.session_state[editor_key] = edited_data.copy()
+                                            # Don't rerun - just update state
+                                    
+                                    except Exception as e:
+                                        status_container.error(f"Auto-save error: {str(e)}")
+                                        log_debug(f"Auto-save error: {str(e)}", "ERROR", e)
+                                
+                                elif changes_detected and not st.session_state[auto_save_key]:
+                                    status_container.info(f"📝 {len(changes_detected)} unsaved changes")
+                                    st.session_state[unsaved_changes_key] = changes_detected
                                 
                             
-                        # Always update session state for Select column changes
-                        # This prevents the equals() check from triggering on checkbox clicks
-                        if 'Select' in edited_data.columns:
-                            st.session_state[editor_key]['Select'] = edited_data['Select'].copy()
-                        
-                        # Handle no data changes case
-                        if not data_changed and st.session_state[auto_save_key]:
-                            status_container.success("✅ All changes auto-saved")
-                        
-                        # Update session state without rerun
-                        st.session_state[editor_key] = edited_data
-                        
-                        # Get the client ID from the search results (if all rows have the same client)
-                        existing_client_id = None
-                        if client_id_col:
-                            unique_client_ids = edit_results[client_id_col].dropna().unique()
-                            if len(unique_client_ids) == 1:
-                                existing_client_id = unique_client_ids[0]
-                                st.info(f"💡 New rows will receive unique Transaction IDs and use Client ID: {existing_client_id}")
-                            elif len(unique_client_ids) > 1:
-                                st.info("💡 New rows will receive unique Transaction IDs. Multiple Client IDs found - new rows will need Client ID specified.")
-                        else:
-                            st.info("💡 New rows will receive unique Transaction IDs and Client IDs when you save.")
+                            # Always update session state for Select column changes
+                            # This prevents the equals() check from triggering on checkbox clicks
+                            if 'Select' in edited_data.columns:
+                                st.session_state[editor_key]['Select'] = edited_data['Select'].copy()
                             
-                        # Add buttons for adding new row and editing selected row
-                        button_col1, button_col2 = st.columns(2)
+                            # Handle no data changes case
+                            if not data_changed and st.session_state[auto_save_key]:
+                                status_container.success("✅ All changes auto-saved")
                             
-                        with button_col1:
-                            if st.button("➕ Add New Transaction for This Client", type="secondary", use_container_width=True):
+                            # Update session state without rerun
+                            st.session_state[editor_key] = edited_data
+                            
+                            # Get the client ID from the search results (if all rows have the same client)
+                            existing_client_id = None
+                            if client_id_col:
+                                unique_client_ids = edit_results[client_id_col].dropna().unique()
+                                if len(unique_client_ids) == 1:
+                                    existing_client_id = unique_client_ids[0]
+                                    st.info(f"💡 New rows will receive unique Transaction IDs and use Client ID: {existing_client_id}")
+                                elif len(unique_client_ids) > 1:
+                                    st.info("💡 New rows will receive unique Transaction IDs. Multiple Client IDs found - new rows will need Client ID specified.")
+                            else:
+                                st.info("💡 New rows will receive unique Transaction IDs and Client IDs when you save.")
+                            
+                            # Add buttons for adding new row and editing selected row
+                            button_col1, button_col2 = st.columns(2)
+                            
+                            with button_col1:
+                                if st.button("➕ Add New Transaction for This Client", type="secondary", use_container_width=True):
                                     # Ensure session state exists
                                     if editor_key in st.session_state:
                                         # Create a new empty row with generated IDs
@@ -5104,113 +5115,602 @@ def main():
                                     else:
                                         st.error("Session state not initialized. Please try searching again.")
                             
-                        with button_col2:
-                            # Check for selected rows for edit button - use only the Select column for performance
-                            if 'Select' in edited_data.columns:
-                                # Track selected count in session state for performance
-                                selected_count_key = f"{editor_key}_selected_count"
-                                
-                                # Only recalculate if the Select column has changed
+                            with button_col2:
+                                # Check for selected rows for edit button - use only the Select column for performance
                                 if 'Select' in edited_data.columns:
-                                    current_selected = edited_data['Select'].tolist()
-                                    prev_selected_key = f"{editor_key}_prev_selected"
+                                    # Track selected count in session state for performance
+                                    selected_count_key = f"{editor_key}_selected_count"
                                     
-                                    if (prev_selected_key not in st.session_state or 
-                                        st.session_state[prev_selected_key] != current_selected):
-                                        # Calculate selected count only when selection changes
-                                        selected_mask = edited_data['Select'] == True
-                                        selected_count = selected_mask.sum()
-                                        st.session_state[selected_count_key] = selected_count
-                                        st.session_state[prev_selected_key] = current_selected
-                                        if selected_count == 1:
-                                            # Cache the selected index too
-                                            st.session_state[f"{editor_key}_selected_idx"] = edited_data[selected_mask].index[0]
+                                    # Only recalculate if the Select column has changed
+                                    if 'Select' in edited_data.columns:
+                                        current_selected = edited_data['Select'].tolist()
+                                        prev_selected_key = f"{editor_key}_prev_selected"
+                                        
+                                        if (prev_selected_key not in st.session_state or 
+                                            st.session_state[prev_selected_key] != current_selected):
+                                            # Calculate selected count only when selection changes
+                                            selected_mask = edited_data['Select'] == True
+                                            selected_count = selected_mask.sum()
+                                            st.session_state[selected_count_key] = selected_count
+                                            st.session_state[prev_selected_key] = current_selected
+                                            if selected_count == 1:
+                                                # Cache the selected index too
+                                                st.session_state[f"{editor_key}_selected_idx"] = edited_data[selected_mask].index[0]
+                                        else:
+                                            # Use cached values
+                                            selected_count = st.session_state.get(selected_count_key, 0)
+                                    
+                                    if selected_count == 1:
+                                        if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
+                                            st.session_state['show_edit_modal'] = True
+                                            # Use cached index
+                                            selected_idx = st.session_state.get(f"{editor_key}_selected_idx")
+                                            if selected_idx is not None:
+                                                st.session_state['edit_modal_data'] = edited_data.loc[selected_idx].to_dict()
+                                    elif selected_count == 0:
+                                        st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
                                     else:
-                                        # Use cached values
-                                        selected_count = st.session_state.get(selected_count_key, 0)
-                                
-                                if selected_count == 1:
-                                    if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
-                                        st.session_state['show_edit_modal'] = True
-                                        # Use cached index
-                                        selected_idx = st.session_state.get(f"{editor_key}_selected_idx")
-                                        if selected_idx is not None:
-                                            st.session_state['edit_modal_data'] = edited_data.loc[selected_idx].to_dict()
-                                elif selected_count == 0:
-                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
+                                        st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help=f"{selected_count} selected - please select only ONE transaction")
                                 else:
-                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help=f"{selected_count} selected - please select only ONE transaction")
-                            else:
-                                st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="No selection column available")
+                                    st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="No selection column available")
                             
-                        # Save and Delete buttons with status
-                        st.markdown("---")
-                        col1, col2, col3 = st.columns([2, 2, 2])
-                        
-                        with col1:
-                            # Show save status
-                            if unsaved_changes_key in st.session_state and st.session_state[unsaved_changes_key]:
-                                st.warning(f"⚠️ {len(st.session_state[unsaved_changes_key])} unsaved changes")
-                            else:
-                                st.success("✅ All changes saved")
-                        
-                        with col2:
-                            save_button = st.button("💾 Save All Changes", type="primary", use_container_width=True)
-                        
-                        if save_button:
-                            try:
-                                updated_count = 0
-                                inserted_count = 0
-                                
-                                # Store original transaction IDs to track which rows are updates vs inserts
-                                original_transaction_ids = set()
-                                if transaction_id_col:
-                                    original_transaction_ids = set(edit_results[transaction_id_col].dropna().astype(str))
-                                
-                                # Process each record in the edited data
-                                for idx, row in edited_data.iterrows():
-                                    # Skip the selection column for save operations
-                                    if 'Select' in row:
-                                        row = row.drop('Select')
-                                    
-                                    # Get the transaction ID for this row
-                                    transaction_id = row.get(transaction_id_col) if transaction_id_col else None
+                            # Save and Delete buttons with status
+                            st.markdown("---")
+                            col1, col2, col3 = st.columns([2, 2, 2])
+                            
+                            with col1:
+                                # Show save status
+                                if unsaved_changes_key in st.session_state and st.session_state[unsaved_changes_key]:
+                                    st.warning(f"⚠️ {len(st.session_state[unsaved_changes_key])} unsaved changes")
+                                else:
+                                    st.success("✅ All changes saved")
+                            
+                            with col2:
+                                save_button = st.button("💾 Save All Changes", type="primary", use_container_width=True)
+                            
+                            if save_button:
+                                    try:
+                                        updated_count = 0
+                                        inserted_count = 0
+                                        
+                                        
+                                        # Store original transaction IDs to track which rows are updates vs inserts
+                                        original_transaction_ids = set()
+                                        if transaction_id_col:
+                                            original_transaction_ids = set(edit_results[transaction_id_col].dropna().astype(str))
+                                        
+                                        # Process each record in the edited data
+                                        for idx, row in edited_data.iterrows():
+                                            # Skip the selection column for save operations
+                                            if 'Select' in row:
+                                                row = row.drop('Select')
                                             
-                                    # Check if this is a new row by seeing if the transaction ID exists in original data
-                                    is_new_row = False
-                                    if transaction_id_col:
-                                        # If there's no transaction ID or it's not in the original set, it's new
-                                        if pd.isna(transaction_id) or str(transaction_id).strip() == '' or str(transaction_id) not in original_transaction_ids:
-                                            is_new_row = True
-                                    else:
-                                        # Fallback to index-based check if no transaction ID column
-                                        is_new_row = idx >= len(edit_results)
+                                            # Get the transaction ID for this row
+                                            transaction_id = row.get(transaction_id_col) if transaction_id_col else None
                                             
-                                    if is_new_row:
-                                        # For new rows, generate unique IDs if they're missing
-                                        if transaction_id_col and (pd.isna(transaction_id) or str(transaction_id).strip() == ''):
-                                            transaction_id = generate_transaction_id()
-                                            row[transaction_id_col] = transaction_id
-                                        if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
-                                            # Use existing client ID if searching for a specific client, otherwise generate new
-                                            if existing_client_id:
-                                                row[client_id_col] = existing_client_id
+                                            # Check if this is a new row by seeing if the transaction ID exists in original data
+                                            is_new_row = False
+                                            if transaction_id_col:
+                                                # If there's no transaction ID or it's not in the original set, it's new
+                                                if pd.isna(transaction_id) or str(transaction_id).strip() == '' or str(transaction_id) not in original_transaction_ids:
+                                                    is_new_row = True
                                             else:
-                                                row[client_id_col] = generate_client_id()
+                                                # Fallback to index-based check if no transaction ID column
+                                                is_new_row = idx >= len(edit_results)
+                                            
+                                            if is_new_row:
+                                                # For new rows, generate unique IDs if they're missing
+                                                if transaction_id_col and (pd.isna(transaction_id) or str(transaction_id).strip() == ''):
+                                                    transaction_id = generate_transaction_id()
+                                                    row[transaction_id_col] = transaction_id
+                                                if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
+                                                    # Use existing client ID if searching for a specific client, otherwise generate new
+                                                    if existing_client_id:
+                                                        row[client_id_col] = existing_client_id
+                                                    else:
+                                                        row[client_id_col] = generate_client_id()
+                                            
+                                            # Process all rows
+                                            if is_new_row:
+                                                # INSERT new record
+                                                insert_dict = {}
+                                                for col in edited_data.columns:
+                                                    if col not in ['_id', 'Select']:  # Exclude auto-generated fields and selection column
+                                                        value = row[col]
+                                                        # Clean numeric values
+                                                        if pd.notna(value) and isinstance(value, (int, float)):
+                                                            insert_dict[col] = clean_numeric_value(value)
+                                                        else:
+                                                            insert_dict[col] = value if pd.notna(value) else None
+                                                
+                                                try:
+                                                    # Clean data before insertion
+                                                    cleaned_insert = clean_data_for_database(insert_dict)
+                                                    supabase.table('policies').insert(cleaned_insert).execute()
+                                                    inserted_count += 1
+                                                except Exception as insert_error:
+                                                    st.error(f"Error inserting new record: {insert_error}")
+                                            elif transaction_id:  # Only update if we have a transaction ID
+                                                # UPDATE existing record
+                                                update_dict = {}
+                                                for col in edited_data.columns:
+                                                    if col not in ['_id', 'Select', transaction_id_col]:  # Don't update ID field or selection column
+                                                        value = row[col]
+                                                        # Clean numeric values
+                                                        if pd.notna(value) and isinstance(value, (int, float)):
+                                                            update_dict[col] = clean_numeric_value(value)
+                                                        else:
+                                                            update_dict[col] = value if pd.notna(value) else None
+                                                
+                                                try:
+                                                    supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                                    updated_count += 1
+                                                except Exception as update_error:
+                                                    st.error(f"Error updating record: {update_error}")
+                                            else:
+                                                # This shouldn't happen, but log it if it does
+                                                st.warning(f"Skipped row {idx} - existing row but no transaction ID found")
+                                        
+                                        # Clear cache and show success message
+                                        clear_policies_cache()
+                                        
+                                        if inserted_count > 0 and updated_count > 0:
+                                            st.success(f"Successfully inserted {inserted_count} new records and updated {updated_count} existing records!")
+                                        elif inserted_count > 0:
+                                            st.success(f"Successfully inserted {inserted_count} new records!")
+                                        elif updated_count > 0:
+                                            st.success(f"Successfully updated {updated_count} records!")
+                                        else:
+                                            st.info("No changes were made.")
+                                        
+                                        st.rerun()
+                                        
+                                        # Clear unsaved changes after successful save
+                                        if unsaved_changes_key in st.session_state:
+                                            del st.session_state[unsaved_changes_key]
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error saving changes: {e}")
+                            
+                            with col3:
+                                if st.button("🔄 Refresh Data", use_container_width=True):
+                                    # Clear session state and refresh
+                                    if unsaved_changes_key in st.session_state:
+                                        del st.session_state[unsaved_changes_key]
+                                    st.rerun()
+                            
+                            # Modal Form Implementation for Edit
+                            if st.session_state.get('show_edit_modal', False):
+                                # Create a modal-like overlay
+                                st.markdown("---")
+                                st.markdown("### 📝 Edit Transaction")
+                                
+                                modal_data = st.session_state.get('edit_modal_data', {})
+                                
+                                # Add an anchor point to prevent scroll jumping
+                                st.empty()  # This helps maintain scroll position
+                                
+                                # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
+                                st.subheader("Carrier & MGA Selection 🏢")
+                                st.info("💡 Select carrier first to see available MGAs. This will auto-populate commission rates.")
+                                
+                                # Get current values from modal data
+                                current_carrier = modal_data.get('Carrier Name', '')
+                                current_mga = modal_data.get('MGA Name', '')
+                                
+                                # Load carriers for dropdown
+                                carriers_list = load_carriers_for_dropdown()
+                                
+                                # Use container to better control rendering
+                                carrier_container = st.container()
+                                with carrier_container:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        # Carrier dropdown with search capability
+                                        carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
+                                        
+                                        # Find index of current carrier
+                                        carrier_index = 0
+                                        if current_carrier and current_carrier in carrier_options:
+                                            carrier_index = carrier_options.index(current_carrier)
+                                        
+                                        selected_carrier_name = st.selectbox(
+                                            "Carrier Name*",
+                                            options=carrier_options,
+                                            index=carrier_index,
+                                            format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
+                                            help="Select carrier to auto-populate commission rates",
+                                            key="edit_policy_carrier_outside"
+                                        )
+                                        
+                                        # Get carrier_id for selected carrier
+                                        selected_carrier_id = None
+                                        if selected_carrier_name:
+                                            selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
+                                            st.session_state['edit_selected_carrier_id'] = selected_carrier_id
+                                            st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                                        
+                                        # Fallback text input for manual entry
+                                        if not selected_carrier_name:
+                                            carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
+                                            st.session_state['edit_carrier_name_manual'] = carrier_name_manual
                                     
-                                    # Process all rows
+                                    with col2:
+                                        # MGA dropdown (filtered by carrier) - Updates immediately!
+                                        mga_options = ["Direct Appointment"]
+                                        selected_mga_id = None
+                                        
+                                        if selected_carrier_id:
+                                            mgas_list = load_mgas_for_carrier(selected_carrier_id)
+                                            mga_options.extend([m['mga_name'] for m in mgas_list])
+                                        
+                                        # Find index of current MGA
+                                        mga_index = 0
+                                        if current_mga:
+                                            if current_mga in mga_options:
+                                                mga_index = mga_options.index(current_mga)
+                                            elif "Direct Appointment" in mga_options:
+                                                mga_index = mga_options.index("Direct Appointment")
+                                        
+                                        selected_mga_name = st.selectbox(
+                                            "MGA/Appointment",
+                                            options=mga_options,
+                                            index=mga_index,
+                                            format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
+                                            help="MGA options update automatically when you select a carrier",
+                                            key="edit_policy_mga_outside"
+                                        )
+                                        
+                                        # Get mga_id for selected MGA
+                                        if selected_mga_name != "Direct Appointment" and selected_carrier_id:
+                                            mgas_list = load_mgas_for_carrier(selected_carrier_id) 
+                                            selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
+                                            st.session_state['edit_selected_mga_id'] = selected_mga_id
+                                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                        else:
+                                            st.session_state['edit_selected_mga_id'] = None
+                                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                    
+                                    # Fallback text input for manual entry
+                                    if not selected_carrier_name:
+                                        mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
+                                        st.session_state['edit_mga_name_manual'] = mga_name_manual
+                                
+                                # Store final values for form submission
+                                if selected_carrier_name:
+                                    final_carrier_name = selected_carrier_name
+                                    final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
+                                else:
+                                    final_carrier_name = st.session_state.get('edit_carrier_name_manual', '')
+                                    final_mga_name = st.session_state.get('edit_mga_name_manual', '')
+                                
+                                # Store in session state for form to access
+                                st.session_state['edit_final_carrier_name'] = final_carrier_name
+                                st.session_state['edit_final_mga_name'] = final_mga_name
+                                
+                                # Display selection status and commission info
+                                if selected_carrier_name and selected_carrier_id:
+                                    # Look up commission rule
+                                    commission_rule = None
+                                    policy_type = modal_data.get('Policy Type', '')
+                                    
+                                    if selected_mga_id:
+                                        # Try carrier + MGA + policy type first
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, policy_type)
+                                        if not commission_rule:
+                                            # Try carrier + MGA without policy type
+                                            commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
+                                    
+                                    if not commission_rule:
+                                        # Try carrier + policy type without MGA
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, None, policy_type)
+                                    
+                                    if not commission_rule:
+                                        # Try carrier default
+                                        commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
+                                    
+                                    if commission_rule:
+                                        # Store both rates and let the form decide which to use based on transaction type
+                                        new_rate = commission_rule.get('new_rate', 0)
+                                        renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
+                                        
+                                        st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
+                                        st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
+                                        st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
+                                        
+                                        # Store both rates in session state
+                                        st.session_state['edit_commission_new_rate'] = new_rate
+                                        st.session_state['edit_commission_renewal_rate'] = renewal_rate
+                                        st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
+                                        st.session_state['edit_has_commission_rule'] = True
+                                    else:
+                                        st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
+                                        st.session_state['edit_commission_new_rate'] = None
+                                        st.session_state['edit_commission_renewal_rate'] = None
+                                        st.session_state['edit_commission_rule_id'] = None
+                                        st.session_state['edit_has_commission_rule'] = False
+                                
+                                st.markdown("---")
+                                
+                                # Use the reusable edit transaction form
+                                result = edit_transaction_form(modal_data, source_page="edit_policies")
+                                
+                                if result:
+                                    if result["action"] == "save":
+                                        try:
+                                            # Get transaction ID and _id to determine if this is new or existing
+                                            transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
+                                            record_id = result["data"].get('_id')
+                                            
+                                            # Convert data for database operation
+                                            save_data = result["data"].copy()
+                                            save_data = convert_timestamps_for_json(save_data)
+                                            
+                                            # Handle NaN values
+                                            for key, value in save_data.items():
+                                                if pd.isna(value):
+                                                    save_data[key] = None
+                                            
+                                            # First check if this transaction already exists in the database
+                                            # This handles cases where the record was added inline but doesn't have _id in session state
+                                            existing_record = None
+                                            if transaction_id:
+                                                try:
+                                                    check_response = supabase.table('policies').select('_id').eq(
+                                                        get_mapped_column("Transaction ID"), transaction_id
+                                                    ).execute()
+                                                    if check_response.data and len(check_response.data) > 0:
+                                                        existing_record = check_response.data[0]
+                                                except:
+                                                    pass
+                                            
+                                            # Determine if this is an INSERT or UPDATE
+                                            if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
+                                                # Existing record - UPDATE
+                                                # Remove _id from update data as it shouldn't be updated
+                                                if '_id' in save_data:
+                                                    del save_data['_id']
+                                                
+                                                # For Supabase Python client, we need to specify select parameter in update
+                                                response = supabase.table('policies').update(save_data).eq(
+                                                    get_mapped_column("Transaction ID"), transaction_id
+                                                ).execute()
+                                            else:
+                                                # New record - INSERT
+                                                # Remove _id field to let database auto-generate it
+                                                if '_id' in save_data:
+                                                    del save_data['_id']
+                                                
+                                                # Clean data before insertion
+                                                cleaned_save = clean_data_for_database(save_data)
+                                                response = supabase.table('policies').insert(cleaned_save).execute()
+                                            
+                                            # Check if we have a response - for updates, data might be None but operation succeeded
+                                            # For inserts, we should have data
+                                            if response is not None and (response.data or existing_record or record_id):
+                                                st.success("✅ Transaction updated successfully!")
+                                                clear_policies_cache()
+                                                
+                                                # Clear modal state
+                                                st.session_state['show_edit_modal'] = False
+                                                st.session_state['edit_modal_data'] = None
+                                                
+                                                # Force clear the session state for the editor
+                                                if 'edit_policies_editor' in st.session_state:
+                                                    del st.session_state['edit_policies_editor']
+                                                if 'last_search_edit_policies_editor' in st.session_state:
+                                                    del st.session_state['last_search_edit_policies_editor']
+                                                
+                                                time.sleep(1)
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Update failed - no response from database")
+                                        
+                                        except Exception as e:
+                                            st.error(f"Error updating transaction: {str(e)}")
+                                    
+                                    elif result["action"] == "close" or result["action"] == "cancel":
+                                        # Clear modal state
+                                        st.session_state['show_edit_modal'] = False
+                                        st.session_state['edit_modal_data'] = None
+                                        st.rerun()
+                                
+                                # The old form implementation has been removed and replaced with the reusable function
+                            # Delete functionality moved to bottom
+                            st.divider()
+                            st.subheader("🗑️ Delete Selected Records")
+                            
+                            # Re-check selected rows for delete functionality
+                            selected_rows_for_delete = edited_data[edited_data['Select'] == True].copy()
+                            
+                            # Collect transaction IDs to delete BEFORE any modifications
+                            transaction_ids_to_delete = []
+                            reconciliation_attempts = []
+                            import_attempts = []
+                            if not selected_rows_for_delete.empty and transaction_id_col:
+                                for idx, row in selected_rows_for_delete.iterrows():
+                                    tid = row[transaction_id_col]
+                                    if tid and pd.notna(tid):
+                                        # Check if this is a reconciliation transaction
+                                        if is_reconciliation_transaction(tid):
+                                            reconciliation_attempts.append(str(tid))
+                                        # Check if this is an import-created transaction
+                                        elif is_import_transaction(tid):
+                                            import_attempts.append(str(tid))
+                                        else:
+                                            transaction_ids_to_delete.append(str(tid))
+                            
+                            # Show error if trying to delete reconciliation transactions
+                            if reconciliation_attempts:
+                                st.error(f"🔒 Cannot delete {len(reconciliation_attempts)} reconciliation transaction(s):")
+                                for tid in reconciliation_attempts:
+                                    st.write(f"- {tid}")
+                                st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
+                            
+                            # Show error if trying to delete import-created transactions
+                            if import_attempts:
+                                st.error(f"📥 Cannot delete {len(import_attempts)} import-created transaction(s):")
+                                for tid in import_attempts:
+                                    # Find the customer name for this transaction ID
+                                    customer_row = edited_data[edited_data[transaction_id_col] == tid]
+                                    if not customer_row.empty:
+                                        customer = customer_row.iloc[0].get('Customer', 'Unknown')
+                                        st.write(f"- {tid} - {customer}")
+                                st.info("Import transactions (-IMPORT suffix) contain payment records from statements and cannot be deleted. Complete the premium/commission fields instead.")
+                            
+                            if transaction_ids_to_delete:
+                                st.warning(f"⚠️ You have selected {len(transaction_ids_to_delete)} record(s) for deletion:")
+                                # Show which records are selected
+                                for tid in transaction_ids_to_delete:
+                                    # Find the customer name for this transaction ID
+                                    customer_row = edited_data[edited_data[transaction_id_col] == tid]
+                                    if not customer_row.empty:
+                                        customer = customer_row.iloc[0].get('Customer', 'Unknown')
+                                        st.write(f"- {tid} - {customer}")
+                                
+                                col1, col2 = st.columns([1, 3])
+                                with col1:
+                                    if st.button("🗑️ Confirm Delete", type="secondary"):
+                                        try:
+                                            deleted_count = 0
+                                            # Use the pre-collected transaction IDs
+                                            for tid in transaction_ids_to_delete:
+                                                # Get the full row data for archiving
+                                                row_to_archive = edited_data[edited_data[transaction_id_col] == tid]
+                                                if not row_to_archive.empty:
+                                                    row = row_to_archive.iloc[0]
+                                                    # First, archive the record to deleted_policies table
+                                                    # Convert row to dict, handling NaN values and type conversion
+                                                    policy_dict = {}
+                                                    for col in row.index:
+                                                        if col != 'Select':  # Skip the selection column
+                                                            value = row[col]
+                                                            if pd.notna(value):
+                                                                # Convert to Python native types for JSON serialization
+                                                                if hasattr(value, 'item'):  # numpy scalar
+                                                                    policy_dict[col] = value.item()
+                                                                elif isinstance(value, (int, float, bool, str)):
+                                                                    policy_dict[col] = value
+                                                                else:
+                                                                    policy_dict[col] = str(value)
+                                                            else:
+                                                                policy_dict[col] = None
+                                                    
+                                                    # Create archive record with JSONB structure
+                                                    archive_record = {
+                                                        'transaction_id': tid,
+                                                        'customer_name': row.get('Customer', 'Unknown'),
+                                                        'policy_data': policy_dict
+                                                    }
+                                                    
+                                                    try:
+                                                        # Insert into deleted_policies table
+                                                        supabase.table('deleted_policies').insert(archive_record).execute()
+                                                        
+                                                        # Then delete from main policies table
+                                                        supabase.table('policies').delete().eq(transaction_id_col, tid).execute()
+                                                        deleted_count += 1
+                                                    except Exception as archive_error:
+                                                        st.error(f"Error archiving record {tid}: {archive_error}")
+                                            
+                                            # Clear cache and session state before rerun
+                                            clear_policies_cache()
+                                            
+                                            # Clear the editor session state to force refresh
+                                            if 'edit_policies_editor' in st.session_state:
+                                                del st.session_state['edit_policies_editor']
+                                            if 'edit_policies_editor_widget' in st.session_state:
+                                                del st.session_state['edit_policies_editor_widget']
+                                            if 'last_search_edit_policies_editor' in st.session_state:
+                                                del st.session_state['last_search_edit_policies_editor']
+                                            
+                                            st.success(f"Successfully deleted {deleted_count} records! (Archived for recovery)")
+                                            time.sleep(1)  # Brief pause to show success message
+                                            st.rerun()
+                                            
+                                        except Exception as e:
+                                            st.error(f"Error deleting records: {e}")
+                                with col2:
+                                    st.info("Click 'Confirm Delete' to permanently remove the selected records.")
+                            else:
+                                # Only show error if we haven't already handled the rows as import/reconciliation transactions
+                                if not selected_rows_for_delete.empty and not reconciliation_attempts and not import_attempts and not transaction_id_col:
+                                    st.error("Could not identify transaction IDs for selected rows. Make sure the Transaction ID column is properly identified.")
+                                elif selected_rows_for_delete.empty:
+                                    st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
+                                # If we processed import/reconciliation transactions, don't show any additional message
+                    else:
+                        if show_attention_filter:
+                            # Already showed the success message above
+                            pass
+                        else:
+                            st.warning("No records found matching your search")
+                elif not show_attention_filter:
+                    st.info("Enter a search term to find records to edit")
+            else:
+                st.info("Use the search box above to find policies to edit, or edit all policies below:")
+                
+                # Option to edit all data (with pagination for performance)
+                show_all = st.checkbox("Show all policies for editing (use with caution)")
+                
+                if show_all:
+                    st.warning("Editing all policies at once can be slow with large datasets")
+                    
+                    # Sort by Customer A-Z first, then limit to first 50 records for performance
+                    if 'Customer' in all_data.columns:
+                        all_data_sorted = all_data.sort_values(by='Customer', ascending=True)
+                        edit_all_data = all_data_sorted.head(50)
+                    else:
+                        edit_all_data = all_data.head(50)
+                    st.write(f"Showing first 50 records for editing out of {len(all_data)} total (sorted by Customer A-Z)")
+                    
+                    # Find the actual column names dynamically
+                    transaction_id_col = None
+                    client_id_col = None
+                    for col in edit_all_data.columns:
+                        if 'transaction' in col.lower() and 'id' in col.lower():
+                            transaction_id_col = col
+                        if 'client' in col.lower() and 'id' in col.lower():
+                            client_id_col = col
+                    
+                    # Try minimal column config to see if it helps with sorting
+                    edited_all_data = st.data_editor(
+                        edit_all_data,
+                        use_container_width=True,
+                        height=500,
+                        key="edit_all_policies_editor",
+                        num_rows="dynamic",
+                        disabled=['_id'] if '_id' in edit_all_data.columns else []  # Only disable _id column
+                    )
+                    
+                    if st.button("💾 Save Changes", key="save_all_edits"):
+                        try:
+                            updated_count = 0
+                            inserted_count = 0
+                            
+                            for idx, row in edited_all_data.iterrows():
+                                # Check if this is a new row
+                                is_new_row = idx >= len(edit_all_data)
+                                
+                                if is_new_row:
+                                    # For new rows, generate unique IDs if they're missing
+                                    if transaction_id_col and (pd.isna(row[transaction_id_col]) or str(row[transaction_id_col]).strip() == ''):
+                                        row[transaction_id_col] = generate_transaction_id()
+                                    if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
+                                        row[client_id_col] = generate_client_id()
+                                
+                                # Get the transaction ID for processing
+                                transaction_id = row.get(transaction_id_col) if transaction_id_col else None
+                                
+                                if transaction_id:
+                                    
                                     if is_new_row:
                                         # INSERT new record
                                         insert_dict = {}
-                                        for col in edited_data.columns:
-                                            if col not in ['_id', 'Select']:  # Exclude auto-generated fields and selection column
-                                                value = row[col]
-                                                # Clean numeric values
-                                                if pd.notna(value) and isinstance(value, (int, float)):
-                                                    insert_dict[col] = clean_numeric_value(value)
-                                                else:
-                                                    insert_dict[col] = value if pd.notna(value) else None
-                                                
+                                        for col in edited_all_data.columns:
+                                            if col not in ['_id']:  # Exclude auto-generated fields
+                                                insert_dict[col] = row[col] if pd.notna(row[col]) else None
+                                        
                                         try:
                                             # Clean data before insertion
                                             cleaned_insert = clean_data_for_database(insert_dict)
@@ -5218,511 +5718,35 @@ def main():
                                             inserted_count += 1
                                         except Exception as insert_error:
                                             st.error(f"Error inserting new record: {insert_error}")
-                                    elif transaction_id:  # Only update if we have a transaction ID
+                                    else:
                                         # UPDATE existing record
                                         update_dict = {}
-                                        for col in edited_data.columns:
-                                            if col not in ['_id', 'Select', transaction_id_col]:  # Don't update ID field or selection column
-                                                value = row[col]
-                                                # Clean numeric values
-                                                if pd.notna(value) and isinstance(value, (int, float)):
-                                                    update_dict[col] = clean_numeric_value(value)
-                                                else:
-                                                    update_dict[col] = value if pd.notna(value) else None
-                                                
+                                        for col in edited_all_data.columns:
+                                            if col not in ['_id', transaction_id_col]:  # Don't update the ID field itself
+                                                update_dict[col] = row[col] if pd.notna(row[col]) else None
+                                        
                                         try:
                                             supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
                                             updated_count += 1
                                         except Exception as update_error:
                                             st.error(f"Error updating record: {update_error}")
-                                    else:
-                                        # This shouldn't happen, but log it if it does
-                                        st.warning(f"Skipped row {idx} - existing row but no transaction ID found")
-                                        
-                                # Clear cache and show success message
-                                clear_policies_cache()
-                                
-                                if inserted_count > 0 and updated_count > 0:
-                                    st.success(f"Successfully inserted {inserted_count} new records and updated {updated_count} existing records!")
-                                elif inserted_count > 0:
-                                    st.success(f"Successfully inserted {inserted_count} new records!")
-                                elif updated_count > 0:
-                                    st.success(f"Successfully updated {updated_count} records!")
-                                else:
-                                    st.info("No changes were made.")
-                                
-                                st.rerun()
-                                
-                                # Clear unsaved changes after successful save
-                                if unsaved_changes_key in st.session_state:
-                                    del st.session_state[unsaved_changes_key]
-                                
-                            except Exception as e:
-                                st.error(f"Error saving changes: {e}")
                             
-                        with col3:
-                            if st.button("🔄 Refresh Data", use_container_width=True):
-                                # Clear session state and refresh
-                                if unsaved_changes_key in st.session_state:
-                                    del st.session_state[unsaved_changes_key]
-                                st.rerun()
-                        
-                        # Modal Form Implementation for Edit
-                        if st.session_state.get('show_edit_modal', False):
-                            # Create a modal-like overlay
-                            st.markdown("---")
-                            st.markdown("### 📝 Edit Transaction")
-                                
-                            modal_data = st.session_state.get('edit_modal_data', {})
-                                
-                            # Add an anchor point to prevent scroll jumping
-                            st.empty()  # This helps maintain scroll position
+                            # Clear cache and show success message
+                            clear_policies_cache()
                             
-                            # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
-                            st.subheader("Carrier & MGA Selection 🏢")
-                            st.info("💡 Select carrier first to see available MGAs. This will auto-populate commission rates.")
-                                
-                            # Get current values from modal data
-                            current_carrier = modal_data.get('Carrier Name', '')
-                            current_mga = modal_data.get('MGA Name', '')
-                            
-                            # Load carriers for dropdown
-                            carriers_list = load_carriers_for_dropdown()
-                            
-                            # Use container to better control rendering
-                            carrier_container = st.container()
-                            with carrier_container:
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    # Carrier dropdown with search capability
-                                    carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
-                                    
-                                    # Find index of current carrier
-                                    carrier_index = 0
-                                    if current_carrier and current_carrier in carrier_options:
-                                        carrier_index = carrier_options.index(current_carrier)
-                                    
-                                    selected_carrier_name = st.selectbox(
-                                        "Carrier Name*",
-                                        options=carrier_options,
-                                        index=carrier_index,
-                                        format_func=lambda x: "🔍 Select or search carrier..." if x == "" else f"🏢 {x}",
-                                        help="Select carrier to auto-populate commission rates",
-                                        key="edit_policy_carrier_outside"
-                                    )
-                                    
-                                    # Get carrier_id for selected carrier
-                                    selected_carrier_id = None
-                                    if selected_carrier_name:
-                                        selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
-                                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
-                                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
-                                    
-                                    # Fallback text input for manual entry
-                                    if not selected_carrier_name:
-                                        carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
-                                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
-                                
-                                with col2:
-                                    # MGA dropdown (filtered by carrier) - Updates immediately!
-                                    mga_options = ["Direct Appointment"]
-                                    selected_mga_id = None
-                                    
-                                    if selected_carrier_id:
-                                        mgas_list = load_mgas_for_carrier(selected_carrier_id)
-                                        mga_options.extend([m['mga_name'] for m in mgas_list])
-                                    
-                                    # Find index of current MGA
-                                    mga_index = 0
-                                    if current_mga:
-                                        if current_mga in mga_options:
-                                            mga_index = mga_options.index(current_mga)
-                                        elif "Direct Appointment" in mga_options:
-                                            mga_index = mga_options.index("Direct Appointment")
-                                    
-                                    selected_mga_name = st.selectbox(
-                                        "MGA/Appointment",
-                                        options=mga_options,
-                                        index=mga_index,
-                                        format_func=lambda x: f"🤝 {x}" if x != "Direct Appointment" else "🏢 Direct Appointment",
-                                        help="MGA options update automatically when you select a carrier",
-                                        key="edit_policy_mga_outside"
-                                    )
-                                    
-                                    # Get mga_id for selected MGA
-                                    if selected_mga_name != "Direct Appointment" and selected_carrier_id:
-                                        mgas_list = load_mgas_for_carrier(selected_carrier_id) 
-                                        selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
-                                        st.session_state['edit_selected_mga_id'] = selected_mga_id
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
-                                    else:
-                                        st.session_state['edit_selected_mga_id'] = None
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
-                                
-                                # Fallback text input for manual entry
-                                if not selected_carrier_name:
-                                    mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
-                                    st.session_state['edit_mga_name_manual'] = mga_name_manual
-                            
-                            # Store final values for form submission
-                            if selected_carrier_name:
-                                final_carrier_name = selected_carrier_name
-                                final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
+                            if inserted_count > 0 and updated_count > 0:
+                                st.success(f"Successfully inserted {inserted_count} new records and updated {updated_count} existing records!")
+                            elif inserted_count > 0:
+                                st.success(f"Successfully inserted {inserted_count} new records!")
+                            elif updated_count > 0:
+                                st.success(f"Successfully updated {updated_count} records!")
                             else:
-                                final_carrier_name = st.session_state.get('edit_carrier_name_manual', '')
-                                final_mga_name = st.session_state.get('edit_mga_name_manual', '')
+                                st.info("No changes were made.")
                             
-                            # Store in session state for form to access
-                            st.session_state['edit_final_carrier_name'] = final_carrier_name
-                            st.session_state['edit_final_mga_name'] = final_mga_name
+                            st.rerun()
                             
-                            # Display selection status and commission info
-                            if selected_carrier_name and selected_carrier_id:
-                                # Look up commission rule
-                                commission_rule = None
-                                policy_type = modal_data.get('Policy Type', '')
-                                
-                                if selected_mga_id:
-                                    # Try carrier + MGA + policy type first
-                                    commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, policy_type)
-                                    if not commission_rule:
-                                        # Try carrier + MGA without policy type
-                                        commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
-                                
-                                if not commission_rule:
-                                    # Try carrier + policy type without MGA
-                                    commission_rule = lookup_commission_rule(selected_carrier_id, None, policy_type)
-                                
-                                if not commission_rule:
-                                    # Try carrier default
-                                    commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
-                                
-                                if commission_rule:
-                                    # Store both rates and let the form decide which to use based on transaction type
-                                    new_rate = commission_rule.get('new_rate', 0)
-                                    renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
-                                    
-                                    st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
-                                    st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
-                                    st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
-                                    
-                                    # Store both rates in session state
-                                    st.session_state['edit_commission_new_rate'] = new_rate
-                                    st.session_state['edit_commission_renewal_rate'] = renewal_rate
-                                    st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
-                                    st.session_state['edit_has_commission_rule'] = True
-                                else:
-                                    st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
-                                    st.session_state['edit_commission_new_rate'] = None
-                                    st.session_state['edit_commission_renewal_rate'] = None
-                                    st.session_state['edit_commission_rule_id'] = None
-                                    st.session_state['edit_has_commission_rule'] = False
-                            
-                            st.markdown("---")
-                            
-                            # Use the reusable edit transaction form
-                            result = edit_transaction_form(modal_data, source_page="edit_policies")
-                            
-                            if result:
-                                if result["action"] == "save":
-                                    try:
-                                        # Get transaction ID and _id to determine if this is new or existing
-                                        transaction_id = result["data"].get(get_mapped_column("Transaction ID"))
-                                        record_id = result["data"].get('_id')
-                                        
-                                        # Convert data for database operation
-                                        save_data = result["data"].copy()
-                                        save_data = convert_timestamps_for_json(save_data)
-                                        
-                                        # Handle NaN values
-                                        for key, value in save_data.items():
-                                            if pd.isna(value):
-                                                save_data[key] = None
-                                        
-                                        # First check if this transaction already exists in the database
-                                        # This handles cases where the record was added inline but doesn't have _id in session state
-                                        existing_record = None
-                                        if transaction_id:
-                                            try:
-                                                check_response = supabase.table('policies').select('_id').eq(
-                                                    get_mapped_column("Transaction ID"), transaction_id
-                                                ).execute()
-                                                if check_response.data and len(check_response.data) > 0:
-                                                    existing_record = check_response.data[0]
-                                            except:
-                                                pass
-                                        
-                                        # Determine if this is an INSERT or UPDATE
-                                        if existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
-                                            # Existing record - UPDATE
-                                            # Remove _id from update data as it shouldn't be updated
-                                            if '_id' in save_data:
-                                                del save_data['_id']
-                                            
-                                            # For Supabase Python client, we need to specify select parameter in update
-                                            response = supabase.table('policies').update(save_data).eq(
-                                                get_mapped_column("Transaction ID"), transaction_id
-                                            ).execute()
-                                        else:
-                                            # New record - INSERT
-                                            # Remove _id field to let database auto-generate it
-                                            if '_id' in save_data:
-                                                del save_data['_id']
-                                            
-                                            # Clean data before insertion
-                                            cleaned_save = clean_data_for_database(save_data)
-                                            response = supabase.table('policies').insert(cleaned_save).execute()
-                                        
-                                        # Check if we have a response - for updates, data might be None but operation succeeded
-                                        # For inserts, we should have data
-                                        if response is not None and (response.data or existing_record or record_id):
-                                            st.success("✅ Transaction updated successfully!")
-                                            clear_policies_cache()
-                                            
-                                            # Clear modal state
-                                            st.session_state['show_edit_modal'] = False
-                                            st.session_state['edit_modal_data'] = None
-                                            
-                                            # Force clear the session state for the editor
-                                            if 'edit_policies_editor' in st.session_state:
-                                                del st.session_state['edit_policies_editor']
-                                            if 'last_search_edit_policies_editor' in st.session_state:
-                                                del st.session_state['last_search_edit_policies_editor']
-                                            
-                                            time.sleep(1)
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ Update failed - no response from database")
-                                    
-                                    except Exception as e:
-                                        st.error(f"Error updating transaction: {str(e)}")
-                                
-                                elif result["action"] == "close" or result["action"] == "cancel":
-                                    # Clear modal state
-                                    st.session_state['show_edit_modal'] = False
-                                    st.session_state['edit_modal_data'] = None
-                                    st.rerun()
-                            
-                            # The old form implementation has been removed and replaced with the reusable function
-                        # Delete functionality moved to bottom
-                        st.divider()
-                        st.subheader("🗑️ Delete Selected Records")
-                        
-                        # Re-check selected rows for delete functionality
-                        selected_rows_for_delete = edited_data[edited_data['Select'] == True].copy()
-                        
-                        # Collect transaction IDs to delete BEFORE any modifications
-                        transaction_ids_to_delete = []
-                        reconciliation_attempts = []
-                        if not selected_rows_for_delete.empty and transaction_id_col:
-                            for idx, row in selected_rows_for_delete.iterrows():
-                                tid = row[transaction_id_col]
-                                if tid and pd.notna(tid):
-                                    # Check if this is a reconciliation transaction
-                                    if is_reconciliation_transaction(tid):
-                                        reconciliation_attempts.append(str(tid))
-                                    # IMPORT transactions can now be deleted - add them to delete list
-                                    else:
-                                        transaction_ids_to_delete.append(str(tid))
-                        
-                        # Show error if trying to delete reconciliation transactions
-                        if reconciliation_attempts:
-                            st.error(f"🔒 Cannot delete {len(reconciliation_attempts)} reconciliation transaction(s):")
-                            for tid in reconciliation_attempts:
-                                st.write(f"- {tid}")
-                            st.info("Reconciliation entries (-STMT-, -VOID-, -ADJ-) are permanent audit records. Use the Reconciliation page to create adjustments if needed.")
-                        
-                        if transaction_ids_to_delete:
-                            st.warning(f"⚠️ You have selected {len(transaction_ids_to_delete)} record(s) for deletion:")
-                            # Check if any are IMPORT transactions
-                            import_count = sum(1 for tid in transaction_ids_to_delete if '-IMPORT' in str(tid))
-                            if import_count > 0:
-                                st.info(f"ℹ️ Note: {import_count} of these are IMPORT transactions that can now be deleted.")
-                            # Show which records are selected
-                            for tid in transaction_ids_to_delete:
-                                # Find the customer name for this transaction ID
-                                customer_row = edited_data[edited_data[transaction_id_col] == tid]
-                                if not customer_row.empty:
-                                    customer = customer_row.iloc[0].get('Customer', 'Unknown')
-                                    st.write(f"- {tid} - {customer}")
-                            
-                            col1, col2 = st.columns([1, 3])
-                            with col1:
-                                if st.button("🗑️ Confirm Delete", type="secondary"):
-                                    try:
-                                        deleted_count = 0
-                                        # Use the pre-collected transaction IDs
-                                        for tid in transaction_ids_to_delete:
-                                            # Get the full row data for archiving
-                                            row_to_archive = edited_data[edited_data[transaction_id_col] == tid]
-                                            if not row_to_archive.empty:
-                                                row = row_to_archive.iloc[0]
-                                                # First, archive the record to deleted_policies table
-                                                # Convert row to dict, handling NaN values and type conversion
-                                                policy_dict = {}
-                                                for col in row.index:
-                                                    if col != 'Select':  # Skip the selection column
-                                                        value = row[col]
-                                                        if pd.notna(value):
-                                                            # Convert to Python native types for JSON serialization
-                                                            if hasattr(value, 'item'):  # numpy scalar
-                                                                policy_dict[col] = value.item()
-                                                            elif isinstance(value, (int, float, bool, str)):
-                                                                policy_dict[col] = value
-                                                            else:
-                                                                policy_dict[col] = str(value)
-                                                        else:
-                                                            policy_dict[col] = None
-                                                
-                                                # Create archive record with JSONB structure
-                                                archive_record = {
-                                                    'transaction_id': tid,
-                                                    'customer_name': row.get('Customer', 'Unknown'),
-                                                    'policy_data': policy_dict
-                                                }
-                                                
-                                                try:
-                                                    # Insert into deleted_policies table
-                                                    supabase.table('deleted_policies').insert(archive_record).execute()
-                                                    
-                                                    # Then delete from main policies table
-                                                    supabase.table('policies').delete().eq(transaction_id_col, tid).execute()
-                                                    deleted_count += 1
-                                                except Exception as archive_error:
-                                                    st.error(f"Error archiving record {tid}: {archive_error}")
-                                        
-                                        # Clear cache and session state before rerun
-                                        clear_policies_cache()
-                                        
-                                        # Clear the editor session state to force refresh
-                                        if 'edit_policies_editor' in st.session_state:
-                                            del st.session_state['edit_policies_editor']
-                                        if 'edit_policies_editor_widget' in st.session_state:
-                                            del st.session_state['edit_policies_editor_widget']
-                                        if 'last_search_edit_policies_editor' in st.session_state:
-                                            del st.session_state['last_search_edit_policies_editor']
-                                        
-                                        st.success(f"Successfully deleted {deleted_count} records! (Archived for recovery)")
-                                        time.sleep(1)  # Brief pause to show success message
-                                        st.rerun()
-                                        
-                                    except Exception as e:
-                                        st.error(f"Error deleting records: {e}")
-                            with col2:
-                                st.info("Click 'Confirm Delete' to permanently remove the selected records.")
-                        else:
-                            # Only show error if we haven't already handled the rows as reconciliation transactions
-                            if not selected_rows_for_delete.empty and not reconciliation_attempts and not transaction_id_col:
-                                st.error("Could not identify transaction IDs for selected rows. Make sure the Transaction ID column is properly identified.")
-                            elif selected_rows_for_delete.empty:
-                                st.info("Check the 'Select' checkbox in the data editor above to select rows for deletion.")
-                            # If we processed reconciliation transactions, don't show any additional message
-                else:
-                    if show_attention_filter:
-                        # Already showed the success message above
-                        pass
-                    else:
-                        st.warning("No records found matching your search")
-            else:
-                st.info("Use the search box above to find policies to edit, or edit all policies below:")
-            
-            # Option to edit all data (with pagination for performance)
-            show_all = st.checkbox("Show all policies for editing (use with caution)")
-            
-            if show_all:
-                st.warning("Editing all policies at once can be slow with large datasets")
-                
-                # Sort by Customer A-Z first, then limit to first 50 records for performance
-                if 'Customer' in all_data.columns:
-                    all_data_sorted = all_data.sort_values(by='Customer', ascending=True)
-                    edit_all_data = all_data_sorted.head(50)
-                else:
-                    edit_all_data = all_data.head(50)
-                st.write(f"Showing first 50 records for editing out of {len(all_data)} total (sorted by Customer A-Z)")
-                
-                # Find the actual column names dynamically
-                transaction_id_col = None
-                client_id_col = None
-                for col in edit_all_data.columns:
-                    if 'transaction' in col.lower() and 'id' in col.lower():
-                        transaction_id_col = col
-                    if 'client' in col.lower() and 'id' in col.lower():
-                        client_id_col = col
-                
-                # Try minimal column config to see if it helps with sorting
-                edited_all_data = st.data_editor(
-                    edit_all_data,
-                    use_container_width=True,
-                        height=500,
-                        key="edit_all_policies_editor",
-                        num_rows="dynamic",
-                        disabled=['_id'] if '_id' in edit_all_data.columns else []  # Only disable _id column
-                    )
-                
-                if st.button("💾 Save Changes", key="save_all_edits"):
-                    try:
-                        updated_count = 0
-                        inserted_count = 0
-                        
-                        for idx, row in edited_all_data.iterrows():
-                            # Check if this is a new row
-                            is_new_row = idx >= len(edit_all_data)
-                            
-                            if is_new_row:
-                                # For new rows, generate unique IDs if they're missing
-                                if transaction_id_col and (pd.isna(row[transaction_id_col]) or str(row[transaction_id_col]).strip() == ''):
-                                    row[transaction_id_col] = generate_transaction_id()
-                                if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
-                                    row[client_id_col] = generate_client_id()
-                            
-                            # Get the transaction ID for processing
-                            transaction_id = row.get(transaction_id_col) if transaction_id_col else None
-                            
-                            if transaction_id:
-                                
-                                if is_new_row:
-                                    # INSERT new record
-                                    insert_dict = {}
-                                    for col in edited_all_data.columns:
-                                        if col not in ['_id']:  # Exclude auto-generated fields
-                                            insert_dict[col] = row[col] if pd.notna(row[col]) else None
-                                    
-                                    try:
-                                        # Clean data before insertion
-                                        cleaned_insert = clean_data_for_database(insert_dict)
-                                        supabase.table('policies').insert(cleaned_insert).execute()
-                                        inserted_count += 1
-                                    except Exception as insert_error:
-                                        st.error(f"Error inserting new record: {insert_error}")
-                                else:
-                                    # UPDATE existing record
-                                    update_dict = {}
-                                    for col in edited_all_data.columns:
-                                        if col not in ['_id', transaction_id_col]:  # Don't update the ID field itself
-                                            update_dict[col] = row[col] if pd.notna(row[col]) else None
-                                    
-                                    try:
-                                        supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
-                                        updated_count += 1
-                                    except Exception as update_error:
-                                        st.error(f"Error updating record: {update_error}")
-                        
-                        # Clear cache and show success message
-                        clear_policies_cache()
-                        
-                        if inserted_count > 0 and updated_count > 0:
-                            st.success(f"Successfully inserted {inserted_count} new records and updated {updated_count} existing records!")
-                        elif inserted_count > 0:
-                            st.success(f"Successfully inserted {inserted_count} new records!")
-                        elif updated_count > 0:
-                            st.success(f"Successfully updated {updated_count} records!")
-                        else:
-                            st.info("No changes were made.")
-                        
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"Error saving changes: {e}")
+                        except Exception as e:
+                            st.error(f"Error saving changes: {e}")
     
     # --- Add New Policy Transaction ---
     elif page == "Add New Policy Transaction":
@@ -5862,41 +5886,9 @@ def main():
         st.session_state['final_carrier_name'] = final_carrier_name
         st.session_state['final_mga_name'] = final_mga_name
         
-        # Display selection status and commission info
-        if selected_carrier_name and selected_carrier_id:
+        # Display selection status
+        if selected_carrier_name:
             st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name}")
-            
-            # Look up commission rule
-            commission_rule = None
-            
-            if selected_mga_id:
-                # Try carrier + MGA first
-                commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
-            
-            if not commission_rule:
-                # Try carrier default
-                commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
-            
-            if commission_rule:
-                # Store both rates and let the form decide which to use based on transaction type
-                new_rate = commission_rule.get('new_rate', 0)
-                renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
-                
-                st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
-                st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
-                st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
-                
-                # Store both rates in session state
-                st.session_state['commission_new_rate'] = new_rate
-                st.session_state['commission_renewal_rate'] = renewal_rate
-                st.session_state['commission_rule_id'] = commission_rule.get('rule_id')
-                st.session_state['has_commission_rule'] = True
-            else:
-                st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
-                st.session_state['commission_new_rate'] = None
-                st.session_state['commission_renewal_rate'] = None
-                st.session_state['commission_rule_id'] = None
-                st.session_state['has_commission_rule'] = False
         
         st.markdown("---")
         
@@ -6061,49 +6053,49 @@ def main():
             # Commission Details Section (Enhanced with Auto-Population)
             st.subheader("Commission Details 💰")
             
-            # Use commission rule from session state if available
+            # Look up commission rule if carrier is selected
             applied_rule = None
             suggested_rate = 10.0  # Default fallback
             rule_info_text = "Manual entry (no carrier selected)"
             
-            # Check if we have commission rates from session state (set during carrier selection)
-            has_rule = st.session_state.get('has_commission_rule', False)
-            
-            if has_rule and selected_carrier_id:
-                # Get rates from session state
-                new_rate = st.session_state.get('commission_new_rate', 10.0)
-                renewal_rate = st.session_state.get('commission_renewal_rate', new_rate)
-                rule_id = st.session_state.get('commission_rule_id')
+            if selected_carrier_id:
+                # Look up commission rule - don't pass transaction type, we'll determine rate here
+                commission_rule = lookup_commission_rule(
+                    carrier_id=selected_carrier_id,
+                    mga_id=selected_mga_id,
+                    policy_type=policy_type
+                )
                 
-                # Apply Prior Policy Number logic
-                if transaction_type == 'NEW':
-                    # NEW transactions always use new rate
-                    suggested_rate = new_rate
-                    rule_info_text = f"✅ New business rate - {new_rate}%"
-                elif transaction_type == 'RWL':
-                    # RWL transactions always use renewal rate
-                    suggested_rate = renewal_rate
-                    rule_info_text = f"✅ Renewal rate - {renewal_rate}%"
-                else:
-                    # For all other transaction types, check Prior Policy Number
-                    if prior_policy_number and str(prior_policy_number).strip():
-                        # Has prior policy = this is a renewal policy
-                        suggested_rate = renewal_rate
-                        rule_info_text = f"✅ Renewal rate (Has Prior Policy: {prior_policy_number}) - {renewal_rate}%"
-                    else:
-                        # No prior policy = this is a new policy
+                if commission_rule:
+                    # Determine which rate to use based on transaction type and prior policy
+                    new_rate = commission_rule.get('new_rate', 10.0)
+                    renewal_rate = commission_rule.get('renewal_rate', new_rate)
+                    
+                    # Apply Prior Policy Number logic
+                    if transaction_type == 'NEW':
+                        # NEW transactions always use new rate
                         suggested_rate = new_rate
-                        rule_info_text = f"✅ New business rate (No Prior Policy) - {new_rate}%"
-                
-                applied_rule = {
-                    'rule_id': rule_id,
-                    'new_rate': new_rate,
-                    'renewal_rate': renewal_rate,
-                    'rate_to_use': suggested_rate
-                }
-            elif selected_carrier_id:
-                rule_info_text = f"⚠️ No rule found for {final_carrier_name} - using manual entry"
-                applied_rule = None
+                        rule_info_text = f"✅ New business rate from: {commission_rule['rule_description']} - {new_rate}%"
+                    elif transaction_type == 'RWL':
+                        # RWL transactions always use renewal rate
+                        suggested_rate = renewal_rate
+                        rule_info_text = f"✅ Renewal rate from: {commission_rule['rule_description']} - {renewal_rate}%"
+                    else:
+                        # For all other transaction types, check Prior Policy Number
+                        if prior_policy_number and str(prior_policy_number).strip():
+                            # Has prior policy = this is a renewal policy
+                            suggested_rate = renewal_rate
+                            rule_info_text = f"✅ Renewal rate (Has Prior Policy: {prior_policy_number}) from: {commission_rule['rule_description']} - {renewal_rate}%"
+                        else:
+                            # No prior policy = this is a new policy
+                            suggested_rate = new_rate
+                            rule_info_text = f"✅ New business rate (No Prior Policy) from: {commission_rule['rule_description']} - {new_rate}%"
+                    
+                    applied_rule = commission_rule
+                    applied_rule['rate_to_use'] = suggested_rate
+                else:
+                    rule_info_text = f"⚠️ No rule found for {final_carrier_name} - using manual entry"
+                    applied_rule = None
             
             # Rule application info
             st.info(f"**Applied Rule:** {rule_info_text}")
@@ -6243,9 +6235,9 @@ def main():
                             "Prior Policy Number": prior_policy_number if prior_policy_number else None,
                             "Transaction Type": transaction_type,
                             "Policy Term": policy_term,  # Add Policy Term
-                            "Policy Origination Date": policy_orig_date.strftime('%Y-%m-%d'),  # Changed to YYYY-MM-DD
-                            "Effective Date": effective_date.strftime('%Y-%m-%d'),  # Changed to YYYY-MM-DD
-                            "X-DATE": x_date.strftime('%Y-%m-%d'),  # Changed to YYYY-MM-DD
+                            "Policy Origination Date": policy_orig_date.strftime('%m/%d/%Y'),
+                            "Effective Date": effective_date.strftime('%m/%d/%Y'),
+                            "X-DATE": x_date.strftime('%m/%d/%Y'),
                             "Policy Checklist Complete": "Yes" if policy_checklist else "No",
                             "Premium Sold": clean_numeric_value(premium_for_calculation),
                             "Policy Taxes & Fees": clean_numeric_value(policy_taxes_fees),
@@ -10191,6 +10183,7 @@ SOLUTION NEEDED:
                                     
                                     # Check for NEW transaction
                                     new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
+                                    st.caption(f"Debug: Found {len(new_transactions)} NEW transactions")
                                     if len(new_transactions) > 1:
                                         # Multiple NEW transactions warning
                                         return None, "Multiple NEW transactions found"
@@ -10851,47 +10844,6 @@ SOLUTION NEEDED:
             
             st.divider()
             
-            # Policy Audit Strategy
-            st.write("**🔍 Policy Audit Strategy**")
-            with st.expander("📋 How to Audit Your Policy Records Efficiently", expanded=False):
-                st.markdown("""
-                ## Start with the Policy Revenue Ledger Reports page - it's your best friend!
-
-                ### 1. **Attack in Order of Priority**
-                Use the new balance filter to break it down:
-                - **First**: Filter for "Positive Balance Only" - these are policies where you're owed money
-                - **Second**: Filter for "Negative Balance Only" - these are potential overpayments to investigate
-                - **Third**: Filter for "Zero Balance Only" - just to verify these look correct
-
-                ### 2. **Use the Search Function Strategically**
-                - Search by date ranges to audit month by month
-
-                ### 3. **Look for Red Flags**
-                - Policies with unusually high balances due
-                - Old policies (check Effective Date) that still show balances
-                - Negative balances (overpayments)
-                - Policies missing key data (use "Show Transactions Requiring Attention" on Edit Policies page)
-
-                ### 4. **Create Report Templates**
-                Save different column templates for different audit purposes:
-                - "Payment Audit" template with payment-related columns
-                - "Commission Audit" template with commission calculation columns
-                - "Date Audit" template to check for date inconsistencies
-
-                ### 5. **Export and Work Offline**
-                - Export filtered data to CSV
-                - Use Excel to sort, filter, and add your audit notes
-                - Re-import corrections using the Reconciliation page
-
-                ### 6. **Daily Bite-Sized Approach**
-                - Or: "Today I'll verify all policies with balance > $500"
-                - Or: "Today I'll check all 2024 policies"
-
-                The key is using the filters to break the mountain into small, manageable hills! 🏔️→🏞️
-                """)
-            
-            st.divider()
-            
             # Administrative features
             st.write("**⚙️ Administrative Tools**")
             st.write("- **Admin Panel**: Database management and system tools")
@@ -11185,42 +11137,6 @@ TO "New Column Name";
             with col3:
                 st.metric("Total Balance Due", f"${total_balance:,.2f}")
             
-            # Balance Filter Options
-            st.markdown("### 🔍 Balance Filters")
-            filter_col1, filter_col2, filter_col3 = st.columns(3)
-            
-            # Initialize balance_filter with default value
-            balance_filter = "All Balances"
-            
-            with filter_col1:
-                balance_filter = st.selectbox(
-                    "Show policies with:",
-                    options=[
-                        "All Balances",
-                        "Positive Balance Only (> $0)",
-                        "Zero Balance Only (= $0)", 
-                        "Negative Balance Only (< $0)",
-                        "Non-Zero Balance (≠ $0)"
-                    ],
-                    index=0,
-                    help="Filter policies based on their balance due amount"
-                )
-            
-            # Apply balance filter
-            if balance_filter != "All Balances":
-                if "Policy Balance Due" in working_data.columns:
-                    if balance_filter == "Positive Balance Only (> $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] > 0]
-                    elif balance_filter == "Zero Balance Only (= $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] == 0]
-                    elif balance_filter == "Negative Balance Only (< $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] < 0]
-                    elif balance_filter == "Non-Zero Balance (≠ $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] != 0]
-                    
-                    # Show filtered count
-                    st.info(f"📊 Showing {len(working_data):,} policies matching filter: {balance_filter}")
-            
             # Enhanced Column Selection and Template Management
             st.markdown("### 🔧 Column Selection & Templates")
             
@@ -11421,7 +11337,6 @@ TO "New Column Name";
                     export_metadata = {
                         "Report Generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Report Type": "Policy Revenue Ledger Report",
-                        "Balance Filter": balance_filter,
                         "Total Records": f"{len(working_data):,}",
                         "Selected Columns": f"{len(valid_columns)} columns: {', '.join(valid_columns)}",
                         "Data Aggregation": "Grouped by Policy Number (one row per unique policy)",
@@ -11606,11 +11521,10 @@ TO "New Column Name";
         if not display_df.empty:
             # Format dates to MM/DD/YYYY before displaying
             date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE']
-            # REMOVED: Date formatting to show raw dates as stored in database
-            # for col in date_columns:
-            #     if col in display_df.columns:
-            #         # Convert to datetime, then to string with MM/DD/YYYY format
-            #         display_df[col] = pd.to_datetime(display_df[col], errors='coerce').dt.strftime('%m/%d/%Y')
+            for col in date_columns:
+                if col in display_df.columns:
+                    # Convert to datetime, then to string with MM/DD/YYYY format
+                    display_df[col] = pd.to_datetime(display_df[col], errors='coerce').dt.strftime('%m/%d/%Y')
             
             # Add Edit checkbox column only
             display_df.insert(0, "Edit", False)
@@ -11888,7 +11802,7 @@ TO "New Column Name";
                 if 'expiration_date' in renewal_data:
                     # New effective date is the old expiration date
                     new_effective = pd.to_datetime(renewal_data['expiration_date'])
-                    renewal_data[get_mapped_column("Effective Date")] = new_effective.strftime('%Y-%m-%d')  # Changed to YYYY-MM-DD
+                    renewal_data[get_mapped_column("Effective Date")] = new_effective.strftime('%m/%d/%Y')
                     
                     # Calculate new expiration date based on Policy Term
                     policy_term_col = get_mapped_column("Policy Term")
@@ -11898,16 +11812,16 @@ TO "New Column Name";
                         months_to_add = 6  # Default to 6 months if not specified
                     
                     new_expiration = new_effective + pd.DateOffset(months=months_to_add)
-                    renewal_data[get_mapped_column("X-DATE")] = new_expiration.strftime('%Y-%m-%d')  # Changed to YYYY-MM-DD
+                    renewal_data[get_mapped_column("X-DATE")] = new_expiration.strftime('%m/%d/%Y')
                 
-                # Clear commission fields and NOTES for renewal
+                # Clear commission fields for renewal
                 fields_to_clear = [
                     'Premium Sold', 'Commissionable Premium', 'Commission %', 
                     'Commission $', 'Producer Commission %', 'Producer Commission $',
                     'Override %', 'Override Commission', 'Commission Already Earned',
                     'Commission Already Received', 'Balance Owed', 'Renewal/Bonus Percentage',
                     'Renewal Amount', 'Not Paid/Paid', 'Agent Paid Amount (STMT)',
-                    'Agency Comm Received (STMT)', 'NOTES'  # Added NOTES to clear it
+                    'Agency Comm Received (STMT)'
                 ]
                 for field in fields_to_clear:
                     if field in renewal_data:
