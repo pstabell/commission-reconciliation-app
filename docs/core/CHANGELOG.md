@@ -5,6 +5,44 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.5] - 2025-01-24 - Excel Update Tool and View Toggle
+
+### Added
+- **Excel Update Tool in Tools → Import/Export**
+  - Bulk update existing transactions from modified Excel files
+  - Transaction ID matching ensures only existing records are updated
+  - Selective column updates - only modifies columns present in Excel
+  - Preview shows which transactions and columns will be affected
+  - Progress tracking with real-time status updates
+  - Comprehensive Excel report with summary, details, and error sheets
+  - Both Excel and CSV download options for update reports
+
+- **View Toggle in Policy Revenue Ledger Reports**
+  - Switch between "Aggregated by Policy" and "Detailed Transactions" views
+  - Aggregated view: One row per policy with summed values
+  - Detailed view: All individual transactions with full details
+  - Metrics adjust based on view mode
+  - Context-specific help text for each view
+  - All report features (filters, exports) work with both views
+  - Missing columns (Transaction Type, etc.) now available in detailed view
+
+- **Template Persistence**
+  - Report templates now save to JSON file for persistence
+  - Templates survive page navigation and app restarts
+  - Auto-loads saved templates on page visit
+  - Added prl_templates.json to .gitignore
+
+### Changed
+- **Excel Update Warning**
+  - Clarified that only columns in Excel file are updated
+  - Other database columns remain unchanged
+  - Added visual confirmation of which columns will be modified
+
+### Fixed
+- **Report Templates Not Saving**
+  - Templates now persist in config_files/prl_templates.json
+  - Fixed loss of templates on page navigation
+
 ## [3.8.4] - 2025-07-19 - Balance Filters, Audit Help, and Date Formatting
 
 ### Added

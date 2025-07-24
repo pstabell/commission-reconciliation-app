@@ -216,14 +216,55 @@
 **What it does**: Advanced reporting with templates and customization
 
 **Key Features**:
-- **Policy Aggregation**: One row per policy with totals
-- **Template System**: Save and reuse report configurations
+- **View Toggle**: Switch between aggregated (one row per policy) and detailed (all transactions) views
+- **Policy Aggregation**: One row per policy with totals (in aggregated view)
+- **Transaction Details**: See all individual transactions with types and terms (in detailed view)
+- **Template System**: Save and reuse report configurations (persists between sessions)
 - **Column Selection**: Choose exactly what to display
+- **Balance Filters**: Filter by positive, zero, negative, or non-zero balances
 - **Pagination**: Handle large datasets efficiently
 - **Enhanced Export**: Include report parameters in exports
 
 **Advanced Features**:
-1. **Template Management**: Save, load, edit, and delete report templates
-2. **Quick Presets**: Use predefined column sets (Financial Focus, Basic Info)
-3. **Column Reordering**: Drag and drop to arrange columns
-4. **Metadata Export**: Export includes report parameters and timestamps
+1. **View Mode Selection**: 
+   - Aggregated by Policy: Summary view with one row per policy
+   - Detailed Transactions: All transactions visible for dispute resolution
+2. **Template Management**: Save, load, edit, and delete report templates
+3. **Quick Presets**: Use predefined column sets (Financial Focus, Basic Info)
+4. **Column Reordering**: Drag and drop to arrange columns
+5. **Metadata Export**: Export includes report parameters and timestamps
+
+---
+
+## 🛠️ Tools
+
+**What it does**: Utility functions for data management and calculations
+
+**Key Sections**:
+
+### Data Tools
+- **Commission Calculator**: Quick premium and commission calculations
+- **ID Generators**: Create Client IDs and Transaction IDs
+- **Policy Origination Date Tool**: Bulk populate missing origination dates
+
+### Import/Export Tools
+- **Export Data**: Download all policies as CSV or formatted Excel
+- **Import Data**: Upload CSV or Excel files (validation only)
+- **Update Existing Transactions**: Bulk update from modified Excel files
+
+**NEW - Excel Update Tool**:
+1. **Purpose**: Update multiple existing transactions without creating new ones
+2. **How it works**:
+   - Upload Excel file with Transaction ID column
+   - System matches Transaction IDs to existing records
+   - Preview shows which transactions and columns will be updated
+   - Only columns in your Excel are updated, others remain unchanged
+3. **Safety Features**:
+   - No new transactions created
+   - Preview before committing changes
+   - Detailed error reporting
+   - Excel report with update summary
+4. **Use Cases**:
+   - Bulk corrections after export
+   - Update specific fields across many transactions
+   - Fix data issues discovered in reports
