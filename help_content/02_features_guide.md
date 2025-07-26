@@ -26,6 +26,7 @@
 - **Client Search**: Quickly find and edit specific client data
 - **Pagination**: Browse through client policies 10 at a time
 - **Quick Edit**: Add new transactions for existing clients directly from the dashboard
+- **Visual Indicators**: STMT and VOID transactions are highlighted in blue and red respectively
 
 **How to use**:
 1. Select a client from the dropdown to see their policies
@@ -86,6 +87,9 @@
 
 **Key Features**:
 - **Complete Data View**: See all policies and transactions at once
+- **Visual Transaction Highlighting**: 
+  - STMT transactions display with light blue background
+  - VOID transactions display with light red background
 - **Horizontal Scrolling**: Use browser zoom-out (Ctrl -) to see more columns
 - **Formatted Display**: Currency and date fields are properly formatted
 - **Responsive Height**: Table adjusts to show data efficiently
@@ -94,6 +98,7 @@
 - Use browser zoom-out to see more columns
 - Scroll horizontally for wide tables
 - Use this view to get a complete picture of your data
+- Look for colored rows to identify reconciliation and void entries
 
 ---
 

@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.7] - 2025-01-26 - Special Colors for STMT and VOID Transactions
+
+### Added
+- **Visual Highlighting for STMT and VOID Transactions**
+  - STMT transactions now display with light blue background (#e6f3ff) 
+  - VOID transactions now display with light red background (#ffe6e6)
+  - Applied consistently across all data tables throughout the app
+  - Makes reconciliation and void entries immediately identifiable
+  - Implemented in Dashboard, All Policy Transactions, Reports, Policy Revenue Ledger Reports, and Reconciliation sections
+
+### Changed
+- Added `style_special_transactions()` utility function to apply consistent styling
+- Updated dataframe displays to use styled output where Transaction ID is visible
+
 ## [3.8.6] - 2025-01-25 - Statement Month and X-DATE Filters
 
 ### Added
