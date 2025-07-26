@@ -10944,7 +10944,7 @@ SOLUTION NEEDED:
                 else:
                     with term_col2:
                         st.info("📊 Showing all transactions for this policy")
-            # Define the original ledger columns with visual indicator and financial columns
+            # Define the original ledger columns with visual indicator
             ledger_columns = [
                 "Type",  # New visual indicator column
                 "Transaction ID",
@@ -10953,15 +10953,6 @@ SOLUTION NEEDED:
                 "Credit (Commission Owed)",
                 "Debit (Paid to Agent)",
                 "Transaction Type"
-            ]
-            
-            # Additional financial columns (will be at the far right after Delete column)
-            financial_columns = [
-                "Premium Sold",
-                "Policy Taxes & Fees",
-                "Commissionable Premium",
-                "Broker Fee",
-                "Broker Fee Agent Comm"
             ]
 
             # --- Always include all ledger columns, filling missing with empty values ---
@@ -11011,46 +11002,8 @@ SOLUTION NEEDED:
                     ledger_df["Debit (Paid to Agent)"] = 0.0
                     
                 ledger_df["Transaction Type"] = policy_rows[transaction_type_col] if transaction_type_col in policy_rows.columns else ""
-                
-                # Add financial columns with mapped column names
-                # Premium Sold
-                premium_col = get_mapped_column("Premium Sold") or "Premium Sold"
-                if premium_col in policy_rows.columns:
-                    ledger_df["Premium Sold"] = policy_rows[premium_col]
-                else:
-                    ledger_df["Premium Sold"] = 0.0
-                
-                # Policy Taxes & Fees
-                taxes_col = get_mapped_column("Policy Taxes & Fees") or "Policy Taxes & Fees"
-                if taxes_col in policy_rows.columns:
-                    ledger_df["Policy Taxes & Fees"] = policy_rows[taxes_col]
-                else:
-                    ledger_df["Policy Taxes & Fees"] = 0.0
-                
-                # Commissionable Premium
-                comm_premium_col = get_mapped_column("Commissionable Premium") or "Commissionable Premium"
-                if comm_premium_col in policy_rows.columns:
-                    ledger_df["Commissionable Premium"] = policy_rows[comm_premium_col]
-                else:
-                    ledger_df["Commissionable Premium"] = 0.0
-                
-                # Broker Fee
-                broker_fee_col = get_mapped_column("Broker Fee") or "Broker Fee"
-                if broker_fee_col in policy_rows.columns:
-                    ledger_df["Broker Fee"] = policy_rows[broker_fee_col]
-                else:
-                    ledger_df["Broker Fee"] = 0.0
-                
-                # Broker Fee Agent Comm
-                broker_comm_col = get_mapped_column("Broker Fee Agent Comm") or "Broker Fee Agent Comm"
-                if broker_comm_col in policy_rows.columns:
-                    ledger_df["Broker Fee Agent Comm"] = policy_rows[broker_comm_col]
-                else:
-                    ledger_df["Broker Fee Agent Comm"] = 0.0
-                
-                # Ensure correct column order - combine main columns with financial columns
-                all_ledger_columns = ledger_columns + financial_columns
-                ledger_df = ledger_df[all_ledger_columns]
+                # Ensure correct column order
+                ledger_df = ledger_df[ledger_columns]
                 
                 # Sort by Effective Date (oldest to newest)
                 if "Effective Date" in ledger_df.columns:
@@ -11064,9 +11017,8 @@ SOLUTION NEEDED:
                 # Reset index for clean display
                 ledger_df = ledger_df.reset_index(drop=True)
             else:
-                # If no rows, show empty DataFrame with all columns
-                all_ledger_columns = ledger_columns + financial_columns
-                ledger_df = pd.DataFrame(columns=all_ledger_columns)
+                # If no rows, show empty DataFrame with correct columns
+                ledger_df = pd.DataFrame(columns=ledger_columns)
                 
             if not ledger_df.empty:
                     st.markdown("### Policy Details (Editable)")
@@ -11217,18 +11169,11 @@ SOLUTION NEEDED:
                         if col in formula_columns:
                             column_config[col] = {"disabled": True}
 
-                    # Prevent deletion of the first (opening) row and STMT/VOID rows
+                    # Prevent deletion of the first (opening) row
                     ledger_df_display = ledger_df.copy()
                     ledger_df_display["Delete"] = True
                     ledger_df_display.loc[0, "Delete"] = False  # Opening row cannot be deleted
-                    
-                    # Disable delete for STMT and VOID transactions
-                    if "Type" in ledger_df_display.columns:
-                        stmt_void_mask = ledger_df_display["Type"].isin(["💙 STMT", "🔴 VOID"])
-                        ledger_df_display.loc[stmt_void_mask, "Delete"] = False
-                    
-                    # Update display columns to include financial columns after Delete
-                    display_cols = ledger_columns + ["Delete"] + financial_columns
+                    display_cols = ledger_columns + ["Delete"]
 
                     # --- Ensure all display columns exist in the DataFrame ---
                     for col in display_cols:
@@ -11283,22 +11228,6 @@ SOLUTION NEEDED:
                         "disabled": True,
                         "help": "Transaction ID is a unique identifier and cannot be changed."
                     }
-                    
-                    # Configure financial columns as currency columns
-                    for fin_col in financial_columns:
-                        column_config[fin_col] = st.column_config.NumberColumn(
-                            fin_col,
-                            format="$%.2f",
-                            step=0.01,
-                            help=f"Enter {fin_col} amount"
-                        )
-                    
-                    # Configure Delete column
-                    column_config["Delete"] = st.column_config.CheckboxColumn(
-                        "Delete",
-                        help="Check to delete this row. STMT and VOID entries cannot be deleted.",
-                        default=False
-                    )
                     edited_ledger_df = st.data_editor(
                         ledger_df_display,
                         use_container_width=True,
@@ -11312,9 +11241,8 @@ SOLUTION NEEDED:
                     # Strictly prevent row addition and deletion: only allow editing of existing rows
                     # Remove the Delete column before saving (no row deletion allowed)
                     edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
-                    # Keep all ledger columns including financial columns
-                    all_ledger_columns = ledger_columns + financial_columns
-                    edited_ledger_df = edited_ledger_df[all_ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
+                    # Only keep the original ledger columns (no extra columns)
+                    edited_ledger_df = edited_ledger_df[ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
                     if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
                         st.session_state["show_policy_ledger_mapping_preview"] = True
                         def get_policy_ledger_column_mapping(col, val):
@@ -11352,46 +11280,11 @@ SOLUTION NEEDED:
                         st.metric("Total Debits", f"${total_debits:,.2f}")
                     with col3:
                         st.metric("Balance Due", f"${balance_due:,.2f}")
-                    
-                    # --- Policy Financial Summary Section ---
-                    st.markdown("#### Policy Financial Summary")
-                    
-                    # Calculate totals for financial columns
-                    total_premium = edited_ledger_df["Premium Sold"].apply(pd.to_numeric, errors="coerce").sum() if "Premium Sold" in edited_ledger_df.columns else 0.0
-                    total_taxes = edited_ledger_df["Policy Taxes & Fees"].apply(pd.to_numeric, errors="coerce").sum() if "Policy Taxes & Fees" in edited_ledger_df.columns else 0.0
-                    total_comm_premium = edited_ledger_df["Commissionable Premium"].apply(pd.to_numeric, errors="coerce").sum() if "Commissionable Premium" in edited_ledger_df.columns else 0.0
-                    total_broker_fee = edited_ledger_df["Broker Fee"].apply(pd.to_numeric, errors="coerce").sum() if "Broker Fee" in edited_ledger_df.columns else 0.0
-                    total_broker_comm = edited_ledger_df["Broker Fee Agent Comm"].apply(pd.to_numeric, errors="coerce").sum() if "Broker Fee Agent Comm" in edited_ledger_df.columns else 0.0
-                    
-                    # First row of financial summary
-                    fin_col1, fin_col2, fin_col3 = st.columns(3)
-                    with fin_col1:
-                        st.metric("Total Premium Sold", f"${total_premium:,.2f}")
-                    with fin_col2:
-                        st.metric("Total Taxes & Fees", f"${total_taxes:,.2f}")
-                    with fin_col3:
-                        st.metric("Commissionable Premium", f"${total_comm_premium:,.2f}")
-                    
-                    # Second row of financial summary
-                    fin_col4, fin_col5, fin_col6 = st.columns(3)
-                    with fin_col4:
-                        st.metric("Total Broker Fees", f"${total_broker_fee:,.2f}")
-                    with fin_col5:
-                        st.metric("Broker Fee Agent Comm", f"${total_broker_comm:,.2f}")
-                    with fin_col6:
-                        # Empty column for spacing
-                        pass
 
                     if st.button("Save Changes", key="save_policy_ledger_btn"):
                         for idx, row in edited_ledger_df.iterrows():
-                            # Skip STMT and VOID transactions - they should not be editable
-                            if "Type" in row and row["Type"] in ["💙 STMT", "🔴 VOID"]:
-                                continue
-                            
-                            # Include all columns except Transaction ID and Type
-                            all_update_columns = [col for col in all_ledger_columns if col not in ["Transaction ID", "Type"]]
-                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in all_update_columns]) + " WHERE \"Transaction ID\" = :transaction_id"
-                            update_params = {col: row[col] for col in all_update_columns}
+                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in ledger_columns if col != "Transaction ID"]) + " WHERE \"Transaction ID\" = :transaction_id"
+                            update_params = {col: row[col] for col in ledger_columns if col != "Transaction ID"}
                             update_params["transaction_id"] = row["Transaction ID"]
                             
                             # Update via Supabase

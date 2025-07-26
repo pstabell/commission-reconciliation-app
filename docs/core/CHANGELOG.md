@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.8] - 2025-01-26 - Policy Ledger Financial Columns
+
+### Added
+- **Financial Columns in Policy Revenue Ledger**
+  - Premium Sold, Policy Taxes & Fees, Commissionable Premium, Broker Fee, Broker Fee Agent Comm
+  - Columns appear to the right of Delete column with horizontal scrolling
+  - Maintains clean default view with financial details accessible on demand
+
+- **Policy Financial Summary Section**
+  - New section below Ledger Totals showing financial totals
+  - Two rows of metrics for comprehensive financial overview
+  - Automatically calculates totals for all financial columns
+
+- **STMT/VOID Transaction Protection**
+  - Delete checkbox disabled for STMT and VOID transactions
+  - Save operation skips STMT and VOID rows to prevent edits
+  - Visual and functional protection for reconciliation entries
+
+### Changed
+- Policy Revenue Ledger now supports horizontal scrolling for extended column view
+- Save Changes logic updated to handle all columns including financial fields
+
 ## [3.8.7] - 2025-01-26 - Special Colors for STMT and VOID Transactions
 
 ### Added

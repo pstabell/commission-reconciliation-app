@@ -208,9 +208,11 @@
 - **Effective Date Column**: See when each transaction occurred
 - **Chronological Sorting**: Transactions ordered by date (oldest first)
 - **Editable Ledger**: Modify individual transactions
+- **Financial Columns**: Scroll right to see Premium Sold, Taxes, Broker Fees, and more
 - **Running Totals**: See credits, debits, and balance due
+- **Policy Financial Summary**: Comprehensive totals for all financial fields
 - **Smart Client ID Display**: Shows most complete policy information available
-- **Audit Protection**: Critical fields are protected from accidental changes
+- **Audit Protection**: Critical fields and STMT/VOID transactions are protected
 
 **NEW - X-DATE Filter**:
 1. **All Terms** (default): Shows complete policy history
