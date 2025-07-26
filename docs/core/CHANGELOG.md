@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Added `style_special_transactions()` utility function to apply consistent styling
 - Updated dataframe displays to use styled output where Transaction ID is visible
+- Policy Revenue Ledger (Editable) now includes a Type column with emoji indicators since st.data_editor doesn't support row styling
 
 ## [3.8.6] - 2025-01-25 - Statement Month and X-DATE Filters
 
