@@ -21,6 +21,57 @@
 - CSV files (.csv)
 - PDF files (.pdf) - for commission statements
 
+## 📤 Import & Export Questions
+
+### Q: How do I bulk update transactions after exporting to Excel?
+**A**: Use the Update Existing Transactions tool:
+1. Export your data from any report
+2. Make changes in Excel (keep Transaction ID unchanged)
+3. Go to Tools → Import/Export → Update Existing Transactions
+4. Upload your modified Excel file
+5. Review the preview and click Update Transactions
+
+### Q: Will updating from Excel delete my other data?
+**A**: No! The update tool:
+- Only updates columns present in your Excel file
+- Leaves all other columns unchanged
+- Never deletes transactions
+- Only updates existing records (matched by Transaction ID)
+
+### Q: What happens to calculated fields like Policy Balance Due?
+**A**: Calculated fields are:
+- Automatically skipped during updates
+- Recalculated when you view reports
+- Not stored in the database
+- Always based on current data
+
+### Q: My Excel has multiple sheets. Which one is used?
+**A**: The tool automatically:
+1. Looks for "Policy Revenue Report" sheet first
+2. Then searches for sheets with "report" or "policy" in the name
+3. Uses the last sheet if no match found
+4. Shows which sheet it's reading from
+
+### Q: Can I change the column order in my Excel file?
+**A**: Yes! Column order doesn't matter:
+- Matching is done by column name, not position
+- Rearrange columns however you prefer
+- Just ensure column names match exactly
+
+### Q: What if some Transaction IDs don't match?
+**A**: Unmatched transactions are:
+- Counted as "New/Unmatched"
+- Listed in the preview
+- Skipped during update (not created as new)
+- Reported in the final summary
+
+### Q: How do I know which columns will be updated?
+**A**: The preview shows:
+- List of columns to be updated
+- Count of matching transactions
+- Warning for calculated fields
+- All before any changes are made
+
 ## 💰 Commission Calculations
 
 ### Q: How are commissions calculated?

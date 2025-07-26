@@ -10966,25 +10966,6 @@ SOLUTION NEEDED:
                 
             if not ledger_df.empty:
                     st.markdown("### Policy Details (Editable)")
-                    
-                    # Debug: Show available columns
-                    with st.expander("Debug: Client ID Issue", expanded=False):
-                        st.write("Selected Policy Number:", selected_policy)
-                        st.write("Number of transactions for this policy:", len(policy_rows))
-                        st.write("First transaction being displayed in Policy Details:")
-                        if not policy_rows.empty:
-                            first_row = policy_rows.iloc[0]
-                            st.write(f"  Transaction ID: {first_row.get('Transaction ID', 'N/A')}")
-                            st.write(f"  Transaction Type: {first_row.get('Transaction Type', 'N/A')}")
-                            st.write(f"  Effective Date: {first_row.get('Effective Date', 'N/A')}")
-                            st.write(f"  Client ID: '{first_row.get('Client ID', 'N/A')}'")
-                        
-                        # Show all Client IDs for this policy
-                        if "Client ID" in policy_rows.columns:
-                            st.write("\nAll Client IDs for this policy:")
-                            for idx, row in policy_rows.iterrows():
-                                st.write(f"  {row['Transaction ID']} ({row['Transaction Type']}): Client ID = '{row['Client ID']}'")
-                    
                     # Show policy-level details using mapped column names
                     policy_detail_field_names = [
                         "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
@@ -10998,39 +10979,8 @@ SOLUTION NEEDED:
                             policy_detail_cols.append(mapped_col)
                         elif field_name in policy_rows.columns:
                             policy_detail_cols.append(field_name)
-                        # Special handling for Client ID - check both variations
-                        elif field_name == "Client ID":
-                            if "client_id" in policy_rows.columns:
-                                policy_detail_cols.append("client_id")
-                            elif "ClientID" in policy_rows.columns:
-                                policy_detail_cols.append("ClientID")
                     
-                    # Ensure we have valid columns before creating the dataframe
-                    valid_detail_cols = [col for col in policy_detail_cols if col in policy_rows.columns]
-                    
-                    # If Client ID wasn't found but exists in the data, add it
-                    if "Client ID" not in valid_detail_cols and "Client ID" in policy_rows.columns:
-                        # Find where to insert it (after Customer)
-                        if "Customer" in valid_detail_cols:
-                            customer_idx = valid_detail_cols.index("Customer")
-                            valid_detail_cols.insert(customer_idx + 1, "Client ID")
-                        else:
-                            valid_detail_cols.insert(1, "Client ID")
-                    
-                    # Instead of always using the first row, find a row with the most complete data
-                    # Prioritize rows with Client ID populated
-                    if not policy_rows.empty:
-                        # Try to find a row with Client ID
-                        rows_with_client_id = policy_rows[policy_rows["Client ID"].notna() & (policy_rows["Client ID"] != "") & (policy_rows["Client ID"] != "None")]
-                        
-                        if not rows_with_client_id.empty:
-                            # Use the first row that has a Client ID
-                            policy_details_df = rows_with_client_id.iloc[[0]][valid_detail_cols].copy()
-                        else:
-                            # Fall back to the first row if no rows have Client ID
-                            policy_details_df = policy_rows.iloc[[0]][valid_detail_cols].copy()
-                    else:
-                        policy_details_df = pd.DataFrame(columns=valid_detail_cols)
+                    policy_details_df = policy_rows.iloc[[0]][policy_detail_cols].copy() if not policy_rows.empty else pd.DataFrame(columns=policy_detail_cols)
                     edited_details_df = st.data_editor(
                         policy_details_df,
                         use_container_width=True,

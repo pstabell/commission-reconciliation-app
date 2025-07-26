@@ -5,6 +5,51 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.6] - 2025-01-25 - Statement Month and X-DATE Filters
+
+### Added
+- **Statement Month Filter in Policy Revenue Ledger Reports**
+  - Filter policies by effective date month for monthly cohort tracking
+  - Month selection dropdown with "All Months" default
+  - Shows policy/transaction count for selected month
+  - Month-specific balance due calculation
+  - Selected month included in export metadata
+
+- **X-DATE Filter in Policy Revenue Ledger (Individual)**
+  - Optional filter to show transactions for specific policy term
+  - "All Terms" default shows complete history
+  - Smart filtering includes NEW/RWL, ENDs within term, and related payments
+  - Term date range display
+  - Transaction count for selected term
+
+- **Effective Date Column in Ledger**
+  - Added to transaction display for better visibility
+  - Helps verify transactions within policy terms
+
+### Changed
+- **Ledger Sorting**
+  - Now sorts by Effective Date chronologically (oldest first)
+  - Missing dates appear at bottom
+  
+- **Dynamic Table Height**
+  - Tables adjust to show actual rows (max 11 + blank row)
+  - Scrollbar for additional rows
+  
+- **Export Metadata**
+  - Now includes Statement Month and View Mode selections
+
+### Fixed
+- **Client ID Display in Policy Details**
+  - Intelligently selects transaction with Client ID populated
+  - Shows most complete information available
+  - Handles cases where some transactions lack Client ID
+
+- **Excel Update Tool**
+  - Fixed datetime serialization errors
+  - Excludes calculated fields (Policy Balance Due)
+  - Better multi-sheet detection for Policy Revenue Report exports
+  - Improved error messages
+
 ## [3.8.5] - 2025-01-24 - Excel Update Tool and View Toggle
 
 ### Added

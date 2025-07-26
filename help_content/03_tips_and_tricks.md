@@ -79,6 +79,45 @@
 - **Email Reports**: Export and attach to monthly summaries
 - **Calendar Sync**: Use report dates for scheduling reconciliation
 
+## 📤 Import & Export Best Practices
+
+### Excel Update Workflow
+1. **Export Smart**: Use filtered reports to export only what needs updating
+2. **Track Changes**: Use Excel's track changes or highlight modified cells
+3. **Test First**: Update a few records first to verify process
+4. **Batch Similar**: Group similar updates together
+5. **Document**: Keep notes on what was changed and why
+
+### Column Name Management
+- **Never Rename**: Transaction ID column in Excel
+- **Exact Match**: Column names must match database exactly
+- **Check Spaces**: "Agent Paid Amount (STMT)" not "Agent Paid Amount(STMT)"
+- **Case Sensitive**: Match upper/lowercase exactly
+
+### Date Handling Tips
+- **Format**: Dates auto-convert to YYYY-MM-DD
+- **Excel Dates**: Ensure Excel recognizes as dates, not text
+- **Blank Dates**: Empty cells will clear date fields
+- **Consistency**: Use same date format throughout file
+
+### Multi-Sheet Excel Files
+- **Naming**: Name data sheet "Policy Revenue Report" for auto-detection
+- **Clean Sheets**: Remove unnecessary formatting sheets
+- **Single Data**: Keep all update data in one sheet
+- **Parameters**: OK to have Report Parameters sheet - tool ignores it
+
+### Error Prevention
+- **Preview First**: Always review the preview before updating
+- **Match Count**: Verify the matching transaction count is expected
+- **Backup**: Export current data before major updates
+- **Small Batches**: Update in smaller groups for easier troubleshooting
+
+### Performance Tips
+- **File Size**: Smaller files process faster
+- **Remove Formulas**: Convert Excel formulas to values before upload
+- **Clean Data**: Remove extra spaces, special characters
+- **Single Updates**: One update session at a time
+
 ### Data Flow
 1. **Policy Entry** → Add New Policy Transaction
 2. **Statement Receipt** → Reconciliation Import & Match
