@@ -203,6 +203,7 @@
 **Key Features**:
 - **Granular Search**: Find policies by customer, type, date, and number
 - **Transaction History**: See all transactions for a specific policy
+- **Visual Type Indicators**: Each transaction shows an icon (💙=STMT, 🔴=VOID, 📄=Regular)
 - **X-DATE Term Filter**: NEW! Optional filter to show only transactions for a specific policy term
 - **Effective Date Column**: See when each transaction occurred
 - **Chronological Sorting**: Transactions ordered by date (oldest first)

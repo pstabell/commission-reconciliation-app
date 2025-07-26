@@ -63,12 +63,21 @@ The visual highlighting has been applied to the following sections:
    - Unreconciled transactions display (lines 7435-7453)
    - Reconciliation History (already had custom VOID styling)
 
+6. **Policy Revenue Ledger (Editable)**
+   - Added visual indicator column with emojis (lines 10977-10984)
+   - Added legend above the table (lines 11191-11200)
+   - Since st.data_editor doesn't support row styling, implemented emoji indicators instead
+
 ### Technical Notes
 
-- The styling is applied using pandas DataFrame styling functionality
-- Only applies to st.dataframe() displays (st.data_editor() doesn't support styling)
+- The styling is applied using pandas DataFrame styling functionality for st.dataframe() displays
+- For st.data_editor() displays (like Policy Revenue Ledger), visual indicator column with emojis is used instead
 - Gracefully handles DataFrames without Transaction ID column
 - Performance impact is minimal as styling is applied only at display time
+- Visual indicators in Policy Revenue Ledger:
+  - 💙 STMT = Statement/Reconciliation Entry
+  - 🔴 VOID = Voided Transaction
+  - 📄 = Regular Transaction
 
 ### User Benefits
 
