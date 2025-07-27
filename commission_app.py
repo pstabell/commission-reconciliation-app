@@ -12129,9 +12129,28 @@ TO "New Column Name";
             default_columns = ["Customer", "Policy Number", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
             available_default_columns = [col for col in default_columns if col in all_columns]
             
+            # Check for default template and load it
+            default_template = None
+            for name, data in st.session_state.prl_templates.items():
+                if data.get("is_default", False):
+                    default_template = name
+                    break
+            
             # Initialize selected columns in session state
             if "prl_selected_columns" not in st.session_state:
-                st.session_state.prl_selected_columns = available_default_columns            # Column selection interface
+                if default_template:
+                    # Load the default template columns
+                    template_data = st.session_state.prl_templates[default_template]
+                    valid_template_columns = [col for col in template_data["columns"] if col in all_columns]
+                    st.session_state.prl_selected_columns = valid_template_columns
+                else:
+                    # Use standard default columns
+                    st.session_state.prl_selected_columns = available_default_columns            # Show if default template was loaded
+            if default_template and "prl_default_loaded" not in st.session_state:
+                st.info(f"⭐ **Default template loaded**: {default_template}")
+                st.session_state.prl_default_loaded = True
+            
+            # Column selection interface
             col_selection_col1, col_selection_col2 = st.columns([2, 1])
             
             with col_selection_col1:
@@ -12224,19 +12243,78 @@ TO "New Column Name";
             with template_col2:
                 st.markdown("**Load Template:**")
                 if st.session_state.prl_templates:
-                    template_to_load = st.selectbox(
+                    # Show current default template if exists
+                    current_default = None
+                    for name, data in st.session_state.prl_templates.items():
+                        if data.get("is_default", False):
+                            current_default = name
+                            break
+                    
+                    if current_default:
+                        st.info(f"⭐ Default template: {current_default}")
+                    
+                    template_options = list(st.session_state.prl_templates.keys())
+                    template_display = []
+                    for template_name in template_options:
+                        if st.session_state.prl_templates[template_name].get("is_default", False):
+                            template_display.append(f"⭐ {template_name}")
+                        else:
+                            template_display.append(template_name)
+                    
+                    selected_template_display = st.selectbox(
                         "Select template to load",
-                        options=list(st.session_state.prl_templates.keys()),
+                        options=template_display,
                         key="template_loader"
                     )
                     
-                    if st.button("📂 Load Template"):
-                        template_data = st.session_state.prl_templates[template_to_load]
-                        # Only load columns that still exist in the data
-                        valid_columns = [col for col in template_data["columns"] if col in all_columns]
-                        st.session_state.prl_selected_columns = valid_columns
-                        st.success(f"✅ Loaded template: {template_to_load}")
-                        st.rerun()
+                    # Get actual template name (remove star if present)
+                    template_to_load = selected_template_display.replace("⭐ ", "")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("📂 Load Template"):
+                            template_data = st.session_state.prl_templates[template_to_load]
+                            # Only load columns that still exist in the data
+                            valid_columns = [col for col in template_data["columns"] if col in all_columns]
+                            st.session_state.prl_selected_columns = valid_columns
+                            st.success(f"✅ Loaded template: {template_to_load}")
+                            st.rerun()
+                    
+                    with col2:
+                        # Show set/unset default button
+                        is_current_default = st.session_state.prl_templates[template_to_load].get("is_default", False)
+                        if is_current_default:
+                            if st.button("✖️ Unset Default"):
+                                # Remove default flag
+                                st.session_state.prl_templates[template_to_load]["is_default"] = False
+                                
+                                # Save templates to file
+                                templates_file = "config_files/prl_templates.json"
+                                try:
+                                    with open(templates_file, 'w') as f:
+                                        json.dump(st.session_state.prl_templates, f, indent=2)
+                                    st.success(f"✅ Removed default status from: {template_to_load}")
+                                except Exception as e:
+                                    st.error(f"Error saving changes: {str(e)}")
+                                st.rerun()
+                        else:
+                            if st.button("⭐ Set as Default"):
+                                # Remove default from all other templates
+                                for name in st.session_state.prl_templates:
+                                    st.session_state.prl_templates[name]["is_default"] = False
+                                
+                                # Set this template as default
+                                st.session_state.prl_templates[template_to_load]["is_default"] = True
+                                
+                                # Save templates to file
+                                templates_file = "config_files/prl_templates.json"
+                                try:
+                                    with open(templates_file, 'w') as f:
+                                        json.dump(st.session_state.prl_templates, f, indent=2)
+                                    st.success(f"✅ Set as default template: {template_to_load}")
+                                except Exception as e:
+                                    st.error(f"Error saving changes: {str(e)}")
+                                st.rerun()
                 else:
                     st.info("No saved templates yet")
             
@@ -12278,7 +12356,8 @@ TO "New Column Name";
             if st.session_state.prl_templates:
                 with st.expander("📋 Saved Templates", expanded=False):
                     for name, data in st.session_state.prl_templates.items():
-                        st.write(f"**{name}** - Created: {data['created']} - Columns: {len(data['columns'])}")
+                        default_indicator = "⭐ " if data.get("is_default", False) else ""
+                        st.write(f"**{default_indicator}{name}** - Created: {data['created']} - Columns: {len(data['columns'])}")
             
             # Data Preview with Selected Columns
             st.markdown("### 📊 Report Preview")
@@ -12329,6 +12408,23 @@ TO "New Column Name";
                         end_idx = start_idx + records_per_page_int
                         display_data = working_data[valid_columns].iloc[start_idx:end_idx].copy()
                         caption_text = f"Showing records {start_idx + 1}-{min(end_idx, len(working_data))} of {len(working_data):,} total records with {len(valid_columns)} columns"
+                    
+                    # Format numeric columns to 2 decimal places
+                    numeric_columns_to_format = [
+                        "Agent Comm", "Agent Comm (NEW 50% RWL 25%)",
+                        "Agent Estimated Comm", "Agent Estimated Comm $",
+                        "Agent Paid Amount", "Agent Paid Amount (STMT)",
+                        "Policy Balance Due",
+                        "Agency Estimated Comm/Revenue (CRM)",
+                        "Premium Sold", "Broker Fee", "Broker Fee Agent Comm",
+                        "Total Agent Comm", "Policy Taxes & Fees", "Commissionable Premium"
+                    ]
+                    
+                    # Apply formatting to numeric columns that exist in the display data
+                    for col in numeric_columns_to_format:
+                        if col in display_data.columns:
+                            # Convert to numeric and format to 2 decimal places
+                            display_data[col] = pd.to_numeric(display_data[col], errors='coerce').round(2)
                     
                     # Add a blank row at the end for better visibility
                     blank_row = pd.DataFrame([{col: '' for col in valid_columns}])
@@ -12388,8 +12484,14 @@ TO "New Column Name";
                         csv_lines.append("# " + "="*50)
                         csv_lines.append("")  # Empty line before data
                         
+                        # Format numeric columns in the export data
+                        export_data = working_data[valid_columns].copy()
+                        for col in numeric_columns_to_format:
+                            if col in export_data.columns:
+                                export_data[col] = pd.to_numeric(export_data[col], errors='coerce').round(2)
+                        
                         # Add the actual data
-                        csv_data = working_data[valid_columns].to_csv(index=False)
+                        csv_data = export_data.to_csv(index=False)
                         csv_with_metadata = "\n".join(csv_lines) + "\n" + csv_data
                         
                         st.download_button(
@@ -12409,8 +12511,12 @@ TO "New Column Name";
                             # Write metadata to first sheet
                             metadata_df.to_excel(writer, sheet_name='Report Parameters', index=False)
                             
-                            # Write data to second sheet
-                            working_data[valid_columns].to_excel(writer, sheet_name='Policy Revenue Report', index=False)
+                            # Write data to second sheet with formatted numeric columns
+                            excel_export_data = working_data[valid_columns].copy()
+                            for col in numeric_columns_to_format:
+                                if col in excel_export_data.columns:
+                                    excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
+                            excel_export_data.to_excel(writer, sheet_name='Policy Revenue Report', index=False)
                             
                             # Get workbook and format metadata sheet
                             workbook = writer.book

@@ -5,6 +5,21 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.13] - 2025-01-27 - Default Template Feature
+
+### Added
+- **Default Template for Policy Revenue Ledger Reports**
+  - Set any saved template as default with "⭐ Set as Default" button
+  - Default template auto-loads when visiting the page
+  - Visual indicators (⭐) show which template is default
+  - Option to unset default status
+  - Info message displays when default template is loaded
+
+### Improved
+- User experience by preventing "missing column" errors
+- Workflow efficiency with automatic template loading
+- Template management with clear default indicators
+
 ## [3.8.12] - 2025-01-27 - Contacts Edit Functionality
 
 ### Added

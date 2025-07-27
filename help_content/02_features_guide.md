@@ -245,6 +245,7 @@
 - **Policy Aggregation**: One row per policy with totals (in aggregated view)
 - **Transaction Details**: See all individual transactions with types and terms (in detailed view)
 - **Template System**: Save and reuse report configurations (persists between sessions)
+- **Default Template**: NEW! Set any template as default to auto-load on page visit
 - **Column Selection**: Choose exactly what to display
 - **Balance Filters**: Filter by positive, zero, negative, or non-zero balances
 - **Pagination**: Handle large datasets efficiently
@@ -261,7 +262,11 @@
    - Aggregated by Policy: Summary view with one row per policy
    - Detailed Transactions: All transactions visible for dispute resolution
 2. **Statement Month**: Create monthly sales cohorts by effective date
-3. **Template Management**: Save, load, edit, and delete report templates
+3. **Template Management**: 
+   - Save, load, edit, and delete report templates
+   - Set any template as default with "⭐ Set as Default"
+   - Default template auto-loads when visiting the page
+   - Unset default with "⭐ Unset Default" button
 4. **Quick Presets**: Use predefined column sets (Financial Focus, Basic Info)
 5. **Column Reordering**: Drag and drop to arrange columns
 6. **Metadata Export**: Export includes report parameters, filters, and timestamps
