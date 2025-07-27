@@ -5,6 +5,37 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.11] - 2025-01-27 - Policy Revenue Ledger Improvements
+
+### Changed
+- **Policy Ledger Display**
+  - Renamed from "Policy Ledger (Editable)" to "Policy Ledger" (view-only)
+  - Removed all editing capabilities - now purely for viewing
+  - Removed Delete column functionality
+  - Removed Edit Details button from Policy Details section
+  - Removed Save Changes and Test Mapping buttons
+  
+- **Column Layout**
+  - Reordered Transaction Type to appear after Transaction ID
+  - Moved Description column to be the last column
+  - Columns now auto-size to fit content without excess space
+  
+- **Policy Details Section**  
+  - Updated date formatting to MM/DD/YYYY for consistency
+  - Moved (X-DATE) label inline with Expiration Date in subtle gray
+  - Policy Origination Date label now on single line
+
+### Improved
+- Centralized all editing in Edit Policy Transactions page
+- Cleaner, more focused interface for viewing policy data
+- Better column visibility with auto-sizing
+- Consistent date formatting throughout
+
+### Removed
+- Client ID debug section
+- All inline editing functionality from Policy Ledger
+- Edit Details button and associated form
+
 ## [3.8.10] - 2025-01-27 - Policy Revenue Ledger Search Layout
 
 ### Changed

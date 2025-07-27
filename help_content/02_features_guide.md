@@ -208,7 +208,7 @@
 - **X-DATE Term Filter**: NEW! Optional filter to show only transactions for a specific policy term
 - **Effective Date Column**: See when each transaction occurred
 - **Chronological Sorting**: Transactions ordered by date (oldest first)
-- **Editable Ledger**: Modify individual transactions
+- **View-Only Ledger**: Display transactions in clean, read-only format
 - **Financial Columns**: Scroll right to see Premium Sold, Taxes, Broker Fees, and more
 - **Running Totals**: See credits, debits, and balance due
 - **Policy Financial Summary**: Comprehensive totals for all financial fields
@@ -229,9 +229,9 @@
 2. **View Policy Details**: See information displayed in easy-to-read cards
 3. **Select Term** (optional): Choose specific X-DATE or keep "All Terms"
 4. **Review Transactions**: See all related transactions in chronological order
-5. **Edit Details**: Click Edit Details button to modify policy information
-6. **Update Ledger**: Make transaction-level changes as needed
-7. **Save Changes**: Commit all modifications
+5. **Review Financial Summary**: See totals for all financial fields
+6. **View Ledger**: Browse transaction history in read-only format
+7. **Edit Elsewhere**: Use Edit Policy Transactions page for any modifications
 
 ---
 
