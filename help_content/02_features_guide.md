@@ -201,6 +201,7 @@
 **What it does**: Detailed transaction-level view of individual policies
 
 **Key Features**:
+- **Streamlined Search**: All search criteria in a single row for efficient filtering
 - **Granular Search**: Find policies by customer, type, date, and number
 - **Transaction History**: See all transactions for a specific policy
 - **Visual Type Indicators**: Each transaction shows an icon (💙=STMT, 🔴=VOID, 📄=Regular)
@@ -221,7 +222,10 @@
 4. **Perfect for Disputes**: Present focused data for specific policy periods
 
 **How to use**:
-1. **Search for Policy**: Use the dropdown filters to locate a specific policy
+1. **Search for Policy**: All search filters are conveniently arranged in a single row
+   - Customer, Policy Type, Effective Date, and Policy Number dropdowns
+   - Policy Number becomes available after selecting the first three filters
+   - Full page width utilized for better visibility
 2. **View Policy Details**: See information displayed in easy-to-read cards
 3. **Select Term** (optional): Choose specific X-DATE or keep "All Terms"
 4. **Review Transactions**: See all related transactions in chronological order

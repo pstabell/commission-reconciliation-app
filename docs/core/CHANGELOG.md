@@ -5,6 +5,21 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.10] - 2025-01-27 - Policy Revenue Ledger Search Layout
+
+### Changed
+- **Policy Revenue Ledger Search Criteria**
+  - Reorganized all search filters into a single row with 4 equal columns
+  - Improved space utilization with full page width dropdowns
+  - Maintained logical flow: Customer → Type → Date → Policy Number
+  - Better visual alignment and cleaner interface
+  - Selections remain visible after choosing values
+
+### Improved
+- User experience with streamlined filter selection
+- Page layout efficiency with better use of horizontal space
+- Visual consistency across the application
+
 ## [3.8.9] - 2025-01-26 - Policy Details Card Layout
 
 ### Changed

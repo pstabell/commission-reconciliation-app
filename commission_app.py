@@ -10832,29 +10832,74 @@ SOLUTION NEEDED:
         
         st.info("Search for a policy to view and edit a detailed ledger of all commission credits and debits for that policy. You can edit, delete transactions below. Be sure to click 'Save Changes' to commit your edits.")
         
-        # --- Granular Policy Search ---
+        # --- Granular Policy Search in Single Row ---
+        st.markdown("### 🔍 Search Criteria")
+        
+        # Create 4 columns for search criteria
+        search_col1, search_col2, search_col3, search_col4 = st.columns(4)
+        
+        # Get initial data lists
         customers = all_data["Customer"].dropna().unique().tolist() if "Customer" in all_data.columns else []
-        selected_customer = st.selectbox("Select Customer:", ["Select..."] + sorted(customers), key="ledger_customer_select")
-
+        
+        with search_col1:
+            selected_customer = st.selectbox(
+                "Select Customer:", 
+                ["Select..."] + sorted(customers), 
+                key="ledger_customer_select"
+            )
+        
+        # Filter data based on customer selection
         filtered_data = all_data.copy()
         if selected_customer and selected_customer != "Select...":
             filtered_data = filtered_data[filtered_data["Customer"] == selected_customer]
-
+        
+        # Get policy types based on filtered data
         policy_types = filtered_data["Policy Type"].dropna().unique().tolist() if "Policy Type" in filtered_data.columns else []
-        selected_policy_type = st.selectbox("Select Policy Type:", ["Select..."] + sorted(policy_types), key="ledger_policytype_select")
+        
+        with search_col2:
+            selected_policy_type = st.selectbox(
+                "Select Policy Type:", 
+                ["Select..."] + sorted(policy_types), 
+                key="ledger_policytype_select"
+            )
+        
+        # Further filter based on policy type
         if selected_policy_type and selected_policy_type != "Select...":
             filtered_data = filtered_data[filtered_data["Policy Type"] == selected_policy_type]
-
+        
+        # Get effective dates based on filtered data
         effective_dates = filtered_data["Effective Date"].dropna().unique().tolist() if "Effective Date" in filtered_data.columns else []
-        selected_effective_date = st.selectbox("Select Policy Effective Date:", ["Select...", "All Dates"] + sorted(effective_dates), key="ledger_effectivedate_select")
+        
+        with search_col3:
+            selected_effective_date = st.selectbox(
+                "Select Policy Effective Date:", 
+                ["Select...", "All Dates"] + sorted(effective_dates), 
+                key="ledger_effectivedate_select"
+            )
+        
+        # Further filter based on effective date
         if selected_effective_date and selected_effective_date not in ["Select...", "All Dates"]:
             filtered_data = filtered_data[filtered_data["Effective Date"] == selected_effective_date]
-
-        # Show policy number select if customer and policy type are chosen (and optionally effective date)
+        
+        # Get policy numbers based on all filters
         policy_numbers = filtered_data["Policy Number"].dropna().unique().tolist() if "Policy Number" in filtered_data.columns else []
-        selected_policy = None
-        if selected_customer != "Select..." and selected_policy_type != "Select..." and (selected_effective_date != "Select..."):
-            selected_policy = st.selectbox("Select Policy Number:", ["Select..."] + sorted(policy_numbers), key="ledger_policy_select")
+        
+        with search_col4:
+            # Show policy number select if customer and policy type are chosen
+            if selected_customer != "Select..." and selected_policy_type != "Select..." and (selected_effective_date != "Select..."):
+                selected_policy = st.selectbox(
+                    "Select Policy Number:", 
+                    ["Select..."] + sorted(policy_numbers), 
+                    key="ledger_policy_select"
+                )
+            else:
+                st.selectbox(
+                    "Select Policy Number:", 
+                    ["Select filters first..."], 
+                    key="ledger_policy_select",
+                    disabled=True
+                )
+                selected_policy = None
 
         if selected_policy and selected_policy != "Select...":
             # Get all rows for this policy, using only real database data
@@ -11467,10 +11512,17 @@ SOLUTION NEEDED:
                         help="Check to delete this row. STMT and VOID entries cannot be deleted.",
                         default=False
                     )
+                    # Calculate height more precisely with smaller buffer
+                    # Header ~35px + each row ~35px + small buffer for scrollbar
+                    num_rows = len(ledger_df_display)
+                    calculated_height = 35 + (35 * num_rows) + 20  # 20px buffer
+                    # Set minimum to show at least 3 rows comfortably
+                    display_height = max(150, calculated_height)
+                    
                     edited_ledger_df = st.data_editor(
                         ledger_df_display,
                         use_container_width=True,
-                        height=max(400, 40 + 40 * len(ledger_df_display)),
+                        height=display_height,
                         key="policy_ledger_editor",
                         num_rows="fixed",
                         column_config=column_config,
@@ -11482,8 +11534,49 @@ SOLUTION NEEDED:
                     edited_ledger_df = edited_ledger_df.drop(columns=["Delete"])
                     # Keep all ledger columns including financial columns
                     all_ledger_columns = ledger_columns + financial_columns
-                    edited_ledger_df = edited_ledger_df[all_ledger_columns]                # --- Test Mapping (Preview Policy Ledger) Button and Expander ---
-                    if st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn") or st.session_state.get("show_policy_ledger_mapping_preview", False):
+                    edited_ledger_df = edited_ledger_df[all_ledger_columns]
+                    
+                    # Add buttons row with Save Changes and Test Mapping
+                    button_col1, button_col2, button_col3 = st.columns([1, 2, 3])
+                    
+                    with button_col1:
+                        save_changes_button = st.button("Save Changes", key="save_policy_ledger_btn", type="primary")
+                    
+                    with button_col2:
+                        test_mapping_button = st.button("Test Mapping (Preview Policy Ledger)", key="test_mapping_policy_ledger_btn")
+                    
+                    # Handle Save Changes
+                    if save_changes_button:
+                        for idx, row in edited_ledger_df.iterrows():
+                            # Skip STMT and VOID transactions - they should not be editable
+                            if "Type" in row and row["Type"] in ["💙 STMT", "🔴 VOID"]:
+                                continue
+                            
+                            # Include all columns except Transaction ID and Type
+                            all_update_columns = [col for col in all_ledger_columns if col not in ["Transaction ID", "Type"]]
+                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in all_update_columns]) + " WHERE \"Transaction ID\" = :transaction_id"
+                            update_params = {col: row[col] for col in all_update_columns}
+                            update_params["transaction_id"] = row["Transaction ID"]
+                            
+                            # Update via Supabase
+                            try:
+                                # Find the policy by Transaction ID
+                                result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
+                                if result.data:
+                                    policy_id = result.data[0]['_id']
+                                    # Remove ID fields from update
+                                    update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
+                                    supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
+                                    clear_policies_cache()
+                                else:
+                                    st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
+                            except Exception as e:
+                                st.error(f"Error updating policy: {e}")
+                        st.success("Policy ledger changes saved.")
+                        st.rerun()
+                    
+                    # Handle Test Mapping
+                    if test_mapping_button or st.session_state.get("show_policy_ledger_mapping_preview", False):
                         st.session_state["show_policy_ledger_mapping_preview"] = True
                         def get_policy_ledger_column_mapping(col, val):
                             mapping = {
@@ -11548,36 +11641,7 @@ SOLUTION NEEDED:
                         st.metric("Broker Fee Agent Comm", f"${total_broker_comm:,.2f}")
                     with fin_col6:
                         # Empty column for spacing
-                        pass
-
-                    if st.button("Save Changes", key="save_policy_ledger_btn"):
-                        for idx, row in edited_ledger_df.iterrows():
-                            # Skip STMT and VOID transactions - they should not be editable
-                            if "Type" in row and row["Type"] in ["💙 STMT", "🔴 VOID"]:
-                                continue
-                            
-                            # Include all columns except Transaction ID and Type
-                            all_update_columns = [col for col in all_ledger_columns if col not in ["Transaction ID", "Type"]]
-                            update_sql = "UPDATE policies SET " + ", ".join([f'"{col}" = :{col}' for col in all_update_columns]) + " WHERE \"Transaction ID\" = :transaction_id"
-                            update_params = {col: row[col] for col in all_update_columns}
-                            update_params["transaction_id"] = row["Transaction ID"]
-                            
-                            # Update via Supabase
-                            try:
-                                # Find the policy by Transaction ID
-                                result = supabase.table('policies').select('_id').eq('Transaction ID', row["Transaction ID"]).execute()
-                                if result.data:
-                                    policy_id = result.data[0]['_id']
-                                    # Remove ID fields from update
-                                    update_dict = {k: v for k, v in update_params.items() if k not in ['_id', 'transaction_id']}
-                                    supabase.table('policies').update(update_dict).eq('_id', policy_id).execute()
-                                    clear_policies_cache()
-                                else:
-                                    st.error(f"Policy with Transaction ID {row['Transaction ID']} not found")
-                            except Exception as e:
-                                st.error(f"Error updating policy: {e}")
-                        st.success("Policy ledger changes saved.")
-                        st.rerun()    # --- Help ---
+                        pass    # --- Help ---
     elif page == "Help":
         st.title("📚 Help & Documentation")
         
