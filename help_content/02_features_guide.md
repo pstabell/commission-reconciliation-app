@@ -222,11 +222,12 @@
 
 **How to use**:
 1. **Search for Policy**: Use the dropdown filters to locate a specific policy
-2. **Select Term** (optional): Choose specific X-DATE or keep "All Terms"
-3. **Review Transactions**: See all related transactions in chronological order
-4. **Edit Details**: Modify policy-level information
-5. **Update Ledger**: Make transaction-level changes as needed
-6. **Save Changes**: Commit all modifications
+2. **View Policy Details**: See information displayed in easy-to-read cards
+3. **Select Term** (optional): Choose specific X-DATE or keep "All Terms"
+4. **Review Transactions**: See all related transactions in chronological order
+5. **Edit Details**: Click Edit Details button to modify policy information
+6. **Update Ledger**: Make transaction-level changes as needed
+7. **Save Changes**: Commit all modifications
 
 ---
 

@@ -5,6 +5,26 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.9] - 2025-01-26 - Policy Details Card Layout
+
+### Changed
+- **Policy Details Display**
+  - Replaced table view with modern app-style card layout
+  - Information now organized in visual cards with icons
+  - Better visual hierarchy with grouped related information
+  - Policy Origination Date displayed in subtle gray text
+  - Effective and Expiration dates in full month format
+
+- **Edit Functionality**
+  - Changed from inline table editing to form-based editing
+  - Single Edit Details button launches dedicated edit form
+  - Cleaner save/cancel workflow
+
+### Improved
+- User experience with better visual organization
+- Readability with proper information hierarchy
+- Mobile responsiveness with card-based layout
+
 ## [3.8.8] - 2025-01-26 - Policy Ledger Financial Columns
 
 ### Added
