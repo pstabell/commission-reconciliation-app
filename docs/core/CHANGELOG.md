@@ -5,6 +5,29 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.12] - 2025-01-27 - Contacts Edit Functionality
+
+### Added
+- **Carrier Edit Functionality**
+  - Edit button on carrier detail page
+  - Update carrier name, NAIC code, producer code, status, and notes
+  - Form-based editing with save/cancel options
+  
+- **MGA Edit Functionality**  
+  - Edit button on MGA detail page
+  - Update MGA name, contact info, phone, email, and notes
+  - Clickable MGA search results leading to detail view
+  
+- **MGA Section on Main Page**
+  - Recent MGAs displayed as cards
+  - Shows count of associated carriers
+  - Click to view MGA details and associated carriers
+
+### Improved
+- User experience - no database access required for contact updates
+- Search results now clickable for both carriers and MGAs
+- Better organization with separate detail views
+
 ## [3.8.11] - 2025-01-27 - Policy Revenue Ledger Improvements
 
 ### Changed

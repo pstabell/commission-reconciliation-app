@@ -422,3 +422,41 @@
 - Comprehensive update report
 - Transaction-by-transaction processing
 - Original data preserved for unmatched records
+
+---
+
+## 📇 Contacts
+
+**What it does**: Manage Carriers, MGAs, and Commission Rules in one centralized location
+
+**Key Features**:
+- **Carrier Management**: Add, edit, and view insurance carriers
+- **MGA Management**: Add, edit, and view Managing General Agencies
+- **Commission Rules**: Define rates for carrier/MGA/policy type combinations
+- **Search Functionality**: Universal search across all contacts and rules
+- **Quick Add**: Fast addition of new carriers and MGAs
+
+**How to use**:
+
+### Managing Carriers:
+1. **View Carriers**: See recent carriers on the main page or search for specific ones
+2. **Edit Carrier**: Click on a carrier → Click "✏️ Edit Carrier" button
+3. **Update Fields**: Change name, NAIC code, producer code, status, or notes
+4. **Save Changes**: Click "💾 Save Changes" or "❌ Cancel"
+
+### Managing MGAs:
+1. **View MGAs**: See recent MGAs below carriers or search for specific ones
+2. **Edit MGA**: Click on an MGA → Click "✏️ Edit MGA" button
+3. **Update Fields**: Change name, contact info, phone, email, or notes
+4. **Save Changes**: Click "💾 Save Changes" or "❌ Cancel"
+
+### Commission Rules:
+1. **View Rules**: Click on a carrier to see its commission rules
+2. **Add Rule**: Click "➕ Add Rule" and fill in the details
+3. **End-Date Rules**: Better than deleting - preserves history
+4. **Set Rates**: Define NEW and RWL rates separately
+
+**Integration**:
+- Commission rules auto-populate when adding/editing policies
+- You can override rates with reason tracking
+- Historical data is preserved when rules change
