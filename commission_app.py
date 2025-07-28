@@ -12595,13 +12595,23 @@ TO "New Column Name";
                     # Minimum height to show at least header + 2 rows
                     display_height = max(display_height, 105)
                     
-                    # Create column configuration for numeric formatting
+                    # Create column configuration for numeric formatting and date formatting
                     column_config = {}
+                    
+                    # Date columns that need formatting
+                    date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
+                                    'Expiration Date', 'As of Date', 'Transaction Date']
+                    
                     for col in display_data.columns:
                         if col in all_numeric_columns or display_data[col].dtype in ['float64', 'int64', 'float32', 'int32']:
                             column_config[col] = st.column_config.NumberColumn(
                                 col,
                                 format="%.2f"
+                            )
+                        elif col in date_columns:
+                            column_config[col] = st.column_config.DateColumn(
+                                col,
+                                format="YYYY-MM-DD"
                             )
                     
                     # Apply special styling for STMT and VOID transactions
