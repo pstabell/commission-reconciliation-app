@@ -5,6 +5,34 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.15] - 2025-01-28 - Hide Rows Functionality
+
+### Added
+- **Hide Rows Feature for Policy Revenue Ledger Reports**
+  - Interactive "Hide" checkbox column using `st.data_editor`
+  - "🙈 Hide Selected" button to hide checked rows
+  - Hidden rows counter with quick access buttons
+  - Hidden Transactions management section with unhide functionality
+  - "✨ Unhide Selected" for selective unhiding
+  - Persistent within session (clears on refresh)
+
+### Changed
+- **Report Preview Display**
+  - Switched from `st.dataframe` to `st.data_editor` for checkbox support
+  - All columns except "Hide" remain read-only
+  - Maintains all existing formatting and styling
+
+- **UI Layout Improvements**
+  - Moved hidden rows indicator below Saved Templates section
+  - Hidden Transactions expander properly grouped with other collapsed features
+  - Cleaner layout with better organization
+
+### Improved
+- Ability to focus on good transactions by hiding voided ones
+- Visual feedback for hidden row management
+- Intuitive checkbox interface for row selection
+- Maintained all existing functionality (templates, formatting, exports)
+
 ## [3.8.14] - 2025-01-27 - Column Rename and Formatting Improvements
 
 ### Changed

@@ -12251,6 +12251,24 @@ TO "New Column Name";
                     # Show filtered count
                     st.info(f"📊 Showing {len(working_data):,} policies matching filter: {balance_filter}")
             
+            # Initialize hidden rows in session state if not exists
+            if 'prl_hidden_rows' not in st.session_state:
+                st.session_state.prl_hidden_rows = set()
+            
+            # Apply hidden row filter if any rows are hidden
+            if st.session_state.prl_hidden_rows and 'Transaction ID' in working_data.columns:
+                # Store original count before filtering
+                original_count = len(working_data)
+                # Filter out hidden transaction IDs
+                working_data = working_data[~working_data['Transaction ID'].isin(st.session_state.prl_hidden_rows)]
+                hidden_count = original_count - len(working_data)
+                # Store hidden count in session state for later use
+                st.session_state.prl_hidden_count = hidden_count
+            else:
+                st.session_state.prl_hidden_count = 0
+                
+                    
+            
             # Initialize session state for templates before any UI
             if "prl_templates" not in st.session_state:
                 # Load templates from file if exists
@@ -12540,6 +12558,96 @@ TO "New Column Name";
                         default_indicator = "⭐ " if data.get("is_default", False) else ""
                         st.write(f"**{default_indicator}{name}** - Created: {data['created']} - Columns: {len(data['columns'])}")
             
+            # Show hidden rows indicator with unhide option (if any rows are hidden)
+            if st.session_state.get('prl_hidden_count', 0) > 0:
+                hide_col1, hide_col2, hide_col3 = st.columns([2, 1, 1])
+                with hide_col1:
+                    st.warning(f"🙈 {st.session_state.prl_hidden_count} rows hidden from view")
+                with hide_col2:
+                    if st.button("View Hidden", key="view_hidden_rows"):
+                        st.session_state.show_hidden_details = True
+                with hide_col3:
+                    if st.button("Unhide All", key="unhide_all_quick"):
+                        st.session_state.prl_hidden_rows.clear()
+                        st.rerun()
+            
+            # Show hidden transactions details if requested
+            if st.session_state.get('show_hidden_details', False):
+                with st.expander("🙈 Hidden Transactions", expanded=True):
+                    hidden_df = all_data[all_data['Transaction ID'].isin(st.session_state.prl_hidden_rows)]
+                    
+                    # Show summary
+                    st.markdown(f"**{len(hidden_df)} hidden transactions:**")
+                    
+                    if len(hidden_df) > 0:
+                        # Display with select columns for better visibility
+                        display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 
+                                      'Agent Estimated Comm $', 'Agent Paid Amount (STMT)']
+                        available_cols = [col for col in display_cols if col in hidden_df.columns]
+                        
+                        # Create editable dataframe with Unhide column
+                        hidden_editable = hidden_df[available_cols].copy()
+                        hidden_editable.insert(0, 'Unhide', False)
+                        
+                        # Configure columns for the hidden data editor
+                        hidden_column_config = {
+                            'Unhide': st.column_config.CheckboxColumn(
+                                'Unhide',
+                                help="Select rows to unhide",
+                                default=False,
+                                width="small"
+                            )
+                        }
+                        
+                        # Add number formatting for financial columns
+                        for col in ['Agent Estimated Comm $', 'Agent Paid Amount (STMT)']:
+                            if col in hidden_editable.columns:
+                                hidden_column_config[col] = st.column_config.NumberColumn(
+                                    col,
+                                    format="%.2f"
+                                )
+                        
+                        # Use data editor for hidden transactions
+                        edited_hidden = st.data_editor(
+                            hidden_editable,
+                            use_container_width=True,
+                            column_config=hidden_column_config,
+                            disabled=[col for col in hidden_editable.columns if col != 'Unhide'],
+                            hide_index=True,
+                            key="hidden_data_editor"
+                        )
+                        
+                        # Unhide options
+                        unhide_col1, unhide_col2, unhide_col3 = st.columns([1.5, 1.5, 1])
+                        with unhide_col1:
+                            if st.button("✨ Unhide Selected", type="primary", key="unhide_selected"):
+                                # Get rows where Unhide is True
+                                rows_to_unhide = edited_hidden[edited_hidden['Unhide'] == True]['Transaction ID'].tolist()
+                                if rows_to_unhide:
+                                    # Remove from hidden set
+                                    for trans_id in rows_to_unhide:
+                                        st.session_state.prl_hidden_rows.discard(trans_id)
+                                    st.session_state.show_hidden_details = False
+                                    st.rerun()
+                                else:
+                                    st.warning("No rows selected to unhide")
+                        
+                        with unhide_col2:
+                            if st.button("Unhide All", key="unhide_all_detail"):
+                                st.session_state.prl_hidden_rows.clear()
+                                st.session_state.show_hidden_details = False
+                                st.rerun()
+                        
+                        with unhide_col3:
+                            if st.button("Close", key="close_hidden_details"):
+                                st.session_state.show_hidden_details = False
+                                st.rerun()
+                    else:
+                        st.info("No hidden transactions to display")
+                        if st.button("Close", key="close_empty_hidden"):
+                            st.session_state.show_hidden_details = False
+                            st.rerun()
+            
             # Data Preview with Selected Columns
             st.markdown("### 📊 Report Preview")
             if selected_columns and not working_data.empty:
@@ -12655,15 +12763,60 @@ TO "New Column Name";
                                 format="YYYY-MM-DD"
                             )
                     
-                    # Apply special styling for STMT and VOID transactions
-                    styled_data = style_special_transactions(display_data)
-                    
-                    st.dataframe(
-                        styled_data, 
-                        use_container_width=True, 
-                        height=display_height,
-                        column_config=column_config
-                    )
+                    # Add Hide checkbox column for data editor
+                    if 'Transaction ID' in display_data.columns:
+                        # Create a copy for editing
+                        editable_data = display_data.copy()
+                        
+                        # Add Hide checkbox column at the beginning
+                        editable_data.insert(0, 'Hide', False)
+                        
+                        # Update column config for the Hide column
+                        column_config['Hide'] = st.column_config.CheckboxColumn(
+                            'Hide',
+                            help="Select rows to hide",
+                            default=False,
+                            width="small"
+                        )
+                        
+                        # Use data_editor instead of dataframe
+                        edited_df = st.data_editor(
+                            editable_data,
+                            use_container_width=True,
+                            height=display_height,
+                            column_config=column_config,
+                            disabled=[col for col in editable_data.columns if col != 'Hide'],  # Only Hide column is editable
+                            hide_index=True,
+                            key="prl_data_editor"
+                        )
+                        
+                        # Add Hide Selected button
+                        hide_button_col1, hide_button_col2, hide_button_col3 = st.columns([1, 1, 4])
+                        with hide_button_col1:
+                            if st.button("🙈 Hide Selected", type="primary", key="hide_selected_rows"):
+                                # Get rows where Hide is True
+                                rows_to_hide = edited_df[edited_df['Hide'] == True]['Transaction ID'].tolist()
+                                if rows_to_hide:
+                                    st.session_state.prl_hidden_rows.update(rows_to_hide)
+                                    st.rerun()
+                                else:
+                                    st.warning("No rows selected to hide")
+                        
+                        with hide_button_col2:
+                            # Quick access to hidden rows view
+                            if st.session_state.prl_hidden_rows:
+                                if st.button(f"View Hidden ({len(st.session_state.prl_hidden_rows)})", key="quick_view_hidden"):
+                                    st.session_state.show_hidden_details = True
+                                    st.rerun()
+                    else:
+                        # No Transaction ID column, use regular dataframe
+                        styled_data = style_special_transactions(display_data)
+                        st.dataframe(
+                            styled_data, 
+                            use_container_width=True, 
+                            height=display_height,
+                            column_config=column_config
+                        )
                     st.caption(caption_text)                    # Create report metadata for export
                     export_metadata = {
                         "Report Generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
