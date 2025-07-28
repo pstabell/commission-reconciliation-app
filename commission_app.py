@@ -11361,7 +11361,7 @@ SOLUTION NEEDED:
                     ledger_df["Transaction ID"] = policy_rows[transaction_id_col]
                     # Create Type column with visual indicators
                     ledger_df["Type"] = ledger_df["Transaction ID"].apply(lambda x: 
-                        "💙 STMT" if "-STMT-" in str(x) else 
+                        "💰 STMT" if "-STMT-" in str(x) else 
                         "🔴 VOID" if "-VOID-" in str(x) else 
                         "📄"
                     )
@@ -11684,7 +11684,7 @@ SOLUTION NEEDED:
                     with legend_col1:
                         st.markdown("**Legend:**")
                     with legend_col2:
-                        st.markdown("💙 STMT = Reconciliation Entry")
+                        st.markdown("💰 STMT = Reconciliation Entry")
                     with legend_col3:
                         st.markdown("🔴 VOID = Voided Transaction")
                     with legend_col4:
@@ -11704,7 +11704,7 @@ SOLUTION NEEDED:
                         if col == "Type":
                             column_config[col] = st.column_config.TextColumn(
                                 col,
-                                help="Transaction type indicator: 💙=STMT, 🔴=VOID, 📄=Regular"
+                                help="Transaction type indicator: 💰=STMT, 🔴=VOID, 📄=Regular"
                             )
                         elif col in ["Credit (Commission Owed)", "Debit (Paid to Agent)", "Premium Sold", 
                                      "Policy Taxes & Fees", "Commissionable Premium", "Broker Fee", 
