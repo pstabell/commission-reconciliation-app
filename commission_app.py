@@ -1622,6 +1622,13 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
     
+    # Exclude STMT and VOID transactions based on Transaction ID
+    if 'Transaction ID' in pending_renewals.columns:
+        # Filter out any transactions with -STMT- or -VOID- in their Transaction ID
+        pending_renewals = pending_renewals[
+            ~pending_renewals['Transaction ID'].astype(str).str.contains('-STMT-|-VOID-', case=False, na=False)
+        ]
+    
     # Sort by Days Until Expiration (ascending, so most past-due show first)
     pending_renewals = pending_renewals.sort_values('Days Until Expiration', ascending=True)
     
