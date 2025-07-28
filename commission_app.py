@@ -12389,6 +12389,36 @@ TO "New Column Name";
                                 st.error(f"Error saving template: {str(e)}")
                         
                             st.rerun()
+                    
+                    # Add Update Template button if we're editing a template
+                    if 'editing_template' in st.session_state and st.session_state.editing_template:
+                        st.markdown("---")
+                        st.markdown(f"**Currently editing:** {st.session_state.editing_template}")
+                        if st.button("🔄 Update Template", type="primary"):
+                            # Update the existing template
+                            template_name = st.session_state.editing_template
+                            # Preserve the default status if it exists
+                            is_default = st.session_state.prl_templates[template_name].get("is_default", False)
+                            
+                            st.session_state.prl_templates[template_name] = {
+                                "columns": selected_columns.copy(),
+                                "created": st.session_state.prl_templates[template_name].get("created", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "is_default": is_default
+                            }
+                            
+                            # Save templates to file
+                            templates_file = "config_files/prl_templates.json"
+                            try:
+                                with open(templates_file, 'w') as f:
+                                    json.dump(st.session_state.prl_templates, f, indent=2)
+                                st.success(f"✅ Template '{template_name}' updated successfully!")
+                                # Clear editing state
+                                del st.session_state.editing_template
+                            except Exception as e:
+                                st.error(f"Error updating template: {str(e)}")
+                            
+                            st.rerun()
             
                 with template_col2:
                     st.markdown("**Load Template:**")
@@ -12484,7 +12514,8 @@ TO "New Column Name";
                                 template_data = st.session_state.prl_templates[template_to_manage]
                                 valid_columns = [col for col in template_data["columns"] if col in all_columns]
                                 st.session_state.prl_selected_columns = valid_columns
-                                st.info(f"Loaded '{template_to_manage}' for editing. Modify columns above and save with a new name.")
+                                st.session_state.editing_template = template_to_manage  # Track which template is being edited
+                                st.info(f"Loaded '{template_to_manage}' for editing. Modify columns above and click 'Update Template' below.")
                     
                         with manage_col2:
                             if st.button("🗑️ Delete"):
