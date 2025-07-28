@@ -4522,8 +4522,8 @@ def main():
                 '_id', 'Transaction ID', 'Client ID', 'Customer', 
                 'Policy Number', 'Prior Policy Number',
                 'Carrier Name', 'MGA Name',  # MGA right after Carrier
-                'Policy Type', 'Transaction Type',
-                'Effective Date', 'Policy Origination Date', 'Policy Term', 'X-DATE',  # Policy Term after Origination Date
+                'Policy Type', 'Transaction Type', 'Policy Term',  # Policy Term between Transaction Type and Effective Date
+                'Effective Date', 'Policy Origination Date', 'X-DATE',
                 'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
                 'Policy Gross Comm %', 'Agency Estimated Comm/Revenue (CRM)',
                 'Agent Estimated Comm $', 'Broker Fee', 'Broker Fee Agent Comm', 'Total Agent Comm',
