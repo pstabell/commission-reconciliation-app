@@ -12707,7 +12707,8 @@ TO "New Column Name";
                         
                         # Format numeric columns in the export data
                         export_data = working_data[valid_columns].copy()
-                        for col in numeric_columns_to_format:
+                        # Use the same all_numeric_columns list from earlier
+                        for col in all_numeric_columns:
                             if col in export_data.columns:
                                 export_data[col] = pd.to_numeric(export_data[col], errors='coerce').round(2)
                         
@@ -12734,7 +12735,7 @@ TO "New Column Name";
                             
                             # Write data to second sheet with formatted numeric columns
                             excel_export_data = working_data[valid_columns].copy()
-                            for col in numeric_columns_to_format:
+                            for col in all_numeric_columns:
                                 if col in excel_export_data.columns:
                                     excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
                             excel_export_data.to_excel(writer, sheet_name='Policy Revenue Report', index=False)
