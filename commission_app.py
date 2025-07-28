@@ -12865,6 +12865,14 @@ TO "New Column Name";
                             if col in export_data.columns:
                                 export_data[col] = pd.to_numeric(export_data[col], errors='coerce').round(2)
                         
+                        # Format date columns to remove time component
+                        date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
+                                      'Expiration Date', 'As of Date', 'Transaction Date']
+                        for col in date_columns:
+                            if col in export_data.columns:
+                                # Convert to datetime and format as date only
+                                export_data[col] = pd.to_datetime(export_data[col], errors='coerce').dt.strftime('%Y-%m-%d')
+                        
                         # Add the actual data
                         csv_data = export_data.to_csv(index=False)
                         csv_with_metadata = "\n".join(csv_lines) + "\n" + csv_data
@@ -12888,9 +12896,20 @@ TO "New Column Name";
                             
                             # Write data to second sheet with formatted numeric columns
                             excel_export_data = working_data[valid_columns].copy()
+                            
+                            # Format numeric columns
                             for col in all_numeric_columns:
                                 if col in excel_export_data.columns:
                                     excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
+                            
+                            # Format date columns to remove time component
+                            date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
+                                          'Expiration Date', 'As of Date', 'Transaction Date']
+                            for col in date_columns:
+                                if col in excel_export_data.columns:
+                                    # Convert to datetime and format as date only
+                                    excel_export_data[col] = pd.to_datetime(excel_export_data[col], errors='coerce').dt.strftime('%Y-%m-%d')
+                            
                             excel_export_data.to_excel(writer, sheet_name='Policy Revenue Report', index=False)
                             
                             # Get workbook and format metadata sheet
