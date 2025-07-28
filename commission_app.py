@@ -12551,7 +12551,7 @@ TO "New Column Name";
                     
                     # Format numeric columns to 2 decimal places
                     # Get all numeric columns in the data
-                    numeric_columns = display_data.select_dtypes(include=[np.number]).columns.tolist()
+                    numeric_columns = display_data.select_dtypes(include=['float64', 'int64', 'float32', 'int32', 'float', 'int']).columns.tolist()
                     
                     # Also include columns that should be numeric but might be object type
                     potentially_numeric = [
