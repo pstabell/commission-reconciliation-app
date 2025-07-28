@@ -47,4 +47,4 @@ tmp/
 .supabase/
 
 # User-specific configuration
-config_files/prl_templates.json
+# config_files/prl_templates.json  # Commented out so templates can be deployed

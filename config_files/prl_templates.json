@@ -1,0 +1,21 @@
+{
+  "POLICY TERMS": {
+    "columns": [
+      "Transaction ID",
+      "Customer",
+      "Transaction Type",
+      "Policy Type",
+      "Carrier Name",
+      "Policy Number",
+      "Policy Origination Date",
+      "Effective Date",
+      "X-DATE",
+      "Agent Comm %",
+      "Agent Estimated Comm $",
+      "Agent Paid Amount (STMT)",
+      "Policy Balance Due"
+    ],
+    "created": "2025-07-23 21:03:08",
+    "is_default": true
+  }
+}
