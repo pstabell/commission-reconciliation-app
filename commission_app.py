@@ -12575,6 +12575,13 @@ TO "New Column Name";
                             # Convert to numeric and format to 2 decimal places
                             display_data[col] = pd.to_numeric(display_data[col], errors='coerce').round(2)
                     
+                    # Format the dataframe for display with proper decimal places
+                    # Create format dict for all numeric columns
+                    format_dict = {}
+                    for col in display_data.columns:
+                        if col in all_numeric_columns or display_data[col].dtype in ['float64', 'int64', 'float32', 'int32']:
+                            format_dict[col] = '{:.2f}'
+                    
                     # Add a blank row at the end for better visibility
                     blank_row = pd.DataFrame([{col: '' for col in valid_columns}])
                     display_data = pd.concat([display_data, blank_row], ignore_index=True)
@@ -12588,10 +12595,24 @@ TO "New Column Name";
                     # Minimum height to show at least header + 2 rows
                     display_height = max(display_height, 105)
                     
+                    # Create column configuration for numeric formatting
+                    column_config = {}
+                    for col in display_data.columns:
+                        if col in all_numeric_columns or display_data[col].dtype in ['float64', 'int64', 'float32', 'int32']:
+                            column_config[col] = st.column_config.NumberColumn(
+                                col,
+                                format="%.2f"
+                            )
+                    
                     # Apply special styling for STMT and VOID transactions
                     styled_data = style_special_transactions(display_data)
                     
-                    st.dataframe(styled_data, use_container_width=True, height=display_height)
+                    st.dataframe(
+                        styled_data, 
+                        use_container_width=True, 
+                        height=display_height,
+                        column_config=column_config
+                    )
                     st.caption(caption_text)                    # Create report metadata for export
                     export_metadata = {
                         "Report Generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
