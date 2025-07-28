@@ -584,7 +584,7 @@ def apply_formula_display(df, show_formulas=True):
                     return 25.0
             else:
                 # Default to agent comm rate if available
-                agent_rate = row.get('Agent Comm %', 0)
+                agent_rate = row.get('Agent Comm (NEW 50% RWL 25%)', 0)
                 if agent_rate and agent_rate < 1:
                     return agent_rate * 100  # Convert decimal to percentage
                 return agent_rate or 0
@@ -943,7 +943,7 @@ def round_numeric_columns(df):
         df[col] = df[col].round(2)
     
     # Also handle columns that might be stored as strings but contain numeric values
-    percentage_columns = ['Policy Gross Comm %', 'Agent Comm %', 'Agent Comm (New 50% RWL 25%)']
+    percentage_columns = ['Policy Gross Comm %', 'Agent Comm (NEW 50% RWL 25%)', 'Agent Comm (New 50% RWL 25%)']
     for col in percentage_columns:
         if col in df.columns:
             # Convert to numeric if it's a string, then round
@@ -2974,7 +2974,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             'Agency Estimated Comm/Revenue (CRM)', 
             'Policy Gross Comm %', 'Agent Estimated Comm $',
             'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-            'Agent Comm %', 'Broker Fee', 
+            'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
             'Broker Fee Agent Comm', 'Total Agent Comm'
         ]
         status_fields = ['Reconciliation Notes', 'Reconciled?']  # 'Cross-Reference Key' not in database
@@ -3712,7 +3712,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                 modal_data.get('Transaction Type', 'NEW')))
         
         with col11:
-            if 'Agent Comm %' in modal_data.keys():
+            if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
                 # Get Prior Policy Number - check session state first, then updated data, then modal data
                 # This ensures we get the most current value even if field hasn't been rendered yet
                 prior_policy = st.session_state.get('modal_Prior Policy Number', 
@@ -3760,18 +3760,18 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         help_text += f" | No Prior Policy → New business rate (50%)"
                 
                 st.text_input(
-                    'Agent Comm %',
+                    'Agent Comm (NEW 50% RWL 25%)',
                     value=f"{agent_rate}%",
                     key="modal_Agent Comm %_display",
                     disabled=True,
                     help=help_text
                 )
-                updated_data['Agent Comm %'] = agent_rate
+                updated_data['Agent Comm (NEW 50% RWL 25%)'] = agent_rate
         
         with col12:
             # Agent Estimated Comm $ (calculated)
             # Use the agent_rate calculated above
-            agent_comm_pct = agent_rate if 'agent_rate' in locals() else updated_data.get('Agent Comm %', 0)
+            agent_comm_pct = agent_rate if 'agent_rate' in locals() else updated_data.get('Agent Comm (NEW 50% RWL 25%)', 0)
             try:
                 agent_comm_pct = float(agent_comm_pct) if pd.notna(agent_comm_pct) else 0.0
                 agent_comm = agency_comm * (agent_comm_pct / 100)
@@ -4886,7 +4886,7 @@ def main():
                             'Broker Fee Agent Comm',
                             'Total Agent Comm',
                             'Policy Balance Due',
-                            'Agent Comm %'
+                            'Agent Comm (NEW 50% RWL 25%)'
                         ]
                         
                         # Dollar amount columns (show with $ sign)
@@ -4907,7 +4907,7 @@ def main():
                         # Percentage columns (show without $ sign)
                         percent_cols = [
                             'Policy Gross Comm %',
-                            'Agent Comm %'
+                            'Agent Comm (NEW 50% RWL 25%)'
                         ]
                         
                         for col in dollar_cols:
@@ -6211,7 +6211,7 @@ def main():
                         # No prior policy = this is a new policy
                         agent_comm_rate = 50.0
                 
-                st.text_input("Agent Comm %", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
+                st.text_input("Agent Comm (NEW 50% RWL 25%)", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
                 
                 # Calculate broker fee agent commission
                 broker_fee_agent_comm = broker_fee * 0.50
@@ -6288,7 +6288,7 @@ def main():
                             "Broker Fee": clean_numeric_value(broker_fee),
                             "Policy Gross Comm %": clean_numeric_value(policy_gross_comm_input),
                             "Agency Estimated Comm/Revenue (CRM)": clean_numeric_value(agency_est_comm),
-                            "Agent Comm %": clean_numeric_value(agent_comm_rate),
+                            "Agent Comm (NEW 50% RWL 25%)": clean_numeric_value(agent_comm_rate),
                             "Agent Estimated Comm $": clean_numeric_value(agent_est_comm),
                             "Broker Fee Agent Comm": clean_numeric_value(broker_fee_agent_comm),
                             "Total Agent Comm": clean_numeric_value(total_agent_comm),
@@ -6946,7 +6946,7 @@ def main():
                                                     "Premium Sold": f"${float(transaction.get('Premium Sold', 0) or 0):,.2f}",
                                                     "Policy Gross Comm %": f"{float(transaction.get('Policy Gross Comm %', 0) or 0):.2f}%",
                                                     "Agency Est. Comm": f"${float(transaction.get('Agency Estimated Comm/Revenue (CRM)', 0) or 0):,.2f}",
-                                                    "Agent Comm Rate": transaction.get('Agent Comm %', ''),
+                                                    "Agent Comm Rate": transaction.get('Agent Comm (NEW 50% RWL 25%)', ''),
                                                 }
                                                 for key, value in dates_dict.items():
                                                     st.text(f"{key}: {value}")
@@ -8088,150 +8088,12 @@ def main():
         
         with tab2:
             st.subheader("Column Mapping Configuration")
-            st.info("Map database columns to user-friendly display names. Changes are saved to column_mapping.json")
+            st.info("Column mapping settings are managed in column_mapping_config.py")
             
             if not all_data.empty:
-                # Load existing mappings
-                from column_mapping_config import column_mapper
-                current_mapping = column_mapper._load_mapping()
-                
-                # Create editable mapping interface
-                st.write("**Edit Column Display Names:**")
-                st.caption("Change how column names appear in the app without modifying the database")
-                
-                # Initialize session state for editing
-                if 'column_mapping_edits' not in st.session_state:
-                    # Clean up the current mapping to remove duplicates and fix issues
-                    cleaned_mapping = {}
-                    seen_db_cols = set()
-                    
-                    for ui_field, db_col in current_mapping.items():
-                        # Skip duplicate STMT DATE mapping
-                        if db_col == "STMT DATE" and db_col in seen_db_cols:
-                            continue
-                        # Keep calculated fields
-                        if db_col == "(Calculated/Virtual)":
-                            cleaned_mapping[ui_field] = db_col
-                        # Keep valid mappings
-                        elif db_col in all_data.columns or db_col == "NOTES":
-                            cleaned_mapping[ui_field] = db_col
-                            seen_db_cols.add(db_col)
-                    
-                    st.session_state.column_mapping_edits = cleaned_mapping
-                
-                # Create columns for better layout
-                col1, col2, col3 = st.columns([2, 2, 1])
-                with col1:
-                    st.markdown("**Database Column**")
-                with col2:
-                    st.markdown("**Display Name (UI)**")
-                with col3:
-                    st.markdown("**Action**")
-                
-                # Display editable mappings for important columns
-                important_columns = [
-                    "Agent Comm %",
-                    "Agency Estimated Comm/Revenue (CRM)",
-                    "Agent Estimated Comm $",
-                    "Agent Paid Amount (STMT)",
-                    "Agency Comm Received (STMT)",
-                    "Policy Gross Comm %",
-                    "Premium Sold",
-                    "Policy Balance Due",
-                    "Customer",
-                    "Policy Number",
-                    "Transaction Type",
-                    "Effective Date",
-                    "X-DATE"
-                ]
-                
-                # Show mapped columns first
-                st.markdown("---")
-                
-                # Also show calculated fields that need mapping
-                calculated_fields = ["Policy Balance Due", "Agent Estimated Comm $"]
-                
-                for db_col in important_columns:
-                    if db_col in all_data.columns or db_col in calculated_fields:
-                        col1, col2, col3 = st.columns([2, 2, 1])
-                        with col1:
-                            if db_col in calculated_fields:
-                                st.text(f"{db_col} (Calculated)")
-                            else:
-                                st.text(db_col)
-                        with col2:
-                            # Find the UI name for this database column
-                            ui_name = db_col  # default
-                            for ui_field, mapped_col in st.session_state.column_mapping_edits.items():
-                                if mapped_col == db_col or (db_col in calculated_fields and ui_field == db_col):
-                                    ui_name = ui_field
-                                    break
-                            
-                            new_name = st.text_input(
-                                "Display name",
-                                value=ui_name,
-                                key=f"map_{db_col}",
-                                label_visibility="hidden"
-                            )
-                            
-                            # Update session state if changed
-                            if new_name != ui_name:
-                                if db_col in calculated_fields:
-                                    st.session_state.column_mapping_edits[new_name] = "(Calculated/Virtual)"
-                                else:
-                                    st.session_state.column_mapping_edits[new_name] = db_col
-                                # Remove old mapping if UI name changed
-                                if ui_name in st.session_state.column_mapping_edits and ui_name != new_name:
-                                    del st.session_state.column_mapping_edits[ui_name]
-                        
-                        with col3:
-                            if db_col == "Agent Comm %":
-                                st.caption("⭐ Rename to 'Agent Comm %'")
-                
-                # Show other database columns
-                st.markdown("---")
-                st.markdown("**Other Database Columns:**")
-                other_cols = [col for col in sorted(all_data.columns) if col not in important_columns]
-                
-                # Display in a more compact format
-                cols_per_row = 3
-                for i in range(0, len(other_cols), cols_per_row):
-                    cols = st.columns(cols_per_row)
-                    for j, col in enumerate(other_cols[i:i+cols_per_row]):
-                        if j < len(cols):
-                            cols[j].write(f"• {col}")
-                
-                # Save button
-                st.markdown("---")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("💾 Save Column Mappings", type="primary"):
-                        try:
-                            # Validate and save
-                            result = column_mapper.save_mapping(
-                                st.session_state.column_mapping_edits,
-                                list(all_data.columns)
-                            )
-                            
-                            if result['success']:
-                                st.success("✅ Column mappings saved successfully!")
-                                if result.get('warnings'):
-                                    for warning in result['warnings']:
-                                        st.warning(warning)
-                                # Clear the mapping cache to ensure new mappings are loaded
-                                column_mapper.clear_cache()
-                                st.balloons()
-                            else:
-                                st.error("Failed to save mappings:")
-                                for error in result.get('errors', []):
-                                    st.error(f"• {error}")
-                        except Exception as e:
-                            st.error(f"Error saving mappings: {str(e)}")
-                
-                with col2:
-                    if st.button("🔄 Reset to Defaults"):
-                        st.session_state.column_mapping_edits = column_mapper.default_ui_fields.copy()
-                        st.rerun()
+                st.write("**Current Database Columns:**")
+                for col in sorted(all_data.columns):
+                    st.write(f"• {col}")
         
         with tab3:
             st.subheader("Data Management")
@@ -8781,7 +8643,7 @@ Where Used:
                         "Broker Fee",
                         "Policy Gross Comm %",
                         "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Comm %",
+                        "Agent Comm (NEW 50% RWL 25%)",
                         "Agent Estimated Comm $",
                         "Broker Fee Agent Comm",
                         "Total Agent Comm",
@@ -11442,7 +11304,7 @@ SOLUTION NEEDED:
                     policy_detail_field_names = [
                         "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
                         "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
-                        "Agent Comm %", "X-DATE"
+                        "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
                     ]
                     policy_detail_cols = []
                     for field_name in policy_detail_field_names:
@@ -11495,7 +11357,7 @@ SOLUTION NEEDED:
                     effective_date = policy_details_row.get("Effective Date", "N/A")
                     origination_date = policy_details_row.get("Policy Origination Date", "N/A")
                     gross_comm = policy_details_row.get("Policy Gross Comm %", 0)
-                    agent_comm = policy_details_row.get("Agent Comm %", 0)
+                    agent_comm = policy_details_row.get("Agent Comm (NEW 50% RWL 25%)", 0)
                     x_date = policy_details_row.get("X-DATE", "N/A")
                     
                     # Format dates for display
@@ -12083,7 +11945,7 @@ TO "New Column Name";
                             agg_dict[target_col] = 'sum'
                     
                     # For percentage fields, take the first value (should be consistent per policy)
-                    percentage_fields = ["Agent Comm %", "Policy Gross Comm %"]
+                    percentage_fields = ["Agent Comm (NEW 50% RWL 25%)", "Policy Gross Comm %"]
                     for field in percentage_fields:
                         if field in working_data.columns and field not in agg_dict:
                             agg_dict[field] = 'first'
@@ -12241,7 +12103,14 @@ TO "New Column Name";
                     # Show filtered count
                     st.info(f"📊 Showing {len(working_data):,} policies matching filter: {balance_filter}")
             
-            # Initialize session state for templates before any UI
+            # Enhanced Column Selection and Template Management
+            st.markdown("### 🔧 Column Selection & Templates")
+            if view_mode == "Aggregated by Policy":
+                st.info("💡 **Note**: This view aggregates data by Policy Number. Fields like 'Transaction Type' will show the first transaction's value. Switch to 'Detailed Transactions' view to see all individual transactions.")
+            else:
+                st.info("💡 **Note**: This view shows all individual transactions. You can see each transaction type, term, and commission detail separately.")
+            
+            # Initialize session state for templates
             if "prl_templates" not in st.session_state:
                 # Load templates from file if exists
                 templates_file = "config_files/prl_templates.json"
@@ -12256,7 +12125,7 @@ TO "New Column Name";
             
             # Get all available columns
             all_columns = list(working_data.columns)
-            # Default column selection (updated to use correct column names)
+              # Default column selection (updated to use correct column names)
             default_columns = ["Customer", "Policy Number", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
             available_default_columns = [col for col in default_columns if col in all_columns]
             
@@ -12276,223 +12145,214 @@ TO "New Column Name";
                     st.session_state.prl_selected_columns = valid_template_columns
                 else:
                     # Use standard default columns
-                    st.session_state.prl_selected_columns = available_default_columns
-            
-            # Show if default template was loaded
+                    st.session_state.prl_selected_columns = available_default_columns            # Show if default template was loaded
             if default_template and "prl_default_loaded" not in st.session_state:
                 st.info(f"⭐ **Default template loaded**: {default_template}")
                 st.session_state.prl_default_loaded = True
             
-            # Column Selection & Templates in Expander
-            with st.expander("🔧 Column Selection & Templates", expanded=False):
-                if view_mode == "Aggregated by Policy":
-                    st.info("💡 **Note**: This view aggregates data by Policy Number. Fields like 'Transaction Type' will show the first transaction's value. Switch to 'Detailed Transactions' view to see all individual transactions.")
-                else:
-                    st.info("💡 **Note**: This view shows all individual transactions. You can see each transaction type, term, and commission detail separately.")
-                
-                # Column selection interface
-                col_selection_col1, col_selection_col2 = st.columns([2, 1])
-                
-                with col_selection_col1:
-                    st.markdown("**Select Columns:**")
-                    
-                    # Available columns multiselect (restored to original style)
-                    selected_columns = st.multiselect(
-                        "Choose columns to display in your report",
-                        options=all_columns,
-                        default=st.session_state.prl_selected_columns,
-                        key="prl_column_multiselect"
-                    )
-                    
-                    # Update session state
-                    st.session_state.prl_selected_columns = selected_columns
-                    
-                    # Column reordering with streamlit_sortables (compact style like Edit Policies page)
-                    if selected_columns:
-                        reorder_col1, reorder_col2 = st.columns([4, 1])
-                        
-                        with reorder_col1:
-                            st.markdown("**Reorder columns by dragging the boxes below:**")
-                        
-                        with reorder_col2:
-                            if st.button("🔄 Refresh", key="refresh_reorder", help="Refresh reorder section to sync with selected columns"):
-                                # Force sync by updating the sortable key
-                                if "prl_column_order_sortable_counter" not in st.session_state:
-                                    st.session_state.prl_column_order_sortable_counter = 0
-                                st.session_state.prl_column_order_sortable_counter += 1
-                                st.rerun()
-                        
-                        # Generate unique key for sortable component
-                        sortable_key = f"prl_column_order_sortable_{st.session_state.get('prl_column_order_sortable_counter', 0)}"
-                        
-                        reordered_columns = streamlit_sortables.sort_items(
-                            items=selected_columns,
-                            direction="horizontal",
-                            key=sortable_key
-                        )
-                        
-                        # Update session state with reordered columns
-                        st.session_state.prl_selected_columns = reordered_columns
-                        selected_columns = reordered_columns
-                
-                with col_selection_col2:
-                    st.markdown("**Quick Presets:**")
-                    if st.button("💰 Financial Focus"):
-                        financial_cols = ["Customer", "Policy Number", "Agency Estimated Comm/Revenue (CRM)", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
-                        st.session_state.prl_selected_columns = [col for col in financial_cols if col in all_columns]
-                        st.rerun()
-                    
-                    if st.button("📋 Basic Info"):
-                        basic_cols = ["Customer", "Policy Type", "Carrier Name", "Policy Number", "Effective Date"]
-                        st.session_state.prl_selected_columns = [col for col in basic_cols if col in all_columns]
-                        st.rerun()
+            # Column selection interface
+            col_selection_col1, col_selection_col2 = st.columns([2, 1])
             
-            # Template Management Section in Expander
-            with st.expander("💾 Template Management", expanded=False):
-                template_col1, template_col2, template_col3 = st.columns(3)
+            with col_selection_col1:
+                st.markdown("**Select Columns:**")
                 
-                with template_col1:
-                    st.markdown("**Save New Template:**")
-                    new_template_name = st.text_input(
-                        "Template Title",
-                        placeholder="Enter custom report title",
-                        help="Give your template a descriptive name"
-                    )
+                # Available columns multiselect (restored to original style)
+                selected_columns = st.multiselect(
+                    "Choose columns to display in your report",
+                    options=all_columns,
+                    default=st.session_state.prl_selected_columns,
+                    key="prl_column_multiselect"
+                )
                 
-                    if st.button("💾 Save Template", disabled=not new_template_name or not selected_columns):
-                        if new_template_name in st.session_state.prl_templates:
-                            st.error(f"Template '{new_template_name}' already exists!")
-                        else:
-                            st.session_state.prl_templates[new_template_name] = {
-                                "columns": selected_columns.copy(),
-                                "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                        
-                            # Save templates to file for persistence
-                            templates_file = "config_files/prl_templates.json"
-                            os.makedirs("config_files", exist_ok=True)
-                            try:
-                                with open(templates_file, 'w') as f:
-                                    json.dump(st.session_state.prl_templates, f, indent=2)
-                                st.success(f"✅ Template '{new_template_name}' saved!")
-                            except Exception as e:
-                                st.error(f"Error saving template: {str(e)}")
-                        
+                # Update session state
+                st.session_state.prl_selected_columns = selected_columns
+                
+                # Column reordering with streamlit_sortables (compact style like Edit Policies page)
+                if selected_columns:
+                    reorder_col1, reorder_col2 = st.columns([4, 1])
+                    
+                    with reorder_col1:
+                        st.markdown("**Reorder columns by dragging the boxes below:**")
+                    
+                    with reorder_col2:
+                        if st.button("🔄 Refresh", key="refresh_reorder", help="Refresh reorder section to sync with selected columns"):
+                            # Force sync by updating the sortable key
+                            if "prl_column_order_sortable_counter" not in st.session_state:
+                                st.session_state.prl_column_order_sortable_counter = 0
+                            st.session_state.prl_column_order_sortable_counter += 1
                             st.rerun()
+                    
+                    # Generate unique key for sortable component
+                    sortable_key = f"prl_column_order_sortable_{st.session_state.get('prl_column_order_sortable_counter', 0)}"
+                    
+                    reordered_columns = streamlit_sortables.sort_items(
+                        items=selected_columns,
+                        direction="horizontal",
+                        key=sortable_key
+                    )
+                    
+                    # Update session state with reordered columns
+                    st.session_state.prl_selected_columns = reordered_columns
+                    selected_columns = reordered_columns
             
-                with template_col2:
-                    st.markdown("**Load Template:**")
-                    if st.session_state.prl_templates:
-                        # Show current default template if exists
-                        current_default = None
-                        for name, data in st.session_state.prl_templates.items():
-                            if data.get("is_default", False):
-                                current_default = name
-                                break
-                    
-                        if current_default:
-                            st.info(f"⭐ Default template: {current_default}")
-                    
-                        template_options = list(st.session_state.prl_templates.keys())
-                        template_display = []
-                        for template_name in template_options:
-                            if st.session_state.prl_templates[template_name].get("is_default", False):
-                                template_display.append(f"⭐ {template_name}")
-                            else:
-                                template_display.append(template_name)
-                    
-                        selected_template_display = st.selectbox(
-                            "Select template to load",
-                            options=template_display,
-                            key="template_loader"
-                        )
-                    
-                        # Get actual template name (remove star if present)
-                        template_to_load = selected_template_display.replace("⭐ ", "")
-                    
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("📂 Load Template"):
-                                template_data = st.session_state.prl_templates[template_to_load]
-                                # Only load columns that still exist in the data
-                                valid_columns = [col for col in template_data["columns"] if col in all_columns]
-                                st.session_state.prl_selected_columns = valid_columns
-                                st.success(f"✅ Loaded template: {template_to_load}")
-                                st.rerun()
-                    
-                        with col2:
-                            # Show set/unset default button
-                            is_current_default = st.session_state.prl_templates[template_to_load].get("is_default", False)
-                            if is_current_default:
-                                if st.button("✖️ Unset Default"):
-                                    # Remove default flag
-                                    st.session_state.prl_templates[template_to_load]["is_default"] = False
-                                
-                                    # Save templates to file
-                                    templates_file = "config_files/prl_templates.json"
-                                    try:
-                                        with open(templates_file, 'w') as f:
-                                            json.dump(st.session_state.prl_templates, f, indent=2)
-                                        st.success(f"✅ Removed default status from: {template_to_load}")
-                                    except Exception as e:
-                                        st.error(f"Error saving changes: {str(e)}")
-                                    st.rerun()
-                            else:
-                                if st.button("⭐ Set as Default"):
-                                    # Remove default from all other templates
-                                    for name in st.session_state.prl_templates:
-                                        st.session_state.prl_templates[name]["is_default"] = False
-                                
-                                    # Set this template as default
-                                    st.session_state.prl_templates[template_to_load]["is_default"] = True
-                                
-                                    # Save templates to file
-                                    templates_file = "config_files/prl_templates.json"
-                                    try:
-                                        with open(templates_file, 'w') as f:
-                                            json.dump(st.session_state.prl_templates, f, indent=2)
-                                        st.success(f"✅ Set as default template: {template_to_load}")
-                                    except Exception as e:
-                                        st.error(f"Error saving changes: {str(e)}")
-                                    st.rerun()
+            with col_selection_col2:
+                st.markdown("**Quick Presets:**")
+                if st.button("💰 Financial Focus"):
+                    financial_cols = ["Customer", "Policy Number", "Agency Estimated Comm/Revenue (CRM)", "Agent Estimated Comm $", "Agent Paid Amount (STMT)", "Policy Balance Due"]
+                    st.session_state.prl_selected_columns = [col for col in financial_cols if col in all_columns]
+                    st.rerun()
+                
+                if st.button("📋 Basic Info"):
+                    basic_cols = ["Customer", "Policy Type", "Carrier Name", "Policy Number", "Effective Date"]
+                    st.session_state.prl_selected_columns = [col for col in basic_cols if col in all_columns]
+                    st.rerun()
+            
+            # Template Management Section
+            st.markdown("### 💾 Template Management")
+            template_col1, template_col2, template_col3 = st.columns(3)
+            
+            with template_col1:
+                st.markdown("**Save New Template:**")
+                new_template_name = st.text_input(
+                    "Template Title",
+                    placeholder="Enter custom report title",
+                    help="Give your template a descriptive name"
+                )
+                
+                if st.button("💾 Save Template", disabled=not new_template_name or not selected_columns):
+                    if new_template_name in st.session_state.prl_templates:
+                        st.error(f"Template '{new_template_name}' already exists!")
                     else:
-                        st.info("No saved templates yet")
+                        st.session_state.prl_templates[new_template_name] = {
+                            "columns": selected_columns.copy(),
+                            "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        
+                        # Save templates to file for persistence
+                        templates_file = "config_files/prl_templates.json"
+                        os.makedirs("config_files", exist_ok=True)
+                        try:
+                            with open(templates_file, 'w') as f:
+                                json.dump(st.session_state.prl_templates, f, indent=2)
+                            st.success(f"✅ Template '{new_template_name}' saved!")
+                        except Exception as e:
+                            st.error(f"Error saving template: {str(e)}")
+                        
+                        st.rerun()
             
-                with template_col3:
-                    st.markdown("**Manage Templates:**")
-                    if st.session_state.prl_templates:
-                        template_to_manage = st.selectbox(
-                            "Select template to manage",
-                            options=list(st.session_state.prl_templates.keys()),
-                            key="template_manager"
-                        )
+            with template_col2:
+                st.markdown("**Load Template:**")
+                if st.session_state.prl_templates:
+                    # Show current default template if exists
+                    current_default = None
+                    for name, data in st.session_state.prl_templates.items():
+                        if data.get("is_default", False):
+                            current_default = name
+                            break
                     
-                        manage_col1, manage_col2 = st.columns(2)
-                        with manage_col1:
-                            if st.button("✏️ Edit"):
-                                # Load template for editing
-                                template_data = st.session_state.prl_templates[template_to_manage]
-                                valid_columns = [col for col in template_data["columns"] if col in all_columns]
-                                st.session_state.prl_selected_columns = valid_columns
-                                st.info(f"Loaded '{template_to_manage}' for editing. Modify columns above and save with a new name.")
+                    if current_default:
+                        st.info(f"⭐ Default template: {current_default}")
                     
-                        with manage_col2:
-                            if st.button("🗑️ Delete"):
-                                del st.session_state.prl_templates[template_to_manage]
-                            
-                                # Save updated templates to file
+                    template_options = list(st.session_state.prl_templates.keys())
+                    template_display = []
+                    for template_name in template_options:
+                        if st.session_state.prl_templates[template_name].get("is_default", False):
+                            template_display.append(f"⭐ {template_name}")
+                        else:
+                            template_display.append(template_name)
+                    
+                    selected_template_display = st.selectbox(
+                        "Select template to load",
+                        options=template_display,
+                        key="template_loader"
+                    )
+                    
+                    # Get actual template name (remove star if present)
+                    template_to_load = selected_template_display.replace("⭐ ", "")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("📂 Load Template"):
+                            template_data = st.session_state.prl_templates[template_to_load]
+                            # Only load columns that still exist in the data
+                            valid_columns = [col for col in template_data["columns"] if col in all_columns]
+                            st.session_state.prl_selected_columns = valid_columns
+                            st.success(f"✅ Loaded template: {template_to_load}")
+                            st.rerun()
+                    
+                    with col2:
+                        # Show set/unset default button
+                        is_current_default = st.session_state.prl_templates[template_to_load].get("is_default", False)
+                        if is_current_default:
+                            if st.button("✖️ Unset Default"):
+                                # Remove default flag
+                                st.session_state.prl_templates[template_to_load]["is_default"] = False
+                                
+                                # Save templates to file
                                 templates_file = "config_files/prl_templates.json"
                                 try:
                                     with open(templates_file, 'w') as f:
                                         json.dump(st.session_state.prl_templates, f, indent=2)
-                                    st.success(f"✅ Deleted template: {template_to_manage}")
+                                    st.success(f"✅ Removed default status from: {template_to_load}")
                                 except Exception as e:
                                     st.error(f"Error saving changes: {str(e)}")
-                            
                                 st.rerun()
-                    else:
-                        st.info("No templates to manage")
-            # Show current template status
+                        else:
+                            if st.button("⭐ Set as Default"):
+                                # Remove default from all other templates
+                                for name in st.session_state.prl_templates:
+                                    st.session_state.prl_templates[name]["is_default"] = False
+                                
+                                # Set this template as default
+                                st.session_state.prl_templates[template_to_load]["is_default"] = True
+                                
+                                # Save templates to file
+                                templates_file = "config_files/prl_templates.json"
+                                try:
+                                    with open(templates_file, 'w') as f:
+                                        json.dump(st.session_state.prl_templates, f, indent=2)
+                                    st.success(f"✅ Set as default template: {template_to_load}")
+                                except Exception as e:
+                                    st.error(f"Error saving changes: {str(e)}")
+                                st.rerun()
+                else:
+                    st.info("No saved templates yet")
+            
+            with template_col3:
+                st.markdown("**Manage Templates:**")
+                if st.session_state.prl_templates:
+                    template_to_manage = st.selectbox(
+                        "Select template to manage",
+                        options=list(st.session_state.prl_templates.keys()),
+                        key="template_manager"
+                    )
+                    
+                    manage_col1, manage_col2 = st.columns(2)
+                    with manage_col1:
+                        if st.button("✏️ Edit"):
+                            # Load template for editing
+                            template_data = st.session_state.prl_templates[template_to_manage]
+                            valid_columns = [col for col in template_data["columns"] if col in all_columns]
+                            st.session_state.prl_selected_columns = valid_columns
+                            st.info(f"Loaded '{template_to_manage}' for editing. Modify columns above and save with a new name.")
+                    
+                    with manage_col2:
+                        if st.button("🗑️ Delete"):
+                            del st.session_state.prl_templates[template_to_manage]
+                            
+                            # Save updated templates to file
+                            templates_file = "config_files/prl_templates.json"
+                            try:
+                                with open(templates_file, 'w') as f:
+                                    json.dump(st.session_state.prl_templates, f, indent=2)
+                                st.success(f"✅ Deleted template: {template_to_manage}")
+                            except Exception as e:
+                                st.error(f"Error saving changes: {str(e)}")
+                            
+                            st.rerun()
+                else:
+                    st.info("No templates to manage")
+              # Show current template status
             if st.session_state.prl_templates:
                 with st.expander("📋 Saved Templates", expanded=False):
                     for name, data in st.session_state.prl_templates.items():
@@ -12550,27 +12410,18 @@ TO "New Column Name";
                         caption_text = f"Showing records {start_idx + 1}-{min(end_idx, len(working_data))} of {len(working_data):,} total records with {len(valid_columns)} columns"
                     
                     # Format numeric columns to 2 decimal places
-                    # Get all numeric columns in the data
-                    numeric_columns = display_data.select_dtypes(include=[np.number]).columns.tolist()
-                    
-                    # Also include columns that should be numeric but might be object type
-                    potentially_numeric = [
-                        "Agent Comm", "Agent Comm %",
+                    numeric_columns_to_format = [
+                        "Agent Comm", "Agent Comm (NEW 50% RWL 25%)",
                         "Agent Estimated Comm", "Agent Estimated Comm $",
                         "Agent Paid Amount", "Agent Paid Amount (STMT)",
-                        "Policy Balance Due", "Balance Due",
+                        "Policy Balance Due",
                         "Agency Estimated Comm/Revenue (CRM)",
-                        "Agency Comm Received (STMT)",
                         "Premium Sold", "Broker Fee", "Broker Fee Agent Comm",
-                        "Total Agent Comm", "Policy Taxes & Fees", "Commissionable Premium",
-                        "Policy Gross Comm %", "Credit (Commission Owed)", "Debit (Paid to Agent)"
+                        "Total Agent Comm", "Policy Taxes & Fees", "Commissionable Premium"
                     ]
                     
-                    # Combine and get unique columns
-                    all_numeric_columns = list(set(numeric_columns + potentially_numeric))
-                    
                     # Apply formatting to numeric columns that exist in the display data
-                    for col in all_numeric_columns:
+                    for col in numeric_columns_to_format:
                         if col in display_data.columns:
                             # Convert to numeric and format to 2 decimal places
                             display_data[col] = pd.to_numeric(display_data[col], errors='coerce').round(2)

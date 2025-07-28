@@ -5,6 +5,29 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.14] - 2025-01-27 - Column Rename and Formatting Improvements
+
+### Changed
+- **Database Column Rename**
+  - Renamed "Agent Comm (NEW 50% RWL 25%)" to "Agent Comm %" throughout the application
+  - Updated all code references, configurations, and templates
+  - Direct database rename for cleaner implementation
+  
+- **Decimal Formatting**
+  - Fixed numeric columns showing 6 decimal places in Policy Revenue Ledger Reports
+  - All numeric values now display with exactly 2 decimal places
+  - Automatic detection and formatting of numeric columns
+
+- **Admin Panel Enhancement**
+  - Added column mapping edit functionality to Admin Panel
+  - Users can now change display names without code modifications
+
+### Improved
+- Cleaner column names throughout the application
+- Professional numeric formatting in all reports
+- Better user experience with consistent decimal display
+- Expandable sections in Policy Revenue Ledger Reports (start collapsed)
+
 ## [3.8.13] - 2025-01-27 - Default Template Feature
 
 ### Added

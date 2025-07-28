@@ -180,7 +180,7 @@
       "primary_key": false
     },
     {
-      "name": "Agent Comm (NEW 50% RWL 25%)",
+      "name": "Agent Comm %",
       "type": "TEXT",
       "not_null": false,
       "default": null,

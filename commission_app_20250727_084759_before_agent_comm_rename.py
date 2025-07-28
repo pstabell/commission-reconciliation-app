@@ -584,7 +584,7 @@ def apply_formula_display(df, show_formulas=True):
                     return 25.0
             else:
                 # Default to agent comm rate if available
-                agent_rate = row.get('Agent Comm %', 0)
+                agent_rate = row.get('Agent Comm (NEW 50% RWL 25%)', 0)
                 if agent_rate and agent_rate < 1:
                     return agent_rate * 100  # Convert decimal to percentage
                 return agent_rate or 0
@@ -943,7 +943,7 @@ def round_numeric_columns(df):
         df[col] = df[col].round(2)
     
     # Also handle columns that might be stored as strings but contain numeric values
-    percentage_columns = ['Policy Gross Comm %', 'Agent Comm %', 'Agent Comm (New 50% RWL 25%)']
+    percentage_columns = ['Policy Gross Comm %', 'Agent Comm (NEW 50% RWL 25%)', 'Agent Comm (New 50% RWL 25%)']
     for col in percentage_columns:
         if col in df.columns:
             # Convert to numeric if it's a string, then round
@@ -2974,7 +2974,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             'Agency Estimated Comm/Revenue (CRM)', 
             'Policy Gross Comm %', 'Agent Estimated Comm $',
             'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-            'Agent Comm %', 'Broker Fee', 
+            'Agent Comm (NEW 50% RWL 25%)', 'Broker Fee', 
             'Broker Fee Agent Comm', 'Total Agent Comm'
         ]
         status_fields = ['Reconciliation Notes', 'Reconciled?']  # 'Cross-Reference Key' not in database
@@ -3712,7 +3712,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                                 modal_data.get('Transaction Type', 'NEW')))
         
         with col11:
-            if 'Agent Comm %' in modal_data.keys():
+            if 'Agent Comm (NEW 50% RWL 25%)' in modal_data.keys():
                 # Get Prior Policy Number - check session state first, then updated data, then modal data
                 # This ensures we get the most current value even if field hasn't been rendered yet
                 prior_policy = st.session_state.get('modal_Prior Policy Number', 
@@ -3760,18 +3760,18 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         help_text += f" | No Prior Policy → New business rate (50%)"
                 
                 st.text_input(
-                    'Agent Comm %',
+                    'Agent Comm (NEW 50% RWL 25%)',
                     value=f"{agent_rate}%",
                     key="modal_Agent Comm %_display",
                     disabled=True,
                     help=help_text
                 )
-                updated_data['Agent Comm %'] = agent_rate
+                updated_data['Agent Comm (NEW 50% RWL 25%)'] = agent_rate
         
         with col12:
             # Agent Estimated Comm $ (calculated)
             # Use the agent_rate calculated above
-            agent_comm_pct = agent_rate if 'agent_rate' in locals() else updated_data.get('Agent Comm %', 0)
+            agent_comm_pct = agent_rate if 'agent_rate' in locals() else updated_data.get('Agent Comm (NEW 50% RWL 25%)', 0)
             try:
                 agent_comm_pct = float(agent_comm_pct) if pd.notna(agent_comm_pct) else 0.0
                 agent_comm = agency_comm * (agent_comm_pct / 100)
@@ -4886,7 +4886,7 @@ def main():
                             'Broker Fee Agent Comm',
                             'Total Agent Comm',
                             'Policy Balance Due',
-                            'Agent Comm %'
+                            'Agent Comm (NEW 50% RWL 25%)'
                         ]
                         
                         # Dollar amount columns (show with $ sign)
@@ -4907,7 +4907,7 @@ def main():
                         # Percentage columns (show without $ sign)
                         percent_cols = [
                             'Policy Gross Comm %',
-                            'Agent Comm %'
+                            'Agent Comm (NEW 50% RWL 25%)'
                         ]
                         
                         for col in dollar_cols:
@@ -6211,7 +6211,7 @@ def main():
                         # No prior policy = this is a new policy
                         agent_comm_rate = 50.0
                 
-                st.text_input("Agent Comm %", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
+                st.text_input("Agent Comm (NEW 50% RWL 25%)", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
                 
                 # Calculate broker fee agent commission
                 broker_fee_agent_comm = broker_fee * 0.50
@@ -6288,7 +6288,7 @@ def main():
                             "Broker Fee": clean_numeric_value(broker_fee),
                             "Policy Gross Comm %": clean_numeric_value(policy_gross_comm_input),
                             "Agency Estimated Comm/Revenue (CRM)": clean_numeric_value(agency_est_comm),
-                            "Agent Comm %": clean_numeric_value(agent_comm_rate),
+                            "Agent Comm (NEW 50% RWL 25%)": clean_numeric_value(agent_comm_rate),
                             "Agent Estimated Comm $": clean_numeric_value(agent_est_comm),
                             "Broker Fee Agent Comm": clean_numeric_value(broker_fee_agent_comm),
                             "Total Agent Comm": clean_numeric_value(total_agent_comm),
@@ -6946,7 +6946,7 @@ def main():
                                                     "Premium Sold": f"${float(transaction.get('Premium Sold', 0) or 0):,.2f}",
                                                     "Policy Gross Comm %": f"{float(transaction.get('Policy Gross Comm %', 0) or 0):.2f}%",
                                                     "Agency Est. Comm": f"${float(transaction.get('Agency Estimated Comm/Revenue (CRM)', 0) or 0):,.2f}",
-                                                    "Agent Comm Rate": transaction.get('Agent Comm %', ''),
+                                                    "Agent Comm Rate": transaction.get('Agent Comm (NEW 50% RWL 25%)', ''),
                                                 }
                                                 for key, value in dates_dict.items():
                                                     st.text(f"{key}: {value}")
@@ -8130,7 +8130,7 @@ def main():
                 
                 # Display editable mappings for important columns
                 important_columns = [
-                    "Agent Comm %",
+                    "Agent Comm (NEW 50% RWL 25%)",
                     "Agency Estimated Comm/Revenue (CRM)",
                     "Agent Estimated Comm $",
                     "Agent Paid Amount (STMT)",
@@ -8185,7 +8185,7 @@ def main():
                                     del st.session_state.column_mapping_edits[ui_name]
                         
                         with col3:
-                            if db_col == "Agent Comm %":
+                            if db_col == "Agent Comm (NEW 50% RWL 25%)":
                                 st.caption("⭐ Rename to 'Agent Comm %'")
                 
                 # Show other database columns
@@ -8781,7 +8781,7 @@ Where Used:
                         "Broker Fee",
                         "Policy Gross Comm %",
                         "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Comm %",
+                        "Agent Comm (NEW 50% RWL 25%)",
                         "Agent Estimated Comm $",
                         "Broker Fee Agent Comm",
                         "Total Agent Comm",
@@ -11442,7 +11442,7 @@ SOLUTION NEEDED:
                     policy_detail_field_names = [
                         "Customer", "Client ID", "Policy Number", "Policy Type", "Carrier Name", "MGA Name",
                         "Effective Date", "Policy Origination Date", "Policy Gross Comm %", 
-                        "Agent Comm %", "X-DATE"
+                        "Agent Comm (NEW 50% RWL 25%)", "X-DATE"
                     ]
                     policy_detail_cols = []
                     for field_name in policy_detail_field_names:
@@ -11495,7 +11495,7 @@ SOLUTION NEEDED:
                     effective_date = policy_details_row.get("Effective Date", "N/A")
                     origination_date = policy_details_row.get("Policy Origination Date", "N/A")
                     gross_comm = policy_details_row.get("Policy Gross Comm %", 0)
-                    agent_comm = policy_details_row.get("Agent Comm %", 0)
+                    agent_comm = policy_details_row.get("Agent Comm (NEW 50% RWL 25%)", 0)
                     x_date = policy_details_row.get("X-DATE", "N/A")
                     
                     # Format dates for display
@@ -12083,7 +12083,7 @@ TO "New Column Name";
                             agg_dict[target_col] = 'sum'
                     
                     # For percentage fields, take the first value (should be consistent per policy)
-                    percentage_fields = ["Agent Comm %", "Policy Gross Comm %"]
+                    percentage_fields = ["Agent Comm (NEW 50% RWL 25%)", "Policy Gross Comm %"]
                     for field in percentage_fields:
                         if field in working_data.columns and field not in agg_dict:
                             agg_dict[field] = 'first'
@@ -12550,27 +12550,18 @@ TO "New Column Name";
                         caption_text = f"Showing records {start_idx + 1}-{min(end_idx, len(working_data))} of {len(working_data):,} total records with {len(valid_columns)} columns"
                     
                     # Format numeric columns to 2 decimal places
-                    # Get all numeric columns in the data
-                    numeric_columns = display_data.select_dtypes(include=[np.number]).columns.tolist()
-                    
-                    # Also include columns that should be numeric but might be object type
-                    potentially_numeric = [
-                        "Agent Comm", "Agent Comm %",
+                    numeric_columns_to_format = [
+                        "Agent Comm", "Agent Comm (NEW 50% RWL 25%)",
                         "Agent Estimated Comm", "Agent Estimated Comm $",
                         "Agent Paid Amount", "Agent Paid Amount (STMT)",
-                        "Policy Balance Due", "Balance Due",
+                        "Policy Balance Due",
                         "Agency Estimated Comm/Revenue (CRM)",
-                        "Agency Comm Received (STMT)",
                         "Premium Sold", "Broker Fee", "Broker Fee Agent Comm",
-                        "Total Agent Comm", "Policy Taxes & Fees", "Commissionable Premium",
-                        "Policy Gross Comm %", "Credit (Commission Owed)", "Debit (Paid to Agent)"
+                        "Total Agent Comm", "Policy Taxes & Fees", "Commissionable Premium"
                     ]
                     
-                    # Combine and get unique columns
-                    all_numeric_columns = list(set(numeric_columns + potentially_numeric))
-                    
                     # Apply formatting to numeric columns that exist in the display data
-                    for col in all_numeric_columns:
+                    for col in numeric_columns_to_format:
                         if col in display_data.columns:
                             # Convert to numeric and format to 2 decimal places
                             display_data[col] = pd.to_numeric(display_data[col], errors='coerce').round(2)

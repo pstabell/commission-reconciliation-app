@@ -51,8 +51,8 @@ class ColumnMapper:
             "Agency Comm Received (STMT)": "Agency Comm Received (STMT)",
             "Policy Balance Due": "Policy Balance Due",
               # Calculated fields
-            "Agent Comm (New 50% RWL 25%)": "Agent Comm (New 50% RWL 25%)",
-            "Agent Comm (NEW 50% RWL 25%)": "Agent Comm (NEW 50% RWL 25%)",
+            "Agent Comm (New 50% RWL 25%)": "Agent Comm %",
+            "Agent Comm %": "Agent Comm %",
             "Agent Estimated Comm $": "Agent Estimated Comm $",
             "Agency Estimated Comm/Revenue (CRM)": "Agency Estimated Comm/Revenue (CRM)",
             
@@ -184,9 +184,10 @@ class ColumnMapper:
                            if field not in proposed_mapping or proposed_mapping[field] == "(Calculated/Virtual)"]
         if unmapped_required:
             warnings.append(f"Unmapped required fields: {', '.join(unmapped_required)}")
-          # Check for invalid database columns
+          # Check for invalid database columns (but allow some special cases)
+        special_allowed = ["NOTES", "Description"]  # These might not be in all_db_columns but are valid
         invalid_cols = [v for v in proposed_mapping.values() 
-                       if v != "(Calculated/Virtual)" and v not in all_db_columns]
+                       if v != "(Calculated/Virtual)" and v not in all_db_columns and v not in special_allowed]
         if invalid_cols:
             errors.append(f"Invalid database columns: {', '.join(invalid_cols)}")
         
@@ -306,7 +307,7 @@ def get_formula_columns() -> Dict[str, str]:
         "Agent Estimated Comm $": "Agency Estimated Comm/Revenue (CRM) * (Agent Comm % / 100)",
         "Agency Estimated Comm/Revenue (CRM)": "Commissionable Premium * (Policy Gross Comm % / 100)",
         "Policy Balance Due": "Agent Estimated Comm $ - Agent Paid Amount (STMT)",
-        "Agent Comm (New 50% RWL 25%)": "50% for NEW transactions, 25% for RWL/RENEWAL",
+        "Agent Comm %": "50% for NEW transactions, 25% for RWL/RENEWAL",
         "Commissionable Premium": "Premium Sold - Policy Taxes & Fees",
         "Broker Fee Agent Comm": "Broker Fee * 0.50",
         "Total Agent Comm": "Agent Estimated Comm $ + Broker Fee Agent Comm"
