@@ -4523,7 +4523,7 @@ def main():
                 'Policy Number', 'Prior Policy Number',
                 'Carrier Name', 'MGA Name',  # MGA right after Carrier
                 'Policy Type', 'Transaction Type', 'Policy Term',  # Policy Term between Transaction Type and Effective Date
-                'Effective Date', 'Policy Origination Date', 'X-DATE',
+                'Policy Origination Date', 'Effective Date', 'X-DATE',  # Policy Origination Date moved before Effective Date
                 'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
                 'Policy Gross Comm %', 'Agency Estimated Comm/Revenue (CRM)',
                 'Agent Estimated Comm $', 'Broker Fee', 'Broker Fee Agent Comm', 'Total Agent Comm',
