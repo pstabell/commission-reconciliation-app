@@ -4581,6 +4581,14 @@ def main():
                             format="%.2f"
                         )
             
+            # Special handling for Policy Term - should be integer with no decimals
+            if 'Policy Term' in paginated_data_display.columns:
+                column_config['Policy Term'] = st.column_config.NumberColumn(
+                    'Policy Term',
+                    format="%d",  # Integer format with no decimals
+                    help="Policy term in months"
+                )
+            
             # Display the data in a scrollable table
             # Apply special styling for STMT and VOID transactions
             styled_data = style_special_transactions(paginated_data_display)
