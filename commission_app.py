@@ -4551,6 +4551,7 @@ def main():
             column_config = {}
             numeric_cols = [
                 'Agent Estimated Comm $',
+                'Agent Comm %',  # Added this column for 2 decimal formatting
                 'Policy Gross Comm %',
                 'Agency Estimated Comm/Revenue (CRM)',
                 'Agency Comm Received (STMT)',
@@ -4561,7 +4562,8 @@ def main():
                 'Policy Taxes & Fees',
                 'Commissionable Premium',
                 'Broker Fee Agent Comm',
-                'Total Agent Comm'
+                'Total Agent Comm',
+                'Policy Balance Due'
             ]
             
             for col in numeric_cols:
