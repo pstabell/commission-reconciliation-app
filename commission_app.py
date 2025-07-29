@@ -7621,15 +7621,17 @@ def main():
                             # Format date
                             batch_summary['Statement Date'] = pd.to_datetime(batch_summary['Statement Date']).dt.strftime('%m/%d/%Y')
                             
-                            # Display batch summary
-                            selected_batch = st.selectbox(
-                                "Select Batch to View Details",
-                                options=[''] + batch_summary['Batch ID'].tolist(),
-                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} ({batch_summary[batch_summary['Batch ID']==x]['Statement Date'].iloc[0] if x != '' else ''})"
-                            )
+                            # Add checkbox column for batch deletion
+                            batch_summary.insert(0, 'Select', False)
                             
                             # Configure column display with color coding for status
                             column_config = {
+                                "Select": st.column_config.CheckboxColumn(
+                                    "Select",
+                                    help="Select batches to delete",
+                                    default=False,
+                                    width="small"
+                                ),
                                 "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f"),
                                 "Status": st.column_config.TextColumn(
                                     help="ACTIVE = Normal reconciliation, VOIDED = Has been reversed, VOID ENTRY = Reversal entry"
@@ -7643,51 +7645,121 @@ def main():
                             }
                             
                             # Reorder columns for better display
-                            display_columns = ['Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
+                            display_columns = ['Select', 'Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
                             # Only include columns that exist
                             display_columns = [col for col in display_columns if col in batch_summary.columns]
                             
-                            # Apply styling based on status
-                            def highlight_status(row):
-                                if row['Status'] == 'VOIDED':
-                                    return ['background-color: #ffcccc'] * len(row)
-                                elif row['Status'] == 'VOID ENTRY':
-                                    return ['background-color: #ffe6cc'] * len(row)
-                                else:
-                                    return [''] * len(row)
+                            # Sort by Statement Date descending
+                            batch_summary_sorted = batch_summary[display_columns].sort_values('Statement Date', ascending=False)
                             
-                            styled_df = batch_summary[display_columns].sort_values('Statement Date', ascending=False).style.apply(highlight_status, axis=1)
+                            # Display batch summary with scrolling
+                            st.write("**Reconciliation Batches**")
+                            st.info("📌 Select two matching batches (one ACTIVE and one VOID) to delete them together")
                             
-                            st.dataframe(
-                                styled_df,
+                            # Calculate appropriate height (show up to 15 rows with scrolling)
+                            row_height = 35
+                            header_height = 35
+                            max_visible_rows = min(len(batch_summary_sorted), 15)
+                            table_height = header_height + (row_height * max_visible_rows)
+                            
+                            edited_df = st.data_editor(
+                                batch_summary_sorted,
                                 column_config=column_config,
                                 use_container_width=True,
-                                hide_index=True
+                                hide_index=True,
+                                disabled=[col for col in display_columns if col != 'Select'],
+                                height=table_height,
+                                key="batch_selection_editor"
                             )
                             
-                            # Show batch details if selected
-                            if selected_batch:
+                            # Add delete functionality
+                            selected_batches = edited_df[edited_df['Select'] == True]['Batch ID'].tolist()
+                            
+                            if len(selected_batches) == 2:
                                 st.divider()
-                                st.subheader(f"Batch Details: {selected_batch}")
                                 
-                                batch_details = filtered_recon[filtered_recon['reconciliation_id'] == selected_batch]
+                                # Check if the selected batches match (one ACTIVE and one VOID)
+                                batch1, batch2 = selected_batches
                                 
-                                # Format dates
-                                if 'STMT DATE' in batch_details.columns:
-                                    batch_details['STMT DATE'] = pd.to_datetime(batch_details['STMT DATE'], format='mixed').dt.strftime('%m/%d/%Y')
+                                # Determine which is active and which is void
+                                if batch1.startswith('VOID-') and not batch2.startswith('VOID-'):
+                                    void_batch = batch1
+                                    active_batch = batch2
+                                    expected_void = f"VOID-{active_batch}"
+                                elif batch2.startswith('VOID-') and not batch1.startswith('VOID-'):
+                                    void_batch = batch2
+                                    active_batch = batch1
+                                    expected_void = f"VOID-{active_batch}"
+                                else:
+                                    void_batch = None
+                                    active_batch = None
+                                    expected_void = None
                                 
-                                st.dataframe(
-                                    batch_details[[
-                                        'Transaction ID', 'Customer', 'Policy Number', 
-                                        'STMT DATE', 'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)'
-                                    ]],
-                                    column_config={
-                                        "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                        "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f")
-                                    },
-                                    use_container_width=True,
-                                    hide_index=True
-                                )
+                                # Verify if they match
+                                if void_batch and active_batch and void_batch == expected_void:
+                                    # They match!
+                                    st.success(f"✅ **Matching batches selected:**")
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"<p style='color: green; font-weight: bold;'>Active: {active_batch}</p>", unsafe_allow_html=True)
+                                    with col2:
+                                        st.markdown(f"<p style='color: green; font-weight: bold;'>Void: {void_batch}</p>", unsafe_allow_html=True)
+                                    
+                                    # Get transaction counts and totals for confirmation
+                                    active_info = batch_summary[batch_summary['Batch ID'] == active_batch].iloc[0]
+                                    void_info = batch_summary[batch_summary['Batch ID'] == void_batch].iloc[0]
+                                    
+                                    st.info(f"""
+                                    **Confirmation Details:**
+                                    - Active batch has {active_info['Transaction Count']} transactions totaling ${active_info['Agent Payment Total']:,.2f}
+                                    - Void batch has {void_info['Transaction Count']} transactions totaling ${void_info['Agent Payment Total']:,.2f}
+                                    - Total transactions to be deleted: {active_info['Transaction Count'] + void_info['Transaction Count']}
+                                    """)
+                                    
+                                    if st.button("🗑️ Delete Both Batches", type="primary", key="delete_matching_batches"):
+                                        # Get all transaction IDs for both batches
+                                        transactions_to_delete = all_data[
+                                            (all_data['reconciliation_id'] == active_batch) | 
+                                            (all_data['reconciliation_id'] == void_batch)
+                                        ]['Transaction ID'].tolist()
+                                        
+                                        # Delete from database
+                                        try:
+                                            supabase = get_supabase_client()
+                                            
+                                            # Delete in chunks if many transactions
+                                            chunk_size = 100
+                                            deleted_count = 0
+                                            
+                                            for i in range(0, len(transactions_to_delete), chunk_size):
+                                                chunk = transactions_to_delete[i:i + chunk_size]
+                                                response = supabase.table('policies').delete().in_('Transaction ID', chunk).execute()
+                                                deleted_count += len(chunk)
+                                            
+                                            st.success(f"✅ Successfully deleted {deleted_count} transactions from both batches!")
+                                            st.balloons()
+                                            
+                                            # Clear cache and rerun
+                                            clear_policies_cache()
+                                            time.sleep(1)
+                                            st.rerun()
+                                            
+                                        except Exception as e:
+                                            st.error(f"❌ Error deleting batches: {str(e)}")
+                                else:
+                                    # They don't match
+                                    st.error(f"❌ **Selected batches do not match!**")
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"<p style='color: red; font-weight: bold;'>Batch 1: {batch1}</p>", unsafe_allow_html=True)
+                                    with col2:
+                                        st.markdown(f"<p style='color: red; font-weight: bold;'>Batch 2: {batch2}</p>", unsafe_allow_html=True)
+                                    st.warning("⚠️ These batches cannot be deleted together because they don't match. Please select one ACTIVE batch and its corresponding VOID batch.")
+                            
+                            elif len(selected_batches) > 2:
+                                st.warning("⚠️ Please select exactly 2 batches (one ACTIVE and one VOID)")
+                            elif len(selected_batches) == 1:
+                                st.info("ℹ️ Please select one more batch to delete. You need to select matching ACTIVE and VOID batches.")
                         else:
                             # Show all transactions
                             # Format dates
