@@ -1,5 +1,50 @@
 import streamlit as st
 st.set_page_config(layout="wide")
+
+# Custom CSS to make scrollbars more visible
+st.markdown("""
+<style>
+    /* Make scrollbars thicker and always visible */
+    ::-webkit-scrollbar {
+        width: 16px !important;
+        height: 16px !important;
+    }
+    
+    /* Track (background of the scrollbar) */
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1 !important;
+        border-radius: 10px !important;
+        border: 1px solid #ddd !important;
+    }
+    
+    /* Handle (the draggable part) */
+    ::-webkit-scrollbar-thumb {
+        background: #888 !important;
+        border-radius: 10px !important;
+        border: 2px solid #f1f1f1 !important;
+    }
+    
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555 !important;
+    }
+    
+    /* Make scrollbars always visible in dataframes/data editors */
+    .stDataFrame > div > div > div {
+        overflow: auto !important;
+    }
+    
+    div[data-testid="stDataFrameContainer"] > div {
+        overflow: auto !important;
+    }
+    
+    /* For data editor specifically */
+    div[data-testid="data-editor-container"] {
+        overflow: auto !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 import traceback
 import string
 import random
