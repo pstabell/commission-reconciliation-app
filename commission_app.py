@@ -11848,6 +11848,7 @@ SOLUTION NEEDED:
             st.write("- **Carrier Commission Rates**: Automatically loads rates when carrier/MGA selected")
             st.write("- **Premium Calculator**: Built-in endorsement calculator for premium changes")
             st.write("- **Smart Filtering**: Cancelled and excluded policies automatically hidden")
+            st.write("- **Remove from List**: Use Prior Policy Number field when creating RWL/REWRITE to auto-remove")
             
             st.divider()
             
@@ -11901,6 +11902,44 @@ SOLUTION NEEDED:
                 """)
             
             st.warning("⚠️ **Remember**: Always use REWRITE (not RWL) for mid-term rewrites to ensure proper 25% commission calculation!")
+            
+            st.divider()
+            
+            # Prior Policy Number Workflow
+            st.write("**🔗 Prior Policy Number - The Magic Field!**")
+            st.info("**Key Feature**: The Prior Policy Number field automatically removes old policies from Pending Renewals!")
+            
+            with st.expander("📋 How Prior Policy Number Works", expanded=True):
+                st.markdown("""
+                ### What is Prior Policy Number?
+                It's a field that links a new policy to the old policy it's replacing. This creates a chain of policy history.
+                
+                ### When to Use It
+                Use the Prior Policy Number field whenever you:
+                - **Renew a policy** (RWL transaction)
+                - **Rewrite a policy** (REWRITE transaction)
+                - **Replace a policy** with a new carrier or policy type
+                
+                ### How It Works in Pending Renewals
+                1. You see a policy in Pending Renewals that needs to be renewed/rewritten
+                2. You create a new transaction (RWL or REWRITE)
+                3. **Enter the old policy number in the Prior Policy Number field**
+                4. Save the new transaction
+                5. **The old policy automatically disappears from Pending Renewals!**
+                
+                ### Benefits
+                ✅ No manual deletion needed  
+                ✅ Maintains complete policy history  
+                ✅ Prevents duplicate renewal reminders  
+                ✅ Clean, accurate Pending Renewals list  
+                ✅ Works for all replacement scenarios  
+                
+                ### Pro Tips
+                - Always fill in Prior Policy Number when replacing ANY policy
+                - This works even if the carrier changes
+                - This works even if the policy type changes
+                - The system tracks the complete chain of renewals
+                """)
         
         with tab3:
             st.subheader("🔧 Troubleshooting")
@@ -12953,6 +12992,19 @@ TO "New Column Name";
     # --- Pending Policy Renewals ---
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
+        
+        # Add helpful tip about removing renewals
+        st.info("""
+        💡 **Tip: How to Remove a Policy from This List**
+        
+        When you process a renewal or rewrite:
+        1. Go to "Add Policy Transactions" page
+        2. Create your new transaction (RWL or REWRITE)
+        3. **IMPORTANT**: Enter the old policy number in the "Prior Policy Number" field
+        4. The old policy will automatically disappear from this pending renewals list!
+        
+        This works for all replacement scenarios: standard renewals, rewrites with carrier changes, or policy type changes.
+        """)
         
         # Load fresh data for this page
         all_data = load_policies_data()
