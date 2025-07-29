@@ -12998,9 +12998,14 @@ TO "New Column Name";
         # Add helpful tip about removing renewals in a collapsible expander
         with st.expander("💡 **Tip: How to Remove a Policy from This List**", expanded=False):
             st.info("""
-            **To process a renewal:**
+            **To process a renewal (RWL):**
+            - You can renew policies directly from this page!
+            - Click the renewal button for any policy listed here
+            - Fill in the renewal details and save
+            
+            **To process a "REWRITE":**
             1. Go to "Add Policy Transactions" page
-            2. Create your new transaction (REWRITE or RWL)
+            2. Create your new REWRITE transaction
             3. **IMPORTANT**: Enter the old policy number in the "Prior Policy Number" field
             4. The old policy will automatically disappear from this pending renewals list!
             
