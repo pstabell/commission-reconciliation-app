@@ -10893,6 +10893,7 @@ SOLUTION NEEDED:
             - ONLY the columns present in your Excel file will be updated
             - Columns not in your Excel file will remain unchanged
             - This action cannot be undone - make sure you have a backup!
+            - 💡 **TIP**: To avoid upload errors, delete all app-created columns (reconciliation_status, is_reconciliation_entry, etc.) from the right side of your spreadsheet before uploading!
             """)
             
             update_file = st.file_uploader(
