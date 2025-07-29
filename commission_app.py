@@ -12995,18 +12995,27 @@ TO "New Column Name";
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
         
-        # Add helpful tip about removing renewals
-        st.info("""
-        💡 **Tip: How to Remove a Policy from This List**
-        
-        When you process a renewal or rewrite:
-        1. Go to "Add Policy Transactions" page
-        2. Create your new transaction (RWL or REWRITE)
-        3. **IMPORTANT**: Enter the old policy number in the "Prior Policy Number" field
-        4. The old policy will automatically disappear from this pending renewals list!
-        
-        This works for all replacement scenarios: standard renewals, rewrites with carrier changes, or policy type changes.
-        """)
+        # Add helpful tip about removing renewals in a collapsible expander
+        with st.expander("💡 **Tip: How to Remove a Policy from This List**", expanded=False):
+            st.info("""
+            **To process a renewal:**
+            1. Go to "Add Policy Transactions" page
+            2. Create your new transaction (REWRITE or RWL)
+            3. **IMPORTANT**: Enter the old policy number in the "Prior Policy Number" field
+            4. The old policy will automatically disappear from this pending renewals list!
+            
+            **About Cancelled Policies (CAN):**
+            - When you cancel a policy (CAN transaction), it ends the policy's history trail
+            - Cancelled policies will NOT appear in this renewal list
+            - Only use CAN when the policy is truly terminated (not replaced)
+            
+            **What doesn't show here:**
+            - STMT transactions (these are payment records, not policies)
+            - VOID transactions (these are voided/reversed entries)
+            - This page is specifically for renewing policies by creating RWL transactions
+            
+            This works for all replacement scenarios: standard renewals, rewrites with carrier changes, or policy type changes.
+            """)
         
         # Load fresh data for this page
         all_data = load_policies_data()
