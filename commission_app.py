@@ -1,46 +1,33 @@
 import streamlit as st
 st.set_page_config(layout="wide")
 
-# Custom CSS to make scrollbars more visible
+# Custom CSS to make scrollbars more visible without causing double scrollbars
 st.markdown("""
 <style>
-    /* Make scrollbars thicker and always visible */
+    /* Only style the scrollbar appearance, not the overflow behavior */
     ::-webkit-scrollbar {
-        width: 16px !important;
-        height: 16px !important;
+        width: 14px !important;
+        height: 14px !important;
     }
     
-    /* Track (background of the scrollbar) */
     ::-webkit-scrollbar-track {
-        background: #f1f1f1 !important;
-        border-radius: 10px !important;
-        border: 1px solid #ddd !important;
+        background: #e0e0e0 !important;
+        border-radius: 8px !important;
     }
     
-    /* Handle (the draggable part) */
     ::-webkit-scrollbar-thumb {
-        background: #888 !important;
-        border-radius: 10px !important;
-        border: 2px solid #f1f1f1 !important;
+        background: #666666 !important;
+        border-radius: 8px !important;
+        border: 2px solid #e0e0e0 !important;
     }
     
-    /* Handle on hover */
     ::-webkit-scrollbar-thumb:hover {
-        background: #555 !important;
+        background: #333333 !important;
     }
     
-    /* Make scrollbars always visible in dataframes/data editors */
-    .stDataFrame > div > div > div {
-        overflow: auto !important;
-    }
-    
-    div[data-testid="stDataFrameContainer"] > div {
-        overflow: auto !important;
-    }
-    
-    /* For data editor specifically */
-    div[data-testid="data-editor-container"] {
-        overflow: auto !important;
+    /* Make corner where scrollbars meet look better */
+    ::-webkit-scrollbar-corner {
+        background: #e0e0e0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
