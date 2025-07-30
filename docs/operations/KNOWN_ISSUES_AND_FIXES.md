@@ -151,6 +151,146 @@ if agent_comm_rate > 0 and agent_comm_rate < 1:
 
 ---
 
+### 6. Column Reordering Not Updating
+**Date**: July 30, 2025  
+**Severity**: MEDIUM  
+**Status**: ✅ RESOLVED
+
+**Issue**: Column order changes in code don't reflect in UI
+**Root Cause**: Streamlit session state caching preserves old column order
+**Discovery**: Debug showed columns in correct order in array but UI showed old order
+**Solution**: Add version number to session state identifier to force refresh
+```python
+# Change from:
+current_search_state = f"{edit_search_term}_{show_attention_filter}"
+# To:
+current_search_state = f"{edit_search_term}_{show_attention_filter}_v2"
+```
+**Documentation**: Created comprehensive [COLUMN_ORDERING_GUIDE.md](../guides/COLUMN_ORDERING_GUIDE.md)
+
+### 7. Policy Term Override and Session State Error
+**Date**: July 30, 2025  
+**Severity**: HIGH  
+**Status**: ✅ RESOLVED
+
+**Issue**: 
+1. User changes to Policy Term were being overridden on save (always forced to 12 months)
+2. Session state error when trying to update X-DATE: "st.session_state.modal_X-DATE cannot be modified after the widget with key modal_X-DATE is instantiated"
+
+**Root Cause**: 
+1. Save logic was forcing `updated_data['Policy Term'] = 12` for all NEW/RWL transactions
+2. Streamlit doesn't allow modifying session state of already-rendered widgets
+
+**Solution**:
+1. Removed the auto-override in save logic - now respects user selection
+2. Added "Custom" option to Policy Term dropdown for special cases
+3. Implemented pending calculation pattern to avoid session state conflicts
+4. Updated database constraint to allow "Custom" value
+
+**Code Changes**:
+```python
+# Removed this override:
+if transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO':
+    updated_data['Policy Term'] = 12  # REMOVED - now respects user choice
+
+# Added Custom option:
+policy_terms = [3, 6, 9, 12, "Custom"]
+
+# Use pending state pattern:
+st.session_state['pending_x_date'] = calculated_date
+# Then apply in Calculate button
+```
+
+**Database Update**:
+```sql
+-- Changed Policy Term from INTEGER to TEXT to allow "Custom"
+ALTER TABLE policies ALTER COLUMN "Policy Term" TYPE TEXT;
+ALTER TABLE policies ADD CONSTRAINT chk_policy_term 
+CHECK ("Policy Term" IN ('3', '6', '9', '12', 'Custom'));
+```
+
+**Features Added**:
+- Policy Term changes now persist correctly
+- X-DATE auto-updates when Policy Term is changed (except Custom)
+- Calculate button updates X-DATE based on Policy Term
+- Custom option for non-standard terms (e.g., cancellations)
+
+### 8. Add New Transaction Missing Customer Name
+**Date**: July 30, 2025  
+**Severity**: MEDIUM  
+**Status**: ✅ RESOLVED
+
+**Issue**: "Add New Transaction for This Client" button only copied Transaction ID and Client ID, not Customer name
+
+**Root Cause**: Logic didn't extract or populate Customer name from search results
+
+**Solution**: 
+1. Extract Customer name from search results when all rows have same customer
+2. Populate Customer field in new row
+
+**Code Changes** (commission_app.py lines 5225-5268):
+```python
+# Get customer name if all rows have the same customer
+if 'Customer' in edit_results.columns:
+    unique_customers = edit_results['Customer'].dropna().unique()
+    if len(unique_customers) == 1:
+        existing_customer_name = unique_customers[0]
+
+# Add Customer name if available
+if 'Customer' in new_row.index and existing_customer_name:
+    new_row['Customer'] = existing_customer_name
+```
+
+### 9. Duplicate Transaction Feature
+**Date**: July 30, 2025  
+**Severity**: Feature Enhancement  
+**Status**: ✅ IMPLEMENTED
+
+**Features Added**:
+1. **Duplicate Selected Transaction Button**
+   - Added to Edit Policy Transactions page
+   - Only enabled when exactly one transaction is selected
+   - Copies all data except unique IDs and tracking fields
+
+2. **Excluded Fields from Duplication**:
+   - Transaction ID (generates new one)
+   - _id, created_at, updated_at
+   - reconciliation_status, reconciliation_id, reconciled_at
+   - is_reconciliation_entry
+
+3. **Form Behavior**:
+   - Opens edit form with "Create Duplicate" button
+   - Always performs INSERT (never UPDATE)
+   - Clears duplicate_mode flag after save/cancel
+
+### 10. Agent Comm % Override for Cancellations
+**Date**: July 30, 2025  
+**Severity**: Feature Enhancement  
+**Status**: ✅ IMPLEMENTED
+
+**Issue**: System calculates 25% chargeback when Prior Policy Number exists, but user needs 50% for NEW policy cancellations
+
+**Solution**: 
+1. Agent Comm % field becomes editable for CAN transactions after Calculate clicked
+2. User can manually override percentage while maintaining negative calculation
+3. Shows "🔓 UNLOCKED" indicator when editable
+
+**Code Implementation**:
+```python
+# Check if field should be editable
+is_editable = (current_transaction_type == "CAN" and 
+              st.session_state.get('calculate_clicked', False))
+
+if is_editable:
+    # Editable number input for manual override
+    updated_data['Agent Comm %'] = st.number_input(...)
+else:
+    # Normal read-only display
+    st.text_input(..., disabled=True)
+```
+
+**Use Case**: Cancelling within NEW policy term while keeping Prior Policy Number for audit trail
+
 ## UI/UX Issues
 
 ### 1. Form Submit Button Missing

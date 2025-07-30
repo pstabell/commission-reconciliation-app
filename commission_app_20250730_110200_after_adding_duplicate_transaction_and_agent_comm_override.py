@@ -12283,8 +12283,6 @@ SOLUTION NEEDED:
             st.write("**💾 Database Management**")
             st.write("- **All Policies**: Browse paginated policy data with export options")
             st.write("- **Edit Policies**: Search and modify existing policy records")
-            st.write("  - ✨ **NEW**: Duplicate transactions with one click!")
-            st.write("  - ✨ **NEW**: Agent Comm % override for CAN transactions")
             st.write("- **Add New**: Create new policy transactions with auto-generated IDs")
             
             st.divider()
@@ -12355,59 +12353,6 @@ SOLUTION NEEDED:
             st.write("- **Premium Calculator**: Built-in endorsement calculator for premium changes")
             st.write("- **Smart Filtering**: Cancelled and excluded policies automatically hidden")
             st.write("- **Remove from List**: Use Prior Policy Number field when creating RWL/REWRITE to auto-remove")
-            
-            st.divider()
-            
-            # Duplicate Transaction Feature
-            st.write("**📋 Duplicate Transaction Feature (NEW!)**")
-            with st.expander("📋 How to Duplicate Transactions", expanded=False):
-                st.markdown("""
-                ### What is the Duplicate Feature?
-                The Duplicate Transaction feature allows you to quickly create new transactions based on existing ones. 
-                Perfect for creating cancellations, endorsements, or similar policies without re-entering all data.
-                
-                ### How to Use It
-                1. **Navigate to Edit Policy Transactions**
-                2. **Search for the transaction** you want to duplicate
-                3. **Select exactly ONE transaction** using the checkbox
-                4. **Click "📋 Duplicate Selected Transaction"** button
-                5. **Modify the data** as needed in the form
-                6. **Click "Create Duplicate"** to save as a new transaction
-                
-                ### Common Use Cases
-                
-                **Creating a Cancellation:**
-                - Duplicate the original NEW/RWL transaction
-                - Change Transaction Type to CAN
-                - Add Prior Policy Number for audit trail
-                - Adjust dates and click Calculate for chargebacks
-                
-                **Creating an Endorsement:**
-                - Duplicate the current policy
-                - Change Transaction Type to END
-                - Use the Premium Calculator for adjustments
-                - Update effective dates
-                
-                **Creating a Similar Policy:**
-                - Duplicate an existing policy for the same client
-                - Update Policy Number and dates
-                - Adjust coverage amounts as needed
-                
-                ### Special Feature: Agent Comm % Override
-                For CAN (cancellation) transactions:
-                - After clicking Calculate, the Agent Comm % field unlocks
-                - You can manually adjust the rate (e.g., 50% for NEW cancellations)
-                - Shows "🔓 UNLOCKED" indicator when editable
-                - Useful when you need a different chargeback rate than calculated
-                
-                ### What Gets Copied?
-                ✅ All policy data and commission information  
-                ✅ Customer and client information  
-                ✅ Carrier and MGA details  
-                ❌ Transaction ID (new one generated)  
-                ❌ Internal tracking fields  
-                ❌ Timestamps and reconciliation data
-                """)
             
             st.divider()
             

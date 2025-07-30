@@ -5,6 +5,70 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.3] - 2025-07-30 - Duplicate Transaction & Agent Commission Override
+
+### Added
+- **Duplicate Transaction Feature**
+  - New "📋 Duplicate Selected Transaction" button on Edit Policy Transactions page
+  - Copies all transaction data except unique IDs and tracking fields
+  - Generates new Transaction ID automatically
+  - Opens edit form in "Create Duplicate" mode
+  - Perfect for creating similar transactions or cancellations
+  
+- **Agent Comm % Override for Cancellations**
+  - Agent Comm % field becomes editable for CAN transactions after clicking Calculate
+  - Allows manual adjustment for special cases (e.g., 50% chargeback on NEW policy cancellations)
+  - Shows "🔓 UNLOCKED" indicator when field is editable
+  - Maintains automatic negative calculation for chargebacks
+
+### Fixed
+- **Add New Transaction Customer Name**
+  - "Add New Transaction for This Client" now properly copies Customer name
+  - Previously only copied Transaction ID and Client ID
+  
+- **Duplicate Button Selection Logic**
+  - Fixed button being disabled when transaction selected
+  - Moved selection count calculation before all buttons
+  - Both Duplicate and Edit buttons now use same selection logic
+
+### Improved
+- **Commission Calculation Flow**
+  - Agent Estimated Comm $ now respects manual rate overrides
+  - Total Agent Comm updates correctly with overridden values
+  - Better handling of cancellation chargeback scenarios
+
+## [3.9.2] - 2025-07-30 - Policy Term Enhancement & Bug Fixes
+
+### Added
+- **Custom Policy Term Option**
+  - Added "Custom" option to Policy Term dropdown for non-standard terms
+  - Useful for policy cancellations and special endorsements
+  - Manual X-DATE entry when Custom is selected
+
+### Fixed
+- **Policy Term Override Issue**
+  - User changes to Policy Term were being forced back to 12 months on save
+  - Removed auto-override logic in save function
+  - Now respects user's manual selection
+  
+- **Session State Error for X-DATE Updates**
+  - Fixed "st.session_state.modal_X-DATE cannot be modified" error
+  - Implemented pending state pattern for widget updates
+  - Calculate button now properly updates X-DATE
+
+### Changed
+- **Policy Term Database Schema**
+  - Changed from INTEGER to TEXT type to support "Custom" value
+  - Updated CHECK constraint to allow '3', '6', '9', '12', or 'Custom'
+  - Migration script: `update_policy_term_constraint_for_custom.sql`
+
+### Improved
+- **X-DATE Auto-Calculation**
+  - X-DATE updates automatically when Policy Term is changed
+  - Shows pending calculation message
+  - Calculate button applies the update
+  - No auto-calculation for Custom term
+
 ## [3.8.15] - 2025-01-28 - Hide Rows Functionality
 
 ### Added

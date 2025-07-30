@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 17, 2025  
-**Current Version**: 3.8.2
+**Last Updated**: July 30, 2025  
+**Current Version**: 3.9.3
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,28 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.8.2)
+## Recent Major Changes (v3.9.3)
+1. **Duplicate Transaction Feature**:
+   - New "📋 Duplicate Selected Transaction" button on Edit Policy Transactions page
+   - Copies all transaction data except unique IDs and tracking fields
+   - Opens form in "Create Duplicate" mode for easy modification
+   - Perfect for creating cancellations, endorsements, or similar policies
+2. **Agent Comm % Override for Cancellations**:
+   - Agent Comm % field becomes editable for CAN transactions after Calculate
+   - Allows manual adjustment for special cases (e.g., 50% chargeback on NEW cancellations)
+   - Shows "🔓 UNLOCKED" indicator when field is editable
+3. **Add New Transaction Customer Name Fix**:
+   - "Add New Transaction for This Client" now properly copies Customer name
+   - Previously only copied Transaction ID and Client ID
+
+## Prior Major Changes (v3.9.2)
+1. **Policy Term Enhancements**:
+   - Added "Custom" option to Policy Term dropdown
+   - Fixed override issue where changes were forced back to 12 months
+   - Implemented pending state pattern for X-DATE updates
+   - Changed database schema from INTEGER to TEXT for Policy Term
+
+## Prior Major Changes (v3.8.2)
 1. **Table Width Fix in Edit Policy Transactions**:
    - Fixed table not using full screen width
    - Moved st.data_editor outside column context to page level

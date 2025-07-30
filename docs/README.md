@@ -29,6 +29,10 @@ UI/UX and design documentation:
 - **[UI_DESIGN_STANDARDS.md](design/UI_DESIGN_STANDARDS.md)** - Comprehensive UI/UX standards
 - **[PAGE_DESIGNS/](design/PAGE_DESIGNS/)** - Individual page design specifications
 
+### 📖 Guides (`/guides`)
+Technical guides and how-to documentation:
+- **[COLUMN_ORDERING_GUIDE.md](guides/COLUMN_ORDERING_GUIDE.md)** - How to reorder columns in different pages
+
 ### 🗄️ Archive (`/archive`)
 Historical documentation preserved for reference:
 - **[phase0_implementation/](archive/phase0_implementation/)** - Phase 0 implementation files
@@ -78,6 +82,7 @@ Historical documentation preserved for reference:
 - Technical issues → [KNOWN_ISSUES_AND_FIXES.md](operations/KNOWN_ISSUES_AND_FIXES.md)
 - User problems → [TROUBLESHOOTING_GUIDE.md](operations/TROUBLESHOOTING_GUIDE.md)
 - Setup issues → [SETUP_AND_MIGRATION.md](operations/SETUP_AND_MIGRATION.md)
+- Column ordering → [COLUMN_ORDERING_GUIDE.md](guides/COLUMN_ORDERING_GUIDE.md)
 
 ### By Time Period
 - Project history → [PROJECT_HISTORY.md](core/PROJECT_HISTORY.md)
