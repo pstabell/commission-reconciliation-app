@@ -1,33 +1,63 @@
 import streamlit as st
 st.set_page_config(layout="wide")
 
-# Custom CSS to make scrollbars more visible without causing double scrollbars
+# Custom CSS to make scrollbars more visible and always present
 st.markdown("""
 <style>
-    /* Only style the scrollbar appearance, not the overflow behavior */
+    /* Make scrollbars thicker and more visible */
     ::-webkit-scrollbar {
-        width: 14px !important;
-        height: 14px !important;
+        width: 20px !important;
+        height: 20px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
     
     ::-webkit-scrollbar-track {
-        background: #e0e0e0 !important;
-        border-radius: 8px !important;
+        background: #f0f0f0 !important;
+        border: 1px solid #cccccc !important;
+        border-radius: 10px !important;
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.1) !important;
     }
     
     ::-webkit-scrollbar-thumb {
-        background: #666666 !important;
-        border-radius: 8px !important;
-        border: 2px solid #e0e0e0 !important;
+        background: #888888 !important;
+        border-radius: 10px !important;
+        border: 3px solid #f0f0f0 !important;
+        min-height: 30px !important;
+        min-width: 30px !important;
     }
     
     ::-webkit-scrollbar-thumb:hover {
+        background: #555555 !important;
+        border: 3px solid #f0f0f0 !important;
+    }
+    
+    ::-webkit-scrollbar-thumb:active {
         background: #333333 !important;
     }
     
     /* Make corner where scrollbars meet look better */
     ::-webkit-scrollbar-corner {
-        background: #e0e0e0 !important;
+        background: #f0f0f0 !important;
+        border: 1px solid #cccccc !important;
+    }
+    
+    /* Force scrollbars to always be visible in data editors and dataframes */
+    div[data-testid="data-editor-container"] {
+        scrollbar-width: thick !important;
+        scrollbar-color: #888888 #f0f0f0 !important;
+    }
+    
+    /* For Firefox users */
+    * {
+        scrollbar-width: thick !important;
+        scrollbar-color: #888888 #f0f0f0 !important;
+    }
+    
+    /* Ensure scrollable areas always show scrollbar */
+    .stDataFrame {
+        overflow: auto !important;
+        scrollbar-gutter: stable !important;
     }
 </style>
 """, unsafe_allow_html=True)
