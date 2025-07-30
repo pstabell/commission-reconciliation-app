@@ -587,7 +587,16 @@ The system stands as a testament to the power of listening to users, understandi
 
 ---
 
-## Recent Enhancements (v3.5.7 - v3.5.15)
+## Recent Enhancements (v3.5.7 - v3.9.0)
+
+### Edit Reconciled Transactions (v3.9.0 - July 30, 2025)
+New feature allowing corrections to reconciled transactions without voiding:
+- **Checkbox Selection**: Select transactions to edit in Reconciliation History
+- **Two-Column Form**: Non-editable reference fields (left) and editable fields (right)
+- **Limited Edit Fields**: Only Transaction Type, Customer, and Policy Number can be changed
+- **Visual Design**: Yellow borders on editable fields using form context
+- **Data Integrity**: Financial amounts remain locked to preserve reconciliation
+- **See**: [EDIT_RECONCILED_TRANSACTIONS.md](./EDIT_RECONCILED_TRANSACTIONS.md) for full details
 
 ### Debug Mode for Unmatched Transactions (v3.5.13)
 Enhanced troubleshooting capabilities for reconciliation matching:

@@ -1,54 +1,5 @@
 import streamlit as st
 st.set_page_config(layout="wide")
-
-# Custom CSS to make scrollbars more visible and always present
-st.markdown("""
-<style>
-    /* Make scrollbars thicker and more visible */
-    ::-webkit-scrollbar {
-        width: 20px !important;
-        height: 20px !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #f0f0f0 !important;
-        border: 1px solid #cccccc !important;
-        border-radius: 10px !important;
-        box-shadow: inset 0 0 5px rgba(0,0,0,0.1) !important;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #888888 !important;
-        border-radius: 10px !important;
-        border: 3px solid #f0f0f0 !important;
-        min-height: 30px !important;
-        min-width: 30px !important;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #555555 !important;
-        border: 3px solid #f0f0f0 !important;
-    }
-    
-    ::-webkit-scrollbar-thumb:active {
-        background: #333333 !important;
-    }
-    
-    /* Make corner where scrollbars meet look better */
-    ::-webkit-scrollbar-corner {
-        background: #f0f0f0 !important;
-        border: 1px solid #cccccc !important;
-    }
-    
-    /* For Firefox users - just style colors, not width */
-    * {
-        scrollbar-color: #888888 #f0f0f0 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 import traceback
 import string
 import random
@@ -82,7 +33,6 @@ from column_mapping_config import (
     column_mapper, get_mapped_column, get_ui_field_name, 
     is_calculated_field, safe_column_reference
 )
-from utils.styling import apply_css
 
 def check_password():
     """Returns True if the user had the correct password."""
@@ -1671,13 +1621,6 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
         cancelled_policies = df[df[transaction_type_col].isin(["CAN", "XCL"])]["Policy Number"].unique()
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
-    
-    # Exclude STMT and VOID transactions based on Transaction ID
-    if 'Transaction ID' in pending_renewals.columns:
-        # Filter out any transactions with -STMT- or -VOID- in their Transaction ID
-        pending_renewals = pending_renewals[
-            ~pending_renewals['Transaction ID'].astype(str).str.contains('-STMT-|-VOID-', case=False, na=False)
-        ]
     
     # Sort by Days Until Expiration (ascending, so most past-due show first)
     pending_renewals = pending_renewals.sort_values('Days Until Expiration', ascending=True)
@@ -7671,17 +7614,15 @@ def main():
                             # Format date
                             batch_summary['Statement Date'] = pd.to_datetime(batch_summary['Statement Date']).dt.strftime('%m/%d/%Y')
                             
-                            # Add checkbox column for batch deletion
-                            batch_summary.insert(0, 'Select', False)
+                            # Display batch summary
+                            selected_batch = st.selectbox(
+                                "Select Batch to View Details",
+                                options=[''] + batch_summary['Batch ID'].tolist(),
+                                format_func=lambda x: 'Select a batch...' if x == '' else f"{x} ({batch_summary[batch_summary['Batch ID']==x]['Statement Date'].iloc[0] if x != '' else ''})"
+                            )
                             
                             # Configure column display with color coding for status
                             column_config = {
-                                "Select": st.column_config.CheckboxColumn(
-                                    "Select",
-                                    help="Select batches to delete",
-                                    default=False,
-                                    width="small"
-                                ),
                                 "Agent Payment Total": st.column_config.NumberColumn(format="$%.2f"),
                                 "Status": st.column_config.TextColumn(
                                     help="ACTIVE = Normal reconciliation, VOIDED = Has been reversed, VOID ENTRY = Reversal entry"
@@ -7695,126 +7636,53 @@ def main():
                             }
                             
                             # Reorder columns for better display
-                            display_columns = ['Select', 'Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
+                            display_columns = ['Batch ID', 'Statement Date', 'Status', 'Transaction Count', 'Agent Payment Total', 'Void ID', 'Void Date']
                             # Only include columns that exist
                             display_columns = [col for col in display_columns if col in batch_summary.columns]
                             
-                            # Sort by Statement Date descending
-                            batch_summary_sorted = batch_summary[display_columns].sort_values('Statement Date', ascending=False)
+                            # Apply styling based on status
+                            def highlight_status(row):
+                                if row['Status'] == 'VOIDED':
+                                    return ['background-color: #ffcccc'] * len(row)
+                                elif row['Status'] == 'VOID ENTRY':
+                                    return ['background-color: #ffe6cc'] * len(row)
+                                else:
+                                    return [''] * len(row)
                             
-                            # Display batch summary with scrolling
-                            st.write("**Reconciliation Batches**")
-                            st.info("📌 Select two matching batches (one ACTIVE and one VOID) to delete them together")
+                            styled_df = batch_summary[display_columns].sort_values('Statement Date', ascending=False).style.apply(highlight_status, axis=1)
                             
-                            # Calculate appropriate height (show up to 15 rows with scrolling)
-                            row_height = 35
-                            header_height = 35
-                            max_visible_rows = min(len(batch_summary_sorted), 15)
-                            table_height = header_height + (row_height * max_visible_rows)
-                            
-                            edited_df = st.data_editor(
-                                batch_summary_sorted,
+                            st.dataframe(
+                                styled_df,
                                 column_config=column_config,
                                 use_container_width=True,
-                                hide_index=True,
-                                disabled=[col for col in display_columns if col != 'Select'],
-                                height=table_height,
-                                key="batch_selection_editor"
+                                hide_index=True
                             )
                             
-                            # Add delete functionality
-                            selected_batches = edited_df[edited_df['Select'] == True]['Batch ID'].tolist()
-                            
-                            if len(selected_batches) == 2:
+                            # Show batch details if selected
+                            if selected_batch:
                                 st.divider()
+                                st.subheader(f"Batch Details: {selected_batch}")
                                 
-                                # Check if the selected batches match (one ACTIVE and one VOID)
-                                batch1, batch2 = selected_batches
+                                batch_details = filtered_recon[filtered_recon['reconciliation_id'] == selected_batch]
                                 
-                                # Determine which is active and which is void
-                                if batch1.startswith('VOID-') and not batch2.startswith('VOID-'):
-                                    void_batch = batch1
-                                    active_batch = batch2
-                                    expected_void = f"VOID-{active_batch}"
-                                elif batch2.startswith('VOID-') and not batch1.startswith('VOID-'):
-                                    void_batch = batch2
-                                    active_batch = batch1
-                                    expected_void = f"VOID-{active_batch}"
-                                else:
-                                    void_batch = None
-                                    active_batch = None
-                                    expected_void = None
+                                # Format dates
+                                if 'STMT DATE' in batch_details.columns:
+                                    batch_details['STMT DATE'] = pd.to_datetime(batch_details['STMT DATE'], format='mixed').dt.strftime('%m/%d/%Y')
                                 
-                                # Verify if they match
-                                if void_batch and active_batch and void_batch == expected_void:
-                                    # They match!
-                                    st.success(f"✅ **Matching batches selected:**")
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        st.markdown(f"<p style='color: green; font-weight: bold;'>Active: {active_batch}</p>", unsafe_allow_html=True)
-                                    with col2:
-                                        st.markdown(f"<p style='color: green; font-weight: bold;'>Void: {void_batch}</p>", unsafe_allow_html=True)
-                                    
-                                    # Get transaction counts and totals for confirmation
-                                    active_info = batch_summary[batch_summary['Batch ID'] == active_batch].iloc[0]
-                                    void_info = batch_summary[batch_summary['Batch ID'] == void_batch].iloc[0]
-                                    
-                                    st.info(f"""
-                                    **Confirmation Details:**
-                                    - Active batch has {active_info['Transaction Count']} transactions totaling ${active_info['Agent Payment Total']:,.2f}
-                                    - Void batch has {void_info['Transaction Count']} transactions totaling ${void_info['Agent Payment Total']:,.2f}
-                                    - Total transactions to be deleted: {active_info['Transaction Count'] + void_info['Transaction Count']}
-                                    """)
-                                    
-                                    if st.button("🗑️ Delete Both Batches", type="primary", key="delete_matching_batches"):
-                                        # Get all transaction IDs for both batches
-                                        transactions_to_delete = all_data[
-                                            (all_data['reconciliation_id'] == active_batch) | 
-                                            (all_data['reconciliation_id'] == void_batch)
-                                        ]['Transaction ID'].tolist()
-                                        
-                                        # Delete from database
-                                        try:
-                                            supabase = get_supabase_client()
-                                            
-                                            # Delete in chunks if many transactions
-                                            chunk_size = 100
-                                            deleted_count = 0
-                                            
-                                            for i in range(0, len(transactions_to_delete), chunk_size):
-                                                chunk = transactions_to_delete[i:i + chunk_size]
-                                                response = supabase.table('policies').delete().in_('Transaction ID', chunk).execute()
-                                                deleted_count += len(chunk)
-                                            
-                                            st.success(f"✅ Successfully deleted {deleted_count} transactions from both batches!")
-                                            st.balloons()
-                                            
-                                            # Clear cache and rerun
-                                            clear_policies_cache()
-                                            time.sleep(1)
-                                            st.rerun()
-                                            
-                                        except Exception as e:
-                                            st.error(f"❌ Error deleting batches: {str(e)}")
-                                else:
-                                    # They don't match
-                                    st.error(f"❌ **Selected batches do not match!**")
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        st.markdown(f"<p style='color: red; font-weight: bold;'>Batch 1: {batch1}</p>", unsafe_allow_html=True)
-                                    with col2:
-                                        st.markdown(f"<p style='color: red; font-weight: bold;'>Batch 2: {batch2}</p>", unsafe_allow_html=True)
-                                    st.warning("⚠️ These batches cannot be deleted together because they don't match. Please select one ACTIVE batch and its corresponding VOID batch.")
-                            
-                            elif len(selected_batches) > 2:
-                                st.warning("⚠️ Please select exactly 2 batches (one ACTIVE and one VOID)")
-                            elif len(selected_batches) == 1:
-                                st.info("ℹ️ Please select one more batch to delete. You need to select matching ACTIVE and VOID batches.")
+                                st.dataframe(
+                                    batch_details[[
+                                        'Transaction ID', 'Customer', 'Policy Number', 
+                                        'STMT DATE', 'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)'
+                                    ]],
+                                    column_config={
+                                        "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                        "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f")
+                                    },
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
                         else:
                             # Show all transactions
-                            st.write("**All Reconciliation Transactions**")
-                            st.info("📝 Select a transaction to edit its details")
-                            
                             # Format dates
                             if 'STMT DATE' in filtered_recon.columns:
                                 display_recon = filtered_recon.copy()
@@ -7844,15 +7712,16 @@ def main():
                                 axis=1
                             )
                             
-                            # Add checkbox column for selection
-                            display_recon.insert(0, 'Edit', False)
-                            
                             # Include both agent and agency amounts
-                            display_columns = ['Edit', 'Transaction ID', 'Transaction Type', 'Customer', 'Policy Number', 'STMT DATE']
+                            display_columns = ['Transaction ID', 'Transaction Type', 'Customer', 'Policy Number', 'STMT DATE']
                             if 'Agent Paid Amount (STMT)' in display_recon.columns:
                                 display_columns.append('Agent Paid Amount (STMT)')
                             if 'Agency Comm Received (STMT)' in display_recon.columns:
                                 display_columns.append('Agency Comm Received (STMT)')
+                            
+                            # Add Cross-Reference Key to show original transaction (if column exists)
+                            # if 'Cross-Reference Key' in display_recon.columns:
+                            #     display_columns.append('Cross-Reference Key')
                             
                             # Add new tracking columns
                             display_columns.extend(['Reconciliation Status', 'Batch ID', 'Is Void Entry'])
@@ -7860,31 +7729,35 @@ def main():
                             # Only include columns that exist
                             display_columns = [col for col in display_columns if col in display_recon.columns]
                             
-                            # Sort by STMT DATE
-                            display_recon_sorted = display_recon[display_columns].sort_values('STMT DATE', ascending=False)
+                            # Apply styling based on status
+                            def highlight_void_status(row):
+                                if row.get('Is Void Entry') == 'Yes':
+                                    return ['background-color: #ffcccc'] * len(row)
+                                elif str(row.get('Reconciliation Status', '')).upper() == 'VOID':
+                                    return ['background-color: #ffe6cc'] * len(row)
+                                else:
+                                    return [''] * len(row)
+                            
+                            styled_df = display_recon[display_columns].sort_values('STMT DATE', ascending=False).style.apply(highlight_void_status, axis=1)
                             
                             # Calculate height to show all rows plus 2 extra
-                            num_rows = len(display_recon_sorted)
+                            num_rows = len(display_recon[display_columns])
                             row_height = 35  # Approximate height per row in pixels
                             header_height = 35  # Header row height
                             extra_rows = 2  # Number of extra blank rows to show
                             calculated_height = header_height + (num_rows + extra_rows) * row_height
                             # Cap the height at a reasonable maximum
-                            max_height = 600
+                            max_height = 800
                             display_height = min(calculated_height, max_height)
                             
-                            # Use data editor for checkbox selection
-                            edited_transactions = st.data_editor(
-                                display_recon_sorted,
+                            st.dataframe(
+                                styled_df,
                                 column_config={
-                                    "Edit": st.column_config.CheckboxColumn(
-                                        "Edit",
-                                        help="Select to edit transaction",
-                                        default=False,
-                                        width="small"
-                                    ),
                                     "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
                                     "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    # "Cross-Reference Key": st.column_config.TextColumn(
+                                    #     help="Original Transaction ID that was matched"
+                                    # ),
                                     "Reconciliation Status": st.column_config.TextColumn(
                                         help="RECONCILED = Normal entry, VOID = Void reversal entry"
                                     ),
@@ -7895,100 +7768,10 @@ def main():
                                         help="Yes = This is a reversal entry, No = Original entry"
                                     )
                                 },
-                                disabled=[col for col in display_columns if col != 'Edit'],
                                 use_container_width=True,
                                 hide_index=True,
-                                height=display_height,
-                                key="reconciliation_transactions_editor"
+                                height=display_height
                             )
-                            
-                            # Check if a transaction is selected for editing
-                            selected_for_edit = edited_transactions[edited_transactions['Edit'] == True]
-                            
-                            if len(selected_for_edit) > 0:
-                                st.divider()
-                                
-                                if len(selected_for_edit) > 1:
-                                    st.warning("⚠️ Please select only one transaction to edit at a time")
-                                else:
-                                    # Get the selected transaction
-                                    selected_row = selected_for_edit.iloc[0]
-                                    
-                                    # Create edit form
-                                    st.subheader("✏️ Edit Reconciled Statement Transaction Details")
-                                    
-                                    # Use a form to ensure proper styling
-                                    with st.form("edit_reconciled_transaction_form"):
-                                        # Create two columns for the form
-                                        form_col1, form_col2 = st.columns(2)
-                                        
-                                        with form_col1:
-                                            st.markdown("**Non-editable Fields** *(for reference)*")
-                                            
-                                            # Display non-editable fields with gray background
-                                            st.text_input("Transaction ID", value=selected_row['Transaction ID'], disabled=True, key="edit_trans_id")
-                                            st.text_input("STMT DATE", value=selected_row['STMT DATE'], disabled=True, key="edit_stmt_date")
-                                            if 'Agency Comm Received (STMT)' in selected_row:
-                                                st.number_input("Agency Comm Received", value=float(selected_row['Agency Comm Received (STMT)']), disabled=True, format="%.2f", key="edit_agency_comm")
-                                            if 'Agent Paid Amount (STMT)' in selected_row:
-                                                st.number_input("Agent Paid Amount", value=float(selected_row['Agent Paid Amount (STMT)']), disabled=True, format="%.2f", key="edit_agent_paid")
-                                            st.text_input("Reconciliation Status", value=selected_row['Reconciliation Status'], disabled=True, key="edit_recon_status")
-                                            st.text_input("Batch ID", value=selected_row['Batch ID'], disabled=True, key="edit_batch_id")
-                                        
-                                        with form_col2:
-                                            st.markdown("**Editable Fields**")
-                                            
-                                            # Get original values from the full data
-                                            original_data = all_data[all_data['Transaction ID'] == selected_row['Transaction ID']].iloc[0]
-                                            
-                                            # Editable fields with "was" text
-                                            new_trans_type = st.text_input(
-                                                f"Transaction Type *(was: {original_data['Transaction Type']})*",
-                                                value=original_data['Transaction Type'],
-                                                key="edit_new_trans_type"
-                                            )
-                                            
-                                            new_customer = st.text_input(
-                                                f"Customer *(was: {original_data['Customer']})*",
-                                                value=original_data['Customer'],
-                                                key="edit_new_customer"
-                                            )
-                                            
-                                            new_policy_number = st.text_input(
-                                                f"Policy Number *(was: {original_data.get('Policy Number', '')})*",
-                                                value=original_data.get('Policy Number', ''),
-                                                key="edit_new_policy_number"
-                                            )
-                                        
-                                        # Submit button for the form
-                                        submitted = st.form_submit_button("💾 Save Changes", type="primary")
-                                        
-                                        if submitted:
-                                            # Update the database
-                                            try:
-                                                supabase = get_supabase_client()
-                                                
-                                                # Update only the changed fields
-                                                update_data = {
-                                                    'Transaction Type': new_trans_type,
-                                                    'Customer': new_customer,
-                                                    'Policy Number': new_policy_number
-                                                }
-                                                
-                                                response = supabase.table('policies').update(update_data).eq('Transaction ID', selected_row['Transaction ID']).execute()
-                                                
-                                                if response.data:
-                                                    st.success(f"✅ Successfully updated transaction {selected_row['Transaction ID']}")
-                                                    
-                                                    # Clear cache and rerun
-                                                    clear_policies_cache()
-                                                    time.sleep(1)
-                                                    st.rerun()
-                                                else:
-                                                    st.error("Failed to update transaction")
-                                                    
-                                            except Exception as e:
-                                                st.error(f"❌ Error updating transaction: {str(e)}")
                     else:
                         st.info("No reconciliations found in the selected date range")
                 else:
@@ -11103,8 +10886,6 @@ SOLUTION NEEDED:
             - ONLY the columns present in your Excel file will be updated
             - Columns not in your Excel file will remain unchanged
             - This action cannot be undone - make sure you have a backup!
-            
-            💡 **TIP**: To avoid upload errors, delete all app-created columns (reconciliation_status, is_reconciliation_entry, etc.) from the right side of your spreadsheet before uploading!
             """)
             
             update_file = st.file_uploader(
@@ -12060,7 +11841,6 @@ SOLUTION NEEDED:
             st.write("- **Carrier Commission Rates**: Automatically loads rates when carrier/MGA selected")
             st.write("- **Premium Calculator**: Built-in endorsement calculator for premium changes")
             st.write("- **Smart Filtering**: Cancelled and excluded policies automatically hidden")
-            st.write("- **Remove from List**: Use Prior Policy Number field when creating RWL/REWRITE to auto-remove")
             
             st.divider()
             
@@ -12114,44 +11894,6 @@ SOLUTION NEEDED:
                 """)
             
             st.warning("⚠️ **Remember**: Always use REWRITE (not RWL) for mid-term rewrites to ensure proper 25% commission calculation!")
-            
-            st.divider()
-            
-            # Prior Policy Number Workflow
-            st.write("**🔗 Prior Policy Number - The Magic Field!**")
-            st.info("**Key Feature**: The Prior Policy Number field automatically removes old policies from Pending Renewals!")
-            
-            with st.expander("📋 How Prior Policy Number Works", expanded=True):
-                st.markdown("""
-                ### What is Prior Policy Number?
-                It's a field that links a new policy to the old policy it's replacing. This creates a chain of policy history.
-                
-                ### When to Use It
-                Use the Prior Policy Number field whenever you:
-                - **Renew a policy** (RWL transaction)
-                - **Rewrite a policy** (REWRITE transaction)
-                - **Replace a policy** with a new carrier or policy type
-                
-                ### How It Works in Pending Renewals
-                1. You see a policy in Pending Renewals that needs to be renewed/rewritten
-                2. You create a new transaction (RWL or REWRITE)
-                3. **Enter the old policy number in the Prior Policy Number field**
-                4. Save the new transaction
-                5. **The old policy automatically disappears from Pending Renewals!**
-                
-                ### Benefits
-                ✅ No manual deletion needed  
-                ✅ Maintains complete policy history  
-                ✅ Prevents duplicate renewal reminders  
-                ✅ Clean, accurate Pending Renewals list  
-                ✅ Works for all replacement scenarios  
-                
-                ### Pro Tips
-                - Always fill in Prior Policy Number when replacing ANY policy
-                - This works even if the carrier changes
-                - This works even if the policy type changes
-                - The system tracks the complete chain of renewals
-                """)
         
         with tab3:
             st.subheader("🔧 Troubleshooting")
@@ -12520,12 +12262,96 @@ TO "New Column Name";
                 # Filter out hidden transaction IDs
                 working_data = working_data[~working_data['Transaction ID'].isin(st.session_state.prl_hidden_rows)]
                 hidden_count = original_count - len(working_data)
-                # Store hidden count in session state for later use
-                st.session_state.prl_hidden_count = hidden_count
-            else:
-                st.session_state.prl_hidden_count = 0
                 
+                # Show hidden rows indicator with unhide option
+                if hidden_count > 0:
+                    hide_col1, hide_col2, hide_col3 = st.columns([2, 1, 1])
+                    with hide_col1:
+                        st.warning(f"🙈 {hidden_count} rows hidden from view")
+                    with hide_col2:
+                        if st.button("View Hidden", key="view_hidden_rows"):
+                            st.session_state.show_hidden_details = True
+                    with hide_col3:
+                        if st.button("Unhide All", key="unhide_all_quick"):
+                            st.session_state.prl_hidden_rows.clear()
+                            st.rerun()
                     
+                    # Show hidden transactions details if requested
+                    if st.session_state.get('show_hidden_details', False):
+                        with st.expander("Hidden Transactions", expanded=True):
+                            hidden_df = all_data[all_data['Transaction ID'].isin(st.session_state.prl_hidden_rows)]
+                            
+                            # Show summary
+                            st.markdown(f"**{len(hidden_df)} hidden transactions:**")
+                            
+                            if len(hidden_df) > 0:
+                                # Display with select columns for better visibility
+                                display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 
+                                              'Agent Estimated Comm $', 'Agent Paid Amount (STMT)']
+                                available_cols = [col for col in display_cols if col in hidden_df.columns]
+                                
+                                # Create editable dataframe with Unhide column
+                                hidden_editable = hidden_df[available_cols].copy()
+                                hidden_editable.insert(0, 'Unhide', False)
+                                
+                                # Configure columns for the hidden data editor
+                                hidden_column_config = {
+                                    'Unhide': st.column_config.CheckboxColumn(
+                                        'Unhide',
+                                        help="Select rows to unhide",
+                                        default=False,
+                                        width="small"
+                                    )
+                                }
+                                
+                                # Add number formatting for financial columns
+                                for col in ['Agent Estimated Comm $', 'Agent Paid Amount (STMT)']:
+                                    if col in hidden_editable.columns:
+                                        hidden_column_config[col] = st.column_config.NumberColumn(
+                                            col,
+                                            format="%.2f"
+                                        )
+                                
+                                # Use data editor for hidden transactions
+                                edited_hidden = st.data_editor(
+                                    hidden_editable,
+                                    use_container_width=True,
+                                    column_config=hidden_column_config,
+                                    disabled=[col for col in hidden_editable.columns if col != 'Unhide'],
+                                    hide_index=True,
+                                    key="hidden_data_editor"
+                                )
+                                
+                                # Unhide options
+                                unhide_col1, unhide_col2, unhide_col3 = st.columns([1.5, 1.5, 1])
+                                with unhide_col1:
+                                    if st.button("✨ Unhide Selected", type="primary", key="unhide_selected"):
+                                        # Get rows where Unhide is True
+                                        rows_to_unhide = edited_hidden[edited_hidden['Unhide'] == True]['Transaction ID'].tolist()
+                                        if rows_to_unhide:
+                                            # Remove from hidden set
+                                            for trans_id in rows_to_unhide:
+                                                st.session_state.prl_hidden_rows.discard(trans_id)
+                                            st.session_state.show_hidden_details = False
+                                            st.rerun()
+                                        else:
+                                            st.warning("No rows selected to unhide")
+                                
+                                with unhide_col2:
+                                    if st.button("Unhide All", key="unhide_all_detail"):
+                                        st.session_state.prl_hidden_rows.clear()
+                                        st.session_state.show_hidden_details = False
+                                        st.rerun()
+                                
+                                with unhide_col3:
+                                    if st.button("Close", key="close_hidden_details"):
+                                        st.session_state.show_hidden_details = False
+                                        st.rerun()
+                            else:
+                                st.info("No hidden transactions to display")
+                                if st.button("Close", key="close_empty_hidden"):
+                                    st.session_state.show_hidden_details = False
+                                    st.rerun()
             
             # Initialize session state for templates before any UI
             if "prl_templates" not in st.session_state:
@@ -12816,96 +12642,6 @@ TO "New Column Name";
                         default_indicator = "⭐ " if data.get("is_default", False) else ""
                         st.write(f"**{default_indicator}{name}** - Created: {data['created']} - Columns: {len(data['columns'])}")
             
-            # Show hidden rows indicator with unhide option (if any rows are hidden)
-            if st.session_state.get('prl_hidden_count', 0) > 0:
-                hide_col1, hide_col2, hide_col3 = st.columns([2, 1, 1])
-                with hide_col1:
-                    st.warning(f"🙈 {st.session_state.prl_hidden_count} rows hidden from view")
-                with hide_col2:
-                    if st.button("View Hidden", key="view_hidden_rows"):
-                        st.session_state.show_hidden_details = True
-                with hide_col3:
-                    if st.button("Unhide All", key="unhide_all_quick"):
-                        st.session_state.prl_hidden_rows.clear()
-                        st.rerun()
-            
-            # Show hidden transactions details if requested
-            if st.session_state.get('show_hidden_details', False):
-                with st.expander("🙈 Hidden Transactions", expanded=True):
-                    hidden_df = all_data[all_data['Transaction ID'].isin(st.session_state.prl_hidden_rows)]
-                    
-                    # Show summary
-                    st.markdown(f"**{len(hidden_df)} hidden transactions:**")
-                    
-                    if len(hidden_df) > 0:
-                        # Display with select columns for better visibility
-                        display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 
-                                      'Agent Estimated Comm $', 'Agent Paid Amount (STMT)']
-                        available_cols = [col for col in display_cols if col in hidden_df.columns]
-                        
-                        # Create editable dataframe with Unhide column
-                        hidden_editable = hidden_df[available_cols].copy()
-                        hidden_editable.insert(0, 'Unhide', False)
-                        
-                        # Configure columns for the hidden data editor
-                        hidden_column_config = {
-                            'Unhide': st.column_config.CheckboxColumn(
-                                'Unhide',
-                                help="Select rows to unhide",
-                                default=False,
-                                width="small"
-                            )
-                        }
-                        
-                        # Add number formatting for financial columns
-                        for col in ['Agent Estimated Comm $', 'Agent Paid Amount (STMT)']:
-                            if col in hidden_editable.columns:
-                                hidden_column_config[col] = st.column_config.NumberColumn(
-                                    col,
-                                    format="%.2f"
-                                )
-                        
-                        # Use data editor for hidden transactions
-                        edited_hidden = st.data_editor(
-                            hidden_editable,
-                            use_container_width=True,
-                            column_config=hidden_column_config,
-                            disabled=[col for col in hidden_editable.columns if col != 'Unhide'],
-                            hide_index=True,
-                            key="hidden_data_editor"
-                        )
-                        
-                        # Unhide options
-                        unhide_col1, unhide_col2, unhide_col3 = st.columns([1.5, 1.5, 1])
-                        with unhide_col1:
-                            if st.button("✨ Unhide Selected", type="primary", key="unhide_selected"):
-                                # Get rows where Unhide is True
-                                rows_to_unhide = edited_hidden[edited_hidden['Unhide'] == True]['Transaction ID'].tolist()
-                                if rows_to_unhide:
-                                    # Remove from hidden set
-                                    for trans_id in rows_to_unhide:
-                                        st.session_state.prl_hidden_rows.discard(trans_id)
-                                    st.session_state.show_hidden_details = False
-                                    st.rerun()
-                                else:
-                                    st.warning("No rows selected to unhide")
-                        
-                        with unhide_col2:
-                            if st.button("Unhide All", key="unhide_all_detail"):
-                                st.session_state.prl_hidden_rows.clear()
-                                st.session_state.show_hidden_details = False
-                                st.rerun()
-                        
-                        with unhide_col3:
-                            if st.button("Close", key="close_hidden_details"):
-                                st.session_state.show_hidden_details = False
-                                st.rerun()
-                    else:
-                        st.info("No hidden transactions to display")
-                        if st.button("Close", key="close_empty_hidden"):
-                            st.session_state.show_hidden_details = False
-                            st.rerun()
-            
             # Data Preview with Selected Columns
             st.markdown("### 📊 Report Preview")
             if selected_columns and not working_data.empty:
@@ -13123,14 +12859,6 @@ TO "New Column Name";
                             if col in export_data.columns:
                                 export_data[col] = pd.to_numeric(export_data[col], errors='coerce').round(2)
                         
-                        # Format date columns to remove time component
-                        date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
-                                      'Expiration Date', 'As of Date', 'Transaction Date']
-                        for col in date_columns:
-                            if col in export_data.columns:
-                                # Convert to datetime and format as date only
-                                export_data[col] = pd.to_datetime(export_data[col], errors='coerce').dt.strftime('%Y-%m-%d')
-                        
                         # Add the actual data
                         csv_data = export_data.to_csv(index=False)
                         csv_with_metadata = "\n".join(csv_lines) + "\n" + csv_data
@@ -13154,20 +12882,9 @@ TO "New Column Name";
                             
                             # Write data to second sheet with formatted numeric columns
                             excel_export_data = working_data[valid_columns].copy()
-                            
-                            # Format numeric columns
                             for col in all_numeric_columns:
                                 if col in excel_export_data.columns:
                                     excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
-                            
-                            # Format date columns to remove time component
-                            date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
-                                          'Expiration Date', 'As of Date', 'Transaction Date']
-                            for col in date_columns:
-                                if col in excel_export_data.columns:
-                                    # Convert to datetime and format as date only
-                                    excel_export_data[col] = pd.to_datetime(excel_export_data[col], errors='coerce').dt.strftime('%Y-%m-%d')
-                            
                             excel_export_data.to_excel(writer, sheet_name='Policy Revenue Report', index=False)
                             
                             # Get workbook and format metadata sheet
@@ -13204,33 +12921,6 @@ TO "New Column Name";
     # --- Pending Policy Renewals ---
     elif page == "Pending Policy Renewals":
         st.subheader("Pending Policy Renewals")
-        
-        # Add helpful tip about removing renewals in a collapsible expander
-        with st.expander("💡 **Tip: How to Remove a Policy from This List**", expanded=False):
-            st.info("""
-            **To process a renewal (RWL):**
-            - You can renew policies directly from this page!
-            - Click the renewal button for any policy listed here
-            - Fill in the renewal details and save
-            
-            **To process a "REWRITE":**
-            1. Go to "Add Policy Transactions" page
-            2. Create your new REWRITE transaction
-            3. **IMPORTANT**: Enter the old policy number in the "Prior Policy Number" field
-            4. The old policy will automatically disappear from this pending renewals list!
-            
-            **About Cancelled Policies (CAN):**
-            - When you cancel a policy (CAN transaction), it ends the policy's history trail
-            - Cancelled policies will NOT appear in this renewal list
-            - Only use CAN when the policy is truly terminated (not replaced)
-            
-            **What doesn't show here:**
-            - STMT transactions (these are payment records, not policies)
-            - VOID transactions (these are voided/reversed entries)
-            - This page is specifically for renewing policies by creating RWL transactions
-            
-            This works for all replacement scenarios: standard renewals, rewrites with carrier changes, or policy type changes.
-            """)
         
         # Load fresh data for this page
         all_data = load_policies_data()
