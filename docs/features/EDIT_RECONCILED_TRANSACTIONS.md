@@ -1,7 +1,8 @@
 # Edit Reconciled Transactions Feature
 
 **Created**: July 30, 2025  
-**Version**: 3.9.0
+**Updated**: July 30, 2025  
+**Version**: 3.9.1
 
 ## Overview
 
@@ -22,10 +23,16 @@ The Edit Reconciled Transactions feature allows users to make corrections to rec
 
 ## Editable Fields
 
-Only these fields can be modified to maintain data integrity:
+These fields can be modified while maintaining data integrity:
 - **Transaction Type** (shows original value)
 - **Customer** (shows original value)
 - **Policy Number** (shows original value)
+- **Policy Type** (shows original value)
+- **Carrier Name** (shows original value)
+- **Effective Date** (shows original value)
+- **Agent Comm %** (shows original value)
+- **Policy Origination Date** (shows original value)
+- **X-DATE (Expiration)** (shows original value)
 
 ## Non-Editable Fields
 

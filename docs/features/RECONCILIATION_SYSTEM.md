@@ -587,13 +587,29 @@ The system stands as a testament to the power of listening to users, understandi
 
 ---
 
-## Recent Enhancements (v3.5.7 - v3.9.0)
+## Recent Enhancements (v3.5.7 - v3.9.1)
+
+### Enhanced Reconciliation Data Copying (v3.9.1 - July 30, 2025)
+Major improvements to reconciliation import and void operations:
+
+#### Complete Field Copying During Reconciliation
+- **Auto-copies all non-financial fields** from matched transactions
+- Preserves factual data: Policy Type, Carrier Name, Dates, Client ID, etc.
+- Excludes financial estimates (Premium Sold, commission calculations)
+- Keeps only actual statement amounts (Agent/Agency payments)
+- Eliminates manual data entry for reconciled transactions
+
+#### Improved VOID Transaction IDs
+- **Uses same base ID** as original transaction
+- Example: `63Q4XX6-STMT-20240731` → `63Q4XX6-VOID-20240731`
+- Makes transaction pairs immediately identifiable
+- Improves batch delete matching verification
 
 ### Edit Reconciled Transactions (v3.9.0 - July 30, 2025)
 New feature allowing corrections to reconciled transactions without voiding:
 - **Checkbox Selection**: Select transactions to edit in Reconciliation History
 - **Two-Column Form**: Non-editable reference fields (left) and editable fields (right)
-- **Limited Edit Fields**: Only Transaction Type, Customer, and Policy Number can be changed
+- **Nine Editable Fields**: Transaction Type, Customer, Policy Number, Policy Type, Carrier Name, Effective Date, Agent Comm %, Policy Origination Date, X-DATE
 - **Visual Design**: Yellow borders on editable fields using form context
 - **Data Integrity**: Financial amounts remain locked to preserve reconciliation
 - **See**: [EDIT_RECONCILED_TRANSACTIONS.md](./EDIT_RECONCILED_TRANSACTIONS.md) for full details

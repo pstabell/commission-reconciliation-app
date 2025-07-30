@@ -16,6 +16,29 @@
       "Policy Balance Due"
     ],
     "created": "2025-07-23 21:03:08",
+    "is_default": false
+  },
+  "POLICY TERM v1": {
+    "columns": [
+      "Transaction ID",
+      "Customer",
+      "Transaction Type",
+      "Policy Type",
+      "Carrier Name",
+      "Policy Number",
+      "Policy Origination Date",
+      "Effective Date",
+      "X-DATE",
+      "Premium Sold",
+      "Policy Gross Comm %",
+      "Agent Comm %",
+      "Broker Fee Agent Comm",
+      "Agent Estimated Comm $",
+      "Agent Paid Amount (STMT)",
+      "STMT DATE",
+      "Policy Balance Due"
+    ],
+    "created": "2025-07-29 22:02:27",
     "is_default": true
   }
 }
