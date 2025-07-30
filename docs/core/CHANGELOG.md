@@ -5,6 +5,38 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.4] - 2025-07-30 - Reconciliation Matching Logic Fixes
+
+### Fixed
+- **Reconciliation False Matches**
+  - System was matching different policy numbers (e.g., TESTPOLICY123 to TESTPOLICY001) based on customer name alone
+  - Now requires policy number match for automatic matching
+  - Customer-only matches now require manual confirmation
+  
+- **Confidence Labeling**
+  - "exact" label now only applies to 99%+ confidence matches
+  - Added confidence tiers: exact (99%+), high (95%+), good (90%+), moderate (85%+), low (<85%)
+  - Prevents misleading "exact" labels on partial matches
+  
+- **NaN Error Prevention**
+  - Added NaN cleaning to `clean_data_for_database()` function
+  - Converts NaN values to None before database insertion
+  - Prevents database errors during reconciliation import
+
+### Added
+- **Skip Option for Low Confidence Matches**
+  - "Skip (Leave Unmatched)" button for matches below 90% confidence
+  - Allows users to handle uncertain matches manually later
+  - Improves workflow for ambiguous transactions
+
+### Improved
+- **Matching Logic Hierarchy**
+  - Policy + Date match: 100% confidence
+  - Customer + Policy match: 95% confidence  
+  - Customer + Amount match: 90% confidence
+  - Customer only: Requires manual selection
+  - Prevents automatic matching without policy number verification
+
 ## [3.9.3] - 2025-07-30 - Duplicate Transaction & Agent Commission Override
 
 ### Added

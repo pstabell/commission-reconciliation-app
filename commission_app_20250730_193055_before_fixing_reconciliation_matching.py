@@ -54,7 +54,6 @@ import string
 import random
 import pandas as pd
 import numpy as np
-import math
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import hashlib
@@ -434,7 +433,6 @@ def is_import_transaction(transaction_id):
 def clean_data_for_database(data):
     """
     Remove UI-only fields from data dictionary before database insertion.
-    Also handles NaN values to prevent database errors.
     
     UI-only fields that don't exist in the database:
     - Rate (Commission Rate display field)
@@ -464,15 +462,6 @@ def clean_data_for_database(data):
     for field in ui_only_fields:
         if field in cleaned_data:
             del cleaned_data[field]
-    
-    # Clean NaN values
-    for key, value in cleaned_data.items():
-        if pd.isna(value):
-            # Convert NaN to None for database
-            cleaned_data[key] = None
-        elif isinstance(value, float) and math.isnan(value):
-            # Handle math.nan as well
-            cleaned_data[key] = None
     
     return cleaned_data
 
@@ -2039,21 +2028,16 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                             break
                     
                     if not amount_matched:
-                        # Check if any transaction matches the policy number
-                        policy_matched = False
-                        for trans in customer_trans:
-                            if trans.get('Policy Number') == policy_num and policy_num:
-                                # Policy number matches!
-                                match_result['match'] = trans
-                                match_result['confidence'] = 95
-                                match_result['match_type'] = f'{potential_customers[0][1]} + Policy'
-                                match_result['matched_customer'] = matched_customer
-                                matched.append(match_result)
-                                policy_matched = True
-                                break
-                        
-                        if not policy_matched:
-                            # No policy match - needs manual selection
+                        # Multiple transactions but no amount match
+                        if len(customer_trans) == 1:
+                            # Single transaction for this customer
+                            match_result['match'] = customer_trans[0]
+                            match_result['confidence'] = 85
+                            match_result['match_type'] = potential_customers[0][1]
+                            match_result['matched_customer'] = matched_customer
+                            matched.append(match_result)
+                        else:
+                            # Multiple transactions - needs selection
                             match_result['potential_matches'] = customer_trans
                             match_result['potential_customers'] = potential_customers
                             match_result['needs_selection'] = True
@@ -2103,24 +2087,11 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                         break
                 
                 if not amount_matched:
-                    # Check for policy number match
-                    policy_matched = False
-                    for trans in customer_matches:
-                        if trans.get('Policy Number') == policy_num and policy_num:
-                            # Policy number matches!
-                            match_result['match'] = trans
-                            match_result['confidence'] = 95
-                            match_result['match_type'] = 'Customer + Policy'
-                            matched.append(match_result)
-                            policy_matched = True
-                            break
-                    
-                    if not policy_matched:
-                        # No policy match - needs selection
-                        match_result['potential_matches'] = customer_matches
-                        match_result['potential_customers'] = [(customer, 'exact', 100)]
-                        match_result['needs_selection'] = True
-                        unmatched.append(match_result)
+                    # No amount match - needs selection
+                    match_result['potential_matches'] = customer_matches
+                    match_result['potential_customers'] = [(customer, 'exact', 100)]
+                    match_result['needs_selection'] = True
+                    unmatched.append(match_result)
             else:
                 # No match found - can create new transaction
                 match_result['can_create'] = True
@@ -2149,19 +2120,6 @@ def show_import_results(statement_date, all_data):
                 if 'matched_customer' in item and item['matched_customer'] != item['customer']:
                     display_customer = f"{item['customer']} → {item['matched_customer']}"
                 
-                # Determine confidence label
-                confidence = item.get('confidence', 0)
-                if confidence >= 99:
-                    confidence_label = "exact"
-                elif confidence >= 95:
-                    confidence_label = "high"
-                elif confidence >= 90:
-                    confidence_label = "good"
-                elif confidence >= 85:
-                    confidence_label = "moderate"
-                else:
-                    confidence_label = "low"
-                
                 matched_df.append({
                     'Status': '✅',
                     'Transaction ID': item['match'].get('Transaction ID', 'N/A'),
@@ -2171,7 +2129,7 @@ def show_import_results(statement_date, all_data):
                     'Eff Date': item.get('effective_date', ''),
                     'Statement Amt': item.get('amount', 0),
                     'DB Balance': item['match'].get('balance', item.get('amount', 0)),
-                    'Confidence': f"{confidence}% {confidence_label}",
+                    'Confidence': f"{item['confidence']}%",
                     'Match Type': item['match_type']
                 })
             
@@ -2316,40 +2274,29 @@ def show_import_results(statement_date, all_data):
                                         key=f"trans_select_{idx}"
                                     )
                                     
-                                    col_match, col_skip = st.columns(2)
-                                    with col_match:
-                                        if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
-                                            # Immediately move to matched transactions
-                                            matched_item = item.copy()
-                                            matched_item['match'] = customer_trans[selected_trans_idx]
-                                            matched_item['confidence'] = 100
-                                            matched_item['match_type'] = 'Manual - Selected'
-                                            matched_item['matched_customer'] = selected_customer
-                                            
-                                            # Add to matched list
-                                            st.session_state.matched_transactions.append(matched_item)
-                                            
-                                            # Remove from unmatched list
-                                            st.session_state.unmatched_transactions = [
-                                                unmatched for i, unmatched in enumerate(st.session_state.unmatched_transactions) 
-                                                if i != idx
-                                            ]
-                                            
-                                            # Clear any manual match entry for this index
-                                            if idx in st.session_state.manual_matches:
-                                                del st.session_state.manual_matches[idx]
-                                            
-                                            st.success("Match confirmed and moved to matched list!")
-                                            st.rerun()
-                                    
-                                    with col_skip:
-                                        # Check if confidence is low
-                                        if 'potential_customers' in item and item['potential_customers']:
-                                            max_confidence = max(score for _, _, score in item['potential_customers'])
-                                            if max_confidence < 90:
-                                                if st.button("⏭️ Skip (Leave Unmatched)", key=f"skip_{idx}"):
-                                                    st.info("Transaction will remain unmatched. You can handle it manually later.")
-                                                    # Just provide feedback - item stays in unmatched list
+                                    if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
+                                        # Immediately move to matched transactions
+                                        matched_item = item.copy()
+                                        matched_item['match'] = customer_trans[selected_trans_idx]
+                                        matched_item['confidence'] = 100
+                                        matched_item['match_type'] = 'Manual - Selected'
+                                        matched_item['matched_customer'] = selected_customer
+                                        
+                                        # Add to matched list
+                                        st.session_state.matched_transactions.append(matched_item)
+                                        
+                                        # Remove from unmatched list
+                                        st.session_state.unmatched_transactions = [
+                                            unmatched for i, unmatched in enumerate(st.session_state.unmatched_transactions) 
+                                            if i != idx
+                                        ]
+                                        
+                                        # Clear any manual match entry for this index
+                                        if idx in st.session_state.manual_matches:
+                                            del st.session_state.manual_matches[idx]
+                                        
+                                        st.success("Match confirmed and moved to matched list!")
+                                        st.rerun()
                                 else:
                                     st.info("No transactions with balance for this customer")
                                     

@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 30, 2025  
-**Current Version**: 3.9.3
+**Current Version**: 3.9.4
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,17 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.3)
+## Recent Major Changes (v3.9.4)
+1. **Reconciliation Matching Logic Fixes**:
+   - Fixed false matches where different policy numbers (TESTPOLICY123 vs TESTPOLICY001) were matched based on customer name alone
+   - Now requires policy number match for automatic matching (95% confidence)
+   - Customer-only matches require manual confirmation
+   - "exact" label now only for 99%+ confidence matches
+   - Added confidence tiers: exact, high, good, moderate, low
+   - Added NaN cleaning to prevent database errors
+   - Added "Skip" option for low confidence matches
+
+## Prior Major Changes (v3.9.3)
 1. **Duplicate Transaction Feature**:
    - New "📋 Duplicate Selected Transaction" button on Edit Policy Transactions page
    - Copies all transaction data except unique IDs and tracking fields

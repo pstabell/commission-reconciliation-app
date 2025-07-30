@@ -245,14 +245,28 @@ if "," in search_name:
 
 **Solution**: Updated search to use correct column names
 
-### Current Matching Algorithm
+### Current Matching Algorithm (Updated v3.9.4)
 
-1. **Exact Match** (100%): Policy + Date with normalization
-2. **Name Reversal** (98%): "Last, First" → "First Last"
-3. **Business Normalized** (95%): Ignores LLC, Inc, etc.
-4. **First Word Match** (90%): Partial name matching
-5. **Contains Match** (85%): Substring matching
-6. **Amount Validation**: Within 5% tolerance
+1. **Policy + Date Match** (100%): Exact policy number and effective date match
+2. **Customer + Policy Match** (95%): Customer name match with correct policy number
+3. **Customer + Amount Match** (90%): Customer name match with amount within 5% tolerance
+4. **Customer Only Match**: Requires manual selection (no automatic matching)
+
+#### Customer Name Matching Tiers:
+- **Exact** (100%): Perfect string match
+- **Name Reversal** (98%): "Last, First" → "First Last"
+- **Business Normalized** (95%): Ignores LLC, Inc, etc.
+- **First Word Match** (90%): Partial name matching
+- **All Words Match** (88%): All words present in any order
+- **Contains Match** (85%): Substring matching
+- **Most Words Match** (82%): Most words match between names
+
+#### Confidence Labels:
+- **exact**: 99%+ confidence
+- **high**: 95-98% confidence
+- **good**: 90-94% confidence
+- **moderate**: 85-89% confidence
+- **low**: <85% confidence
 
 ### Enhanced Unmatched Transaction Display (Added v3.5.14)
 
