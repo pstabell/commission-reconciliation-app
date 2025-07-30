@@ -42,22 +42,9 @@ st.markdown("""
         border: 1px solid #cccccc !important;
     }
     
-    /* Force scrollbars to always be visible in data editors and dataframes */
-    div[data-testid="data-editor-container"] {
-        scrollbar-width: thick !important;
-        scrollbar-color: #888888 #f0f0f0 !important;
-    }
-    
-    /* For Firefox users */
+    /* For Firefox users - just style colors, not width */
     * {
-        scrollbar-width: thick !important;
         scrollbar-color: #888888 #f0f0f0 !important;
-    }
-    
-    /* Ensure scrollable areas always show scrollbar */
-    .stDataFrame {
-        overflow: auto !important;
-        scrollbar-gutter: stable !important;
     }
 </style>
 """, unsafe_allow_html=True)
