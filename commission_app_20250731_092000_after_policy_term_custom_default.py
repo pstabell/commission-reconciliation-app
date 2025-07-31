@@ -3519,7 +3519,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 # Check if we have a calculated X-DATE from Policy Term selection
                 if 'calculated_x_date' in st.session_state:
                     date_value = st.session_state['calculated_x_date']
-                # else: Don't auto-populate X-DATE - let user choose via Policy Term dropdown
+                else:
+                    # Don't auto-populate X-DATE - let user choose via Policy Term dropdown
                 
                 if date_value and pd.notna(date_value):
                     try:
@@ -3613,33 +3614,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 
                 # Don't auto-calculate or force any term
                 
-                # Define callback function for Policy Term changes
-                def on_policy_term_change():
-                    selectbox_value = st.session_state.get("modal_Policy Term")
-                    effective_date = updated_data.get('Effective Date')
-                    
-                    if selectbox_value and selectbox_value != "Custom" and effective_date:
-                        try:
-                            # Parse the effective date
-                            if not isinstance(effective_date, pd.Timestamp):
-                                effective_date = pd.to_datetime(effective_date)
-                            
-                            # Calculate new X-DATE based on selected term
-                            new_x_date = effective_date + pd.DateOffset(months=int(selectbox_value))
-                            
-                            # Store the calculated value for the X-DATE widget to pick up on next render
-                            st.session_state['calculated_x_date'] = new_x_date.date()
-                            st.session_state['policy_term_changed'] = True
-                            st.session_state['policy_term_message'] = f"✅ X-DATE will be updated to {new_x_date.strftime('%Y-%m-%d')} (Effective Date + {selectbox_value} months)"
-                        except Exception as e:
-                            st.session_state['policy_term_error'] = f"Could not calculate X-DATE: {str(e)}"
-                    elif selectbox_value == "Custom":
-                        # Clear any calculated X-DATE
-                        if 'calculated_x_date' in st.session_state:
-                            del st.session_state['calculated_x_date']
-                        st.session_state['policy_term_changed'] = True
-                        st.session_state['policy_term_message'] = "📝 Custom term selected - please enter X-DATE manually"
-                
                 # Set the selectbox with the calculated value
                 selectbox_value = st.selectbox(
                     'Policy Term',
@@ -3647,28 +3621,40 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     format_func=lambda x: "" if x is None else (f"{x} months" if x != "Custom" else "Custom"),
                     index=selected_index,
                     key="modal_Policy Term",
-                    help="Select term length. Choose 'Custom' for special dates like cancellations.",
-                    on_change=on_policy_term_change
+                    help="Select term length. Choose 'Custom' for special dates like cancellations."
                 )
                 
                 # Store the user's selection
                 updated_data['Policy Term'] = selectbox_value
                 
-                # Show any messages from the callback
-                if st.session_state.get('policy_term_changed'):
-                    if 'policy_term_message' in st.session_state:
-                        if 'Custom' in st.session_state['policy_term_message']:
-                            st.info(st.session_state['policy_term_message'])
-                        else:
-                            st.success(st.session_state['policy_term_message'])
-                        del st.session_state['policy_term_message']
-                    if 'policy_term_error' in st.session_state:
-                        st.warning(st.session_state['policy_term_error'])
-                        del st.session_state['policy_term_error']
-                    st.session_state['policy_term_changed'] = False
-                    
-                    # Force a rerun to update X-DATE widget with new value
-                    st.rerun()
+                # Immediately update X-DATE when a numeric term is selected
+                if selectbox_value and selectbox_value != "Custom" and effective_date:
+                    try:
+                        # Parse the effective date
+                        if not isinstance(effective_date, pd.Timestamp):
+                            effective_date = pd.to_datetime(effective_date)
+                        
+                        # Calculate new X-DATE based on selected term
+                        new_x_date = effective_date + pd.DateOffset(months=int(selectbox_value))
+                        
+                        # Update X-DATE immediately
+                        updated_data['X-DATE'] = new_x_date.date()
+                        
+                        # Update the X-DATE field in session state to reflect the change
+                        if 'modal_X-DATE' in st.session_state:
+                            st.session_state['modal_X-DATE'] = new_x_date.date()
+                        
+                        # Store the calculated value
+                        st.session_state['calculated_x_date'] = new_x_date.date()
+                        
+                        st.success(f"✅ X-DATE updated to {new_x_date.strftime('%Y-%m-%d')} (Effective Date + {selectbox_value} months)")
+                    except Exception as e:
+                        st.warning(f"Could not calculate X-DATE: {str(e)}")
+                elif selectbox_value == "Custom":
+                    st.info("📝 Custom term selected - please enter X-DATE manually")
+                    # Clear any calculated X-DATE
+                    if 'calculated_x_date' in st.session_state:
+                        del st.session_state['calculated_x_date']
         
         # Premium Information
         st.markdown("#### Premium Information")

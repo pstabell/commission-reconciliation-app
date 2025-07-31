@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Eliminated pending X-DATE storage in session state
   - Calculate button no longer needed for X-DATE updates
 
+### Fixed
+- **X-DATE Session State Error**
+  - Fixed "st.session_state.modal_X-DATE cannot be modified after widget instantiated" error
+  - Implemented callback function with st.rerun() to properly update X-DATE widget
+  - X-DATE now updates immediately when Policy Term selection changes
+
 ## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
 
 ### Fixed

@@ -20,6 +20,7 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Removed automatic 12-month term calculation for NEW/RWL transactions
    - Users must explicitly choose term length for better data accuracy
    - Shows success message when X-DATE is automatically calculated
+   - Fixed session state modification error using callback function with st.rerun()
 
 ## Prior Major Changes (v3.9.11)
 1. **Edit Transactions Column Order Fix**:
