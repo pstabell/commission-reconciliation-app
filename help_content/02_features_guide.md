@@ -194,6 +194,13 @@
 4. **Process Batch**: Save matched transactions as reconciliation batch
 5. **View History**: Review past reconciliations and payment history
 
+**Void Management**:
+- **Void Reconciliation Batches**: Reverse entire payment batches when needed
+- **Double-Void Prevention**: System prevents voiding already-voided batches
+- **Required Void Reason**: Yellow-highlighted field for entering void explanation
+- **Audit Trail**: Complete history of voids with reasons and timestamps
+- **Suggested Alternatives**: System suggests adjustments for already-voided batches
+
 ---
 
 ## 📑 Policy Revenue Ledger

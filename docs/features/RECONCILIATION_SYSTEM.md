@@ -449,6 +449,21 @@ When voiding a reconciliation batch:
 2. Updates original transactions back to 'unreconciled' status
 3. Maintains complete audit trail with void reason
 
+### Double-Void Prevention (Added v3.9.5)
+The system now prevents attempting to void an already-voided batch:
+- **Validation Check**: Before showing void form, checks if `VOID-{batch_id}` already exists
+- **Error Message**: "This batch has already been voided. You cannot void a batch twice."
+- **Suggested Action**: "If you need to make corrections, please create an adjustment entry instead."
+- **UI Behavior**: Void form is completely hidden when batch is already voided
+- **Prevents**: Duplicate VOID entries and balance calculation errors
+
+### Void Reason Field Styling (Added v3.9.5)
+The void reason text area now has enhanced visibility:
+- **Background**: Yellow (#fff3b0) matching app-wide input field styling
+- **Border**: 2px solid darker yellow (#e6a800)
+- **Label**: Bold font-weight (600) for emphasis
+- **Purpose**: Makes the required field immediately visible to users
+
 ### Important: Agent vs Agency Amounts (Fixed v3.5.12)
 The system tracks two commission amounts:
 - **Agent Paid Amount (STMT)**: What YOU receive (primary reconciliation field)

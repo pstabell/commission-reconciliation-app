@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.4)
+## Recent Major Changes (v3.9.5)
+1. **Void Improvements**:
+   - Added double-void prevention validation
+   - System checks if VOID-{batch_id} already exists before allowing void
+   - Shows error: "This batch has already been voided. You cannot void a batch twice."
+   - Void reason field now has yellow styling (#fff3b0 background, #e6a800 border)
+   - Matches app-wide input field styling for consistency
+
+## Prior Major Changes (v3.9.4)
 1. **Reconciliation Matching Logic Fixes**:
    - Fixed false matches where different policy numbers (TESTPOLICY123 vs TESTPOLICY001) were matched based on customer name alone
    - Now requires policy number match for automatic matching (95% confidence)
