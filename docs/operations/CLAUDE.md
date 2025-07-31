@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.17
+**Current Version**: 3.9.18
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,16 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.17)
+## Recent Major Changes (v3.9.18)
+1. **STMT Transaction Client ID Inclusion Fix**:
+   - Fixed missing STMT transactions in Policy Revenue Ledger
+   - STMT transactions often have missing or different Client IDs
+   - Now retrieves transactions by Client ID + Policy Number
+   - ALSO includes any STMT transactions matching Policy Number regardless of Client ID
+   - Ensures all reconciliation entries appear under correct policy
+   - Prevents orphaned STMT transactions due to Client ID mismatches
+
+## Prior Major Changes (v3.9.17)
 1. **Simplified Checkbox Interface in Policy Revenue Ledger Reports**:
    - Replaced two checkbox columns (Hide, Reviewed) with single "Select" column
    - Actions determined by buttons: "Hide Selected" and "Mark as Reviewed"

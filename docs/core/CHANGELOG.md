@@ -5,6 +5,16 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.18] - 2025-07-31 - STMT Transaction Client ID Inclusion
+
+### Fixed
+- **Missing STMT Transactions in Policy Revenue Ledger**
+  - STMT transactions with missing or different Client IDs now included
+  - Policy Revenue Ledger retrieves transactions by Client ID + Policy Number
+  - Also includes STMT transactions that match Policy Number regardless of Client ID
+  - Ensures all reconciliation entries appear for policies
+  - Prevents STMT transactions from being orphaned due to Client ID mismatches
+
 ## [3.9.17] - 2025-07-31 - Simplified Checkbox Interface
 
 ### Changed
