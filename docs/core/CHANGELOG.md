@@ -5,6 +5,26 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.17] - 2025-07-31 - Simplified Checkbox Interface
+
+### Changed
+- **Single Select Checkbox Column**
+  - Replaced two checkbox columns (Hide, Reviewed) with one "Select" column
+  - Reduces table width and simplifies interface
+  - Actions determined by button clicked after selection
+  
+### Improved
+- **Action Buttons**
+  - "Hide Selected" - hides checked transactions
+  - "Mark as Reviewed" - marks checked transactions as reviewed
+  - "View Reviewed" - shows reviewed transactions in separate view
+  - Added "Clear All Reviewed" button in reviewed view
+  
+### Updated
+- **Navigation Tips**
+  - Updated to reflect new single checkbox workflow
+  - Column order now: Select, Type →, Transaction ID, Customer, etc.
+
 ## [3.9.16] - 2025-07-31 - Policy Number Whitespace Fix
 
 ### Fixed

@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.16
+**Current Version**: 3.9.17
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.16)
+## Recent Major Changes (v3.9.17)
+1. **Simplified Checkbox Interface in Policy Revenue Ledger Reports**:
+   - Replaced two checkbox columns (Hide, Reviewed) with single "Select" column
+   - Actions determined by buttons: "Hide Selected" and "Mark as Reviewed"
+   - Added "View Reviewed" button to access reviewed transactions
+   - Cleaner interface with less horizontal scrolling
+   - Follows common UI pattern of select-then-act
+
+## Prior Major Changes (v3.9.16)
 1. **Policy Number Whitespace Fix**:
    - Fixed duplicate policy entries caused by leading/trailing spaces in policy numbers
    - STMT transaction had ' 1AA338948' (with space) vs original '1AA338948'
