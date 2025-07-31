@@ -5,6 +5,17 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.7] - 2025-07-31 - Premium Calculator Label Updates
+
+### Changed
+- **Premium Sold Calculator Field Labels**
+  - Changed "Existing Premium" to "Existing Net Premium" for clarity
+  - Changed "New/Revised Premium" to "New/Revised Gross Premium" for clarity
+  - Updated in both Edit Transaction form and Add New Policy Transaction form
+  - Updated help text to reflect net/gross terminology
+  - Updated CSS styling to target new field names
+  - Updated formula documentation to use new terminology
+
 ## [3.9.6] - 2025-07-31 - Policy Revenue Ledger & Transaction Management Fixes
 
 ### Fixed

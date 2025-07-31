@@ -144,8 +144,8 @@ def get_custom_css():
             border-radius: 6px !important;
         }
         /* Add yellow border to Premium Sold Calculator inputs */
-        input[type="number"][aria-label="Existing Premium"],
-        input[type="number"][aria-label="New/Revised Premium"] {
+        input[type="number"][aria-label="Existing Net Premium"],
+        input[type="number"][aria-label="New/Revised Gross Premium"] {
             background-color: #fff3b0 !important;
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
