@@ -118,7 +118,8 @@ def get_custom_css():
         }
         /* Highlight all interactive input fields in Add New Policy Transaction form and Admin Panel rename headers */
         .stForm input:not([disabled]), .stForm select:not([disabled]), .stForm textarea:not([disabled]),
-        .stTextInput > div > input:not([disabled]), .stNumberInput > div > input:not([disabled]), .stDateInput > div > input:not([disabled]) {
+        .stTextInput > div > input:not([disabled]), .stNumberInput > div > input:not([disabled]), .stDateInput > div > input:not([disabled]),
+        .stTextArea > div > textarea:not([disabled]) {
             background-color: #fff3b0 !important; /* Darker yellow */
             border: 2px solid #e6a800 !important; /* Darker yellow border */
             border-radius: 6px !important;
@@ -158,6 +159,12 @@ def get_custom_css():
         }
         /* Highlight Date inputs */
         .stDateInput > div > input {
+            background-color: #fff3b0 !important;
+            border: 2px solid #e6a800 !important;
+            border-radius: 6px !important;
+        }
+        /* Ensure all text areas get yellow styling including void reason */
+        .stTextArea textarea {
             background-color: #fff3b0 !important;
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
