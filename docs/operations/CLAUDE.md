@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.15
+**Current Version**: 3.9.16
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.15)
+## Recent Major Changes (v3.9.16)
+1. **Policy Number Whitespace Fix**:
+   - Fixed duplicate policy entries caused by leading/trailing spaces in policy numbers
+   - STMT transaction had ' 1AA338948' (with space) vs original '1AA338948'
+   - Now trims all policy numbers before comparison and grouping
+   - Applied trimming in both dropdown population and transaction retrieval
+   - Resolves issue where same policy appeared twice in Policy Revenue Ledger
+
+## Prior Major Changes (v3.9.15)
 1. **Policy Revenue Ledger Grouping Fix**:
    - Fixed duplicate policy entries in dropdown when customer names have slight variations
    - Now groups by Client ID + Policy Number instead of relying on exact customer name matches

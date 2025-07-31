@@ -5,6 +5,17 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.16] - 2025-07-31 - Policy Number Whitespace Fix
+
+### Fixed
+- **Duplicate Policies Due to Whitespace**
+  - Discovered STMT transaction had leading space in policy number: ' 1AA338948'
+  - Original transaction had no space: '1AA338948'
+  - This caused the same policy to appear twice in dropdown
+  - Now strips all whitespace from policy numbers before comparison
+  - Applied trimming throughout Policy Revenue Ledger logic
+  - Resolves duplicate policy display issue completely
+
 ## [3.9.15] - 2025-07-31 - Policy Revenue Ledger Grouping Improvements
 
 ### Fixed
