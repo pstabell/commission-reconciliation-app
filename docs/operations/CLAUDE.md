@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.14
+**Current Version**: 3.9.15
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.14)
+## Recent Major Changes (v3.9.15)
+1. **Policy Revenue Ledger Grouping Fix**:
+   - Fixed duplicate policy entries in dropdown when customer names have slight variations
+   - Now groups by Client ID + Policy Number instead of relying on exact customer name matches
+   - When retrieving policy transactions, uses Client ID + Policy Number to get ALL related transactions
+   - Prevents splitting of policies due to punctuation differences (commas, periods, etc.)
+   - Ensures STMT transactions show under the correct policy even with name mismatches
+
+## Prior Major Changes (v3.9.14)
 1. **Client ID in Reconciliation Edit Form**:
    - Added Client ID as editable field in reconciliation edit form
    - Allows fixing missing Client IDs on STMT transactions directly from reconciliation page

@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.15] - 2025-07-31 - Policy Revenue Ledger Grouping Improvements
+
+### Fixed
+- **Duplicate Policy Entries in Dropdown**
+  - Fixed issue where policies appeared multiple times in dropdown due to customer name variations
+  - Policy Revenue Ledger now groups by Client ID + Policy Number for more reliable matching
+  - Eliminates duplicates caused by punctuation differences (commas, periods, spaces)
+  
+### Changed
+- **Policy Transaction Retrieval**
+  - When a policy is selected, system now uses Client ID + Policy Number to find ALL related transactions
+  - Falls back to Policy Number only if Client ID is not available
+  - Ensures STMT transactions are included even with slight customer name differences
+
 ## [3.9.14] - 2025-07-31 - Client ID in Reconciliation Edit Form
 
 ### Added
