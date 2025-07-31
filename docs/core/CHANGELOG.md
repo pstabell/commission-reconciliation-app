@@ -5,6 +5,27 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.12] - 2025-07-31 - Policy Term Custom Default
+
+### Changed
+- **Policy Term Default Behavior**
+  - Policy Term now defaults to "Custom" instead of auto-calculating 12 months
+  - Removed automatic 12-month calculation for NEW/RWL transactions
+  - Users must explicitly select a term length
+  
+- **X-DATE Auto-Update**
+  - X-DATE now updates immediately when a Policy Term is selected
+  - No longer requires clicking the Calculate button
+  - Selecting 3, 6, 9, or 12 months instantly calculates X-DATE
+  - Custom term selection prompts manual X-DATE entry
+  - Shows success message when X-DATE is automatically updated
+
+### Removed
+- **Pending X-DATE Calculations**
+  - Removed the two-step process requiring Calculate button
+  - Eliminated pending X-DATE storage in session state
+  - Calculate button no longer needed for X-DATE updates
+
 ## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
 
 ### Fixed

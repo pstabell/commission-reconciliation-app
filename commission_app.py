@@ -3520,23 +3520,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 if 'calculated_x_date' in st.session_state:
                     date_value = st.session_state['calculated_x_date']
                 else:
-                    # Check if we should auto-populate X-DATE for NEW/RWL (except AUTO)
-                    transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
-                    policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
-                    effective_date = updated_data.get('Effective Date', modal_data.get('Effective Date'))
-                    
-                    if (transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO' and 
-                        effective_date and (not date_value or pd.isna(date_value))):
-                        try:
-                            # Parse the effective date
-                            if not isinstance(effective_date, pd.Timestamp):
-                                effective_date = pd.to_datetime(effective_date)
-                            
-                            # Calculate X-DATE (12 months later)
-                            date_value = effective_date + pd.DateOffset(months=12)
-                            st.info("📅 X-DATE auto-populated as Effective Date + 12 months for NEW/RWL policy")
-                        except Exception as e:
-                            pass
+                    # Don't auto-populate X-DATE - let user choose via Policy Term dropdown
                 
                 if date_value and pd.notna(date_value):
                     try:
@@ -3578,31 +3562,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 # Check if this is the first time loading (no user selection yet)
                 is_initial_load = 'modal_Policy Term' not in st.session_state
                 
-                if transaction_type in ['NEW', 'RWL'] and policy_type != 'AUTO' and effective_date and is_initial_load:
-                    # If no X-DATE is set, calculate it as Effective Date + 12 months
-                    if not x_date or pd.isna(x_date):
-                        try:
-                            # Parse the effective date
-                            if not isinstance(effective_date, pd.Timestamp):
-                                effective_date = pd.to_datetime(effective_date)
-                            
-                            # Calculate X-DATE (12 months later)
-                            x_date_calculated = effective_date + pd.DateOffset(months=12)
-                            updated_data['X-DATE'] = x_date_calculated.date()
-                            x_date = x_date_calculated
-                            
-                            # Update the X-DATE field in session state to reflect the change
-                            if 'modal_X-DATE' in st.session_state:
-                                st.session_state['modal_X-DATE'] = x_date_calculated.date()
-                            
-                            st.info("📅 X-DATE auto-populated as Effective Date + 12 months for NEW/RWL policy")
-                        except Exception as e:
-                            st.warning(f"Could not calculate X-DATE: {str(e)}")
-                    
-                    # Set calculated term to 12 months only on initial load
-                    calculated_term = 12
+                # Don't auto-calculate anything - let user choose
+                # Default to Custom unless there's already a value
                 
-                elif effective_date and x_date:
+                if effective_date and x_date:
                     try:
                         # Convert to datetime if needed
                         if not isinstance(effective_date, pd.Timestamp):
@@ -3632,9 +3595,10 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 # Use calculated term if available, otherwise use existing value
                 current_term = calculated_term if calculated_term else modal_data.get('Policy Term', None)
                 
-                # Handle the display
+                # Handle the display - Default to Custom if no value exists
                 if current_term is None or pd.isna(current_term):
-                    selected_index = 0
+                    # Default to Custom (index 5 = position of "Custom" + 1 for None option)
+                    selected_index = policy_terms.index("Custom") + 1
                 else:
                     try:
                         # Check if it's a numeric value
@@ -3643,23 +3607,12 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         elif current_term == "Custom":
                             selected_index = policy_terms.index("Custom") + 1
                         else:
-                            selected_index = 0
+                            # Default to Custom if we can't determine
+                            selected_index = policy_terms.index("Custom") + 1
                     except (ValueError, TypeError):
-                        selected_index = 0
+                        selected_index = policy_terms.index("Custom") + 1
                 
-                # Only force the calculated term on initial load
-                if calculated_term is not None and is_initial_load:
-                    try:
-                        selected_index = policy_terms.index(int(calculated_term)) + 1
-                        # Update session state to ensure the widget reflects the calculated value
-                        if 'modal_Policy Term' not in st.session_state:
-                            st.session_state['modal_Policy Term'] = calculated_term
-                    except (ValueError, TypeError):
-                        selected_index = 0
-                
-                # Show info message if we auto-calculated
-                if calculated_term:
-                    st.info(f"📊 Policy Term auto-calculated as {calculated_term} months based on dates")
+                # Don't auto-calculate or force any term
                 
                 # Set the selectbox with the calculated value
                 selectbox_value = st.selectbox(
@@ -3674,7 +3627,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 # Store the user's selection
                 updated_data['Policy Term'] = selectbox_value
                 
-                # Show guidance about X-DATE calculation
+                # Immediately update X-DATE when a numeric term is selected
                 if selectbox_value and selectbox_value != "Custom" and effective_date:
                     try:
                         # Parse the effective date
@@ -3684,19 +3637,24 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         # Calculate new X-DATE based on selected term
                         new_x_date = effective_date + pd.DateOffset(months=int(selectbox_value))
                         
-                        # Store for the Calculate button
-                        st.session_state['pending_x_date'] = new_x_date.date()
-                        st.session_state['pending_policy_term'] = selectbox_value
-                        st.info(f"📅 Click Calculate to update X-DATE to {new_x_date.strftime('%Y-%m-%d')} (Effective Date + {selectbox_value} months)")
+                        # Update X-DATE immediately
+                        updated_data['X-DATE'] = new_x_date.date()
+                        
+                        # Update the X-DATE field in session state to reflect the change
+                        if 'modal_X-DATE' in st.session_state:
+                            st.session_state['modal_X-DATE'] = new_x_date.date()
+                        
+                        # Store the calculated value
+                        st.session_state['calculated_x_date'] = new_x_date.date()
+                        
+                        st.success(f"✅ X-DATE updated to {new_x_date.strftime('%Y-%m-%d')} (Effective Date + {selectbox_value} months)")
                     except Exception as e:
                         st.warning(f"Could not calculate X-DATE: {str(e)}")
                 elif selectbox_value == "Custom":
                     st.info("📝 Custom term selected - please enter X-DATE manually")
-                    # Clear any pending calculations
-                    if 'pending_x_date' in st.session_state:
-                        del st.session_state['pending_x_date']
-                    if 'pending_policy_term' in st.session_state:
-                        del st.session_state['pending_policy_term']
+                    # Clear any calculated X-DATE
+                    if 'calculated_x_date' in st.session_state:
+                        del st.session_state['calculated_x_date']
         
         # Premium Information
         st.markdown("#### Premium Information")
@@ -4112,22 +4070,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             # Set flag that Calculate was clicked
             st.session_state['calculate_clicked'] = True
             
-            # Check if we have a pending X-DATE calculation
-            if 'pending_x_date' in st.session_state and 'pending_policy_term' in st.session_state:
-                pending_date = st.session_state['pending_x_date']
-                pending_term = st.session_state['pending_policy_term']
-                
-                # Update the X-DATE in the form data
-                updated_data['X-DATE'] = pending_date
-                
-                # Force a rerun to update the form
-                st.session_state['calculated_x_date'] = pending_date
-                st.success(f"✅ X-DATE calculated as {pending_date.strftime('%Y-%m-%d')} (Effective Date + {pending_term} months)")
-                st.info("📝 X-DATE will be updated when you save the form.")
-                
-                # Clear the pending values
-                del st.session_state['pending_x_date']
-                del st.session_state['pending_policy_term']
+            # X-DATE is now updated immediately when Policy Term is selected
+            # No need for pending calculations
             
             # Check if we need to update commission rate from carrier selection
             if st.session_state.get('edit_commission_rate') is not None and 'Policy Gross Comm %' in updated_data:

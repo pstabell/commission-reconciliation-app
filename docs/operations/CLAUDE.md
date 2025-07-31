@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.11
+**Current Version**: 3.9.12
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.11)
+## Recent Major Changes (v3.9.12)
+1. **Policy Term Custom Default**:
+   - Policy Term now defaults to "Custom" instead of auto-calculating 12 months
+   - X-DATE updates immediately when Policy Term is selected (no Calculate button needed)
+   - Removed automatic 12-month term calculation for NEW/RWL transactions
+   - Users must explicitly choose term length for better data accuracy
+   - Shows success message when X-DATE is automatically calculated
+
+## Prior Major Changes (v3.9.11)
 1. **Edit Transactions Column Order Fix**:
    - Fixed persistent column ordering in Edit Policy Transactions table
    - Column order now maintained throughout editing sessions
