@@ -5,6 +5,27 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.9] - 2025-07-31 - Review Checkmarks for Policy Revenue Ledger Reports
+
+### Added
+- **Review Checkmark Feature**
+  - New "Reviewed ✓" checkbox column in Policy Revenue Ledger Reports
+  - Allows marking transactions as reviewed to track progress
+  - "Save Reviewed" button to persist review status
+  - Review Progress metric showing X/Y transactions reviewed with percentage
+  - "View Reviewed" button to see all reviewed transactions
+  - "Clear All Reviews" button to reset review status
+  - Review status persists within session (clears on refresh)
+
+### Improved
+- **Visual Transaction Type Legend**
+  - Added legend showing transaction type indicators
+  - ✅ Reviewed = Checkmark in Reviewed column
+  - 💙 STMT = Statement/Reconciliation Entry (blue background)
+  - 🔴 VOID = Voided Transaction (red background) 
+  - 📄 Regular = Standard Transaction (gray background)
+  - Helps users understand visual indicators at a glance
+
 ## [3.9.8] - 2025-07-31 - Edit Transactions Column Reordering
 
 ### Changed
