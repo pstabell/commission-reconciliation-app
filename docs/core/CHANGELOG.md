@@ -5,6 +5,46 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.6] - 2025-07-31 - Policy Revenue Ledger & Transaction Management Fixes
+
+### Fixed
+- **CAN Transaction Warning with Auto-Scroll**
+  - Fixed warning message appearing at top of page with immediate auto-scroll
+  - Warning now appears within the Edit form dialog context
+  - Prevents users from missing important cancellation warnings
+  - Improved user experience by keeping warnings visible near the action
+
+- **X-DATE Display in Policy Revenue Ledger**
+  - Fixed X-DATE column not showing in Policy Revenue Ledger (Editable)
+  - Added Transaction Type indicators for better visibility (🆕 NEW, 🔄 RWL, 📝 END, etc.)
+  - Column now appears between Policy Number and Premium Sold
+  - Includes Transaction Type emoji column for quick visual identification
+
+- **Auto-Select "All Terms" for Multi-Type Policies**
+  - Fixed issue where policies with multiple transaction types (NEW + END + CAN) were defaulting to specific term filter
+  - System now auto-selects "All Terms" when detecting CAN transactions
+  - Ensures all related transactions are visible when cancellations are involved
+  - Prevents confusion from missing transaction context
+
+- **-IMPORT Transaction Cleanup**
+  - Fixed double entry issue where -IMPORT transactions showed twice in reports
+  - Corrected filter logic from IS NOT NULL to IS NULL
+  - Prevents duplicate display of import transactions in Policy Revenue Ledger
+  - Ensures clean, accurate transaction listings
+
+- **Policy Type Mapping Confusion**
+  - Resolved confusion between policy type mapping configurations
+  - Clarified that policy_types_updated.json is the source configuration
+  - policy_type_mappings.json is specifically for reconciliation statement mapping
+  - Improved documentation to prevent future configuration errors
+
+### Improved
+- **User Experience**
+  - Better warning placement for critical actions
+  - More intuitive transaction type visibility
+  - Smarter filter defaults based on transaction context
+  - Cleaner transaction displays without duplicates
+
 ## [3.9.5] - 2025-07-31 - Void Improvements
 
 ### Added
@@ -40,6 +80,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Converts NaN values to None before database insertion
   - Prevents database errors during reconciliation import
 
+- **Import Button for Create-Only Reconciliations**
+  - Fixed import button being disabled when only creating new transactions
+  - Now enabled if there are matched, to create, OR pending manual matches
+  - Automatically processes pending manual matches during import
+  - Added helpful hint when manual matches are pending
+
+- **Client ID Auto-Copy During Import**
+  - New transactions created during reconciliation now copy Client ID from existing customer records
+  - Prevents orphaned transactions without Client IDs
+  - Maintains data consistency across all transactions for a customer
+
+- **Nested UI Element Errors**
+  - Fixed "Expanders may not be nested" error in reconciliation
+  - Removed all UI feedback that could cause Streamlit conflicts
+  - Graceful silent handling of missing clients table
+
 ### Added
 - **Skip Option for Low Confidence Matches**
   - "Skip (Leave Unmatched)" button for matches below 90% confidence
@@ -50,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Matching Logic Hierarchy**
   - Policy + Date match: 100% confidence
   - Customer + Policy match: 95% confidence  
-  - Customer + Amount match: 90% confidence
+  - Customer + Amount match: 90% confidence (with policy number verification)
   - Customer only: Requires manual selection
   - Prevents automatic matching without policy number verification
 
