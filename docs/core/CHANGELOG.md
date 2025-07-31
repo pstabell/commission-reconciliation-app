@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - X-DATE calculation now works within form constraints
   - Shows info message about calculated X-DATE when Policy Term is selected
   - Added help text to X-DATE field explaining bidirectional relationship with Policy Term
+  - Fixed critical bug where existing X-DATE values were being overwritten when opening edit form
+  - X-DATE now only updates when user explicitly changes the Policy Term dropdown
 
 ## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
 
