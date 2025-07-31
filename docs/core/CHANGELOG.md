@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - "Clear All Reviews" button to reset review status
   - Review status persists within session (clears on refresh)
 
+- **Column Reordering for Better Navigation**
+  - Reordered columns to put key fields first: Hide → Reviewed → Transaction ID → Customer → Transaction Type → Policy Type
+  - Added column width optimization for better visibility
+  - Added "Tips for Better Navigation" expandable guide
+  - Includes keyboard shortcuts and browser zoom tips
+  - Helps prevent losing context while scrolling through data
+
 ### Improved
 - **Visual Transaction Type Legend**
   - Added legend showing transaction type indicators
