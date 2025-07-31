@@ -5,6 +5,18 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.8] - 2025-07-31 - Edit Transactions Column Reordering
+
+### Changed
+- **Edit Policy Transactions Table Column Order**
+  - Moved Carrier Name, MGA Name, Policy Type, Transaction Type before Policy Number
+  - Moved Prior Policy Number to appear immediately after Policy Number
+  - Moved STMT DATE to appear after Agent Paid Amount (STMT)
+  - Moved Broker Fee, Policy Taxes & Fees, Commissionable Premium before Agency Estimated Comm/Revenue (CRM)
+  - Moved Agent Comm % before Agent Estimated Comm $
+  - Improved logical grouping of related columns for better workflow
+  - Enhanced data entry efficiency with more intuitive column placement
+
 ## [3.9.7] - 2025-07-31 - Premium Calculator Label Updates
 
 ### Changed
