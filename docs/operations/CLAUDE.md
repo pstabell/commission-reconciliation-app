@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.13
+**Current Version**: 3.9.14
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.13)
+## Recent Major Changes (v3.9.14)
+1. **Client ID in Reconciliation Edit Form**:
+   - Added Client ID as editable field in reconciliation edit form
+   - Allows fixing missing Client IDs on STMT transactions directly from reconciliation page
+   - Helps properly link transactions for Policy Revenue Ledger grouping
+   - Shows "was: [original value]" format like other editable fields
+   - Includes help text: "Enter the Client ID to properly link this transaction"
+
+## Prior Major Changes (v3.9.13)
 1. **MGA Contact Info Fix**:
    - Fixed "Could not find the 'contact_name' column of 'mgas'" error
    - MGAs use JSONB contact_info column, not individual contact fields

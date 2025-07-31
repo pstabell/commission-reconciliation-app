@@ -5,6 +5,17 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.14] - 2025-07-31 - Client ID in Reconciliation Edit Form
+
+### Added
+- **Client ID Field in Reconciliation Edit**
+  - Added Client ID as editable field in the reconciliation edit form
+  - Allows users to fix missing Client IDs on STMT transactions without navigating to multiple pages
+  - Positioned after Customer field for logical flow
+  - Shows original value in "was: [value]" format
+  - Includes help text to guide users
+  - Resolves issue where STMT transactions appeared as duplicate policies in Policy Revenue Ledger
+
 ## [3.9.13] - 2025-07-31 - MGA Contact Info Database Fix
 
 ### Fixed
