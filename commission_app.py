@@ -11936,27 +11936,38 @@ SOLUTION NEEDED:
             if not filtered_data.empty:
                 st.info(f"🔍 Debug: Found {len(filtered_data)} transactions before grouping")
                 
-                # Show details for each policy number
-                policy_groups = filtered_data.groupby("Policy Number").agg({
-                    "Client ID": lambda x: list(x.dropna().unique()),
-                    "Customer": lambda x: list(x.unique()),
-                    "Transaction ID": "count",
-                    "Transaction Type": lambda x: list(x.unique())
-                }).reset_index()
-                
-                for idx, group in policy_groups.iterrows():
-                    st.write(f"**Policy {group['Policy Number']}**:")
-                    st.write(f"  - Client IDs: {group['Client ID']}")
-                    st.write(f"  - Customer Names: {group['Customer']}")
-                    st.write(f"  - Transaction Count: {group['Transaction ID']}")
-                    st.write(f"  - Transaction Types: {group['Transaction Type']}")
+                # Show raw transaction details
+                st.write("**Raw Transaction Details:**")
+                for idx, row in filtered_data.iterrows():
+                    st.write(f"Transaction {idx + 1}:")
+                    st.write(f"  - Transaction ID: {row.get('Transaction ID', 'N/A')}")
+                    st.write(f"  - Policy Number: '{row.get('Policy Number', 'N/A')}'")
+                    st.write(f"  - Client ID: '{row.get('Client ID', 'N/A')}'")
+                    st.write(f"  - Customer: '{row.get('Customer', 'N/A')}'")
+                    st.write(f"  - Transaction Type: {row.get('Transaction Type', 'N/A')}")
+                    st.write(f"  - Effective Date: {row.get('Effective Date', 'N/A')}")
+                    st.write(f"  - Policy Type: {row.get('Policy Type', 'N/A')}")
                     st.write("---")
+                
+                # Check for invisible differences
+                if len(filtered_data) > 1:
+                    policy_nums = filtered_data["Policy Number"].tolist()
+                    st.write("**Checking for hidden differences in Policy Numbers:**")
+                    for i, pn in enumerate(policy_nums):
+                        st.write(f"Policy {i+1}: '{pn}' (length: {len(str(pn))}, type: {type(pn)})")
+                        if isinstance(pn, str):
+                            st.write(f"  ASCII values: {[ord(c) for c in pn]}")
+                    
+                    # Check if they're actually the same
+                    if len(set(policy_nums)) == 1:
+                        st.warning("⚠️ Policy numbers appear identical but are being treated as different!")
             
-            # Get unique combinations of Client ID + Policy Number
-            unique_policies = filtered_data[["Client ID", "Policy Number"]].dropna(subset=["Policy Number"]).drop_duplicates()
-            policy_numbers = sorted(unique_policies["Policy Number"].unique().tolist())
+            # Get unique policy numbers - should only be unique based on policy number itself
+            # The issue is we're getting unique from the dataframe which still has duplicates
+            policy_numbers = sorted(filtered_data["Policy Number"].dropna().unique().tolist())
             
             st.success(f"✅ After grouping: {len(policy_numbers)} unique policy numbers")
+            st.write(f"Policy numbers found: {policy_numbers}")
         else:
             # Fallback to just unique policy numbers
             policy_numbers = filtered_data["Policy Number"].dropna().unique().tolist() if "Policy Number" in filtered_data.columns else []
