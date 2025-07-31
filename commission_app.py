@@ -11967,7 +11967,11 @@ SOLUTION NEEDED:
                 # IMPORTANT: Create a copy and trim policy numbers to handle whitespace issues
                 all_data_trimmed = all_data.copy()
                 if "Policy Number" in all_data_trimmed.columns:
+                    # Debug: Check for this specific policy before and after trimming
+                    before_trim = len(all_data[all_data["Policy Number"].astype(str).str.contains("984331972", na=False)])
                     all_data_trimmed["Policy Number"] = all_data_trimmed["Policy Number"].astype(str).str.strip()
+                    after_trim = len(all_data_trimmed[all_data_trimmed["Policy Number"] == "984331972"])
+                    st.write(f"Debug: Policy 984331972 - Before trim: {before_trim} rows, After trim: {after_trim} rows")
                 
                 # First try to find the Client ID for this customer and policy
                 customer_data = all_data_trimmed[
@@ -11985,6 +11989,12 @@ SOLUTION NEEDED:
                             (all_data_trimmed["Client ID"] == client_id) & 
                             (all_data_trimmed["Policy Number"] == selected_policy.strip())
                         ].copy()
+                        
+                        # Debug: Show what we found
+                        st.info(f"🔍 Debug: Found {len(policy_rows)} transactions for Client ID {client_id} + Policy {selected_policy}")
+                        if len(policy_rows) > 0:
+                            trans_types = policy_rows["Transaction Type"].value_counts()
+                            st.write("Transaction types found:", dict(trans_types))
                     else:
                         # Fallback to policy number only with trimming
                         policy_rows = all_data_trimmed[all_data_trimmed["Policy Number"] == selected_policy.strip()].copy()
@@ -11997,6 +12007,12 @@ SOLUTION NEEDED:
                 if "Policy Number" in all_data_trimmed.columns:
                     all_data_trimmed["Policy Number"] = all_data_trimmed["Policy Number"].astype(str).str.strip()
                 policy_rows = all_data_trimmed[all_data_trimmed["Policy Number"] == selected_policy.strip()].copy()
+                
+                # Debug: Show what we found
+                st.info(f"🔍 Debug: Found {len(policy_rows)} transactions for policy {selected_policy}")
+                if len(policy_rows) > 0:
+                    trans_types = policy_rows["Transaction Type"].value_counts()
+                    st.write("Transaction types found:", dict(trans_types))
             
             # Add X-DATE filter for policy term selection
             if not policy_rows.empty and "X-DATE" in policy_rows.columns:
@@ -13601,22 +13617,61 @@ TO "New Column Name";
                                           'Agent Estimated Comm $', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
                             available_cols = [col for col in display_cols if col in reviewed_df.columns]
                             
-                            st.dataframe(
-                                reviewed_df[available_cols],
+                            # Create editable dataframe with Clear Review column
+                            reviewed_editable = reviewed_df[available_cols].copy()
+                            reviewed_editable.insert(0, 'Clear Review', False)
+                            
+                            # Configure columns for the reviewed data editor
+                            reviewed_column_config = {
+                                'Clear Review': st.column_config.CheckboxColumn(
+                                    'Clear Review',
+                                    help="Select rows to clear review status",
+                                    default=False,
+                                    width="small"
+                                )
+                            }
+                            
+                            # Add number formatting for financial columns
+                            for col in ['Agent Estimated Comm $', 'Agent Paid Amount (STMT)', 'Policy Balance Due']:
+                                if col in reviewed_editable.columns:
+                                    reviewed_column_config[col] = st.column_config.NumberColumn(
+                                        col,
+                                        format="%.2f"
+                                    )
+                            
+                            # Use data editor for reviewed transactions
+                            edited_reviewed = st.data_editor(
+                                reviewed_editable,
                                 use_container_width=True,
-                                height=min(400, 50 + len(reviewed_df) * 35)
+                                column_config=reviewed_column_config,
+                                disabled=[col for col in reviewed_editable.columns if col != 'Clear Review'],
+                                hide_index=True,
+                                key="reviewed_data_editor"
                             )
                         
                         # Action buttons
-                        action_col1, action_col2, action_col3 = st.columns([1, 1, 3])
+                        action_col1, action_col2, action_col3 = st.columns([1.5, 1.5, 1])
                         
                         with action_col1:
-                            if st.button("Clear All Reviewed", type="secondary", key="clear_all_reviewed"):
-                                st.session_state.prl_reviewed_rows.clear()
-                                st.success("✅ Cleared all reviewed transactions")
-                                st.rerun()
+                            if st.button("✨ Clear Selected Reviews", type="primary", key="clear_selected_reviews"):
+                                # Get rows where Clear Review is True
+                                rows_to_clear = edited_reviewed[edited_reviewed['Clear Review'] == True]['Transaction ID'].astype(str).tolist()
+                                if rows_to_clear:
+                                    # Remove from reviewed set
+                                    for trans_id in rows_to_clear:
+                                        st.session_state.prl_reviewed_rows.discard(trans_id)
+                                    st.session_state.show_reviewed_details = False
+                                    st.rerun()
+                                else:
+                                    st.warning("No rows selected to clear review")
                         
                         with action_col2:
+                            if st.button("Clear All Reviewed", key="clear_all_reviewed"):
+                                st.session_state.prl_reviewed_rows.clear()
+                                st.session_state.show_reviewed_details = False
+                                st.rerun()
+                        
+                        with action_col3:
                             if st.button("Close", key="close_reviewed_details"):
                                 st.session_state.show_reviewed_details = False
                                 st.rerun()
