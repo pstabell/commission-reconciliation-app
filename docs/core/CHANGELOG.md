@@ -29,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **X-DATE Session State Error**
   - Fixed "st.session_state.modal_X-DATE cannot be modified after widget instantiated" error
-  - Implemented callback function with st.rerun() to properly update X-DATE widget
-  - X-DATE now updates immediately when Policy Term selection changes
+  - Removed callback approach (callbacks not allowed inside Streamlit forms)
+  - X-DATE calculation now works within form constraints
+  - Shows info message about calculated X-DATE when Policy Term is selected
 
 ## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
 

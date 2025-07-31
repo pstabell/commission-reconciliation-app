@@ -20,7 +20,8 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Removed automatic 12-month term calculation for NEW/RWL transactions
    - Users must explicitly choose term length for better data accuracy
    - Shows success message when X-DATE is automatically calculated
-   - Fixed session state modification error using callback function with st.rerun()
+   - Fixed session state modification error by removing form callbacks (not allowed in Streamlit forms)
+   - X-DATE calculation now shows info message when Policy Term is selected
 
 ## Prior Major Changes (v3.9.11)
 1. **Edit Transactions Column Order Fix**:
