@@ -5,6 +5,16 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
+
+### Fixed
+- **Edit Policy Transactions Column Order**
+  - Fixed issue where column reordering wasn't persisting in the data editor
+  - Column order now properly maintained throughout editing session
+  - Auto-save preserves the correct column order
+  - Session state properly stores and applies column order on display
+  - Resolved UnboundLocalError by properly scoping column order storage
+
 ## [3.9.10] - 2025-07-31 - Separate Reviewed Transactions Table
 
 ### Added

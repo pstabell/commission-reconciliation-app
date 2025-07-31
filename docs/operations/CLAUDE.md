@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.10
+**Current Version**: 3.9.11
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.10)
+## Recent Major Changes (v3.9.11)
+1. **Edit Transactions Column Order Fix**:
+   - Fixed persistent column ordering in Edit Policy Transactions table
+   - Column order now maintained throughout editing sessions
+   - Auto-save preserves correct column order
+   - Session state properly stores and restores column order
+   - Fixed UnboundLocalError with proper variable scoping
+
+## Prior Major Changes (v3.9.10)
 1. **Transaction Type Symbols & Reviewed Transactions**:
    - Added Type → column with transaction symbols in Policy Revenue Ledger Reports
    - Symbols: 💰=STMT, 🔴=VOID, ✏️=END, ❌=CAN, 📄=Other

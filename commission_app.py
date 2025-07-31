@@ -5273,6 +5273,10 @@ def main():
                         # Create a unique key for this search result to track edits
                         editor_key = "edit_policies_editor"
                         
+                        # Store the desired column order in session state
+                        column_order_key = f"{editor_key}_column_order"
+                        st.session_state[column_order_key] = final_col_order
+                        
                         # Initialize or reset session state for this editor
                         search_key = f"last_search_{editor_key}"
                         edit_position_key = f"edit_position_{editor_key}"
@@ -5280,7 +5284,7 @@ def main():
                         
                         # Create a unique search identifier that includes both search term and filter state
                         # Add version number to force refresh when column order changes
-                        current_search_state = f"{edit_search_term}_{show_attention_filter}_v2"
+                        current_search_state = f"{edit_search_term}_{show_attention_filter}_v3"
                         
                         # Initialize if not exists or reset if search criteria changed
                         if (editor_key not in st.session_state or 
@@ -5348,6 +5352,16 @@ def main():
                         if select_column_key not in st.session_state:
                             st.session_state[select_column_key] = st.session_state[editor_key]['Select'].copy() if 'Select' in st.session_state[editor_key].columns else pd.Series()
                         
+                        # Ensure correct column order before display
+                        column_order_key = f"{editor_key}_column_order"
+                        if column_order_key in st.session_state:
+                            # Reorder to match our desired column order
+                            desired_order = st.session_state[column_order_key]
+                            current_cols = list(st.session_state[editor_key].columns)
+                            # Only reorder if all columns exist
+                            if all(col in current_cols for col in desired_order):
+                                st.session_state[editor_key] = st.session_state[editor_key][desired_order]
+                        
                         # Editable data grid with selection column
                         edited_data = st.data_editor(
                             st.session_state[editor_key],
@@ -5402,7 +5416,12 @@ def main():
                                     if saved_count > 0:
                                         status_container.success(f"✅ Auto-saved {saved_count} changes")
                                         # Update the base data to reflect saved changes
-                                        st.session_state[editor_key] = edited_data.copy()
+                                        # Preserve column order when updating session state
+                                        column_order_key = f"{editor_key}_column_order"
+                                        if column_order_key in st.session_state:
+                                            st.session_state[editor_key] = edited_data[st.session_state[column_order_key]].copy()
+                                        else:
+                                            st.session_state[editor_key] = edited_data.copy()
                                         # Don't rerun - just update state
                                 
                                 except Exception as e:
@@ -5423,8 +5442,12 @@ def main():
                         if not data_changed and st.session_state[auto_save_key]:
                             status_container.success("✅ All changes auto-saved")
                         
-                        # Update session state without rerun
-                        st.session_state[editor_key] = edited_data
+                        # Update session state without rerun, preserving column order
+                        column_order_key = f"{editor_key}_column_order"
+                        if column_order_key in st.session_state and all(col in edited_data.columns for col in st.session_state[column_order_key]):
+                            st.session_state[editor_key] = edited_data[st.session_state[column_order_key]]
+                        else:
+                            st.session_state[editor_key] = edited_data
                         
                         # Get the client ID and customer name from the search results
                         existing_client_id = None
