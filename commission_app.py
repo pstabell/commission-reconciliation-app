@@ -2841,6 +2841,17 @@ def show_import_results(statement_date, all_data):
                             # Add Client ID if we have one
                             if client_id_to_use:
                                 new_trans['Client ID'] = client_id_to_use
+                            else:
+                                # Try to get Client ID from existing transactions for this customer
+                                if not all_data.empty and final_customer_name:
+                                    existing_customer_trans = all_data[
+                                        (all_data['Customer'] == final_customer_name) & 
+                                        (all_data['Client ID'].notna())
+                                    ]
+                                    if not existing_customer_trans.empty:
+                                        # Use the Client ID from the first matching transaction
+                                        existing_client_id = existing_customer_trans.iloc[0]['Client ID']
+                                        new_trans['Client ID'] = existing_client_id
                             
                             # Add other mapped fields with special handling for Policy Type
                             for sys_field, stmt_field in st.session_state.column_mapping.items():
