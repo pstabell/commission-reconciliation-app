@@ -2469,9 +2469,7 @@ def show_import_results(statement_date, all_data):
                                 client_action = 'new'
                                 client_id = None
                                 client_name = statement_customer
-                                
-                                # Show minimal info about client feature not being available
-                                st.caption("ℹ️ Client ID linking not available - transaction will be created without Client ID")
+                                # No UI feedback needed - this is expected behavior
                             
                             # Show transaction type selector
                             transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
