@@ -22,6 +22,7 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Shows success message when X-DATE is automatically calculated
    - Fixed session state modification error by removing form callbacks (not allowed in Streamlit forms)
    - X-DATE calculation now shows info message when Policy Term is selected
+   - Added help text explaining bidirectional relationship: Policy Term → X-DATE (immediate) and X-DATE → Policy Term (on Calculate)
 
 ## Prior Major Changes (v3.9.11)
 1. **Edit Transactions Column Order Fix**:

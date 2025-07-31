@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed callback approach (callbacks not allowed inside Streamlit forms)
   - X-DATE calculation now works within form constraints
   - Shows info message about calculated X-DATE when Policy Term is selected
+  - Added help text to X-DATE field explaining bidirectional relationship with Policy Term
 
 ## [3.9.11] - 2025-07-31 - Edit Transactions Column Order Fix
 
