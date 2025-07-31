@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 30, 2025  
-**Current Version**: 3.9.4
+**Last Updated**: July 31, 2025  
+**Current Version**: 3.9.10
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,17 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.5)
+## Recent Major Changes (v3.9.10)
+1. **Transaction Type Symbols & Reviewed Transactions**:
+   - Added Type → column with transaction symbols in Policy Revenue Ledger Reports
+   - Symbols: 💰=STMT, 🔴=VOID, ✏️=END, ❌=CAN, 📄=Other
+   - Reviewed transactions now filter out of main display (like hidden transactions)
+   - Reviewed transactions accessible via "View Reviewed" button
+   - Fixed initialization error for prl_reviewed_rows session state
+   - Removed column order info message to reduce clutter
+   - Updated Policy Revenue Ledger page to include END and CAN symbols
+
+## Prior Major Changes (v3.9.5)
 1. **Void Improvements**:
    - Added double-void prevention validation
    - System checks if VOID-{batch_id} already exists before allowing void

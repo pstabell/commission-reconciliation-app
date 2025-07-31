@@ -211,7 +211,7 @@
 - **Streamlined Search**: All search criteria in a single row for efficient filtering
 - **Granular Search**: Find policies by customer, type, date, and number
 - **Transaction History**: See all transactions for a specific policy
-- **Visual Type Indicators**: Each transaction shows an icon (💙=STMT, 🔴=VOID, 📄=Regular)
+- **Visual Type Indicators**: Transaction symbols (💰=STMT, 🔴=VOID, ✏️=END, ❌=CAN, 📄=Other)
 - **X-DATE Term Filter**: NEW! Optional filter to show only transactions for a specific policy term
 - **Effective Date Column**: See when each transaction occurred
 - **Chronological Sorting**: Transactions ordered by date (oldest first)
@@ -257,6 +257,9 @@
 - **Balance Filters**: Filter by positive, zero, negative, or non-zero balances
 - **Pagination**: Handle large datasets efficiently
 - **Enhanced Export**: Include report parameters in exports
+- **Review Tracking**: Mark transactions as reviewed to track progress
+- **Separate Tables**: Reviewed transactions move to separate view like hidden transactions
+- **Type → Column**: Visual indicators for transaction types (💰=STMT, 🔴=VOID, ✏️=END, ❌=CAN, 📄=Other)
 
 **NEW - Statement Month Filter**:
 1. **All Months** (default): Shows all policies across all time

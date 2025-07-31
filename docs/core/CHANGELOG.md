@@ -5,6 +5,41 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.10] - 2025-07-31 - Separate Reviewed Transactions Table
+
+### Added
+- **Type → Column with Transaction Symbols**
+  - New visual indicator column showing transaction type with simplified symbols
+  - Clear and easy to understand symbols:
+    - 💰 = STMT (Reconciliation Entry)
+    - 🔴 = VOID (Voided Transaction)
+    - ✏️ = END (Policy Endorsement)
+    - 📄 = Regular Transaction (NEW, RWL, CAN, and all other types)
+  - Column positioned after Reviewed checkbox for easy visibility
+
+### Changed
+- **Reviewed Transactions Filtering**
+  - Reviewed transactions are now automatically filtered out of the main report display
+  - Similar to hidden transactions, reviewed items don't clutter the working view
+  - Keeps the main table focused on transactions that still need attention
+  - Reviewed transactions remain accessible via "View Reviewed" button
+
+### Fixed
+- **STMT Symbol Display**
+  - Changed STMT indicator from heart (💙) to dollar sign (💵)
+  - Better represents the financial nature of statement entries
+  - Matches user feedback about inappropriate heart symbol
+
+### Removed
+- **Column Order Info Message**
+  - Removed the "📌 Column Order:" information message above the data table
+  - Reduces visual clutter while maintaining the reordered columns
+  - Column order tips still available in expandable section
+- **Unnecessary Legend Items**
+  - Removed "✅ Reviewed = Checkmark in Reviewed column" (redundant)
+  - Removed "📄 Regular = Standard Transaction" (no symbol shown for regular)
+  - Simplified legend to only show STMT and VOID indicators
+
 ## [3.9.9] - 2025-07-31 - Review Checkmarks for Policy Revenue Ledger Reports
 
 ### Added
