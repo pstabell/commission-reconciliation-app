@@ -5,15 +5,22 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.9.5] - 2025-07-31 - Void Reason Field Styling
+## [3.9.5] - 2025-07-31 - Void Improvements
 
 ### Added
 - **Visual Styling for Void Reason Field**
-  - Added yellow background (#fff8dc) to make field more visible
-  - Added gold border (#ffd700) with 3px width
-  - Made label bold with gold color (#d4af37)
+  - Added yellow background (#fff3b0) to make field more visible
+  - Added darker yellow border (#e6a800) with 2px width matching app standards
+  - Made label bold with font-weight 600
   - Improves user experience by clearly indicating where to enter void reason
   - Addresses user feedback: "I have no idea where to click my mouse when it tells me to provide a reason for voiding!"
+
+- **Double-Void Prevention**
+  - Added validation to prevent voiding already-voided batches
+  - Checks if VOID-{batch_id} already exists before allowing void action
+  - Shows error message: "This batch has already been voided. You cannot void a batch twice."
+  - Suggests using adjustment entries for corrections instead
+  - Prevents duplicate VOID entries and balance calculation errors
 
 ## [3.9.4] - 2025-07-30 - Reconciliation Matching Logic Fixes
 
