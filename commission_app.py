@@ -2470,10 +2470,8 @@ def show_import_results(statement_date, all_data):
                                 client_id = None
                                 client_name = statement_customer
                                 
-                                # Only show error in expander for debugging if needed
-                                with st.expander("⚠️ Client lookup info", expanded=False):
-                                    st.info("Client ID feature not available - transactions will be created without Client ID linking.")
-                                    st.caption(f"Technical details: {str(e)}")
+                                # Show minimal info about client feature not being available
+                                st.caption("ℹ️ Client ID linking not available - transaction will be created without Client ID")
                             
                             # Show transaction type selector
                             transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
