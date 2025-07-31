@@ -5,6 +5,16 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.13] - 2025-07-31 - MGA Contact Info Database Fix
+
+### Fixed
+- **MGA Contact Info Error**
+  - Fixed "Could not find the 'contact_name' column of 'mgas'" database error
+  - MGAs table uses JSONB `contact_info` column, not individual contact fields
+  - Updated MGA edit form to properly build and save contact_info JSONB object
+  - Updated MGA display to read from contact_info.contact_name, contact_info.phone, etc.
+  - Add MGA form was already correctly using JSONB format
+
 ## [3.9.12] - 2025-07-31 - Policy Term Custom Default
 
 ### Changed

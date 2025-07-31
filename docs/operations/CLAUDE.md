@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.12
+**Current Version**: 3.9.13
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.12)
+## Recent Major Changes (v3.9.13)
+1. **MGA Contact Info Fix**:
+   - Fixed "Could not find the 'contact_name' column of 'mgas'" error
+   - MGAs use JSONB contact_info column, not individual contact fields
+   - Updated MGA edit form to properly save contact data to contact_info JSONB
+   - Updated MGA display to read from contact_info.contact_name, etc.
+   - Add MGA form already correctly used JSONB format
+
+## Prior Major Changes (v3.9.12)
 1. **Policy Term Custom Default**:
    - Policy Term now defaults to "Custom" instead of auto-calculating 12 months
    - X-DATE updates immediately when Policy Term is selected (no Calculate button needed)
