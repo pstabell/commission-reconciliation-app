@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.18
+**Current Version**: 3.9.19
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing
 
-## Recent Major Changes (v3.9.18)
+## Recent Major Changes (v3.9.19)
+1. **Reconciliation Client ID Fixes**:
+   - Fixed missing Client IDs in CSV/Excel reconciliation imports
+   - STMT transactions now properly inherit Client ID from matched transactions
+   - Added explicit Client ID preservation in reconciliation entry creation
+   - Added Client ID column to Reconciliation History display
+   - Removed debug messages for cleaner interface
+
+## Prior Major Changes (v3.9.18)
 1. **STMT Transaction Client ID Inclusion Fix**:
    - Fixed missing STMT transactions in Policy Revenue Ledger
    - STMT transactions often have missing or different Client IDs

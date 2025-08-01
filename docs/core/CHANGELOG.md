@@ -5,6 +5,29 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.19] - 2025-07-31 - Reconciliation Client ID Fixes
+
+### Fixed
+- **Missing Client IDs in Reconciliation Import**
+  - CSV/Excel reconciliation imports now properly preserve Client IDs when creating STMT transactions
+  - Added explicit Client ID assignment in reconciliation entry creation
+  - Ensures STMT transactions inherit Client ID from their matched transactions
+  - Prevents orphaned reconciliation entries without client association
+
+### Added
+- **Client ID Column in Reconciliation History**
+  - Added Client ID column to Reconciliation History display
+  - Column appears between Customer and Policy Number for better data visibility
+  - Helps track which client each reconciled transaction belongs to
+
+### Removed
+- **Debug Messages Cleanup**
+  - Removed "Debug: Policy X - Before trim: Y rows, After trim: Z rows" message
+  - Removed "Found X STMT transactions with missing/different Client IDs" warning
+  - Removed "Debug: Found X total transactions for Policy" info message
+  - Removed "Transaction types found:" output
+  - Cleaner interface without debug clutter
+
 ## [3.9.18] - 2025-07-31 - STMT Transaction Client ID Inclusion
 
 ### Fixed
