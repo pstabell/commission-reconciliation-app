@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: July 31, 2025  
-**Current Version**: 3.9.19
+**Current Version**: 3.9.20
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -11,9 +11,20 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Architecture**: Single-file app (commission_app.py) - intentionally monolithic
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
-- **Caching**: In-memory with manual cache clearing
+- **Caching**: In-memory with manual cache clearing (5-minute TTL)
 
-## Recent Major Changes (v3.9.19)
+## Recent Major Changes (v3.9.20)
+1. **Total Agent Comm Fixes**:
+   - Policy Revenue Ledger now uses "Total Agent Comm" for Credit column (includes broker fees)
+   - Policy Revenue Ledger Reports balance calculation uses "Total Agent Comm"
+   - Column display automatically substitutes when "Agent Estimated Comm $" is selected
+   - Default columns and presets updated to use "Total Agent Comm"
+2. **Refresh Data Buttons**:
+   - Added refresh buttons to Policy Revenue Ledger and Reports pages
+   - Clears cache for real-time database updates
+   - Helps sync data between local and live app instances
+
+## Prior Major Changes (v3.9.19)
 1. **Reconciliation Client ID Fixes**:
    - Fixed missing Client IDs in CSV/Excel reconciliation imports
    - STMT transactions now properly inherit Client ID from matched transactions

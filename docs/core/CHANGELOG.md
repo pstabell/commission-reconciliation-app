@@ -5,6 +5,33 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.20] - 2025-07-31 - Total Agent Comm and Refresh Buttons
+
+### Fixed
+- **Policy Revenue Ledger Credit Column**
+  - Changed from "Agent Estimated Comm $" to "Total Agent Comm"
+  - Credit (Commission Owed) now includes broker fees
+  - Ensures accurate commission tracking
+
+- **Policy Revenue Ledger Reports Balance Calculation**
+  - Policy Balance Due now uses "Total Agent Comm" instead of "Agent Estimated Comm $"
+  - Formula: Total Agent Comm - Agent Paid Amount (STMT)
+  - Includes broker fees in balance calculations
+  - Column display automatically substitutes "Total Agent Comm" when "Agent Estimated Comm $" is selected
+
+### Added
+- **Refresh Data Buttons**
+  - Added "🔄 Refresh" button to Policy Revenue Ledger page
+  - Added "🔄 Refresh" button to Policy Revenue Ledger Reports page
+  - Clears 5-minute cache to show real-time database updates
+  - Helps when working between local and live app instances
+
+### Changed
+- **Default Column Selection**
+  - Policy Revenue Ledger Reports default columns now include "Total Agent Comm"
+  - Financial Focus preset updated to use "Total Agent Comm"
+  - Metadata correctly states formula uses "Total Agent Comm"
+
 ## [3.9.19] - 2025-07-31 - Reconciliation Client ID Fixes
 
 ### Fixed
