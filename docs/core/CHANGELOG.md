@@ -16,13 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Hidden and Reviewed Tables**
-  - Tables now show different columns based on view mode
-  - "Aggregated by Policy" mode shows policy-level columns in Hidden/Reviewed tables
-  - "Detailed Transactions" mode shows transaction-level columns as before
+  - Tables now use the same columns as the Report Preview (dynamically matches selected columns)
+  - No longer uses hardcoded column lists - shows exactly what user has selected
   - Table titles change based on view mode:
     - "Hidden Policies" / "Reviewed Policies" for Aggregated view
     - "Hidden Transactions" / "Reviewed Transactions" for Detailed view
   - Summary text adapts to view mode ("X hidden policies" vs "X hidden transactions")
+  - Added extra row padding below data for better visibility (height calculation includes +1 row)
 
 ### Improved
 - **User Experience**

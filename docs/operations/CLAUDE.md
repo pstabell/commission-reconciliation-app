@@ -19,8 +19,9 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Aggregated view shows policy-level columns (Client ID, Carrier Name, MGA Name, Policy Origination Date, etc.)
    - Detailed view shows transaction-level columns (Transaction Type, focused on individual entries)
    - Column selection automatically resets when switching view modes
-   - Hidden and Reviewed tables also show view-specific columns
+   - Hidden and Reviewed tables now use same columns as Report Preview (not hardcoded)
    - Table titles change based on view mode: "Hidden/Reviewed Policies" vs "Hidden/Reviewed Transactions"
+   - Added extra row padding to Hidden/Reviewed tables for better visibility
 
 ## Prior Major Changes (v3.9.20)
 1. **Total Agent Comm Fixes**:
