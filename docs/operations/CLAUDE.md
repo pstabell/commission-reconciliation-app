@@ -22,6 +22,7 @@ This file contains important context and guidelines for AI assistants (like Clau
    - Hidden and Reviewed tables now use same columns as Report Preview (not hardcoded)
    - Table titles change based on view mode: "Hidden/Reviewed Policies" vs "Hidden/Reviewed Transactions"
    - Added extra row padding to Hidden/Reviewed tables for better visibility
+   - Default sorting by Customer name then Policy Number in Aggregated view (all tables)
 
 ## Prior Major Changes (v3.9.20)
 1. **Total Agent Comm Fixes**:

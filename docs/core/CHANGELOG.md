@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - More logical column selection for each view mode
   - Clearer distinction between policy-level and transaction-level analysis
   - Consistent column display across main table and Hidden/Reviewed tables
+  - Default sorting by Customer name then Policy Number in "Aggregated by Policy" view
+  - Same sorting applied to Report Preview, Hidden Policies, and Reviewed Policies tables
 
 ## [3.9.20] - 2025-07-31 - Total Agent Comm and Refresh Buttons
 
