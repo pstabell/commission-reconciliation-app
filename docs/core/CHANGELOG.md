@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **View-Specific Column Defaults**
   - "Aggregated by Policy" view now shows policy-level columns by default
   - Includes: Customer, Client ID, Policy Number, Policy Type, Carrier Name, MGA Name, Effective Date, Policy Origination Date, X-DATE, Total Agent Comm, Agent Paid Amount (STMT), Policy Balance Due
-  - "Detailed Transactions" view shows transaction-level columns focused on individual entries
+  - "Detailed Transactions" view shows comprehensive transaction-level columns: Transaction ID, Transaction Type, Customer, Policy Number, Policy Type, Carrier Name, Effective Date, Premium Sold, Total Agent Comm, Agent Paid Amount (STMT), Policy Balance Due
   - Column selection automatically resets when switching between view modes
 
 ### Changed
