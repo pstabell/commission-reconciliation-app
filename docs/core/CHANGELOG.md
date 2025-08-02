@@ -5,6 +5,31 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.21] - 2025-08-02 - View-Specific Columns for Policy Revenue Ledger Reports
+
+### Added
+- **View-Specific Column Defaults**
+  - "Aggregated by Policy" view now shows policy-level columns by default
+  - Includes: Customer, Client ID, Policy Number, Policy Type, Carrier Name, MGA Name, Effective Date, Policy Origination Date, X-DATE, Total Agent Comm, Agent Paid Amount (STMT), Policy Balance Due
+  - "Detailed Transactions" view shows transaction-level columns focused on individual entries
+  - Column selection automatically resets when switching between view modes
+
+### Changed
+- **Hidden and Reviewed Tables**
+  - Tables now show different columns based on view mode
+  - "Aggregated by Policy" mode shows policy-level columns in Hidden/Reviewed tables
+  - "Detailed Transactions" mode shows transaction-level columns as before
+  - Table titles change based on view mode:
+    - "Hidden Policies" / "Reviewed Policies" for Aggregated view
+    - "Hidden Transactions" / "Reviewed Transactions" for Detailed view
+  - Summary text adapts to view mode ("X hidden policies" vs "X hidden transactions")
+
+### Improved
+- **User Experience**
+  - More logical column selection for each view mode
+  - Clearer distinction between policy-level and transaction-level analysis
+  - Consistent column display across main table and Hidden/Reviewed tables
+
 ## [3.9.20] - 2025-07-31 - Total Agent Comm and Refresh Buttons
 
 ### Fixed

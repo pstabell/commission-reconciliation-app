@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: July 31, 2025  
-**Current Version**: 3.9.20
+**Last Updated**: August 2, 2025  
+**Current Version**: 3.9.21
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,16 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
 
-## Recent Major Changes (v3.9.20)
+## Recent Major Changes (v3.9.21)
+1. **View-Specific Columns in Policy Revenue Ledger Reports**:
+   - Different default columns for "Aggregated by Policy" vs "Detailed Transactions" views
+   - Aggregated view shows policy-level columns (Client ID, Carrier Name, MGA Name, Policy Origination Date, etc.)
+   - Detailed view shows transaction-level columns (Transaction Type, focused on individual entries)
+   - Column selection automatically resets when switching view modes
+   - Hidden and Reviewed tables also show view-specific columns
+   - Table titles change based on view mode: "Hidden/Reviewed Policies" vs "Hidden/Reviewed Transactions"
+
+## Prior Major Changes (v3.9.20)
 1. **Total Agent Comm Fixes**:
    - Policy Revenue Ledger now uses "Total Agent Comm" for Credit column (includes broker fees)
    - Policy Revenue Ledger Reports balance calculation uses "Total Agent Comm"
