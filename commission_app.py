@@ -13320,23 +13320,35 @@ TO "New Column Name";
                     help="Filter policies based on their balance due amount"
                 )
             
+            # Store the balance filter in session state for use in detailed view
+            st.session_state.prl_balance_filter = balance_filter
+            
             # Apply balance filter
             if balance_filter != "All Balances":
                 if "Policy Balance Due" in working_data.columns:
-                    if balance_filter == "Positive Balance Only (> $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] > 0]
-                    elif balance_filter == "Zero Balance Only (= $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] == 0]
-                    elif balance_filter == "Negative Balance Only (< $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] < 0]
-                    elif balance_filter == "Non-Zero Balance (≠ $0)":
-                        working_data = working_data[working_data["Policy Balance Due"] != 0]
+                    if view_mode == "Aggregated by Policy":
+                        # For aggregated view, filter at policy level as before
+                        if balance_filter == "Positive Balance Only (> $0)":
+                            working_data = working_data[working_data["Policy Balance Due"] > 0]
+                        elif balance_filter == "Zero Balance Only (= $0)":
+                            working_data = working_data[working_data["Policy Balance Due"] == 0]
+                        elif balance_filter == "Negative Balance Only (< $0)":
+                            working_data = working_data[working_data["Policy Balance Due"] < 0]
+                        elif balance_filter == "Non-Zero Balance (≠ $0)":
+                            working_data = working_data[working_data["Policy Balance Due"] != 0]
+                    else:
+                        # For detailed view, we'll apply term-based filtering later after grouping
+                        # Just store the filter for now
+                        pass
                     
                     # Re-apply sorting after filtering
                     working_data = apply_transaction_sorting(working_data, view_mode)
                     
-                    # Show filtered count
-                    st.info(f"📊 Showing {len(working_data):,} policies matching filter: {balance_filter}")
+                    # Show filtered count (update message for detailed view)
+                    if view_mode == "Aggregated by Policy":
+                        st.info(f"📊 Showing {len(working_data):,} policies matching filter: {balance_filter}")
+                    else:
+                        st.info(f"📊 Balance filter will be applied at policy term level: {balance_filter}")
             
             # Initialize hidden rows in session state if not exists
             
@@ -13927,6 +13939,27 @@ TO "New Column Name";
             
             # Data Preview with Selected Columns
             st.markdown("### 📊 Report Preview")
+            
+            # Add view mode toggle
+            view_mode_col1, view_mode_col2, view_mode_col3 = st.columns([2, 3, 5])
+            with view_mode_col1:
+                st.write("View Mode:")
+            with view_mode_col2:
+                # Initialize column view mode in session state if not exists
+                if 'prl_column_view_mode' not in st.session_state:
+                    st.session_state.prl_column_view_mode = 'full'
+                
+                column_view_mode = st.radio(
+                    "",
+                    options=['full', 'compact'],
+                    format_func=lambda x: '👀 Full Headers' if x == 'full' else '👁️ Compact Data',
+                    index=0 if st.session_state.prl_column_view_mode == 'full' else 1,
+                    horizontal=True,
+                    key='prl_column_view_toggle',
+                    label_visibility="collapsed"
+                )
+                st.session_state.prl_column_view_mode = column_view_mode
+            
             if selected_columns and not working_data.empty:
                 # Filter to only include columns that exist
                 valid_columns = [col for col in selected_columns if col in working_data.columns]
@@ -14026,6 +14059,14 @@ TO "New Column Name";
                     # Create column configuration for numeric formatting and date formatting
                     column_config = {}
                     
+                    # Determine column width based on view mode
+                    if st.session_state.get('prl_column_view_mode', 'full') == 'compact':
+                        # Compact mode - minimum widths for all columns
+                        default_width = "small"
+                    else:
+                        # Full mode - let Streamlit auto-size
+                        default_width = None
+                    
                     # Date columns that need formatting
                     date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
                                     'Expiration Date', 'As of Date', 'Transaction Date']
@@ -14034,12 +14075,20 @@ TO "New Column Name";
                         if col in all_numeric_columns or display_data[col].dtype in ['float64', 'int64', 'float32', 'int32']:
                             column_config[col] = st.column_config.NumberColumn(
                                 col,
-                                format="%.2f"
+                                format="%.2f",
+                                width=default_width
                             )
                         elif col in date_columns:
                             column_config[col] = st.column_config.DateColumn(
                                 col,
-                                format="YYYY-MM-DD"
+                                format="YYYY-MM-DD",
+                                width=default_width
+                            )
+                        else:
+                            # Text columns
+                            column_config[col] = st.column_config.TextColumn(
+                                col,
+                                width=default_width
                             )
                     
                     # Add checkbox column for data editor based on view mode
@@ -14103,13 +14152,25 @@ TO "New Column Name";
                             editable_data.insert(1, 'Type →', type_symbols)
                         
                         
+                        # Determine special column widths based on view mode
+                        if st.session_state.get('prl_column_view_mode', 'full') == 'compact':
+                            # Ultra compact - use minimal pixel widths
+                            checkbox_width = 50  # Just enough for checkbox
+                            type_width = 40      # Just for emoji
+                            group_width = 40     # Just for symbol
+                        else:
+                            # Full mode - use appropriate widths for full headers
+                            checkbox_width = None    # Auto-size for "Reviewed" header
+                            type_width = "small"     # Keep small for Type → (just emoji)
+                            group_width = "small"    # Keep small for Group (just symbol)
+                        
                         # Update column config for the Reviewed checkbox (both views)
                         if 'Reviewed' in editable_data.columns and view_mode != "Aggregated by Policy":
                             column_config['Reviewed'] = st.column_config.CheckboxColumn(
                                 'Reviewed',
                                 help="Click to mark transaction as reviewed",
                                 default=False,
-                                width="small"
+                                width=checkbox_width
                             )
                         
                         # Add column config for Reviewed checkbox in Aggregated view
@@ -14118,7 +14179,7 @@ TO "New Column Name";
                                 'Reviewed',
                                 help="Click to mark policy as reviewed",
                                 default=False,
-                                width="small"
+                                width=checkbox_width
                             )
                         
                         # Add column config for Type column
@@ -14126,8 +14187,19 @@ TO "New Column Name";
                             column_config['Type →'] = st.column_config.TextColumn(
                                 'Type →',
                                 help="💰=STMT, 🔴=VOID, ✏️=END, ❌=CAN, 📄=Regular",
-                                width="small"
+                                width=type_width
                             )
+                        
+                        # Add column config for numeric columns with proper width
+                        numeric_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due', 
+                                      'Premium Sold', 'Broker Fee', 'Broker Fee Agent Comm']
+                        for col in numeric_cols:
+                            if col in editable_data.columns and col not in column_config:
+                                column_config[col] = st.column_config.NumberColumn(
+                                    col,
+                                    format="%.2f",
+                                    width="small" if st.session_state.get('prl_column_view_mode', 'full') == 'compact' else None
+                                )
                         
                         
                         # Apply visual grouping by policy term BEFORE column reordering (only in detailed view)
@@ -14187,6 +14259,12 @@ TO "New Column Name";
                                                     if pd.notna(stmt_date) and term_eff_date <= stmt_date <= term_x_date:
                                                         editable_data.at[idx, '_term_group'] = term_name
                                                         editable_data.at[idx, '_term_dates'] = term_dates
+                                                # Include all other transactions (STL, etc.) within the term dates
+                                                else:
+                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
+                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
+                                                        editable_data.at[idx, '_term_group'] = term_name
+                                                        editable_data.at[idx, '_term_dates'] = term_dates
                                             
                                             all_term_groups.append(term_name)
                                     else:
@@ -14212,22 +14290,27 @@ TO "New Column Name";
                             group_indicators = []
                             current_group = None
                             subtotal_rows = []
+                            group_counters = {}  # Track row count within each group
                             
                             for idx, row in editable_data.iterrows():
                                 term_group = row['_term_group']
-                                if term_group and term_group != current_group:
-                                    current_group = term_group
-                                    # Find group number
+                                if term_group:
+                                    if term_group != current_group:
+                                        current_group = term_group
+                                        group_counters[term_group] = 0
+                                    
+                                    # Increment counter for this group
+                                    group_counters[term_group] += 1
+                                    
+                                    # Find group number (1-based)
                                     if term_group in unique_groups:
-                                        group_idx = unique_groups.index(term_group)
-                                        if group_idx % 2 == 0:
-                                            group_indicators.append('◐')  # Half-filled circle for even groups
-                                        else:
-                                            group_indicators.append('○')  # Empty circle for odd groups
+                                        group_num = unique_groups.index(term_group) + 1
+                                        row_num = group_counters[term_group]
+                                        group_indicators.append(f'{group_num}.{row_num}')
                                     else:
                                         group_indicators.append('')
                                 else:
-                                    group_indicators.append('')  # No indicator for subsequent rows in same group
+                                    group_indicators.append('')  # No indicator for rows without term group
                             
                             # Insert group indicator after Select column
                             editable_data.insert(1, 'Group', group_indicators)
@@ -14248,8 +14331,13 @@ TO "New Column Name";
                                     
                                     # Set specific values for subtotal row
                                     if 'Reviewed' in editable_data.columns:
-                                        subtotal_row['Reviewed'] = False
-                                    subtotal_row['Group'] = '▬'  # Horizontal line for subtotal
+                                        # Check if all transactions in this group are reviewed
+                                        group_trans_ids = [str(row['Transaction ID']) for _, row in group_data.iterrows() 
+                                                         if not str(row.get('Transaction ID', '')).startswith('SUBTOTAL:')]
+                                        all_reviewed = all(trans_id in st.session_state.prl_transaction_reviews 
+                                                         for trans_id in group_trans_ids)
+                                        subtotal_row['Reviewed'] = all_reviewed
+                                    subtotal_row['Group'] = '='  # Equals sign for subtotal
                                     subtotal_row['Transaction ID'] = f'SUBTOTAL: {group_name}'
                                     
                                     # Add term dates if available
@@ -14286,11 +14374,74 @@ TO "New Column Name";
                                 editable_data = pd.concat([before, subtotal_df, after], ignore_index=True)
                             
                             # Add column config for Group
+                            # Use the group_width from special columns config above
+                            if st.session_state.get('prl_column_view_mode', 'full') == 'compact':
+                                group_col_width = 40  # Minimal width for symbol
+                            else:
+                                group_col_width = "small"
+                            
                             column_config['Group'] = st.column_config.TextColumn(
                                 'Group',
-                                help="◐ = Even term, ○ = Odd term, ▬ = Subtotal",
-                                width="small"
+                                help="1.1, 1.2... = Term 1 transactions, 2.1, 2.2... = Term 2 transactions, = = Subtotal",
+                                width=group_col_width
                             )
+                            
+                            # Apply term-based balance filtering if in detailed view
+                            if st.session_state.get('prl_balance_filter', 'All Balances') != "All Balances":
+                                balance_filter = st.session_state.get('prl_balance_filter', 'All Balances')
+                                
+                                # Find term groups that meet the filter criteria
+                                filtered_term_groups = set()
+                                
+                                for group_name in unique_groups:
+                                    # Find the subtotal row for this group
+                                    subtotal_mask = (editable_data['Transaction ID'] == f'SUBTOTAL: {group_name}') & (editable_data['Group'] == '=')
+                                    subtotal_row = editable_data[subtotal_mask]
+                                    
+                                    if not subtotal_row.empty and 'Policy Balance Due' in subtotal_row.columns:
+                                        # Get the balance from the subtotal row
+                                        balance_str = subtotal_row['Policy Balance Due'].iloc[0]
+                                        # Convert from formatted string (e.g., "$1,234.56") to float
+                                        try:
+                                            if isinstance(balance_str, str) and balance_str.startswith('$'):
+                                                balance = float(balance_str.replace('$', '').replace(',', ''))
+                                            else:
+                                                balance = float(balance_str)
+                                        except:
+                                            balance = 0.0
+                                        
+                                        # Check if this term meets the filter criteria
+                                        include_term = False
+                                        if balance_filter == "Positive Balance Only (> $0)" and balance > 0:
+                                            include_term = True
+                                        elif balance_filter == "Zero Balance Only (= $0)" and balance == 0:
+                                            include_term = True
+                                        elif balance_filter == "Negative Balance Only (< $0)" and balance < 0:
+                                            include_term = True
+                                        elif balance_filter == "Non-Zero Balance (≠ $0)" and balance != 0:
+                                            include_term = True
+                                        
+                                        if include_term:
+                                            filtered_term_groups.add(group_name)
+                                
+                                # Filter to only include rows from the selected term groups
+                                if filtered_term_groups:
+                                    # Include rows that belong to filtered term groups OR are subtotal rows for those groups
+                                    mask = (editable_data['_term_group'].isin(filtered_term_groups)) | \
+                                           (editable_data['Transaction ID'].apply(lambda x: any(x == f'SUBTOTAL: {group}' for group in filtered_term_groups)))
+                                    original_count = len(editable_data)
+                                    editable_data = editable_data[mask].copy()
+                                    
+                                    # Update the info message with detailed counts
+                                    total_terms = len(unique_groups)
+                                    shown_terms = len(filtered_term_groups)
+                                    transaction_count = len(editable_data) - shown_terms  # Subtract subtotal rows
+                                    st.info(f"📊 Showing {shown_terms} of {total_terms} policy terms ({transaction_count} transactions) matching filter: {balance_filter}")
+                                else:
+                                    # No terms match the filter
+                                    st.warning(f"No policy terms found matching filter: {balance_filter}")
+                                    # Create empty dataframe with same columns
+                                    editable_data = editable_data.iloc[0:0].copy()
                             
                             # Keep _term_group for term-based actions, but drop _term_dates
                             cols_to_drop = ['_term_dates']
@@ -14344,27 +14495,40 @@ TO "New Column Name";
                         
                         editable_data = editable_data[reordered_columns]
                         
-                        # Column width configuration for Select is already done above
-                        if 'Transaction ID' in column_config:
-                            column_config['Transaction ID'] = st.column_config.TextColumn(
-                                'Transaction ID',
-                                width="medium"
-                            )
-                        if 'Customer' in column_config:
-                            column_config['Customer'] = st.column_config.TextColumn(
-                                'Customer',
-                                width="large"
-                            )
-                        if 'Transaction Type' in column_config:
-                            column_config['Transaction Type'] = st.column_config.TextColumn(
-                                'Transaction Type',
-                                width="small"
-                            )
-                        if 'Policy Type' in column_config:
-                            column_config['Policy Type'] = st.column_config.TextColumn(
-                                'Policy Type',
-                                width="medium"
-                            )
+                        # Column width configuration based on view mode
+                        if st.session_state.get('prl_column_view_mode', 'full') == 'compact':
+                            # Compact mode - all columns small
+                            default_width = "small"
+                            
+                            # Apply compact width to all columns except special ones already configured
+                            special_columns = ['Reviewed', 'Group', 'Type →']
+                            for col in editable_data.columns:
+                                if col not in column_config and col not in special_columns:
+                                    column_config[col] = st.column_config.TextColumn(col, width="small")
+                                elif col in ['Transaction ID', 'Customer', 'Policy Type'] and col not in special_columns:
+                                    column_config[col] = st.column_config.TextColumn(col, width="small")
+                        else:
+                            # Full mode - use specific widths
+                            if 'Transaction ID' in column_config:
+                                column_config['Transaction ID'] = st.column_config.TextColumn(
+                                    'Transaction ID',
+                                    width="medium"
+                                )
+                            if 'Customer' in column_config:
+                                column_config['Customer'] = st.column_config.TextColumn(
+                                    'Customer',
+                                    width="large"
+                                )
+                            if 'Transaction Type' in column_config:
+                                column_config['Transaction Type'] = st.column_config.TextColumn(
+                                    'Transaction Type',
+                                    width=None  # Auto-size to show full header
+                                )
+                            if 'Policy Type' in column_config:
+                                column_config['Policy Type'] = st.column_config.TextColumn(
+                                    'Policy Type',
+                                    width="medium"
+                                )
                         
                         # Tips for better navigation
                         with st.expander("💡 **Tips for Better Navigation**", expanded=False):
@@ -14375,9 +14539,10 @@ TO "New Column Name";
                             3. **Shift + Scroll**: Hold Shift while scrolling to move horizontally
                             
                             **Visual Grouping & Actions:**
-                            - ◐ = Even-numbered policy term groups
-                            - ○ = Odd-numbered policy term groups
-                            - ▬ = Subtotal row for the policy term
+                            - 1.1, 1.2... = Term 1 transactions (Policy-Number - Term 1)
+                            - 2.1, 2.2... = Term 2 transactions (Policy-Number - Term 2)
+                            - = = Subtotal row for the policy term
+                            - **Click subtotal checkbox to mark/unmark ALL transactions in that term!**
                             - Terms are determined by NEW/RWL transactions and their Effective Date to X-DATE ranges
                             - Subtotal rows show: Total Agent Comm | Agent Paid Amount | Policy Balance Due
                             
@@ -14407,7 +14572,7 @@ TO "New Column Name";
                         
                         # Apply styling to subtotal rows
                         def style_subtotal_rows(row):
-                            if 'Group' in row and row['Group'] == '▬':
+                            if 'Group' in row and row['Group'] == '=':
                                 # Dark gray background for subtotal rows
                                 return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
                             return [''] * len(row)
@@ -14415,7 +14580,7 @@ TO "New Column Name";
                         # Apply combined styling for special transactions and subtotals
                         def combined_styling(row):
                             # First check if it's a subtotal row
-                            if 'Group' in row and row['Group'] == '▬':
+                            if 'Group' in row and row['Group'] == '=':
                                 return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
                             
                             # Then check for special transaction types
@@ -14488,12 +14653,37 @@ TO "New Column Name";
                                                 else:
                                                     st.session_state.prl_reviewed_policies.discard(policy_num)
                                             else:
-                                                # Detailed view - track individual transactions
-                                                trans_id = str(row_data['Transaction ID'])
-                                                if new_reviewed:
-                                                    st.session_state.prl_transaction_reviews.add(trans_id)
+                                                # Detailed view - check if it's a subtotal row
+                                                if 'Group' in row_data and row_data['Group'] == '=':
+                                                    # This is a subtotal row - handle bulk operations
+                                                    trans_id = str(row_data['Transaction ID'])
+                                                    if trans_id.startswith('SUBTOTAL: '):
+                                                        # Extract term group name
+                                                        term_group = trans_id.replace('SUBTOTAL: ', '')
+                                                        
+                                                        # Find all transactions in this term group
+                                                        # We need to look back at the original data with _term_group column
+                                                        if '_term_group' in editable_data.columns:
+                                                            term_transactions = editable_data[editable_data['_term_group'] == term_group]
+                                                            
+                                                            # Update all transactions in this term
+                                                            for _, trans_row in term_transactions.iterrows():
+                                                                trans_id_to_update = str(trans_row['Transaction ID'])
+                                                                # Skip subtotal rows
+                                                                if not trans_id_to_update.startswith('SUBTOTAL:'):
+                                                                    if new_reviewed:
+                                                                        st.session_state.prl_transaction_reviews.add(trans_id_to_update)
+                                                                    else:
+                                                                        st.session_state.prl_transaction_reviews.discard(trans_id_to_update)
+                                                            
+                                                            st.session_state.rerun_history.append(f"Bulk update: {term_group} - {'Reviewed' if new_reviewed else 'Unreviewed'}")
                                                 else:
-                                                    st.session_state.prl_transaction_reviews.discard(trans_id)
+                                                    # Regular transaction - track individual transaction
+                                                    trans_id = str(row_data['Transaction ID'])
+                                                    if new_reviewed:
+                                                        st.session_state.prl_transaction_reviews.add(trans_id)
+                                                    else:
+                                                        st.session_state.prl_transaction_reviews.discard(trans_id)
                                 
                                 st.session_state.rerun_history.append(f"Review changes processed, triggering rerun at {datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
                                 st.rerun()
@@ -14510,7 +14700,7 @@ TO "New Column Name";
                                     
                                     # Check if any subtotal rows are selected
                                     if 'Group' in selected_rows.columns:
-                                        subtotal_selections = selected_rows[selected_rows['Group'] == '▬']
+                                        subtotal_selections = selected_rows[selected_rows['Group'] == '=']
                                         if not subtotal_selections.empty:
                                             # Get term groups from subtotal selections
                                             term_groups = []
@@ -14528,12 +14718,12 @@ TO "New Column Name";
                                                     # Get all transaction IDs for this term (excluding subtotal rows)
                                                     term_transactions = editable_data[
                                                         (editable_data['_term_group'] == term) & 
-                                                        (editable_data['Group'] != '▬')
+                                                        (editable_data['Group'] != '=')
                                                     ]['Transaction ID'].tolist()
                                                     items_to_review.extend(term_transactions)
                                             
                                             # Also add individually selected transactions
-                                            individual_selections = selected_rows[selected_rows['Group'] != '▬']['Transaction ID'].tolist()
+                                            individual_selections = selected_rows[selected_rows['Group'] != '=']['Transaction ID'].tolist()
                                             items_to_review.extend(individual_selections)
                                             
                                             # Remove duplicates
@@ -14576,7 +14766,7 @@ TO "New Column Name";
                                     
                                     # Check if any subtotal rows are selected
                                     if 'Group' in selected_rows.columns:
-                                        subtotal_selections = selected_rows[selected_rows['Group'] == '▬']
+                                        subtotal_selections = selected_rows[selected_rows['Group'] == '=']
                                         if not subtotal_selections.empty:
                                             # Get term groups from subtotal selections
                                             term_groups = []
@@ -14594,12 +14784,12 @@ TO "New Column Name";
                                                     # Get all transaction IDs for this term (excluding subtotal rows)
                                                     term_transactions = editable_data[
                                                         (editable_data['_term_group'] == term) & 
-                                                        (editable_data['Group'] != '▬')
+                                                        (editable_data['Group'] != '=')
                                                     ]['Transaction ID'].tolist()
                                                     items_to_clear.extend(term_transactions)
                                             
                                             # Also add individually selected transactions
-                                            individual_selections = selected_rows[selected_rows['Group'] != '▬']['Transaction ID'].tolist()
+                                            individual_selections = selected_rows[selected_rows['Group'] != '=']['Transaction ID'].tolist()
                                             items_to_clear.extend(individual_selections)
                                             
                                             # Remove duplicates

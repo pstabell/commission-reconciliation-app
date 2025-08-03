@@ -5,6 +5,39 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.23] - 2025-08-03 - Enhanced Group Indicators and View Toggle
+
+### Added
+- **Compact/Full Column View Toggle**
+  - Added toggle button with eye icons (👁️ for compact, 👀 for full headers)
+  - Compact mode minimizes column widths to show more data at once
+  - Full mode shows complete column headers with appropriate widths
+  - Special handling for Reviewed, Group, and Type columns
+
+- **Improved Group Indicators**
+  - Changed from abstract symbols to numbered hierarchy (1.1, 1.2, etc.)
+  - Each policy term group gets a sequential number (Term 1, Term 2, etc.)
+  - Transactions within a term numbered sequentially (1.1, 1.2, 1.3...)
+  - Subtotal rows now use equals sign (=) instead of dash symbol
+  - More intuitive visual grouping that matches mental model
+
+### Changed
+- **Subtotal Checkbox Functionality**
+  - Made subtotal checkboxes functional - checking marks ALL transactions in that term
+  - Unchecking clears review status for all transactions in the term
+  - Provides efficient bulk operations at the term level
+
+- **Balance Filtering Enhancement**
+  - Balance filters now work at the term level using subtotal values
+  - "Show policies with: Credit/Debit/Zero balance" uses term subtotals
+  - More logical grouping that respects policy term boundaries
+
+### Fixed
+- **Column Width Issues in Compact Mode**
+  - Fixed Reviewed, Group, and Type columns not compacting properly
+  - Used pixel widths for precise control in compact mode
+  - Ensured full headers display correctly when in full mode
+
 ## [3.9.22] - 2025-08-03 - Reviewed Checkboxes and Performance Fixes
 
 ### Changed
