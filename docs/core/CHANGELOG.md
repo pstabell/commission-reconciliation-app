@@ -5,6 +5,45 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.22] - 2025-08-03 - Reviewed Checkboxes and Performance Fixes
+
+### Changed
+- **Policy Revenue Ledger Reports - Major UI Update**
+  - Removed "Select" checkbox column from Aggregated by Policy view
+  - Converted "Select" column to "Reviewed" checkbox in Detailed Transactions view
+  - Removed separate text-based Reviewed column with ✓ marks
+  - Completely removed hidden transactions functionality
+  - All review tracking now done through single Reviewed checkbox column
+
+### Fixed
+- **Performance Issues**
+  - Fixed app constantly rerunning due to improper data_editor state handling
+  - Improved change detection to only trigger reruns on actual user interactions
+  - Added debug tracking system for monitoring rerun frequency
+
+- **Checkbox Functionality**
+  - Fixed checkboxes appearing as TRUE/FALSE text instead of clickable controls
+  - Resolved checkboxes being disabled/unclickable
+  - Fixed subtotal rows trying to reference removed Select column
+
+- **Visual Styling**
+  - Restored row colors while maintaining checkbox functionality:
+    - Light blue background for STMT transactions
+    - Light red background for VOID transactions
+    - Dark gray background with white text for subtotal rows
+  - Successfully combined pandas styling with editable checkboxes
+
+### Removed
+- All hidden transaction-related features and UI elements
+- View Hidden Transactions button
+- Hidden/Reviewed transaction tables (functionality moved to checkboxes)
+- Session state variables: `prl_hidden_rows`, `prl_hidden_policies`
+
+### Technical
+- Updated subtotal row generation to handle Reviewed column
+- Improved data_editor implementation for better Streamlit compatibility
+- Added error handling for malformed rerun history entries
+
 ## [3.9.21] - 2025-08-02 - View-Specific Columns for Policy Revenue Ledger Reports
 
 ### Added

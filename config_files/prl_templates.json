@@ -1,44 +1,54 @@
 {
-  "POLICY TERMS": {
+  "POLICY TERMS v3": {
     "columns": [
       "Transaction ID",
-      "Customer",
       "Transaction Type",
+      "Customer",
+      "Policy Number",
+      "Policy Term",
       "Policy Type",
       "Carrier Name",
-      "Policy Number",
-      "Policy Origination Date",
-      "Effective Date",
-      "X-DATE",
-      "Agent Comm %",
-      "Agent Estimated Comm $",
-      "Agent Paid Amount (STMT)",
-      "Policy Balance Due"
-    ],
-    "created": "2025-07-23 21:03:08",
-    "is_default": false
-  },
-  "POLICY TERM v1": {
-    "columns": [
-      "Transaction ID",
-      "Customer",
-      "Transaction Type",
-      "Policy Type",
-      "Carrier Name",
-      "Policy Number",
+      "MGA Name",
       "Policy Origination Date",
       "Effective Date",
       "X-DATE",
       "Premium Sold",
+      "Policy Taxes & Fees",
+      "Commissionable Premium",
       "Policy Gross Comm %",
-      "Agent Comm %",
+      "Broker Fee",
       "Broker Fee Agent Comm",
-      "Agent Estimated Comm $",
-      "Agent Paid Amount (STMT)",
+      "Agent Comm %",
+      "Total Agent Comm",
       "STMT DATE",
+      "Agent Paid Amount (STMT)",
       "Policy Balance Due"
     ],
-    "created": "2025-07-29 22:02:27",
+    "created": "2025-08-02 22:36:03",
+    "updated": "2025-08-02 22:57:12",
+    "is_default": true
+  },
+  "Aggregated By Policy": {
+    "columns": [
+      "Transaction Type",
+      "Customer",
+      "Policy Number",
+      "Policy Term",
+      "Policy Type",
+      "Carrier Name",
+      "MGA Name",
+      "Policy Origination Date",
+      "Effective Date",
+      "X-DATE",
+      "Policy Gross Comm %",
+      "Agent Comm %",
+      "Total Agent Comm",
+      "STMT DATE",
+      "Agent Paid Amount (STMT)",
+      "Policy Balance Due"
+    ],
+    "created": "2025-08-03 00:33:18",
+    "view_mode": "Aggregated by Policy",
     "is_default": true
   }
 }
