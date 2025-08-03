@@ -5,6 +5,39 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.25] - 2025-08-03 - Fixed Subtotal Values in Excel Export
+
+### Fixed
+- **Subtotal Values Exporting as NaN**
+  - Fixed issue where subtotal values (Total Agent Comm, Agent Paid Amount (STMT), Policy Balance Due) were showing as "nan" in Excel export
+  - Subtotals now correctly export with their numeric values while maintaining proper formatting
+  - Issue was caused by trying to convert currency-formatted strings (e.g., "$227.46") to numeric values
+  - Preserved Excel color formatting for subtotal rows (dark gray), STMT rows (light blue), and VOID rows (light red)
+
+### Technical
+- Modified Excel export logic to skip numeric conversion for subtotal rows in detailed view
+- Currency strings in subtotal rows are preserved and handled by Excel's write_number formatting
+- Non-subtotal rows continue to use standard numeric conversion
+- Formatting code properly detects and styles currency strings in subtotals
+
+## [3.9.24] - 2025-08-03 - Enhanced Excel Export with Subtotals
+
+### Added
+- **Excel Export with Full Table View**
+  - Exports now preserve subtotal rows in Detailed Transactions view
+  - Includes all group indicators (1.1, 1.2, etc.) and special columns
+  - Maintains visual formatting:
+    - Dark gray background for subtotal rows
+    - Light blue for STMT transactions
+    - Light red for VOID transactions
+  - Professional column widths and cell formatting
+  - Exact replication of on-screen table layout
+
+### Technical
+- Store editable_data in session state for export functionality
+- Enhanced xlsxwriter formatting for row-level styling
+- Smart column width management based on content type
+
 ## [3.9.23] - 2025-08-03 - Enhanced Group Indicators and View Toggle
 
 ### Added

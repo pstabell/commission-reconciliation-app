@@ -86,3 +86,33 @@ group_width = "small"    # Keep small for Group
 ### Known Limitations
 - Some columns may require manual stretching in compact mode for full visibility
 - Browser zoom can be used in combination with compact mode for maximum data density
+
+## Enhanced Export Functionality
+
+### Excel Export with Subtotals and Formatting
+The Excel export in Detailed Transactions view now preserves the exact table layout including:
+
+#### Preserved Elements
+1. **Subtotal Rows**: All term subtotals with equals sign (=) indicators
+2. **Group Numbering**: Numbered hierarchy (1.1, 1.2, etc.) for transaction grouping
+3. **Special Columns**: Reviewed checkboxes, Group indicators, Type emojis
+4. **Visual Formatting**:
+   - Dark gray background with white text for subtotal rows
+   - Light blue background for STMT transactions
+   - Light red background for VOID transactions
+   - Bold headers with green background
+
+#### Export Features
+- **Column Order**: Exports columns in the exact order shown in the table
+- **Data Integrity**: All calculated values (subtotals) are preserved
+- **Professional Formatting**: Excel file includes proper column widths and cell formatting
+- **Metadata Sheet**: First sheet contains all report parameters and filters
+
+#### How It Works
+When you click "Export as Excel" in Detailed Transactions view:
+1. The system captures the current table state including all subtotals
+2. Applies the same visual formatting used in the web interface
+3. Creates a multi-sheet Excel file with parameters and formatted data
+4. Preserves the exact view you see on screen
+
+This makes it easy to share reports with others or archive them for future reference while maintaining all the visual cues and organization.

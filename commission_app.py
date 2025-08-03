@@ -13337,8 +13337,9 @@ TO "New Column Name";
                         elif balance_filter == "Non-Zero Balance (≠ $0)":
                             working_data = working_data[working_data["Policy Balance Due"] != 0]
                     else:
-                        # For detailed view, we'll apply term-based filtering later after grouping
-                        # Just store the filter for now
+                        # For detailed view, don't filter working_data here
+                        # The term-based filtering will handle it after grouping and subtotals are created
+                        # This ensures all transactions that contribute to term balances are included
                         pass
                     
                     # Re-apply sorting after filtering
@@ -14107,6 +14108,13 @@ TO "New Column Name";
                         # Create a copy for editing
                         editable_data = display_data.copy()
                         
+                        # For detailed view, ensure subtotal columns are included even if not selected
+                        if view_mode != "Aggregated by Policy":
+                            subtotal_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
+                            for col in subtotal_cols:
+                                if col not in editable_data.columns and col in working_data.columns:
+                                    editable_data[col] = working_data[col]
+                        
                         # Add Reviewed checkbox column for Detailed view
                         if view_mode != "Aggregated by Policy" and 'Transaction ID' in editable_data.columns:
                             # Create reviewed status for each transaction
@@ -14355,6 +14363,10 @@ TO "New Column Name";
                                                 subtotal_row[col] = f'${total:,.2f}'
                                             except:
                                                 subtotal_row[col] = '$0.00'
+                                        else:
+                                            # Column doesn't exist in group_data, set to $0.00
+                                            subtotal_row[col] = '$0.00'
+                                    
                                     
                                     # Store the group name and position for insertion
                                     # Find the position of the last row in this group
@@ -14363,8 +14375,17 @@ TO "New Column Name";
                             
                             # Insert subtotal rows in reverse order to maintain positions
                             for idx, (insert_position, subtotal_row) in enumerate(reversed(subtotal_rows)):
-                                # Create a DataFrame from the subtotal row
-                                subtotal_df = pd.DataFrame([subtotal_row])
+                                # First, create a complete row dictionary with all columns from editable_data
+                                complete_row = {}
+                                for col in editable_data.columns:
+                                    if col in subtotal_row:
+                                        complete_row[col] = subtotal_row[col]
+                                    else:
+                                        complete_row[col] = ''
+                                
+                                # Now create DataFrame with the complete row
+                                subtotal_df = pd.DataFrame([complete_row])
+                                
                                 
                                 # Split the original dataframe and insert subtotal
                                 before = editable_data.iloc[:insert_position+1]
@@ -14395,7 +14416,8 @@ TO "New Column Name";
                                 
                                 for group_name in unique_groups:
                                     # Find the subtotal row for this group
-                                    subtotal_mask = (editable_data['Transaction ID'] == f'SUBTOTAL: {group_name}') & (editable_data['Group'] == '=')
+                                    # Just use Transaction ID to find subtotal rows since Group might not be set yet
+                                    subtotal_mask = editable_data['Transaction ID'] == f'SUBTOTAL: {group_name}'
                                     subtotal_row = editable_data[subtotal_mask]
                                     
                                     if not subtotal_row.empty and 'Policy Balance Due' in subtotal_row.columns:
@@ -14403,8 +14425,10 @@ TO "New Column Name";
                                         balance_str = subtotal_row['Policy Balance Due'].iloc[0]
                                         # Convert from formatted string (e.g., "$1,234.56") to float
                                         try:
-                                            if isinstance(balance_str, str) and balance_str.startswith('$'):
-                                                balance = float(balance_str.replace('$', '').replace(',', ''))
+                                            if isinstance(balance_str, str):
+                                                # Handle both positive "$1,234.56" and negative "-$1,234.56" formats
+                                                clean_str = balance_str.replace('$', '').replace(',', '')
+                                                balance = float(clean_str)
                                             else:
                                                 balance = float(balance_str)
                                         except:
@@ -14613,9 +14637,22 @@ TO "New Column Name";
                             else:
                                 display_data = editable_data
                             styled_data = display_data.style.apply(combined_styling, axis=1)
+                            # Store the display_data (which has subtotals) for export
+                            st.session_state.prl_export_data = display_data.copy()
+                            
+                            # Debug: Check a subtotal row
+                            subtotal_rows = display_data[display_data['Group'] == '=']
+                            if not subtotal_rows.empty:
+                                first_subtotal = subtotal_rows.iloc[0]
+                                st.write("DEBUG - First subtotal in display_data:")
+                                st.write(f"  Total Agent Comm: {first_subtotal.get('Total Agent Comm', 'NOT FOUND')}")
+                                st.write(f"  Agent Paid Amount (STMT): {first_subtotal.get('Agent Paid Amount (STMT)', 'NOT FOUND')}")
+                                st.write(f"  Policy Balance Due: {first_subtotal.get('Policy Balance Due', 'NOT FOUND')}")
                         else:
                             # Apply only transaction type styling
                             styled_data = style_special_transactions(editable_data)
+                            # Store editable_data for export
+                            st.session_state.prl_export_data = editable_data.copy()
                         
                         # Use data_editor with styled data
                         edited_df = st.data_editor(
@@ -14875,6 +14912,8 @@ TO "New Column Name";
                     st.dataframe(metadata_df, use_container_width=True, height=min(300, 40 + 40 * len(metadata_df)))
                     
                     # Enhanced export with custom filename and metadata
+                    if view_mode != "Aggregated by Policy":
+                        st.info("📊 **Enhanced Export**: The Excel export will include all subtotal rows, group indicators, and color formatting exactly as shown in the table above!")
                     export_col1, export_col2, export_col3 = st.columns(3)
                     with export_col1:
                         custom_filename = st.text_input(
@@ -14894,7 +14933,51 @@ TO "New Column Name";
                         csv_lines.append("")  # Empty line before data
                         
                         # Format numeric columns in the export data
-                        export_data = working_data[valid_columns].copy()
+                        # Use editable_data if we're in detailed view with subtotals, otherwise use working_data
+                        if view_mode != "Aggregated by Policy" and 'prl_export_data' in st.session_state and 'Group' in st.session_state.prl_export_data.columns:
+                            # For Detailed view with subtotals, use the editable_data which includes subtotals
+                            # But we need to clean it up for export
+                            export_data = st.session_state.prl_export_data.copy()
+                            
+                            # Remove internal columns
+                            cols_to_remove = ['_term_group', '_term_dates']
+                            for col in cols_to_remove:
+                                if col in export_data.columns:
+                                    export_data = export_data.drop(columns=[col])
+                            
+                            # Ensure we only include the selected columns plus the special columns
+                            special_cols = ['Reviewed', 'Group', 'Type →']
+                            export_cols = []
+                            for col in special_cols:
+                                if col in export_data.columns:
+                                    export_cols.append(col)
+                            export_cols.extend([col for col in valid_columns if col in export_data.columns])
+                            
+                            # Remove duplicates while preserving order
+                            seen = set()
+                            final_export_cols = []
+                            for col in export_cols:
+                                if col not in seen:
+                                    seen.add(col)
+                                    final_export_cols.append(col)
+                            
+                            # Debug before column selection
+                            if 'excel_debug' in st.session_state:
+                                subtotal_test = export_data[export_data['Group'] == '=']
+                                if not subtotal_test.empty:
+                                    st.session_state.excel_debug.append(f"BEFORE column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
+                            
+                            # Use .loc to preserve data integrity when selecting columns
+                            export_data = export_data.loc[:, final_export_cols].copy()
+                            
+                            # Debug after column selection
+                            if 'excel_debug' in st.session_state:
+                                subtotal_test = export_data[export_data['Group'] == '=']
+                                if not subtotal_test.empty:
+                                    st.session_state.excel_debug.append(f"AFTER column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
+                        else:
+                            # For Aggregated view or if no subtotals, use working_data
+                            export_data = working_data[valid_columns].copy()
                         # Use the same all_numeric_columns list from earlier
                         for col in all_numeric_columns:
                             if col in export_data.columns:
@@ -14923,6 +15006,9 @@ TO "New Column Name";
                     with export_col3:
                         excel_filename = filename if filename.endswith('.xlsx') else filename + '.xlsx'
                         
+                        # Clear debug before export - remove after testing
+                        st.session_state.excel_debug = []
+                        
                         # Create Excel file with metadata sheet
                         excel_buffer = io.BytesIO()
                         with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
@@ -14930,12 +15016,65 @@ TO "New Column Name";
                             metadata_df.to_excel(writer, sheet_name='Report Parameters', index=False)
                             
                             # Write data to second sheet with formatted numeric columns
-                            excel_export_data = working_data[valid_columns].copy()
+                            # Use editable_data if we're in detailed view with subtotals, otherwise use working_data
+                            if view_mode != "Aggregated by Policy" and 'prl_export_data' in st.session_state and 'Group' in st.session_state.prl_export_data.columns:
+                                # For Detailed view with subtotals, use the editable_data which includes subtotals
+                                excel_export_data = st.session_state.prl_export_data.copy()
+                                
+                                # Remove internal columns
+                                cols_to_remove = ['_term_group', '_term_dates']
+                                for col in cols_to_remove:
+                                    if col in excel_export_data.columns:
+                                        excel_export_data = excel_export_data.drop(columns=[col])
+                                
+                                # Ensure we only include the selected columns plus the special columns
+                                special_cols = ['Reviewed', 'Group', 'Type →']
+                                # Also ensure subtotal columns are included
+                                subtotal_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
+                                
+                                export_cols = []
+                                for col in special_cols:
+                                    if col in excel_export_data.columns:
+                                        export_cols.append(col)
+                                        
+                                # Add selected columns
+                                export_cols.extend([col for col in valid_columns if col in excel_export_data.columns])
+                                
+                                # Add subtotal columns if they exist in the data (even if not selected)
+                                for col in subtotal_cols:
+                                    if col in excel_export_data.columns and col not in export_cols:
+                                        export_cols.append(col)
+                                
+                                # Remove duplicates while preserving order
+                                seen = set()
+                                final_export_cols = []
+                                for col in export_cols:
+                                    if col not in seen:
+                                        seen.add(col)
+                                        final_export_cols.append(col)
+                                
+                                excel_export_data = excel_export_data[final_export_cols]
+                            else:
+                                # For Aggregated view or if no subtotals, use working_data
+                                excel_export_data = working_data[valid_columns].copy()
                             
-                            # Format numeric columns
-                            for col in all_numeric_columns:
-                                if col in excel_export_data.columns:
-                                    excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
+                            # Format numeric columns - but skip subtotal rows in detailed view
+                            if view_mode != "Aggregated by Policy" and 'Group' in excel_export_data.columns:
+                                # For detailed view with subtotals, only convert non-subtotal rows
+                                for col in all_numeric_columns:
+                                    if col in excel_export_data.columns:
+                                        # Create a mask for non-subtotal rows
+                                        non_subtotal_mask = excel_export_data['Group'] != '='
+                                        # Convert only non-subtotal rows to numeric
+                                        excel_export_data.loc[non_subtotal_mask, col] = pd.to_numeric(
+                                            excel_export_data.loc[non_subtotal_mask, col], 
+                                            errors='coerce'
+                                        ).round(2)
+                            else:
+                                # For aggregated view, convert all rows normally
+                                for col in all_numeric_columns:
+                                    if col in excel_export_data.columns:
+                                        excel_export_data[col] = pd.to_numeric(excel_export_data[col], errors='coerce').round(2)
                             
                             # Format date columns to remove time component
                             date_columns = ['Effective Date', 'X-DATE', 'STMT DATE', 'Policy Origination Date', 
@@ -14947,13 +15086,194 @@ TO "New Column Name";
                             
                             excel_export_data.to_excel(writer, sheet_name='Policy Revenue Report', index=False)
                             
-                            # Get workbook and format metadata sheet
+                            # Get workbook and sheets
                             workbook = writer.book
-                            metadata_sheet = writer.sheets['Report Parameters']                            # Format metadata sheet
+                            metadata_sheet = writer.sheets['Report Parameters']
+                            data_sheet = writer.sheets['Policy Revenue Report']
+                            
+                            # Format metadata sheet
                             header_format = workbook.add_format({'bold': True, 'bg_color': '#D7E4BC'})
                             metadata_sheet.set_column('A:A', 25)
                             metadata_sheet.set_column('B:B', 50)
                             metadata_sheet.write_row(0, 0, ['Parameter', 'Value'], header_format)
+                            
+                            # Apply formatting to data sheet if we have subtotals (Detailed view)
+                            if view_mode != "Aggregated by Policy" and 'Group' in excel_export_data.columns:
+                                # Define formats for different row types
+                                subtotal_format = workbook.add_format({
+                                    'bg_color': '#4a4a4a',
+                                    'font_color': 'white',
+                                    'bold': True
+                                })
+                                subtotal_currency_format = workbook.add_format({
+                                    'bg_color': '#4a4a4a',
+                                    'font_color': 'white',
+                                    'bold': True,
+                                    'num_format': '$#,##0.00'
+                                })
+                                stmt_format = workbook.add_format({'bg_color': '#e6f3ff'})
+                                stmt_currency_format = workbook.add_format({
+                                    'bg_color': '#e6f3ff',
+                                    'num_format': '$#,##0.00'
+                                })
+                                void_format = workbook.add_format({'bg_color': '#ffe6e6'})
+                                void_currency_format = workbook.add_format({
+                                    'bg_color': '#ffe6e6',
+                                    'num_format': '$#,##0.00'
+                                })
+                                regular_currency_format = workbook.add_format({
+                                    'num_format': '$#,##0.00'
+                                })
+                                header_format_data = workbook.add_format({
+                                    'bold': True,
+                                    'bg_color': '#D7E4BC',
+                                    'border': 1
+                                })
+                                
+                                # Format header row
+                                for col_num, value in enumerate(excel_export_data.columns.values):
+                                    data_sheet.write(0, col_num, value, header_format_data)
+                                
+                                # List of currency columns that should use currency format
+                                currency_columns = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due',
+                                                  'Premium Sold', 'Broker Fee', 'Broker Fee Agent Comm',
+                                                  'Agency Estimated Comm/Revenue (CRM)', 'Agent Estimated Comm $',
+                                                  'Policy Taxes & Fees', 'Commissionable Premium']
+                                
+                                # Format data rows
+                                for row_num, (idx, row) in enumerate(excel_export_data.iterrows(), 1):
+                                    # Determine row type
+                                    is_subtotal = 'Group' in row and row['Group'] == '='
+                                    is_stmt = False
+                                    is_void = False
+                                    
+                                    # Debug subtotal rows - remove after testing
+                                    if is_subtotal:
+                                        if 'excel_debug' not in st.session_state:
+                                            st.session_state.excel_debug = []
+                                        debug_msg = f"SUBTOTAL: {row.get('Transaction ID', 'Unknown')} - Comm: {row.get('Total Agent Comm', 'N/A')}, Paid: {row.get('Agent Paid Amount (STMT)', 'N/A')}, Balance: {row.get('Policy Balance Due', 'N/A')}"
+                                        st.session_state.excel_debug.append(debug_msg)
+                                        # Also show what columns are in this row
+                                        st.session_state.excel_debug.append(f"  Columns in row: {list(row.index)}")
+                                    
+                                    if 'Transaction ID' in row and not is_subtotal:
+                                        trans_id = str(row['Transaction ID'])
+                                        is_stmt = '-STMT-' in trans_id
+                                        is_void = '-VOID-' in trans_id
+                                    
+                                    # Write each cell with appropriate format
+                                    for col_num, (col_name, value) in enumerate(zip(excel_export_data.columns, row)):
+                                        # Determine the format to use
+                                        cell_format = None
+                                        
+                                        # Check if this is a currency column
+                                        is_currency_col = col_name in currency_columns
+                                        
+                                        
+                                        # Handle different data types and apply appropriate format
+                                        # Check for currency strings FIRST (before empty check)
+                                        if isinstance(value, str) and (value.startswith('$') or value.startswith('-$')):
+                                            # Formatted currency string (from subtotal rows)
+                                            # Handle formats: "$1,234.56", "-$1,234.56", "$1234.56", "$0.00", etc.
+                                            try:
+                                                # Remove $ and commas, handle negative values
+                                                clean_value = value.replace('$', '').replace(',', '')
+                                                num_value = float(clean_value)
+                                                
+                                                # Debug logging for subtotals - remove after testing
+                                                if is_subtotal and col_name in ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']:
+                                                    if 'excel_debug' not in st.session_state:
+                                                        st.session_state.excel_debug = []
+                                                    st.session_state.excel_debug.append(f"Writing {col_name} = {value} -> {num_value}")
+                                                
+                                                if is_subtotal:
+                                                    data_sheet.write_number(row_num, col_num, num_value, subtotal_currency_format)
+                                                elif is_stmt:
+                                                    data_sheet.write_number(row_num, col_num, num_value, stmt_currency_format)
+                                                elif is_void:
+                                                    data_sheet.write_number(row_num, col_num, num_value, void_currency_format)
+                                                else:
+                                                    data_sheet.write_number(row_num, col_num, num_value, regular_currency_format)
+                                            except Exception as e:
+                                                # Debug logging for errors - remove after testing
+                                                if is_subtotal:
+                                                    if 'excel_debug' not in st.session_state:
+                                                        st.session_state.excel_debug = []
+                                                    st.session_state.excel_debug.append(f"ERROR: Failed to convert {col_name} = {value}, error: {e}")
+                                                
+                                                # If conversion fails, write as string
+                                                if is_subtotal:
+                                                    data_sheet.write(row_num, col_num, str(value), subtotal_format)
+                                                elif is_stmt:
+                                                    data_sheet.write(row_num, col_num, str(value), stmt_format)
+                                                elif is_void:
+                                                    data_sheet.write(row_num, col_num, str(value), void_format)
+                                                else:
+                                                    data_sheet.write(row_num, col_num, str(value))
+                                        elif pd.isna(value) or value == '':
+                                            # Empty cell
+                                            if is_subtotal:
+                                                data_sheet.write(row_num, col_num, '', subtotal_format)
+                                            elif is_stmt:
+                                                data_sheet.write(row_num, col_num, '', stmt_format)
+                                            elif is_void:
+                                                data_sheet.write(row_num, col_num, '', void_format)
+                                            else:
+                                                data_sheet.write(row_num, col_num, '')
+                                        elif isinstance(value, bool):
+                                            # Boolean value (checkboxes)
+                                            if is_subtotal:
+                                                data_sheet.write(row_num, col_num, value, subtotal_format)
+                                            elif is_stmt:
+                                                data_sheet.write(row_num, col_num, value, stmt_format)
+                                            elif is_void:
+                                                data_sheet.write(row_num, col_num, value, void_format)
+                                            else:
+                                                data_sheet.write(row_num, col_num, value)
+                                        elif isinstance(value, (int, float)) and is_currency_col:
+                                            # Numeric value in a currency column
+                                            if is_subtotal:
+                                                data_sheet.write_number(row_num, col_num, value, subtotal_currency_format)
+                                            elif is_stmt:
+                                                data_sheet.write_number(row_num, col_num, value, stmt_currency_format)
+                                            elif is_void:
+                                                data_sheet.write_number(row_num, col_num, value, void_currency_format)
+                                            else:
+                                                data_sheet.write_number(row_num, col_num, value, regular_currency_format)
+                                        elif isinstance(value, (int, float)):
+                                            # Regular numeric value
+                                            if is_subtotal:
+                                                data_sheet.write_number(row_num, col_num, value, subtotal_format)
+                                            elif is_stmt:
+                                                data_sheet.write_number(row_num, col_num, value, stmt_format)
+                                            elif is_void:
+                                                data_sheet.write_number(row_num, col_num, value, void_format)
+                                            else:
+                                                data_sheet.write_number(row_num, col_num, value)
+                                        else:
+                                            # String value
+                                            if is_subtotal:
+                                                data_sheet.write(row_num, col_num, str(value), subtotal_format)
+                                            elif is_stmt:
+                                                data_sheet.write(row_num, col_num, str(value), stmt_format)
+                                            elif is_void:
+                                                data_sheet.write(row_num, col_num, str(value), void_format)
+                                            else:
+                                                data_sheet.write(row_num, col_num, str(value))
+                                
+                                # Auto-fit columns
+                                for i, col in enumerate(excel_export_data.columns):
+                                    # Set column width based on content
+                                    if col == 'Group':
+                                        data_sheet.set_column(i, i, 8)
+                                    elif col == 'Type →':
+                                        data_sheet.set_column(i, i, 8)
+                                    elif col == 'Reviewed':
+                                        data_sheet.set_column(i, i, 10)
+                                    elif col in ['Customer', 'Policy Number', 'Transaction ID']:
+                                        data_sheet.set_column(i, i, 20)
+                                    else:
+                                        data_sheet.set_column(i, i, 15)
                         
                         excel_buffer.seek(0)
                         
@@ -14964,6 +15284,12 @@ TO "New Column Name";
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             help="Excel file includes report parameters on separate sheet"
                         )
+                        
+                        # Show debug info after export - remove after testing
+                        if 'excel_debug' in st.session_state and st.session_state.excel_debug:
+                            with st.expander("🔍 Excel Export Debug Info", expanded=True):
+                                for msg in st.session_state.excel_debug:
+                                    st.write(msg)
                 else:
                     st.warning("Selected columns are not available in the current data.")
             else:
