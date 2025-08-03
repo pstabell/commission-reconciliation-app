@@ -5,6 +5,37 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.26] - 2025-08-03 - Enhanced Transaction Sorting Within Policy Terms
+
+### Added
+- **Improved Transaction Sort Order**
+  - NEW/RWL transactions now always appear first in each policy term group
+  - END transactions follow, sorted by Effective Date
+  - Other transaction types (CAN, STL, etc.) are grouped by type, then sorted by Effective Date
+  - STMT/VOID transactions continue to sort by STMT Date at the end
+  - Sort order explanation added to "Tips for Better Navigation" section
+
+### Fixed
+- **STMT/VOID Transaction Sorting**
+  - Fixed issue where STMT/VOID transactions were not properly grouped together
+  - Now correctly identifies STMT/VOID by Transaction ID pattern instead of Transaction Type field
+  - This ensures proper grouping even when STMT records inherit their parent's transaction type
+
+### Enhanced
+- **Consistent Sorting for STMT/VOID Records**
+  - STMT/VOID transactions now follow the same transaction type ordering as regular transactions
+  - Within payment records: NEW/RWL statements first, END statements next, then other types
+  - Makes statement reconciliation more logical and consistent with the overall transaction flow
+- **Improved Sort Algorithm**
+  - Replaced complex concatenation logic with a unified sort key approach
+  - Ensures NEW always appears before END when they have the same Effective Date
+  - More reliable and maintainable sorting implementation
+
+### Changed
+- **Tips Section Enhancement**
+  - Added clear documentation of the transaction sort order
+  - Helps users understand the logical flow of transactions within each policy term
+
 ## [3.9.25] - 2025-08-03 - Fixed Subtotal Values in Excel Export
 
 ### Fixed

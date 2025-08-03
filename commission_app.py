@@ -14294,6 +14294,67 @@ TO "New Column Name";
                                     unique_groups.append(group)
                                     seen.add(group)
                             
+                            # Sort transactions within each term group with enhanced logic
+                            sorted_dfs = []
+                            for group_name in unique_groups:
+                                group_df = editable_data[editable_data['_term_group'] == group_name].copy()
+                                
+                                if len(group_df) > 0:
+                                    # Add a sort key for transaction types to ensure proper ordering
+                                    def get_type_sort_key(row):
+                                        trans_id = str(row['Transaction ID'])
+                                        trans_type = row['Transaction Type']
+                                        
+                                        # Check if it's STMT/VOID
+                                        if '-STMT-' in trans_id or '-VOID-' in trans_id:
+                                            # STMT/VOID get higher numbers to appear last
+                                            if trans_type in ['NEW', 'RWL']:
+                                                return 4
+                                            elif trans_type == 'END':
+                                                return 5
+                                            else:
+                                                return 6
+                                        else:
+                                            # Regular transactions
+                                            if trans_type in ['NEW', 'RWL']:
+                                                return 1
+                                            elif trans_type == 'END':
+                                                return 2
+                                            else:
+                                                return 3
+                                    
+                                    # Apply the sort key
+                                    group_df['_sort_key'] = group_df.apply(get_type_sort_key, axis=1)
+                                    
+                                    # Sort by sort key first, then by appropriate date
+                                    date_col = group_df.apply(
+                                        lambda row: 'STMT DATE' if ('-STMT-' in str(row['Transaction ID']) or '-VOID-' in str(row['Transaction ID'])) else 'Effective Date',
+                                        axis=1
+                                    )
+                                    
+                                    # Create a unified date column for sorting
+                                    group_df['_sort_date'] = group_df.apply(
+                                        lambda row: row['STMT DATE'] if ('-STMT-' in str(row['Transaction ID']) or '-VOID-' in str(row['Transaction ID'])) else row['Effective Date'],
+                                        axis=1
+                                    )
+                                    
+                                    # Sort by sort key, then date, then transaction type (for grouping within others), then ID
+                                    sorted_group = group_df.sort_values(['_sort_key', '_sort_date', 'Transaction Type', 'Transaction ID'])
+                                    
+                                    # Remove the temporary columns
+                                    sorted_group = sorted_group.drop(['_sort_key', '_sort_date'], axis=1)
+                                    
+                                    sorted_dfs.append(sorted_group)
+                            
+                            # Also include any rows without a term group (shouldn't happen, but just in case)
+                            no_group = editable_data[editable_data['_term_group'] == '']
+                            if len(no_group) > 0:
+                                sorted_dfs.append(no_group)
+                            
+                            # Rebuild editable_data with the sorted order
+                            if sorted_dfs:
+                                editable_data = pd.concat(sorted_dfs, ignore_index=True)
+                            
                             # Create group indicator column and subtotal rows
                             group_indicators = []
                             current_group = None
@@ -14561,6 +14622,18 @@ TO "New Column Name";
                             1. **Use Browser Zoom**: Press `Ctrl -` (or `Cmd -` on Mac) to zoom out and see more columns
                             2. **Column Order**: Your template order is preserved with special columns (Select, Group, Type, Reviewed) at the front
                             3. **Shift + Scroll**: Hold Shift while scrolling to move horizontally
+                            
+                            **📋 Transaction Sort Order:**
+                            Within each policy term group:
+                            1. **NEW/RWL** - Policy start (NEW for first term, RWL for renewals)
+                            2. **END** - Endorsements sorted by Effective Date
+                            3. **Other Types** - CAN, STL, etc. grouped by type, then by Effective Date
+                            4. **STMT/VOID** - Payment records follow the same type ordering:
+                               • NEW/RWL statements first (by STMT Date)
+                               • END statements next (by STMT Date)
+                               • Other type statements (by type, then STMT Date)
+                            
+                            This consistent ordering applies to both regular transactions and payment records, making it easy to track the progression of each policy term and its associated payments.
                             
                             **Visual Grouping & Actions:**
                             - 1.1, 1.2... = Term 1 transactions (Policy-Number - Term 1)
