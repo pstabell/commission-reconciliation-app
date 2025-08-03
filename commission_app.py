@@ -14428,6 +14428,9 @@ TO "New Column Name";
                             
                             return [''] * len(row)
                         
+                        # Alias for compatibility
+                        style_special_transactions_detailed = combined_styling
+                        
                         # Add a blank spacer column at the end for better visual spacing
                         if view_mode != "Aggregated by Policy":
                             editable_data['  '] = ''  # Two spaces as column name
