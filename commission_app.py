@@ -14640,14 +14640,6 @@ TO "New Column Name";
                             # Store the display_data (which has subtotals) for export
                             st.session_state.prl_export_data = display_data.copy()
                             
-                            # Debug: Check a subtotal row
-                            subtotal_rows = display_data[display_data['Group'] == '=']
-                            if not subtotal_rows.empty:
-                                first_subtotal = subtotal_rows.iloc[0]
-                                st.write("DEBUG - First subtotal in display_data:")
-                                st.write(f"  Total Agent Comm: {first_subtotal.get('Total Agent Comm', 'NOT FOUND')}")
-                                st.write(f"  Agent Paid Amount (STMT): {first_subtotal.get('Agent Paid Amount (STMT)', 'NOT FOUND')}")
-                                st.write(f"  Policy Balance Due: {first_subtotal.get('Policy Balance Due', 'NOT FOUND')}")
                         else:
                             # Apply only transaction type styling
                             styled_data = style_special_transactions(editable_data)
@@ -14961,20 +14953,8 @@ TO "New Column Name";
                                     seen.add(col)
                                     final_export_cols.append(col)
                             
-                            # Debug before column selection
-                            if 'excel_debug' in st.session_state:
-                                subtotal_test = export_data[export_data['Group'] == '=']
-                                if not subtotal_test.empty:
-                                    st.session_state.excel_debug.append(f"BEFORE column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
-                            
                             # Use .loc to preserve data integrity when selecting columns
                             export_data = export_data.loc[:, final_export_cols].copy()
-                            
-                            # Debug after column selection
-                            if 'excel_debug' in st.session_state:
-                                subtotal_test = export_data[export_data['Group'] == '=']
-                                if not subtotal_test.empty:
-                                    st.session_state.excel_debug.append(f"AFTER column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
                         else:
                             # For Aggregated view or if no subtotals, use working_data
                             export_data = working_data[valid_columns].copy()
@@ -15005,9 +14985,6 @@ TO "New Column Name";
                     
                     with export_col3:
                         excel_filename = filename if filename.endswith('.xlsx') else filename + '.xlsx'
-                        
-                        # Clear debug before export - remove after testing
-                        st.session_state.excel_debug = []
                         
                         # Create Excel file with metadata sheet
                         excel_buffer = io.BytesIO()
@@ -15147,14 +15124,6 @@ TO "New Column Name";
                                     is_stmt = False
                                     is_void = False
                                     
-                                    # Debug subtotal rows - remove after testing
-                                    if is_subtotal:
-                                        if 'excel_debug' not in st.session_state:
-                                            st.session_state.excel_debug = []
-                                        debug_msg = f"SUBTOTAL: {row.get('Transaction ID', 'Unknown')} - Comm: {row.get('Total Agent Comm', 'N/A')}, Paid: {row.get('Agent Paid Amount (STMT)', 'N/A')}, Balance: {row.get('Policy Balance Due', 'N/A')}"
-                                        st.session_state.excel_debug.append(debug_msg)
-                                        # Also show what columns are in this row
-                                        st.session_state.excel_debug.append(f"  Columns in row: {list(row.index)}")
                                     
                                     if 'Transaction ID' in row and not is_subtotal:
                                         trans_id = str(row['Transaction ID'])
@@ -15180,11 +15149,6 @@ TO "New Column Name";
                                                 clean_value = value.replace('$', '').replace(',', '')
                                                 num_value = float(clean_value)
                                                 
-                                                # Debug logging for subtotals - remove after testing
-                                                if is_subtotal and col_name in ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']:
-                                                    if 'excel_debug' not in st.session_state:
-                                                        st.session_state.excel_debug = []
-                                                    st.session_state.excel_debug.append(f"Writing {col_name} = {value} -> {num_value}")
                                                 
                                                 if is_subtotal:
                                                     data_sheet.write_number(row_num, col_num, num_value, subtotal_currency_format)
@@ -15195,12 +15159,6 @@ TO "New Column Name";
                                                 else:
                                                     data_sheet.write_number(row_num, col_num, num_value, regular_currency_format)
                                             except Exception as e:
-                                                # Debug logging for errors - remove after testing
-                                                if is_subtotal:
-                                                    if 'excel_debug' not in st.session_state:
-                                                        st.session_state.excel_debug = []
-                                                    st.session_state.excel_debug.append(f"ERROR: Failed to convert {col_name} = {value}, error: {e}")
-                                                
                                                 # If conversion fails, write as string
                                                 if is_subtotal:
                                                     data_sheet.write(row_num, col_num, str(value), subtotal_format)
@@ -15285,11 +15243,6 @@ TO "New Column Name";
                             help="Excel file includes report parameters on separate sheet"
                         )
                         
-                        # Show debug info after export - remove after testing
-                        if 'excel_debug' in st.session_state and st.session_state.excel_debug:
-                            with st.expander("🔍 Excel Export Debug Info", expanded=True):
-                                for msg in st.session_state.excel_debug:
-                                    st.write(msg)
                 else:
                     st.warning("Selected columns are not available in the current data.")
             else:
