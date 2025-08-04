@@ -1320,7 +1320,10 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
         }
         
     except Exception as e:
-        st.error(f"Error looking up commission rule: {e}")
+        # Log the error for debugging
+        print(f"Commission rule lookup error: {e}")
+        # Only return None, don't show error to user
+        # The calling code will handle the None result appropriately
         return None
 
 def load_carriers_for_dropdown():
@@ -1335,6 +1338,11 @@ def load_carriers_for_dropdown():
 
 def load_mgas_for_carrier(carrier_id):
     """Load MGAs associated with a specific carrier."""
+    # Check session state cache first
+    cache_key = f'mgas_for_carrier_{carrier_id}'
+    if cache_key in st.session_state:
+        return st.session_state[cache_key]
+    
     try:
         supabase = get_supabase_client()
         
@@ -1359,6 +1367,7 @@ def load_mgas_for_carrier(carrier_id):
                 
                 if mgas:  # If we found MGAs through relationships, return them
                     mgas.sort(key=lambda x: x['mga_name'])
+                    st.session_state[cache_key] = mgas  # Cache the result
                     return mgas
         except Exception as e:
             # Log the error for debugging but continue to fallbacks
@@ -1381,14 +1390,18 @@ def load_mgas_for_carrier(carrier_id):
             if mga_response.data:
                 mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in mga_response.data]
                 mgas.sort(key=lambda x: x['mga_name'])
+                st.session_state[cache_key] = mgas  # Cache the result
                 return mgas
         
         # If no MGAs found through commission rules, return empty list
         # Wright Flood and other carriers might not have MGAs
+        st.session_state[cache_key] = []  # Cache empty result too
         return []
         
     except Exception as e:
-        st.error(f"Error loading MGAs for carrier: {e}")
+        # Log error for debugging but don't show to user
+        # This prevents transient connection errors from disrupting the UI
+        print(f"MGA loading error: {e}")
         return []
 
 # --- Excel Utility Functions ---
@@ -6243,7 +6256,7 @@ def main():
         
         # Carrier, MGA & Policy Type Selection (OUTSIDE FORM for dynamic updates)
         st.subheader("Carrier, MGA & Policy Type Selection 🏢")
-        st.info("💡 Select carrier first to see available MGAs, then select policy type for automatic commission rates")
+        st.info("💡 Select carrier → MGA → Policy Type to automatically populate commission rates")
         
         # Load carriers for dropdown
         carriers_list = load_carriers_for_dropdown()
@@ -6342,24 +6355,43 @@ def main():
         if selected_carrier_name and selected_carrier_id:
             st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name} | Policy Type: {selected_policy_type}")
             
-            # Look up commission rule
+            # Look up commission rule with error handling for transient database issues
             commission_rule = None
             
-            # Try most specific match first: carrier + MGA + policy type
-            if selected_mga_id:
-                commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, selected_policy_type)
-            
-            # If no match, try carrier + policy type (no MGA)
-            if not commission_rule:
-                commission_rule = lookup_commission_rule(selected_carrier_id, None, selected_policy_type)
-            
-            # If still no match, try carrier + MGA (no policy type)
-            if not commission_rule and selected_mga_id:
-                commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
-            
-            # Finally, try carrier default (no MGA, no policy type)
-            if not commission_rule:
-                commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
+            try:
+                # Try most specific match first: carrier + MGA + policy type
+                if selected_mga_id:
+                    commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, selected_policy_type)
+                
+                # If no match, try carrier + policy type (no MGA)
+                if not commission_rule:
+                    commission_rule = lookup_commission_rule(selected_carrier_id, None, selected_policy_type)
+                
+                # If still no match, try carrier + MGA (no policy type)
+                if not commission_rule and selected_mga_id:
+                    commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
+                
+                # Finally, try carrier default (no MGA, no policy type)
+                if not commission_rule:
+                    commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
+            except Exception as e:
+                # Handle transient database errors gracefully
+                # Check if we have cached commission rates in session state
+                if ('commission_new_rate' in st.session_state and 
+                    st.session_state.get('selected_carrier_id') == selected_carrier_id and
+                    st.session_state.get('selected_mga_id') == selected_mga_id and
+                    st.session_state.get('selected_policy_type') == selected_policy_type):
+                    # Use cached rates
+                    commission_rule = {
+                        'new_rate': st.session_state['commission_new_rate'],
+                        'renewal_rate': st.session_state['commission_renewal_rate'],
+                        'rule_description': st.session_state.get('commission_rule_description', 'Cached rule'),
+                        'rule_id': st.session_state.get('commission_rule_id')
+                    }
+                else:
+                    # Only show error if we don't have cached rates
+                    st.warning("⚠️ Temporary connection issue. Please try again.")
+                    commission_rule = None
             
             if commission_rule:
                 # Store both rates and let the form decide which to use based on transaction type
@@ -6375,10 +6407,11 @@ def main():
                 st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
                 st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
                 
-                # Store both rates in session state
+                # Store both rates in session state for caching
                 st.session_state['commission_new_rate'] = new_rate
                 st.session_state['commission_renewal_rate'] = renewal_rate
                 st.session_state['commission_rule_id'] = commission_rule.get('rule_id')
+                st.session_state['commission_rule_description'] = rule_desc
                 st.session_state['has_commission_rule'] = True
             else:
                 st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
