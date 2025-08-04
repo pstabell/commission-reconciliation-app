@@ -13042,7 +13042,16 @@ TO "New Column Name";
         col_title, col_refresh = st.columns([10, 1])
         with col_refresh:
             if st.button("🔄 Refresh", help="Refresh data from database", key="prl_reports_refresh"):
+                # Preserve current selections before clearing cache
+                preserved_view_mode = st.session_state.get('prl_current_view_mode', 'Aggregated by Policy')
+                preserved_month = st.session_state.get('prl_statement_month_selectbox', 'All Months')
+                
                 st.cache_data.clear()
+                
+                # Restore selections after cache clear
+                st.session_state.prl_current_view_mode = preserved_view_mode
+                st.session_state.prl_statement_month_selectbox = preserved_month
+                
                 st.success("✅ Cache cleared! Data refreshed.")
                 time.sleep(0.5)
                 st.rerun()
@@ -13060,10 +13069,19 @@ TO "New Column Name";
             view_col1, view_col2, view_col3 = st.columns([2, 2, 3])
             
             with view_col1:
+                # Get the current index based on session state to preserve selection after refresh
+                view_options = ["Aggregated by Policy", "Detailed Transactions"]
+                current_view_index = 0  # default to Aggregated
+                if "prl_current_view_mode" in st.session_state:
+                    try:
+                        current_view_index = view_options.index(st.session_state.prl_current_view_mode)
+                    except ValueError:
+                        current_view_index = 0
+                
                 view_mode = st.radio(
                     "Select view:",
-                    options=["Aggregated by Policy", "Detailed Transactions"],
-                    index=0,
+                    options=view_options,
+                    index=current_view_index,
                     help="Aggregated: One row per policy with totals | Detailed: All individual transactions"
                 )
             
@@ -13210,6 +13228,7 @@ TO "New Column Name";
             
             # Statement Month Filter
             st.markdown("### 📅 Statement Month Selection")
+            
             stmt_col1, stmt_col2, stmt_col3 = st.columns([2, 2, 2])
             
             with stmt_col1:
@@ -13231,11 +13250,21 @@ TO "New Column Name";
                         except:
                             month_options.append(ym)
                     
+                    # Get the current index based on session state to preserve selection after refresh
+                    current_month_index = 0  # default to "All Months"
+                    # Check the selectbox key in session state (Streamlit stores widget values by key)
+                    if "prl_statement_month_selectbox" in st.session_state:
+                        try:
+                            current_month_index = month_options.index(st.session_state.prl_statement_month_selectbox)
+                        except ValueError:
+                            current_month_index = 0
+                    
                     selected_month = st.selectbox(
                         "Select Statement Month:",
                         options=month_options,
-                        index=0,
-                        help="Filter by the month when policies became effective (your monthly sales cohort)"
+                        index=current_month_index,
+                        help="Filter by the month when policies became effective (your monthly sales cohort)",
+                        key="prl_statement_month_selectbox"
                     )
                 else:
                     st.warning("Effective Date column not found")

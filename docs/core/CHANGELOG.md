@@ -5,6 +5,24 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.27] - 2025-08-03 - Fixed View Mode and Filter Persistence After Refresh
+
+### Fixed
+- **View Mode Reset on Refresh**
+  - Fixed issue where clicking refresh button would reset view to "Aggregated by Policy"
+  - Radio button now preserves the current view selection (Detailed Transactions) after refresh
+  
+- **Statement Month Filter Reset on Refresh**
+  - Fixed issue where Statement Month selection would reset to "All Months" after refresh
+  - Filter selection (e.g., "July 2024") now properly persists through refresh
+  - Data now correctly stays filtered after refresh instead of showing all months
+
+### Technical
+- Radio button and selectbox now use session state to maintain selections
+- Refresh button explicitly preserves view mode and statement month before clearing cache
+- Widget keys used for automatic state management in Streamlit
+- Ensures UI and session state remain synchronized after page refresh
+
 ## [3.9.26] - 2025-08-03 - Enhanced Transaction Sorting Within Policy Terms
 
 ### Added
