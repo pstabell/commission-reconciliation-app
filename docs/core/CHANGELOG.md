@@ -5,6 +5,19 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.28] - 2025-08-03 - Fixed Pagination Persistence After Refresh
+
+### Fixed
+- **Records Per Page and Page Number Reset**
+  - Fixed issue where "Records per page" selection wasn't properly applied after refresh
+  - Fixed page number resetting to 1 after refresh
+  - Pagination settings now fully persist through refresh operations
+
+### Technical
+- Added records per page and current page to refresh preservation logic
+- Selectbox now checks session state for current records per page value
+- Page number input uses session state value while ensuring it's within valid range
+
 ## [3.9.27] - 2025-08-03 - Fixed View Mode and Filter Persistence After Refresh
 
 ### Fixed

@@ -13045,12 +13045,16 @@ TO "New Column Name";
                 # Preserve current selections before clearing cache
                 preserved_view_mode = st.session_state.get('prl_current_view_mode', 'Aggregated by Policy')
                 preserved_month = st.session_state.get('prl_statement_month_selectbox', 'All Months')
+                preserved_records_per_page = st.session_state.get('prl_records_per_page', 20)
+                preserved_current_page = st.session_state.get('prl_current_page', 1)
                 
                 st.cache_data.clear()
                 
                 # Restore selections after cache clear
                 st.session_state.prl_current_view_mode = preserved_view_mode
                 st.session_state.prl_statement_month_selectbox = preserved_month
+                st.session_state.prl_records_per_page = preserved_records_per_page
+                st.session_state.prl_current_page = preserved_current_page
                 
                 st.success("✅ Cache cleared! Data refreshed.")
                 time.sleep(0.5)
@@ -14005,22 +14009,37 @@ TO "New Column Name";
                     pagination_col1, pagination_col2, pagination_col3 = st.columns([2, 1, 1])
                     
                     with pagination_col1:
+                        # Get current index based on session state
+                        page_options = [20, 50, 100, 200, 500, "All"]
+                        current_page_size_index = 0
+                        if "prl_records_per_page" in st.session_state:
+                            try:
+                                current_page_size_index = page_options.index(st.session_state.prl_records_per_page)
+                            except ValueError:
+                                current_page_size_index = 0
+                        
                         records_per_page = st.selectbox(
                             "Records per page:",
-                            options=[20, 50, 100, 200, 500, "All"],
-                            index=0,
-                            key="prl_records_per_page"                        )
+                            options=page_options,
+                            index=current_page_size_index,
+                            key="prl_records_per_page"
+                        )
                     
                     with pagination_col2:
                         if records_per_page != "All":
                             # Ensure records_per_page is treated as integer for calculations
                             records_per_page_int = int(records_per_page)
                             total_pages = max(1, (len(working_data) + records_per_page_int - 1) // records_per_page_int)
+                            # Get current page from session state, ensuring it's within valid range
+                            saved_page = st.session_state.get('prl_current_page', 1)
+                            # Ensure saved page is within valid range for current data
+                            current_page_value = min(saved_page, total_pages) if saved_page > 0 else 1
+                            
                             current_page = st.number_input(
                                 "Page:",
                                 min_value=1,
                                 max_value=total_pages,
-                                value=1,
+                                value=current_page_value,
                                 key="prl_current_page"
                             )
                         else:
