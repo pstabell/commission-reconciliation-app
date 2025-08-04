@@ -10451,6 +10451,11 @@ SOLUTION NEEDED:
         except Exception as e:
             st.error(f"Error loading data: {e}")
         
+        # Display success message if present
+        if 'add_success_message' in st.session_state:
+            st.success(st.session_state['add_success_message'])
+            del st.session_state['add_success_message']
+        
         # Modern Command Palette Style Search
         st.markdown("### 🔍 Search")
         search_container = st.container()
@@ -10507,7 +10512,16 @@ SOLUTION NEEDED:
                                 }
                                 
                                 response = supabase.table('carriers').insert(new_carrier).execute()
-                                st.success(f"✅ Added {carrier_name}")
+                                
+                                # Set success message and navigate to the new carrier
+                                if response.data and len(response.data) > 0:
+                                    new_carrier_data = response.data[0]
+                                    st.session_state['add_success_message'] = f"✅ Successfully added {carrier_name}!"
+                                    st.session_state['selected_carrier_id'] = new_carrier_data['carrier_id']
+                                    st.session_state['search_mode'] = 'carrier_detail'
+                                    # Force reload of carriers data
+                                    st.session_state.carriers_data.append(new_carrier_data)
+                                
                                 del st.session_state['show_add_carrier']
                                 st.rerun()
                             except Exception as e:
@@ -10559,7 +10573,16 @@ SOLUTION NEEDED:
                                 }
                                 
                                 response = supabase.table('mgas').insert(new_mga).execute()
-                                st.success(f"✅ Added {mga_name}")
+                                
+                                # Set success message and navigate to the new MGA
+                                if response.data and len(response.data) > 0:
+                                    new_mga_data = response.data[0]
+                                    st.session_state['add_success_message'] = f"✅ Successfully added {mga_name}!"
+                                    st.session_state['selected_mga_id'] = new_mga_data['mga_id']
+                                    st.session_state['search_mode'] = 'mga_detail'
+                                    # Force reload of MGAs data
+                                    st.session_state.mgas_data.append(new_mga_data)
+                                
                                 del st.session_state['show_add_mga']
                                 st.rerun()
                             except Exception as e:
