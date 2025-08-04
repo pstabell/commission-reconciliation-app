@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.29] - 2025-08-04 - Enhanced Commission Rules with Policy Type Selection
+
+### Added
+- **Multi-Select Policy Types for Commission Rules**
+  - Commission rules can now be configured for specific policy types
+  - Multi-select dropdown allows selecting multiple policy types per rule
+  - "All Policy Types" option for catch-all rules
+  - Policy types are loaded from Admin Panel configuration
+
+### Enhanced
+- **Automatic Commission Rate Selection**
+  - System now matches carrier + MGA + policy type for most specific rate
+  - Falls back through priority levels: carrier+policy type, carrier+MGA, carrier default
+  - Shows which rule was matched in the Add New Policy Transaction page
+  - Policy type selection moved outside form for dynamic commission lookup
+
+### Improved
+- **Commission Rule Display**
+  - Rules now show selected policy types or "All Policy Types" 
+  - Clearer visual hierarchy for understanding rule specificity
+  - Better organization of rule matching logic
+
 ## [3.9.28] - 2025-08-03 - Fixed Pagination Persistence After Refresh
 
 ### Fixed

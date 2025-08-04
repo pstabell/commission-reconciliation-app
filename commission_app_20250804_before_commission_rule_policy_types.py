@@ -6241,14 +6241,14 @@ def main():
         if 'selected_customer_name' in st.session_state:
             selected_customer_name = st.session_state['selected_customer_name']
         
-        # Carrier, MGA & Policy Type Selection (OUTSIDE FORM for dynamic updates)
-        st.subheader("Carrier, MGA & Policy Type Selection 🏢")
-        st.info("💡 Select carrier first to see available MGAs, then select policy type for automatic commission rates")
+        # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
+        st.subheader("Carrier & MGA Selection 🏢")
+        st.info("💡 Select carrier first to see available MGAs")
         
         # Load carriers for dropdown
         carriers_list = load_carriers_for_dropdown()
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             # Carrier dropdown with search capability
             carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
@@ -6304,28 +6304,6 @@ def main():
                 mga_name_manual = st.text_input("Or enter MGA name manually", placeholder="Type MGA name or leave blank", key="mga_manual_outside")
                 st.session_state['mga_name_manual'] = mga_name_manual
         
-        with col3:
-            # Policy Type dropdown
-            # Get dynamic policy types
-            active_types, allow_custom = get_active_policy_types()
-            default_type = get_default_policy_type()
-            
-            # Find default index
-            try:
-                default_index = active_types.index(default_type)
-            except ValueError:
-                default_index = 0
-            
-            selected_policy_type = st.selectbox(
-                "Policy Type*", 
-                options=active_types, 
-                index=default_index,
-                help="Select policy type to get specific commission rate",
-                key="add_policy_type_outside"
-            )
-            
-            st.session_state['selected_policy_type'] = selected_policy_type
-        
         # Store final values for form submission
         if selected_carrier_name:
             final_carrier_name = selected_carrier_name
@@ -6340,25 +6318,17 @@ def main():
         
         # Display selection status and commission info
         if selected_carrier_name and selected_carrier_id:
-            st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name} | Policy Type: {selected_policy_type}")
+            st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name}")
             
             # Look up commission rule
             commission_rule = None
             
-            # Try most specific match first: carrier + MGA + policy type
             if selected_mga_id:
-                commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, selected_policy_type)
-            
-            # If no match, try carrier + policy type (no MGA)
-            if not commission_rule:
-                commission_rule = lookup_commission_rule(selected_carrier_id, None, selected_policy_type)
-            
-            # If still no match, try carrier + MGA (no policy type)
-            if not commission_rule and selected_mga_id:
+                # Try carrier + MGA first
                 commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
             
-            # Finally, try carrier default (no MGA, no policy type)
             if not commission_rule:
+                # Try carrier default
                 commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
             
             if commission_rule:
@@ -6366,12 +6336,7 @@ def main():
                 new_rate = commission_rule.get('new_rate', 0)
                 renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
                 
-                # Build a descriptive message about which rule was matched
-                rule_desc = commission_rule.get('rule_description', '')
-                if not rule_desc:
-                    rule_desc = commission_rule.get('applied_rule_text', 'Carrier default')
-                
-                st.info(f"ℹ️ Commission rule found: {rule_desc}")
+                st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
                 st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
                 st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
                 
@@ -6411,11 +6376,27 @@ def main():
             # Policy Information Section
             st.subheader("Policy Information")
             
-            # Get policy type from session state (selected outside the form)
-            policy_type = st.session_state.get('selected_policy_type', get_default_policy_type())
-            
-            # Row 1: Policy Number (now full width since policy type is outside)
-            policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
+            # Row 1: Policy Type and Policy Number
+            col1, col2 = st.columns(2)
+            with col1:
+                # Get dynamic policy types
+                active_types, allow_custom = get_active_policy_types()
+                default_type = get_default_policy_type()
+                
+                # Find default index
+                try:
+                    default_index = active_types.index(default_type)
+                except ValueError:
+                    default_index = 0
+                
+                policy_type = st.selectbox(
+                    "Policy Type (add new types in Admin Panel)", 
+                    options=active_types, 
+                    index=default_index,
+                    help="To add new policy types, go to Admin Panel → Manage Policy Types"
+                )
+            with col2:
+                policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
             
             # Row 1.5: Prior Policy Number (for rewrites and renewals)
             prior_policy_number = st.text_input(
@@ -10786,20 +10767,7 @@ SOLUTION NEEDED:
                             with col1:
                                 mga_options = ["Direct Appointment"] + [m['mga_name'] for m in st.session_state.mgas_data]
                                 selected_mga = st.selectbox("MGA", options=mga_options)
-                                
-                                # Load policy types from config
-                                policy_types_config, _ = load_policy_types()
-                                active_policy_types = [pt['name'] for pt in policy_types_config if pt.get('active', True)]
-                                
-                                # Add "All Policy Types" as the first option
-                                policy_type_options = ["All Policy Types"] + sorted(active_policy_types)
-                                
-                                selected_policy_types = st.multiselect(
-                                    "Policy Type(s)",
-                                    options=policy_type_options,
-                                    default=[],
-                                    help="Select policy types for this rule. Leave empty or select 'All Policy Types' for a catch-all rule."
-                                )
+                                policy_type = st.text_input("Policy Type(s)", placeholder="Auto, HO3, etc.")
                             
                             with col2:
                                 new_rate = st.number_input("NEW %", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
@@ -10820,18 +10788,10 @@ SOLUTION NEEDED:
                                         if selected_mga != "Direct Appointment":
                                             mga_id = next((m['mga_id'] for m in st.session_state.mgas_data if m['mga_name'] == selected_mga), None)
                                         
-                                        # Handle policy types
-                                        policy_type_value = None
-                                        if selected_policy_types:
-                                            if "All Policy Types" in selected_policy_types:
-                                                policy_type_value = None  # NULL means catch-all
-                                            else:
-                                                policy_type_value = ", ".join(selected_policy_types)
-                                        
                                         new_rule = {
                                             "carrier_id": selected_carrier['carrier_id'],
                                             "mga_id": mga_id,
-                                            "policy_type": policy_type_value,
+                                            "policy_type": policy_type if policy_type else None,
                                             "new_rate": new_rate,
                                             "renewal_rate": renewal_rate,
                                             "payment_terms": payment_terms if payment_terms else None,
@@ -10869,15 +10829,8 @@ SOLUTION NEEDED:
                                 mga_name = next((m['mga_name'] for m in st.session_state.mgas_data if m['mga_id'] == rule['mga_id']), "Unknown")
                             
                             rule_title = f"**{mga_name}**"
-                            
-                            # Show policy types
                             if rule.get('policy_type'):
-                                # Split comma-separated policy types
-                                policy_types = [pt.strip() for pt in rule['policy_type'].split(',')]
-                                rule_title += f" - {', '.join(policy_types)}"
-                            else:
-                                rule_title += " - All Policy Types"
-                            
+                                rule_title += f" - {rule['policy_type']}"
                             st.markdown(rule_title)
                             
                             if rule.get('rule_description'):

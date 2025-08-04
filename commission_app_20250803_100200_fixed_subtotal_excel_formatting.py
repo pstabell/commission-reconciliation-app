@@ -6241,14 +6241,14 @@ def main():
         if 'selected_customer_name' in st.session_state:
             selected_customer_name = st.session_state['selected_customer_name']
         
-        # Carrier, MGA & Policy Type Selection (OUTSIDE FORM for dynamic updates)
-        st.subheader("Carrier, MGA & Policy Type Selection 🏢")
-        st.info("💡 Select carrier first to see available MGAs, then select policy type for automatic commission rates")
+        # Carrier & MGA Selection (OUTSIDE FORM for dynamic updates)
+        st.subheader("Carrier & MGA Selection 🏢")
+        st.info("💡 Select carrier first to see available MGAs")
         
         # Load carriers for dropdown
         carriers_list = load_carriers_for_dropdown()
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             # Carrier dropdown with search capability
             carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
@@ -6304,28 +6304,6 @@ def main():
                 mga_name_manual = st.text_input("Or enter MGA name manually", placeholder="Type MGA name or leave blank", key="mga_manual_outside")
                 st.session_state['mga_name_manual'] = mga_name_manual
         
-        with col3:
-            # Policy Type dropdown
-            # Get dynamic policy types
-            active_types, allow_custom = get_active_policy_types()
-            default_type = get_default_policy_type()
-            
-            # Find default index
-            try:
-                default_index = active_types.index(default_type)
-            except ValueError:
-                default_index = 0
-            
-            selected_policy_type = st.selectbox(
-                "Policy Type*", 
-                options=active_types, 
-                index=default_index,
-                help="Select policy type to get specific commission rate",
-                key="add_policy_type_outside"
-            )
-            
-            st.session_state['selected_policy_type'] = selected_policy_type
-        
         # Store final values for form submission
         if selected_carrier_name:
             final_carrier_name = selected_carrier_name
@@ -6340,25 +6318,17 @@ def main():
         
         # Display selection status and commission info
         if selected_carrier_name and selected_carrier_id:
-            st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name} | Policy Type: {selected_policy_type}")
+            st.success(f"✅ Carrier: {selected_carrier_name} | MGA: {selected_mga_name}")
             
             # Look up commission rule
             commission_rule = None
             
-            # Try most specific match first: carrier + MGA + policy type
             if selected_mga_id:
-                commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, selected_policy_type)
-            
-            # If no match, try carrier + policy type (no MGA)
-            if not commission_rule:
-                commission_rule = lookup_commission_rule(selected_carrier_id, None, selected_policy_type)
-            
-            # If still no match, try carrier + MGA (no policy type)
-            if not commission_rule and selected_mga_id:
+                # Try carrier + MGA first
                 commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, None)
             
-            # Finally, try carrier default (no MGA, no policy type)
             if not commission_rule:
+                # Try carrier default
                 commission_rule = lookup_commission_rule(selected_carrier_id, None, None)
             
             if commission_rule:
@@ -6366,12 +6336,7 @@ def main():
                 new_rate = commission_rule.get('new_rate', 0)
                 renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
                 
-                # Build a descriptive message about which rule was matched
-                rule_desc = commission_rule.get('rule_description', '')
-                if not rule_desc:
-                    rule_desc = commission_rule.get('applied_rule_text', 'Carrier default')
-                
-                st.info(f"ℹ️ Commission rule found: {rule_desc}")
+                st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
                 st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
                 st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
                 
@@ -6411,11 +6376,27 @@ def main():
             # Policy Information Section
             st.subheader("Policy Information")
             
-            # Get policy type from session state (selected outside the form)
-            policy_type = st.session_state.get('selected_policy_type', get_default_policy_type())
-            
-            # Row 1: Policy Number (now full width since policy type is outside)
-            policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
+            # Row 1: Policy Type and Policy Number
+            col1, col2 = st.columns(2)
+            with col1:
+                # Get dynamic policy types
+                active_types, allow_custom = get_active_policy_types()
+                default_type = get_default_policy_type()
+                
+                # Find default index
+                try:
+                    default_index = active_types.index(default_type)
+                except ValueError:
+                    default_index = 0
+                
+                policy_type = st.selectbox(
+                    "Policy Type (add new types in Admin Panel)", 
+                    options=active_types, 
+                    index=default_index,
+                    help="To add new policy types, go to Admin Panel → Manage Policy Types"
+                )
+            with col2:
+                policy_number = st.text_input("Policy Number", placeholder="Enter policy number", key="add_policy_number")
             
             # Row 1.5: Prior Policy Number (for rewrites and renewals)
             prior_policy_number = st.text_input(
@@ -10786,20 +10767,7 @@ SOLUTION NEEDED:
                             with col1:
                                 mga_options = ["Direct Appointment"] + [m['mga_name'] for m in st.session_state.mgas_data]
                                 selected_mga = st.selectbox("MGA", options=mga_options)
-                                
-                                # Load policy types from config
-                                policy_types_config, _ = load_policy_types()
-                                active_policy_types = [pt['name'] for pt in policy_types_config if pt.get('active', True)]
-                                
-                                # Add "All Policy Types" as the first option
-                                policy_type_options = ["All Policy Types"] + sorted(active_policy_types)
-                                
-                                selected_policy_types = st.multiselect(
-                                    "Policy Type(s)",
-                                    options=policy_type_options,
-                                    default=[],
-                                    help="Select policy types for this rule. Leave empty or select 'All Policy Types' for a catch-all rule."
-                                )
+                                policy_type = st.text_input("Policy Type(s)", placeholder="Auto, HO3, etc.")
                             
                             with col2:
                                 new_rate = st.number_input("NEW %", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
@@ -10820,18 +10788,10 @@ SOLUTION NEEDED:
                                         if selected_mga != "Direct Appointment":
                                             mga_id = next((m['mga_id'] for m in st.session_state.mgas_data if m['mga_name'] == selected_mga), None)
                                         
-                                        # Handle policy types
-                                        policy_type_value = None
-                                        if selected_policy_types:
-                                            if "All Policy Types" in selected_policy_types:
-                                                policy_type_value = None  # NULL means catch-all
-                                            else:
-                                                policy_type_value = ", ".join(selected_policy_types)
-                                        
                                         new_rule = {
                                             "carrier_id": selected_carrier['carrier_id'],
                                             "mga_id": mga_id,
-                                            "policy_type": policy_type_value,
+                                            "policy_type": policy_type if policy_type else None,
                                             "new_rate": new_rate,
                                             "renewal_rate": renewal_rate,
                                             "payment_terms": payment_terms if payment_terms else None,
@@ -10869,15 +10829,8 @@ SOLUTION NEEDED:
                                 mga_name = next((m['mga_name'] for m in st.session_state.mgas_data if m['mga_id'] == rule['mga_id']), "Unknown")
                             
                             rule_title = f"**{mga_name}**"
-                            
-                            # Show policy types
                             if rule.get('policy_type'):
-                                # Split comma-separated policy types
-                                policy_types = [pt.strip() for pt in rule['policy_type'].split(',')]
-                                rule_title += f" - {', '.join(policy_types)}"
-                            else:
-                                rule_title += " - All Policy Types"
-                            
+                                rule_title += f" - {rule['policy_type']}"
                             st.markdown(rule_title)
                             
                             if rule.get('rule_description'):
@@ -13089,20 +13042,7 @@ TO "New Column Name";
         col_title, col_refresh = st.columns([10, 1])
         with col_refresh:
             if st.button("🔄 Refresh", help="Refresh data from database", key="prl_reports_refresh"):
-                # Preserve current selections before clearing cache
-                preserved_view_mode = st.session_state.get('prl_current_view_mode', 'Aggregated by Policy')
-                preserved_month = st.session_state.get('prl_statement_month_selectbox', 'All Months')
-                preserved_records_per_page = st.session_state.get('prl_records_per_page', 20)
-                preserved_current_page = st.session_state.get('prl_current_page', 1)
-                
                 st.cache_data.clear()
-                
-                # Restore selections after cache clear
-                st.session_state.prl_current_view_mode = preserved_view_mode
-                st.session_state.prl_statement_month_selectbox = preserved_month
-                st.session_state.prl_records_per_page = preserved_records_per_page
-                st.session_state.prl_current_page = preserved_current_page
-                
                 st.success("✅ Cache cleared! Data refreshed.")
                 time.sleep(0.5)
                 st.rerun()
@@ -13120,19 +13060,10 @@ TO "New Column Name";
             view_col1, view_col2, view_col3 = st.columns([2, 2, 3])
             
             with view_col1:
-                # Get the current index based on session state to preserve selection after refresh
-                view_options = ["Aggregated by Policy", "Detailed Transactions"]
-                current_view_index = 0  # default to Aggregated
-                if "prl_current_view_mode" in st.session_state:
-                    try:
-                        current_view_index = view_options.index(st.session_state.prl_current_view_mode)
-                    except ValueError:
-                        current_view_index = 0
-                
                 view_mode = st.radio(
                     "Select view:",
-                    options=view_options,
-                    index=current_view_index,
+                    options=["Aggregated by Policy", "Detailed Transactions"],
+                    index=0,
                     help="Aggregated: One row per policy with totals | Detailed: All individual transactions"
                 )
             
@@ -13279,7 +13210,6 @@ TO "New Column Name";
             
             # Statement Month Filter
             st.markdown("### 📅 Statement Month Selection")
-            
             stmt_col1, stmt_col2, stmt_col3 = st.columns([2, 2, 2])
             
             with stmt_col1:
@@ -13301,21 +13231,11 @@ TO "New Column Name";
                         except:
                             month_options.append(ym)
                     
-                    # Get the current index based on session state to preserve selection after refresh
-                    current_month_index = 0  # default to "All Months"
-                    # Check the selectbox key in session state (Streamlit stores widget values by key)
-                    if "prl_statement_month_selectbox" in st.session_state:
-                        try:
-                            current_month_index = month_options.index(st.session_state.prl_statement_month_selectbox)
-                        except ValueError:
-                            current_month_index = 0
-                    
                     selected_month = st.selectbox(
                         "Select Statement Month:",
                         options=month_options,
-                        index=current_month_index,
-                        help="Filter by the month when policies became effective (your monthly sales cohort)",
-                        key="prl_statement_month_selectbox"
+                        index=0,
+                        help="Filter by the month when policies became effective (your monthly sales cohort)"
                     )
                 else:
                     st.warning("Effective Date column not found")
@@ -14056,37 +13976,22 @@ TO "New Column Name";
                     pagination_col1, pagination_col2, pagination_col3 = st.columns([2, 1, 1])
                     
                     with pagination_col1:
-                        # Get current index based on session state
-                        page_options = [20, 50, 100, 200, 500, "All"]
-                        current_page_size_index = 0
-                        if "prl_records_per_page" in st.session_state:
-                            try:
-                                current_page_size_index = page_options.index(st.session_state.prl_records_per_page)
-                            except ValueError:
-                                current_page_size_index = 0
-                        
                         records_per_page = st.selectbox(
                             "Records per page:",
-                            options=page_options,
-                            index=current_page_size_index,
-                            key="prl_records_per_page"
-                        )
+                            options=[20, 50, 100, 200, 500, "All"],
+                            index=0,
+                            key="prl_records_per_page"                        )
                     
                     with pagination_col2:
                         if records_per_page != "All":
                             # Ensure records_per_page is treated as integer for calculations
                             records_per_page_int = int(records_per_page)
                             total_pages = max(1, (len(working_data) + records_per_page_int - 1) // records_per_page_int)
-                            # Get current page from session state, ensuring it's within valid range
-                            saved_page = st.session_state.get('prl_current_page', 1)
-                            # Ensure saved page is within valid range for current data
-                            current_page_value = min(saved_page, total_pages) if saved_page > 0 else 1
-                            
                             current_page = st.number_input(
                                 "Page:",
                                 min_value=1,
                                 max_value=total_pages,
-                                value=current_page_value,
+                                value=1,
                                 key="prl_current_page"
                             )
                         else:
@@ -14389,67 +14294,6 @@ TO "New Column Name";
                                     unique_groups.append(group)
                                     seen.add(group)
                             
-                            # Sort transactions within each term group with enhanced logic
-                            sorted_dfs = []
-                            for group_name in unique_groups:
-                                group_df = editable_data[editable_data['_term_group'] == group_name].copy()
-                                
-                                if len(group_df) > 0:
-                                    # Add a sort key for transaction types to ensure proper ordering
-                                    def get_type_sort_key(row):
-                                        trans_id = str(row['Transaction ID'])
-                                        trans_type = row['Transaction Type']
-                                        
-                                        # Check if it's STMT/VOID
-                                        if '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                            # STMT/VOID get higher numbers to appear last
-                                            if trans_type in ['NEW', 'RWL']:
-                                                return 4
-                                            elif trans_type == 'END':
-                                                return 5
-                                            else:
-                                                return 6
-                                        else:
-                                            # Regular transactions
-                                            if trans_type in ['NEW', 'RWL']:
-                                                return 1
-                                            elif trans_type == 'END':
-                                                return 2
-                                            else:
-                                                return 3
-                                    
-                                    # Apply the sort key
-                                    group_df['_sort_key'] = group_df.apply(get_type_sort_key, axis=1)
-                                    
-                                    # Sort by sort key first, then by appropriate date
-                                    date_col = group_df.apply(
-                                        lambda row: 'STMT DATE' if ('-STMT-' in str(row['Transaction ID']) or '-VOID-' in str(row['Transaction ID'])) else 'Effective Date',
-                                        axis=1
-                                    )
-                                    
-                                    # Create a unified date column for sorting
-                                    group_df['_sort_date'] = group_df.apply(
-                                        lambda row: row['STMT DATE'] if ('-STMT-' in str(row['Transaction ID']) or '-VOID-' in str(row['Transaction ID'])) else row['Effective Date'],
-                                        axis=1
-                                    )
-                                    
-                                    # Sort by sort key, then date, then transaction type (for grouping within others), then ID
-                                    sorted_group = group_df.sort_values(['_sort_key', '_sort_date', 'Transaction Type', 'Transaction ID'])
-                                    
-                                    # Remove the temporary columns
-                                    sorted_group = sorted_group.drop(['_sort_key', '_sort_date'], axis=1)
-                                    
-                                    sorted_dfs.append(sorted_group)
-                            
-                            # Also include any rows without a term group (shouldn't happen, but just in case)
-                            no_group = editable_data[editable_data['_term_group'] == '']
-                            if len(no_group) > 0:
-                                sorted_dfs.append(no_group)
-                            
-                            # Rebuild editable_data with the sorted order
-                            if sorted_dfs:
-                                editable_data = pd.concat(sorted_dfs, ignore_index=True)
-                            
                             # Create group indicator column and subtotal rows
                             group_indicators = []
                             current_group = None
@@ -14718,18 +14562,6 @@ TO "New Column Name";
                             2. **Column Order**: Your template order is preserved with special columns (Select, Group, Type, Reviewed) at the front
                             3. **Shift + Scroll**: Hold Shift while scrolling to move horizontally
                             
-                            **📋 Transaction Sort Order:**
-                            Within each policy term group:
-                            1. **NEW/RWL** - Policy start (NEW for first term, RWL for renewals)
-                            2. **END** - Endorsements sorted by Effective Date
-                            3. **Other Types** - CAN, STL, etc. grouped by type, then by Effective Date
-                            4. **STMT/VOID** - Payment records follow the same type ordering:
-                               • NEW/RWL statements first (by STMT Date)
-                               • END statements next (by STMT Date)
-                               • Other type statements (by type, then STMT Date)
-                            
-                            This consistent ordering applies to both regular transactions and payment records, making it easy to track the progression of each policy term and its associated payments.
-                            
                             **Visual Grouping & Actions:**
                             - 1.1, 1.2... = Term 1 transactions (Policy-Number - Term 1)
                             - 2.1, 2.2... = Term 2 transactions (Policy-Number - Term 2)
@@ -14808,6 +14640,14 @@ TO "New Column Name";
                             # Store the display_data (which has subtotals) for export
                             st.session_state.prl_export_data = display_data.copy()
                             
+                            # Debug: Check a subtotal row
+                            subtotal_rows = display_data[display_data['Group'] == '=']
+                            if not subtotal_rows.empty:
+                                first_subtotal = subtotal_rows.iloc[0]
+                                st.write("DEBUG - First subtotal in display_data:")
+                                st.write(f"  Total Agent Comm: {first_subtotal.get('Total Agent Comm', 'NOT FOUND')}")
+                                st.write(f"  Agent Paid Amount (STMT): {first_subtotal.get('Agent Paid Amount (STMT)', 'NOT FOUND')}")
+                                st.write(f"  Policy Balance Due: {first_subtotal.get('Policy Balance Due', 'NOT FOUND')}")
                         else:
                             # Apply only transaction type styling
                             styled_data = style_special_transactions(editable_data)
@@ -15121,8 +14961,20 @@ TO "New Column Name";
                                     seen.add(col)
                                     final_export_cols.append(col)
                             
+                            # Debug before column selection
+                            if 'excel_debug' in st.session_state:
+                                subtotal_test = export_data[export_data['Group'] == '=']
+                                if not subtotal_test.empty:
+                                    st.session_state.excel_debug.append(f"BEFORE column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
+                            
                             # Use .loc to preserve data integrity when selecting columns
                             export_data = export_data.loc[:, final_export_cols].copy()
+                            
+                            # Debug after column selection
+                            if 'excel_debug' in st.session_state:
+                                subtotal_test = export_data[export_data['Group'] == '=']
+                                if not subtotal_test.empty:
+                                    st.session_state.excel_debug.append(f"AFTER column selection - Total Agent Comm: {subtotal_test.iloc[0].get('Total Agent Comm', 'NOT FOUND')}")
                         else:
                             # For Aggregated view or if no subtotals, use working_data
                             export_data = working_data[valid_columns].copy()
@@ -15153,6 +15005,9 @@ TO "New Column Name";
                     
                     with export_col3:
                         excel_filename = filename if filename.endswith('.xlsx') else filename + '.xlsx'
+                        
+                        # Clear debug before export - remove after testing
+                        st.session_state.excel_debug = []
                         
                         # Create Excel file with metadata sheet
                         excel_buffer = io.BytesIO()
@@ -15292,6 +15147,14 @@ TO "New Column Name";
                                     is_stmt = False
                                     is_void = False
                                     
+                                    # Debug subtotal rows - remove after testing
+                                    if is_subtotal:
+                                        if 'excel_debug' not in st.session_state:
+                                            st.session_state.excel_debug = []
+                                        debug_msg = f"SUBTOTAL: {row.get('Transaction ID', 'Unknown')} - Comm: {row.get('Total Agent Comm', 'N/A')}, Paid: {row.get('Agent Paid Amount (STMT)', 'N/A')}, Balance: {row.get('Policy Balance Due', 'N/A')}"
+                                        st.session_state.excel_debug.append(debug_msg)
+                                        # Also show what columns are in this row
+                                        st.session_state.excel_debug.append(f"  Columns in row: {list(row.index)}")
                                     
                                     if 'Transaction ID' in row and not is_subtotal:
                                         trans_id = str(row['Transaction ID'])
@@ -15317,6 +15180,11 @@ TO "New Column Name";
                                                 clean_value = value.replace('$', '').replace(',', '')
                                                 num_value = float(clean_value)
                                                 
+                                                # Debug logging for subtotals - remove after testing
+                                                if is_subtotal and col_name in ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']:
+                                                    if 'excel_debug' not in st.session_state:
+                                                        st.session_state.excel_debug = []
+                                                    st.session_state.excel_debug.append(f"Writing {col_name} = {value} -> {num_value}")
                                                 
                                                 if is_subtotal:
                                                     data_sheet.write_number(row_num, col_num, num_value, subtotal_currency_format)
@@ -15327,6 +15195,12 @@ TO "New Column Name";
                                                 else:
                                                     data_sheet.write_number(row_num, col_num, num_value, regular_currency_format)
                                             except Exception as e:
+                                                # Debug logging for errors - remove after testing
+                                                if is_subtotal:
+                                                    if 'excel_debug' not in st.session_state:
+                                                        st.session_state.excel_debug = []
+                                                    st.session_state.excel_debug.append(f"ERROR: Failed to convert {col_name} = {value}, error: {e}")
+                                                
                                                 # If conversion fails, write as string
                                                 if is_subtotal:
                                                     data_sheet.write(row_num, col_num, str(value), subtotal_format)
@@ -15411,6 +15285,11 @@ TO "New Column Name";
                             help="Excel file includes report parameters on separate sheet"
                         )
                         
+                        # Show debug info after export - remove after testing
+                        if 'excel_debug' in st.session_state and st.session_state.excel_debug:
+                            with st.expander("🔍 Excel Export Debug Info", expanded=True):
+                                for msg in st.session_state.excel_debug:
+                                    st.write(msg)
                 else:
                     st.warning("Selected columns are not available in the current data.")
             else:
