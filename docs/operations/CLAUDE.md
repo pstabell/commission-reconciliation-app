@@ -544,6 +544,15 @@ supabase.table('policies').select('"Transaction ID"')
 - "All Policy Types" option for catch-all rules
 **Impact**: More granular commission rate control
 
+### 30. Tab Navigation in Reconciliation Page (LIMITATION)
+**Issue**: Tabs jump back to "Import Statement" when applying date filters or saving edits
+**Cause**: Streamlit's st.tabs() doesn't support programmatic tab selection
+**Workaround**: 
+- Date filters wrapped in form to minimize reruns
+- Session state tracks selected tab but cannot set it programmatically
+**Status**: Known Streamlit limitation - waiting for framework support
+**Impact**: Users must manually click back to their desired tab after form submissions
+
 ## Development Guidelines
 
 ### 1. Before Making Changes
