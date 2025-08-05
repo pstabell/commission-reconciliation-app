@@ -5,29 +5,34 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.9.32] - 2025-08-05 - Fixed STMT Transaction Term Filtering
+## [3.9.32] - 2025-08-05 - Fixed Policy Term-Based Transaction Filtering
 
 ### Fixed
-- **STMT Transactions Now Appear in Correct Policy Terms**
-  - Policy Revenue Ledger changed to filter STMT transactions by Effective Date (not STMT DATE)
-  - Fixed filtering order to check for "-STMT-" pattern FIRST before transaction types
-  - Resolved issue where STMT transactions with Type="END" were filtered as regular END transactions
-  - All transactions within a term now consistently filtered by when they affect the policy
-  - ALL STMT transactions with Effective Date in term period now properly displayed
+- **Policy Revenue Ledger - STMT Transaction Visibility**
+  - Fixed STMT transactions not appearing in policy terms
+  - Changed filtering from STMT DATE to Effective Date
+  - Reordered logic to check "-STMT-" pattern before transaction types
+  - Fixed issue where STMT with Type="END" were filtered incorrectly
   
-- **Policy Revenue Ledger Reports Data Consistency**
-  - Added policy number trimming to handle whitespace issues
-  - Added special STMT transaction handling for missing Client IDs
-  - Now shows same transactions as Policy Revenue Ledger page
+- **Policy Revenue Ledger Reports - Complete Logic Rewrite**
+  - Changed from date-based to term-based filtering (as originally intended)
+  - Now finds policies that START in selected month
+  - Shows ALL transactions for those policies (complete lifecycle)
+  - Added policy number trimming and STMT Client ID handling
   
-- **Widget State Conflicts Resolved**
-  - Fixed column view mode radio button with conflicting index/key parameters
-  - Properly initialized session state for widget keys
-  - No more widget warning messages
+- **Widget State Conflicts**
+  - Fixed radio button and page number input conflicts
+  - Resolved all widget warning messages
+
+### Changed
+- **Fundamental Filtering Philosophy**
+  - Both pages now show complete policy terms
+  - Month filter finds policies starting in that month, not transactions in that month
+  - Matches original design intent for comprehensive policy views
 
 ### Technical
-- Consolidated transaction retrieval logic between Ledger and Reports pages
-- Both pages now use identical filtering logic for consistency
+- Policy term filtering now consistent across both Ledger pages
+- Proper handling of reconciliation transaction patterns
 
 ## [3.9.31] - 2025-08-04 - Fixed Tab Jumping in Reconciliation Page
 

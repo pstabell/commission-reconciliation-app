@@ -14,11 +14,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
 
 ## Recent Major Changes (v3.9.32)
-1. **Fixed STMT Transaction Filtering in Policy Terms**:
-   - Policy Revenue Ledger now filters STMT transactions by Effective Date (not STMT DATE)
-   - All transactions in a term are now filtered consistently by when they affect the policy
-   - STMT transactions with Effective Date within term now properly appear
-   - Policy Revenue Ledger Reports updated with same STMT handling logic from Ledger page
+1. **Fixed Policy Term-Based Transaction Filtering**:
+   - **Policy Revenue Ledger**: Fixed STMT transactions not appearing in terms
+     - Changed STMT filtering from STMT DATE to Effective Date
+     - Reordered logic to check "-STMT-" pattern before transaction types
+     - Fixed issue where STMT with Type="END" were filtered as regular END transactions
+   - **Policy Revenue Ledger Reports**: Completely rewrote filtering logic
+     - Changed from date-based to term-based filtering
+     - Now finds policies starting in selected month, shows ALL their transactions
+     - Matches original design intent for complete policy lifecycle view
 
 ## Recent Major Changes (v3.9.31)
 1. **Fixed Tab Jumping in Reconciliation Page**:
@@ -560,17 +564,19 @@ supabase.table('policies').select('"Transaction ID"')
 **Status**: Known Streamlit limitation - waiting for framework support
 **Impact**: Users must manually click back to their desired tab after form submissions
 
-### 31. STMT Transaction Term Filtering (FIXED in v3.9.32)
-**Issue**: STMT transactions not showing in Policy Revenue Ledger when filtering by term
-**Cause**: 
-- Initially: STMT transactions were filtered by STMT DATE instead of Effective Date
-- Additionally: STMT transactions with Transaction Type = "END" were being evaluated as regular END transactions before STMT logic
-**Solution**: 
-- Changed Policy Revenue Ledger to filter STMT transactions by Effective Date
-- Reordered filtering logic to check for "-STMT-" pattern FIRST before transaction types
-- All transactions now consistently filtered by when they affect the policy
-- Policy Revenue Ledger Reports updated to match same logic
-**Impact**: ALL STMT transactions now correctly appear in their policy terms regardless of transaction type
+### 31. Policy Term-Based Filtering Issues (FIXED in v3.9.32)
+**Issue**: Incomplete transaction data when viewing policy terms or monthly reports
+**Root Causes**: 
+- Policy Revenue Ledger: STMT transactions filtered by wrong date field and wrong order
+- Policy Revenue Ledger Reports: Entire page used date-based instead of term-based filtering
+**Solutions**: 
+- **Ledger**: Fixed STMT date filtering and check order
+  - Filter STMT by Effective Date (not STMT DATE)
+  - Check "-STMT-" pattern BEFORE transaction types
+- **Reports**: Complete rewrite to term-based logic
+  - Find policies starting in month
+  - Show ALL transactions for those policies
+**Impact**: Both pages now show complete policy lifecycle data as originally intended
 
 ## Development Guidelines
 
