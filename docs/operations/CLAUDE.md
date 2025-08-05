@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: August 5, 2025  
-**Current Version**: 3.9.32
+**Current Version**: 3.9.33
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,18 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.33)
+1. **Transaction Type Mapping Implementation**:
+   - **Admin Panel - New Tab**: Transaction Type Mapping interface
+     - Maps statement types (e.g., STL) to standardized types (e.g., PMT)
+     - Default mapping: STL → PMT for as-earned commission payments
+     - Configuration stored in `config_files/transaction_type_mappings.json`
+   - **Reconciliation Import Enhancement**:
+     - Validates all transaction types have mappings before import
+     - Automatically applies mappings during transaction creation
+     - Shows visual feedback when mappings are applied
+     - Added PMT to valid transaction types list
 
 ## Recent Major Changes (v3.9.32)
 1. **Fixed Policy Term-Based Transaction Filtering**:

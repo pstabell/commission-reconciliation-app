@@ -5,6 +5,30 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.33] - 2025-08-05 - Transaction Type Mapping Implementation
+
+### Added
+- **Transaction Type Mapping Feature**
+  - New tab in Admin Panel for managing transaction type mappings
+  - Maps statement transaction types (e.g., STL) to standardized types (e.g., PMT)
+  - Default mapping: STL → PMT (as-earned commission payments)
+  - Visual mapping interface with add/remove functionality
+  - Configuration saved to `config_files/transaction_type_mappings.json`
+
+### Enhanced
+- **Reconciliation Import with Type Mapping**
+  - Validates all transaction types have mappings before import
+  - Automatically applies mappings during transaction creation
+  - Shows mapped type in transaction creation dropdown
+  - Displays mapping info: "Mapped from statement type 'STL' → 'PMT'"
+  - Added PMT to valid transaction types list
+
+### Technical
+- Transaction type mappings applied at:
+  - Validation phase (blocks import if unmapped types found)
+  - Transaction creation (applies mapping to new transactions)
+  - UI selection (pre-selects mapped type in dropdown)
+
 ## [3.9.32] - 2025-08-05 - Fixed Policy Term-Based Transaction Filtering
 
 ### Fixed

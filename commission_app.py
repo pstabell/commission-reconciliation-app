@@ -2498,14 +2498,28 @@ def show_import_results(statement_date, all_data):
                                 # No UI feedback needed - this is expected behavior
                             
                             # Show transaction type selector
-                            transaction_types = ["NEW", "RWL", "END", "CAN", "XCL", "PCH", "STL", "BoR"]
+                            transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
                             default_type = "NEW"
                             
-                            # Try to guess from statement if available
+                            # Try to guess from statement if available with mapping applied
                             if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
-                                stmt_type = item['statement_data'].get('Transaction Type', '').upper()
-                                if stmt_type in transaction_types:
-                                    default_type = stmt_type
+                                stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                
+                                # Load and apply transaction type mappings
+                                trans_type_mappings = {}
+                                trans_mapping_file = "config_files/transaction_type_mappings.json"
+                                try:
+                                    if os.path.exists(trans_mapping_file):
+                                        with open(trans_mapping_file, 'r') as f:
+                                            trans_type_mappings = json.load(f)
+                                except:
+                                    trans_type_mappings = {}
+                                
+                                # Apply mapping if available
+                                mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                
+                                if mapped_type in transaction_types:
+                                    default_type = mapped_type
                             
                             selected_type = st.selectbox(
                                 "Transaction Type",
@@ -2513,6 +2527,12 @@ def show_import_results(statement_date, all_data):
                                 index=transaction_types.index(default_type),
                                 key=f"trans_type_{idx}"
                             )
+                            
+                            # Show if mapping was applied
+                            if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                orig_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
+                                    st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
                             
                             st.session_state.manual_matches[idx] = {
                                 'statement_item': item,
@@ -2851,13 +2871,29 @@ def show_import_results(statement_date, all_data):
                                         # Use the existing customer name format
                                         final_customer_name = potential_matches[0][0]
                             
+                            # Get transaction type with mapping applied
+                            raw_trans_type = item.get('selected_transaction_type', item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW'))
+                            
+                            # Apply transaction type mapping
+                            trans_type_mappings = {}
+                            trans_mapping_file = "config_files/transaction_type_mappings.json"
+                            try:
+                                if os.path.exists(trans_mapping_file):
+                                    with open(trans_mapping_file, 'r') as f:
+                                        trans_type_mappings = json.load(f)
+                            except:
+                                trans_type_mappings = {}
+                            
+                            # Apply mapping if available
+                            final_trans_type = trans_type_mappings.get(str(raw_trans_type).strip(), raw_trans_type)
+                            
                             # Create new transaction
                             new_trans = {
                                 'Transaction ID': new_trans_id,
                                 'Customer': final_customer_name,  # Use matched customer name if found
                                 'Policy Number': item['policy_number'],
                                 'Effective Date': item['effective_date'],
-                                'Transaction Type': item.get('selected_transaction_type', item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')),
+                                'Transaction Type': final_trans_type,
                                 'Premium Sold': item['statement_data'].get(st.session_state.column_mapping.get('Premium Sold', ''), 0),
                                 'Agent Estimated Comm $': item['amount'],  # Use statement amount as estimated
                                 'Agency Estimated Comm/Revenue (CRM)': item['amount'],
@@ -7839,6 +7875,57 @@ def main():
                                         # Stop processing
                                         st.stop()
                                     
+                                    # Check for unmapped transaction types
+                                    st.write("🔍 Checking for unmapped transaction types...")
+                                    
+                                    # Load transaction type mappings
+                                    trans_type_mappings = {}
+                                    trans_mapping_file = "config_files/transaction_type_mappings.json"
+                                    try:
+                                        if os.path.exists(trans_mapping_file):
+                                            with open(trans_mapping_file, 'r') as f:
+                                                trans_type_mappings = json.load(f)
+                                    except:
+                                        trans_type_mappings = {}
+                                    
+                                    # Get unique transaction types from the statement
+                                    unmapped_trans_types = []
+                                    if 'Transaction Type' in st.session_state.column_mapping:
+                                        trans_type_col = st.session_state.column_mapping['Transaction Type']
+                                        if trans_type_col in df.columns:
+                                            # Get unique types
+                                            statement_trans_types = df[trans_type_col].dropna().unique()
+                                            # Clean and filter
+                                            statement_trans_types = [str(t).strip() for t in statement_trans_types if str(t).strip()]
+                                            
+                                            # Define valid transaction types in our system
+                                            valid_trans_types = ["NEW", "RWL", "END", "CAN", "PMT"]
+                                            
+                                            # Check each type
+                                            for stmt_trans_type in statement_trans_types:
+                                                # Skip if it's already mapped or if it's a known type in our system
+                                                if stmt_trans_type not in trans_type_mappings and stmt_trans_type not in valid_trans_types:
+                                                    unmapped_trans_types.append(stmt_trans_type)
+                                    
+                                    # If unmapped transaction types found, show error and stop
+                                    if unmapped_trans_types:
+                                        st.error("❌ **Unmapped Transaction Types Found**")
+                                        st.warning("The following transaction types from your statement are not mapped to standardized types:")
+                                        
+                                        # Show unmapped types in a nice format
+                                        for unmapped_type in unmapped_trans_types:
+                                            st.write(f"• **{unmapped_type}**")
+                                        
+                                        st.info("👉 **Next Steps:**")
+                                        st.write("1. Go to **Admin Panel** → **Transaction Type Mapping** tab")
+                                        st.write("2. Add mappings for the transaction types listed above")
+                                        st.write("3. Return here and try the import again")
+                                        
+                                        st.markdown("**💡 Note:** STL usually maps to PMT (payment commission)")
+                                        
+                                        # Stop processing
+                                        st.stop()
+                                    
                                     # Calculate statement total from all rows (including totals row)
                                     # This gives us the check-and-balance figure
                                     statement_total_amount = 0
@@ -8915,7 +9002,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Type Mapping"])
         
         with tab1:
             st.subheader("Database Information")
@@ -10455,6 +10542,162 @@ SOLUTION NEEDED:
                 - No more duplicate policy types
                 - Consistent data across all imports
                 - Easy to maintain and update
+                """)
+        
+        with tab10:
+            st.subheader("🔄 Transaction Type Mapping")
+            st.info("Map transaction types from reconciliation statements to your standardized transaction types")
+            
+            # Load or initialize mappings
+            mapping_file = "config_files/transaction_type_mappings.json"
+            try:
+                if os.path.exists(mapping_file):
+                    with open(mapping_file, 'r') as f:
+                        trans_mappings = json.load(f)
+                else:
+                    # Default mappings including STL -> PMT
+                    trans_mappings = {
+                        "STL": "PMT"
+                    }
+                    # Save default mappings
+                    os.makedirs("config_files", exist_ok=True)
+                    with open(mapping_file, 'w') as f:
+                        json.dump(trans_mappings, f, indent=2)
+            except Exception as e:
+                st.error(f"Error loading mappings: {e}")
+                trans_mappings = {"STL": "PMT"}
+            
+            # Define valid transaction types
+            valid_transaction_types = ["NEW", "RWL", "END", "CAN", "PMT"]
+            
+            # Display current mappings
+            st.markdown("### Current Mappings")
+            if trans_mappings:
+                # Create editable dataframe for mappings
+                mapping_data = []
+                for statement_value, mapped_to in trans_mappings.items():
+                    mapping_data.append({
+                        "Statement Value": statement_value,
+                        "Maps To": mapped_to,
+                        "Delete": False
+                    })
+                
+                mapping_df = pd.DataFrame(mapping_data)
+                edited_df = st.data_editor(
+                    mapping_df,
+                    column_config={
+                        "Maps To": st.column_config.SelectboxColumn(
+                            "Maps To",
+                            options=valid_transaction_types,
+                            required=True
+                        ),
+                        "Delete": st.column_config.CheckboxColumn(
+                            "Delete",
+                            help="Check to delete this mapping"
+                        )
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed"
+                )
+                
+                # Save changes button
+                if st.button("💾 Save Mapping Changes", type="primary", key="save_trans_type_mapping"):
+                    # Update mappings based on edits
+                    new_mappings = {}
+                    for idx, row in edited_df.iterrows():
+                        if not row["Delete"]:
+                            new_mappings[row["Statement Value"]] = row["Maps To"]
+                    
+                    # Save to file
+                    try:
+                        os.makedirs("config_files", exist_ok=True)
+                        with open(mapping_file, 'w') as f:
+                            json.dump(new_mappings, f, indent=2)
+                        st.success("✅ Mappings saved successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving mappings: {e}")
+            else:
+                st.info("No mappings configured yet. STL → PMT is added by default.")
+            
+            st.divider()
+            
+            # Add new mapping
+            st.markdown("### Add New Mapping")
+            with st.form("add_trans_mapping_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_statement_value = st.text_input(
+                        "Statement Value",
+                        placeholder="e.g., STL, XCL, NBS",
+                        help="The transaction type as it appears in your reconciliation statements"
+                    )
+                with col2:
+                    new_maps_to = st.selectbox(
+                        "Maps To",
+                        options=[""] + valid_transaction_types,
+                        help="Your standardized transaction type"
+                    )
+                
+                submitted = st.form_submit_button("➕ Add Mapping", type="primary")
+                
+                if submitted:
+                    if new_statement_value and new_maps_to:
+                        # Check if mapping already exists
+                        if new_statement_value in trans_mappings:
+                            st.error(f"Mapping for '{new_statement_value}' already exists!")
+                        else:
+                            # Add new mapping
+                            trans_mappings[new_statement_value] = new_maps_to
+                            
+                            # Save to file
+                            try:
+                                os.makedirs("config_files", exist_ok=True)
+                                with open(mapping_file, 'w') as f:
+                                    json.dump(trans_mappings, f, indent=2)
+                                st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving mapping: {e}")
+                    else:
+                        st.error("Please fill in both fields")
+            
+            st.divider()
+            
+            # Mapping summary
+            st.markdown("### Mapping Summary")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Mappings", len(trans_mappings))
+            with col2:
+                st.metric("Valid Transaction Types", len(valid_transaction_types))
+            
+            # Help text
+            with st.expander("ℹ️ How Transaction Type Mapping Works"):
+                st.markdown("""
+                **Purpose**: Ensure consistent transaction types during reconciliation by mapping statement codes to your standardized types.
+                
+                **Valid Transaction Types**:
+                - **NEW**: New business policy
+                - **RWL**: Renewal
+                - **END**: Endorsement
+                - **CAN**: Cancellation
+                - **PMT**: Payment (as-earned commission from customer payments)
+                
+                **How it works**:
+                1. During reconciliation import, the system checks each transaction type
+                2. If a mapping exists, it automatically uses your standardized type
+                3. If no mapping exists, the import will stop and ask you to add the mapping
+                
+                **Common Mappings**:
+                - STL → PMT (as-earned payments)
+                - XCL → CAN (exclusion/cancellation)
+                - NBS → NEW (new business special)
+                
+                **Special Note on PMT**:
+                PMT represents commissions paid when customers make payments on their policies. 
+                These are NOT directly tied to policy actions (NEW, RWL, END) but to customer payment events.
                 """)
     
     # --- Contacts ---

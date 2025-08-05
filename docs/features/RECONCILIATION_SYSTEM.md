@@ -1,6 +1,6 @@
 # Reconciliation System - Comprehensive Documentation
 **Created**: July 4, 2025  
-**Last Updated**: July 12, 2025  
+**Last Updated**: August 5, 2025  
 **Purpose**: Complete reference for the commission reconciliation system implementation
 
 ## Table of Contents
@@ -54,6 +54,12 @@ The system successfully implements professional accounting principles while rema
 ### 1. Original Transactions (Credits)
 - **Transaction ID**: `A1B2C3D` (7 characters: mixed letters & numbers)
 - **Purpose**: Record commission earned
+- **Transaction Types**: 
+  - **NEW**: New business commission
+  - **RWL**: Renewal commission
+  - **END**: Endorsement commission
+  - **CAN**: Cancellation (negative commission/chargeback)
+  - **PMT**: Payment-driven commission (as-earned)
 - **Behavior**: Visible while balance > $0, can be partially reconciled multiple times
 
 ### 2. Reconciliation Transactions (Debits)
@@ -65,6 +71,7 @@ The system successfully implements professional accounting principles while rema
   - Agent Paid Amount (STMT): Primary reconciliation field
   - Agency Comm Received (STMT): Audit verification field
 - **Behavior**: Permanently locked, grouped by batch
+- **Transaction Type Mapping**: Applied during import (see [TRANSACTION_TYPE_MAPPING.md](TRANSACTION_TYPE_MAPPING.md))
 
 ### 3. Import-Created Transactions (NEW in v3.6.3)
 - **Transaction ID**: `D5D19K7-IMPORT`
@@ -616,7 +623,28 @@ The system stands as a testament to the power of listening to users, understandi
 
 ---
 
-## Recent Enhancements (v3.5.7 - v3.9.1)
+## Recent Enhancements (v3.5.7 - v3.9.33)
+
+### Transaction Type Mapping System (v3.9.33 - August 5, 2025)
+Complete implementation of transaction type standardization:
+
+#### Admin Panel Interface
+- **New Tab**: Transaction Type Mapping in Admin Panel
+- **Visual Management**: Add/remove mappings with dropdowns
+- **Default Mapping**: STL → PMT (as-earned commission payments)
+- **Configuration Storage**: `config_files/transaction_type_mappings.json`
+
+#### Import Validation & Application
+- **Pre-Import Validation**: Blocks imports with unmapped transaction types
+- **Clear Error Messages**: Lists all unmapped types with next steps
+- **Automatic Mapping**: Applied during transaction creation
+- **Visual Feedback**: Shows "Mapped from 'STL' → 'PMT'" in UI
+
+#### Transaction Type Philosophy
+- **Policy Action Types** (NEW, RWL, END, CAN): Commission on policy events
+- **Payment Types** (PMT): Commission on customer payments (as-earned)
+- **Critical Distinction**: Separates policy-driven vs payment-driven commissions
+- **See**: [TRANSACTION_TYPE_MAPPING.md](TRANSACTION_TYPE_MAPPING.md) for complete details
 
 ### Enhanced Reconciliation Data Copying (v3.9.1 - July 30, 2025)
 Major improvements to reconciliation import and void operations:
