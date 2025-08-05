@@ -562,12 +562,15 @@ supabase.table('policies').select('"Transaction ID"')
 
 ### 31. STMT Transaction Term Filtering (FIXED in v3.9.32)
 **Issue**: STMT transactions not showing in Policy Revenue Ledger when filtering by term
-**Cause**: STMT transactions were filtered by STMT DATE instead of Effective Date
+**Cause**: 
+- Initially: STMT transactions were filtered by STMT DATE instead of Effective Date
+- Additionally: STMT transactions with Transaction Type = "END" were being evaluated as regular END transactions before STMT logic
 **Solution**: 
 - Changed Policy Revenue Ledger to filter STMT transactions by Effective Date
+- Reordered filtering logic to check for "-STMT-" pattern FIRST before transaction types
 - All transactions now consistently filtered by when they affect the policy
 - Policy Revenue Ledger Reports updated to match same logic
-**Impact**: STMT transactions now correctly appear in their policy terms
+**Impact**: ALL STMT transactions now correctly appear in their policy terms regardless of transaction type
 
 ## Development Guidelines
 

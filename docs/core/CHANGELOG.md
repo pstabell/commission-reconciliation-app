@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **STMT Transactions Now Appear in Correct Policy Terms**
   - Policy Revenue Ledger changed to filter STMT transactions by Effective Date (not STMT DATE)
+  - Fixed filtering order to check for "-STMT-" pattern FIRST before transaction types
+  - Resolved issue where STMT transactions with Type="END" were filtered as regular END transactions
   - All transactions within a term now consistently filtered by when they affect the policy
-  - STMT transactions with Effective Date in term period now properly displayed
+  - ALL STMT transactions with Effective Date in term period now properly displayed
   
 - **Policy Revenue Ledger Reports Data Consistency**
   - Added policy number trimming to handle whitespace issues
