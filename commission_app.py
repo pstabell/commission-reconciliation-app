@@ -6999,13 +6999,26 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        # Create tabs for different reconciliation functions
-        rec_tab1, rec_tab2, rec_tab3, rec_tab4 = st.tabs([
+        # Create tabs for different reconciliation functions with state preservation
+        # Use session state to remember the selected tab
+        if 'reconciliation_tab_index' not in st.session_state:
+            st.session_state.reconciliation_tab_index = 0
+        
+        tab_names = [
             "Import Statement", 
             "Unreconciled Transactions", 
             "Reconciliation History",
             "Adjustments & Voids"
-        ])
+        ]
+        
+        # Create a container for manual tab switching if needed
+        selected_tab = st.session_state.get('reconciliation_selected_tab', tab_names[0])
+        if selected_tab in tab_names:
+            default_index = tab_names.index(selected_tab)
+        else:
+            default_index = 0
+        
+        rec_tab1, rec_tab2, rec_tab3, rec_tab4 = st.tabs(tab_names)
         
         with rec_tab1:
             st.subheader("📥 Import Commission Statement")
@@ -7870,6 +7883,8 @@ def main():
                         st.exception(e)
         
         with rec_tab2:
+            # Set this as the active tab in session state when viewing
+            st.session_state.reconciliation_selected_tab = "Unreconciled Transactions"
             st.subheader("📋 Transactions with Outstanding Balance")
             
             # Get all transactions with outstanding balances using shared function
@@ -7942,20 +7957,44 @@ def main():
                 ]
                 
                 if not recon_entries.empty:
-                    # Date range filter
-                    col1, col2 = st.columns(2)
+                    # Set this as the active tab in session state
+                    st.session_state.reconciliation_selected_tab = "Reconciliation History"
                     
-                    with col1:
-                        start_date = st.date_input(
-                            "From Date",
-                            value=datetime.date.today() - datetime.timedelta(days=30),
-                        )
+                    # Date range filter with form to prevent jumping
+                    with st.form("recon_history_date_filter"):
+                        col1, col2, col3 = st.columns([2, 2, 1])
+                        
+                        # Use session state to preserve date selections
+                        default_start = st.session_state.get('recon_history_start_date', 
+                                                            datetime.date.today() - datetime.timedelta(days=30))
+                        default_end = st.session_state.get('recon_history_end_date', 
+                                                          datetime.date.today())
+                        
+                        with col1:
+                            start_date = st.date_input(
+                                "From Date",
+                                value=default_start,
+                                key="recon_start_date_input"
+                            )
+                        
+                        with col2:
+                            end_date = st.date_input(
+                                "To Date",
+                                value=default_end,
+                                key="recon_end_date_input"
+                            )
+                        
+                        with col3:
+                            st.write("")  # Spacer
+                            filter_button = st.form_submit_button("Apply Filter", type="primary")
+                        
+                        if filter_button:
+                            st.session_state.recon_history_start_date = start_date
+                            st.session_state.recon_history_end_date = end_date
                     
-                    with col2:
-                        end_date = st.date_input(
-                            "To Date",
-                            value=datetime.date.today(),
-                        )
+                    # Use dates from session state for filtering
+                    start_date = st.session_state.get('recon_history_start_date', default_start)
+                    end_date = st.session_state.get('recon_history_end_date', default_end)
                     
                     # Filter by date range
                     if 'STMT DATE' in recon_entries.columns:
@@ -8520,6 +8559,8 @@ def main():
                 st.warning("No data available")
         
         with rec_tab4:
+            # Set this as the active tab in session state when viewing
+            st.session_state.reconciliation_selected_tab = "Adjustments & Voids"
             st.subheader("🔧 Adjustments & Voids")
             
             action = st.radio(
