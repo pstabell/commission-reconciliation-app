@@ -2,8 +2,8 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.9.31  
-**Last Updated**: August 4, 2025
+**Version**: 3.9.32  
+**Last Updated**: August 5, 2025
 
 ## Overview
 

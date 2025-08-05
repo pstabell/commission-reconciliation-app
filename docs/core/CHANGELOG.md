@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.32] - 2025-08-05 - Fixed STMT Transaction Term Filtering
+
+### Fixed
+- **STMT Transactions Now Appear in Correct Policy Terms**
+  - Policy Revenue Ledger changed to filter STMT transactions by Effective Date (not STMT DATE)
+  - All transactions within a term now consistently filtered by when they affect the policy
+  - STMT transactions with Effective Date in term period now properly displayed
+  
+- **Policy Revenue Ledger Reports Data Consistency**
+  - Added policy number trimming to handle whitespace issues
+  - Added special STMT transaction handling for missing Client IDs
+  - Now shows same transactions as Policy Revenue Ledger page
+  
+- **Widget State Conflicts Resolved**
+  - Fixed column view mode radio button with conflicting index/key parameters
+  - Properly initialized session state for widget keys
+  - No more widget warning messages
+
+### Technical
+- Consolidated transaction retrieval logic between Ledger and Reports pages
+- Both pages now use identical filtering logic for consistency
+
 ## [3.9.31] - 2025-08-04 - Fixed Tab Jumping in Reconciliation Page
 
 ### Fixed

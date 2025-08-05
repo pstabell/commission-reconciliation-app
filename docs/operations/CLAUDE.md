@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: August 4, 2025  
-**Current Version**: 3.9.31
+**Last Updated**: August 5, 2025  
+**Current Version**: 3.9.32
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,13 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.32)
+1. **Fixed STMT Transaction Filtering in Policy Terms**:
+   - Policy Revenue Ledger now filters STMT transactions by Effective Date (not STMT DATE)
+   - All transactions in a term are now filtered consistently by when they affect the policy
+   - STMT transactions with Effective Date within term now properly appear
+   - Policy Revenue Ledger Reports updated with same STMT handling logic from Ledger page
 
 ## Recent Major Changes (v3.9.31)
 1. **Fixed Tab Jumping in Reconciliation Page**:
@@ -552,6 +559,15 @@ supabase.table('policies').select('"Transaction ID"')
 - Session state tracks selected tab but cannot set it programmatically
 **Status**: Known Streamlit limitation - waiting for framework support
 **Impact**: Users must manually click back to their desired tab after form submissions
+
+### 31. STMT Transaction Term Filtering (FIXED in v3.9.32)
+**Issue**: STMT transactions not showing in Policy Revenue Ledger when filtering by term
+**Cause**: STMT transactions were filtered by STMT DATE instead of Effective Date
+**Solution**: 
+- Changed Policy Revenue Ledger to filter STMT transactions by Effective Date
+- All transactions now consistently filtered by when they affect the policy
+- Policy Revenue Ledger Reports updated to match same logic
+**Impact**: STMT transactions now correctly appear in their policy terms
 
 ## Development Guidelines
 
