@@ -5,6 +5,33 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.31] - 2025-08-04 - Fixed Tab Jumping in Reconciliation Page
+
+### Fixed
+- **Reconciliation History Tab Persistence**
+  - Date inputs wrapped in form with "Apply Filter" button
+  - Prevents automatic page rerun when selecting dates
+  - Tab no longer jumps back to "Import Statement" when changing date filters
+  - Selected dates preserved in session state
+  - Each tab tracks its active state
+
+## [3.9.30] - 2025-08-04 - Enhanced Contact Management UX
+
+### Added
+- **Improved Add Carrier/MGA Experience**
+  - Form disappears immediately after successful submission
+  - Success message displayed prominently at top of page
+  - Automatically navigates to newly created carrier/MGA detail view
+  - User can immediately add commission rules or link MGAs
+
+### Fixed
+- **Transient Database Connection Errors**
+  - Removed user-facing error messages for temporary connection issues
+  - Added caching for commission rule lookups to prevent rate changes
+  - Added caching for MGA loading to reduce database calls
+  - Commission rates preserved when database temporarily unavailable
+  - "Resource temporarily unavailable" errors now handled gracefully
+
 ## [3.9.29] - 2025-08-04 - Enhanced Commission Rules with Policy Type Selection
 
 ### Added

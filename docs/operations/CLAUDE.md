@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: August 2, 2025  
-**Current Version**: 3.9.21
+**Last Updated**: August 4, 2025  
+**Current Version**: 3.9.31
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -13,7 +13,35 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
 
-## Recent Major Changes (v3.9.21)
+## Recent Major Changes (v3.9.31)
+1. **Fixed Tab Jumping in Reconciliation Page**:
+   - Date filters in Reconciliation History now use form with "Apply Filter" button
+   - Prevents automatic page rerun when selecting dates
+   - Tab no longer jumps back to "Import Statement" 
+   - Selected dates preserved in session state for persistence
+
+## Recent Major Changes (v3.9.30)
+1. **Enhanced Contact Management UX**:
+   - Add Carrier/MGA forms disappear after successful submission
+   - Success message displayed prominently
+   - Automatically navigates to newly created contact detail view
+   - Improved workflow for immediate commission rule creation
+
+2. **Fixed Transient Database Connection Errors**:
+   - "Resource temporarily unavailable" errors now handled gracefully
+   - Commission rule lookups cached to prevent rate changes on errors
+   - MGA loading cached to reduce database calls
+   - Error messages only logged to console, not shown to users
+
+## Recent Major Changes (v3.9.29)
+1. **Commission Rules with Policy Type Selection**:
+   - Multi-select dropdown for policy types in commission rules
+   - "All Policy Types" option for catch-all rules
+   - Automatic rate selection based on carrier + MGA + policy type
+   - Priority fallback: most specific to general rules
+   - Policy type selection moved outside form in Add New Transaction
+
+## Prior Major Changes (v3.9.21)
 1. **View-Specific Columns in Policy Revenue Ledger Reports**:
    - Different default columns for "Aggregated by Policy" vs "Detailed Transactions" views
    - Aggregated view shows policy-level columns (Client ID, Carrier Name, MGA Name, Policy Origination Date, etc.)
@@ -488,6 +516,33 @@ supabase.table('policies').select('"Transaction ID"')
 - Extracts YYYYMMDD from any batch ID format
 - Sets both Transaction ID suffix and STMT DATE to statement date
 **Impact**: Void transactions now appear in correct historical period
+
+### 27. Tab Jumping in Reconciliation Page (FIXED in v3.9.31)
+**Issue**: Selecting dates in Reconciliation History caused tab to jump back to Import Statement
+**Cause**: Date inputs triggered automatic page rerun, resetting to first tab
+**Solution**: 
+- Wrapped date inputs in form with "Apply Filter" button
+- Added session state preservation for selected dates
+- Each tab sets its active state when viewed
+**Impact**: Users can now filter by date without losing their place
+
+### 28. Transient Database Errors (FIXED in v3.9.30)
+**Issue**: "Resource temporarily unavailable" errors disrupting user workflow
+**Cause**: Temporary database connection issues shown directly to users
+**Solution**: 
+- Error messages now only logged to console
+- Added caching for commission rules and MGA lists
+- Cached data used when database temporarily unavailable
+**Impact**: Smoother user experience during connection issues
+
+### 29. Commission Rule Policy Type Selection (ENHANCED in v3.9.29)
+**Issue**: Commission rules couldn't be specific to policy types
+**Cause**: Rules only supported carrier and MGA, not policy type
+**Solution**: 
+- Added multi-select policy type dropdown to commission rules
+- Implemented priority matching: carrier+MGA+type → carrier+type → carrier+MGA → carrier
+- "All Policy Types" option for catch-all rules
+**Impact**: More granular commission rate control
 
 ## Development Guidelines
 

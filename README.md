@@ -2,14 +2,21 @@
 
 A comprehensive commission tracking and reconciliation system built with Python and Streamlit.
 
-**Version**: 3.5.14  
-**Last Updated**: July 11, 2025
+**Version**: 3.9.31  
+**Last Updated**: August 4, 2025
 
 ## Overview
 
 The Sales Commission App is a powerful tool designed to track insurance policy commissions, automate calculations, and provide detailed reconciliation capabilities. It features a user-friendly interface, automated commission calculations, and comprehensive reporting.
 
 ## Key Features
+
+### 🎯 Commission Rule Management (v3.9.29)
+- Policy type-specific commission rates
+- Multi-level rule matching (carrier + MGA + policy type)
+- Automatic rate selection in transaction entry
+- Support for catch-all and specific rules
+- Real-time commission calculation
 
 ### 🔄 Policy Renewal Tracking (v3.5.0)
 - Complete audit trail with Prior Policy Number tracking
@@ -22,24 +29,28 @@ The Sales Commission App is a powerful tool designed to track insurance policy c
 - Support for different transaction types (NEW, RWL, END, etc.)
 - Broker fee and tax calculations
 - Real-time calculation updates
+- Policy type-aware commission rates
 
 ### 🔍 Advanced Reconciliation System
 - Double-entry reconciliation with -STMT- transactions
 - Protected reconciliation entries
 - Detailed reconciliation reporting
 - Statement import capabilities
+- Date filtering without tab jumping (v3.9.31)
 
 ### 📈 Comprehensive Reporting
 - Policy Revenue Ledger with custom column selection
-- Export to CSV and Excel
+- Export to CSV and Excel with subtotals
 - Customizable report templates
 - Financial summaries and analytics
+- View-specific column defaults
 
 ### 🛡️ Security & Data Integrity
 - Password-protected access
 - Secure cloud database (Supabase)
 - Automatic backups
 - Transaction audit trails
+- Graceful handling of connection errors
 
 ## Technology Stack
 
