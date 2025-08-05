@@ -4397,6 +4397,11 @@ def main():
                         st.success(f"Found {len(search_results)} matching records")
                         
                         # Format dates to strings before displaying
+                        date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE', 'STMT DATE', 
+                                      'Policy Issue Date', 'Policy Effective Date', 'As of Date']
+                        for col in date_columns:
+                            if col in search_results.columns:
+                                search_results[col] = pd.to_datetime(search_results[col], errors='coerce').dt.strftime('%Y-%m-%d')
                         
                         # Configure column settings for proper numeric display
                         column_config = {}
@@ -4429,8 +4434,13 @@ def main():
                             if col in search_results.columns:
                                 column_config[col] = st.column_config.TextColumn(
                                     col,
-                                    help="Date format: MM/DD/YYYY"
+                                    help="Date format: YYYY-MM-DD"
                                 )
+                        
+                        # Ensure numeric columns don't have NaN values that could cause issues
+                        for col in numeric_cols:
+                            if col in search_results.columns:
+                                search_results[col] = search_results[col].fillna(0.0)
                         
                         # Display search results in an editable table
                         edited_data = st.data_editor(
