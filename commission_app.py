@@ -8242,6 +8242,9 @@ def main():
                                             st.success(f"✅ Successfully deleted {deleted_count} transactions from both batches!")
                                             st.balloons()
                                             
+                                            # Set the active tab to preserve it during rerun
+                                            st.session_state.reconciliation_selected_tab = "Reconciliation History"
+                                            
                                             # Clear cache and rerun
                                             clear_policies_cache()
                                             time.sleep(1)
@@ -8551,6 +8554,9 @@ def main():
                                                 
                                                 if response.data:
                                                     st.success(f"✅ Successfully updated transaction {selected_row['Transaction ID']}")
+                                                    
+                                                    # Set the active tab to preserve it during rerun
+                                                    st.session_state.reconciliation_selected_tab = "Reconciliation History"
                                                     
                                                     # Clear cache and rerun
                                                     clear_policies_cache()
