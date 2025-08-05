@@ -14220,11 +14220,14 @@ TO "New Column Name";
                             # Ensure saved page is within valid range for current data
                             current_page_value = min(saved_page, total_pages) if saved_page > 0 else 1
                             
+                            # Initialize session state if not exists
+                            if 'prl_current_page' not in st.session_state:
+                                st.session_state.prl_current_page = current_page_value
+                            
                             current_page = st.number_input(
                                 "Page:",
                                 min_value=1,
                                 max_value=total_pages,
-                                value=current_page_value,
                                 key="prl_current_page"
                             )
                         else:
