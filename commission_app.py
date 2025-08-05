@@ -7966,6 +7966,10 @@ def main():
             st.session_state.reconciliation_selected_tab = "Reconciliation History"
             st.subheader("📜 Reconciliation History")
             
+            # Define callback function for preserving tab state
+            def preserve_reconciliation_tab():
+                st.session_state.reconciliation_selected_tab = "Reconciliation History"
+            
             # Show reconciliation entries
             if not all_data.empty:
                 # Include both -STMT- and -VOID- transactions
@@ -8343,10 +8347,6 @@ def main():
                             display_height = min(calculated_height, max_height)
                             
                             # Use data editor for checkbox selection
-                            # Set a callback to preserve tab state
-                            def preserve_reconciliation_tab():
-                                st.session_state.reconciliation_selected_tab = "Reconciliation History"
-                            
                             edited_transactions = st.data_editor(
                                 display_recon_sorted,
                                 column_config={
