@@ -1,4 +1,14 @@
 {
   "HO3": "HOME",
-  "HOME": "HOME"
+  "HOME": "HOME",
+  "PAWN": "PROP-C",
+  "AUTOP": "AUTOP",
+  "AUTOB": "AUTOB",
+  "PL": "PL",
+  "DFIRE": "DFIRE",
+  "WORK": "WC",
+  "CONDP": "CONDO",
+  "FLODC": "FLOOD",
+  "FLOOD": "FLOOD",
+  "BOAT": "BOAT"
 }

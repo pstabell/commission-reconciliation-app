@@ -1,38 +1,170 @@
 {
   "policy_types": [
     {
-      "code": "HO3",
+      "code": "AUTOP",
+      "name": "AUTOP",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "HOME",
       "name": "HOME",
       "active": true,
       "category": "Personal Property"
     },
     {
-      "code": "HO6",
+      "code": "DFIRE",
+      "name": "DFIRE",
+      "active": true,
+      "category": "Personal Property"
+    },
+    {
+      "code": "WC",
+      "name": "WC",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "AUTOB",
+      "name": "AUTOB",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "GL",
+      "name": "GL",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "FLOOD",
+      "name": "FLOOD",
+      "active": true,
+      "category": "Specialty"
+    },
+    {
+      "code": "BOAT",
+      "name": "BOAT",
+      "active": true,
+      "category": "Specialty"
+    },
+    {
+      "code": "CONDO",
       "name": "CONDO",
       "active": true,
       "category": "Personal Property"
     },
     {
-      "code": "DP1",
-      "name": "DP1",
+      "code": "PROP-C",
+      "name": "PROP-C",
       "active": true,
-      "category": "Personal Property"
+      "category": "Other"
     },
     {
-      "code": "DP3",
-      "name": "DP3",
+      "code": "PACKAGE-P",
+      "name": "PACKAGE-P",
       "active": true,
-      "category": "Personal Property"
+      "category": "Other"
     },
     {
-      "code": "Auto",
-      "name": "AUTO",
+      "code": "UMB-P",
+      "name": "UMB-P",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "IM-C",
+      "name": "IM-C",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "GARAGE",
+      "name": "GARAGE",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "UMB-C",
+      "name": "UMB-C",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "OCEAN MARINE",
+      "name": "OCEAN MARINE",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "WIND-P",
+      "name": "WIND-P",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "PL",
+      "name": "PL",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "COLLECTOR",
+      "name": "COLLECTOR",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "PACKAGE-C",
+      "name": "PACKAGE-C",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "FLOOD-C",
+      "name": "FLOOD-C",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "BOP",
+      "name": "BOP",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "BPP",
+      "name": "BPP",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "EXCESS",
+      "name": "EXCESS",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "CYBER",
+      "name": "CYBER",
+      "active": true,
+      "category": "Commercial"
+    },
+    {
+      "code": "D&O",
+      "name": "D&O",
+      "active": true,
+      "category": "Other"
+    },
+    {
+      "code": "CYCLE",
+      "name": "CYCLE",
       "active": true,
       "category": "Personal Auto"
     },
     {
-      "code": "Motorcycle",
-      "name": "CYCLE",
+      "code": "AUTO",
+      "name": "AUTO",
       "active": true,
       "category": "Personal Auto"
     },
@@ -43,88 +175,34 @@
       "category": "Personal Auto"
     },
     {
-      "code": "Boat",
-      "name": "BOAT",
-      "active": true,
-      "category": "Specialty"
-    },
-    {
-      "code": "BOP",
-      "name": "BOP",
-      "active": true,
-      "category": "Commercial"
-    },
-    {
-      "code": "CPP",
-      "name": "C-PACKAGE",
-      "active": true,
-      "category": "Commercial"
-    },
-    {
-      "code": "CGL",
-      "name": "COMMERCIAL GENERAL LIABILITY",
-      "active": true,
-      "category": "Commercial"
-    },
-    {
-      "code": "GL",
-      "name": "CENERAL LIABILTY",
-      "active": true,
-      "category": "Commercial"
-    },
-    {
-      "code": "WC",
-      "name": "WORKERS COMP",
-      "active": true,
-      "category": "Commercial"
-    },
-    {
-      "code": "Flood",
-      "name": "FLOOD",
-      "active": true,
-      "category": "Specialty"
-    },
-    {
-      "code": "Wind",
-      "name": "WIND",
-      "active": true,
-      "category": "Specialty"
-    },
-    {
-      "code": "Umbrella",
-      "name": "UMBRELLA",
-      "active": true,
-      "category": "Personal"
-    },
-    {
-      "code": "PUP",
-      "name": "UMBRELLA-P",
-      "active": true,
-      "category": "Personal"
-    },
-    {
-      "code": "Renters",
+      "code": "RENTERS",
       "name": "RENTERS",
       "active": true,
       "category": "Personal Property"
     },
     {
-      "code": "Cyber",
-      "name": "CYBER",
+      "code": "UMBRELLA",
+      "name": "UMBRELLA-C",
       "active": true,
       "category": "Commercial"
     },
     {
-      "code": "MHO3",
+      "code": "MOBILE",
       "name": "MOBILE",
       "active": true,
       "category": "Personal Property"
     },
     {
-      "code": "MDP3",
-      "name": "MOBILE DP3",
+      "code": "WIND",
+      "name": "WIND",
       "active": true,
-      "category": "Personal Property"
+      "category": "Specialty"
+    },
+    {
+      "code": "UMBRELLA-P",
+      "name": "UMBRELLA-P",
+      "active": true,
+      "category": "Personal"
     }
   ],
   "default": "HO3",

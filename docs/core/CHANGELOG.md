@@ -5,6 +5,44 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.35] - 2025-08-06 - Policy Revenue Ledger Effective Date Filter Enhancement
+
+### Enhanced
+- **Policy Revenue Ledger - Effective Date Dropdown**
+  - Now only shows NEW/RWL transaction dates (actual policy term starts)
+  - Filters out END, STMT, VOID, and other transaction dates that caused confusion
+  - Added help text clarifying "Shows only NEW and RWL transaction dates (policy term starts)"
+  - Ensures users select actual policy instances, not random transaction dates
+  - Works in conjunction with X-DATE filter for complete term control
+
+### Fixed
+- **Policy Identification Workflow**
+  - Previously showed all transaction dates, making it unclear which represented actual policies
+  - Users could mistakenly select endorsement or payment dates
+  - Now provides clear policy instance selection based on term start dates only
+
+## [3.9.34] - 2025-08-06 - CRITICAL FIX: Policy Revenue Ledger Term Filtering
+
+### Fixed
+- **Policy Revenue Ledger Reports - Future Renewals in Past Months**
+  - Fixed critical bug where future policy renewals appeared in past month views
+  - NEW/RWL transactions now strictly filtered by Year-Month match
+  - Only shows NEW/RWL transactions if they occur in the selected month
+  - Prevents February 2025 renewals from appearing in August 2024 view
+  - Example: Adam Gomes policy with Aug 2024 NEW and Feb 2025 RWL now correctly separated
+
+### Changed
+- **Term-Aware Filtering Logic**
+  - Made NEW/RWL filtering extremely strict - must match selected Year-Month exactly
+  - Other transaction types (END, STMT, VOID, etc.) follow term boundary rules
+  - Ensures each month view only shows terms that actually started in that month
+  - Complete rewrite of filtering logic with proper term isolation
+
+### Documentation
+- Created comprehensive POLICY_TERM_FILTERING.md with complete working logic
+- Added real-world examples and testing checklist
+- Documented common pitfalls and the critical NEW/RWL filtering requirement
+
 ## [3.9.33] - 2025-08-05 - Transaction Type Mapping Implementation
 
 ### Added

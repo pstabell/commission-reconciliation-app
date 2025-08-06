@@ -10103,34 +10103,133 @@ SOLUTION NEEDED:
                         # Convert to DataFrame for easier editing
                         df = pd.DataFrame(policy_types_data)
                         
-                        # Add a delete column
+                        # Get transaction counts from database and find any policy types not in config
+                        try:
+                            supabase = get_supabase_client()
+                            transaction_counts = {}
+                            db_policy_types = set()
+                            
+                            # Get all unique policy types and their counts in one query
+                            response = supabase.table('policies').select('"Policy Type"').execute()
+                            if response.data:
+                                # Count occurrences of each policy type
+                                for record in response.data:
+                                    pt = record.get('Policy Type')
+                                    if pt:
+                                        transaction_counts[pt] = transaction_counts.get(pt, 0) + 1
+                                        db_policy_types.add(pt)
+                            
+                            # Find policy types in database but not in configuration
+                            config_policy_types = set(pt['name'] for pt in policy_types_data)
+                            missing_types = db_policy_types - config_policy_types
+                            
+                            # Add missing policy types to the dataframe
+                            for missing_type in missing_types:
+                                new_row = {
+                                    'code': missing_type,
+                                    'name': missing_type,
+                                    'active': True,
+                                    'category': 'Other'
+                                }
+                                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                            
+                            # Add transaction count to dataframe
+                            df['Transaction Count'] = df['name'].apply(lambda x: transaction_counts.get(x, 0))
+                            
+                            # Sort by transaction count (descending) to show most used types first
+                            df = df.sort_values('Transaction Count', ascending=False)
+                            
+                            if missing_types:
+                                st.warning(f"📌 Found {len(missing_types)} policy type(s) in database not in configuration: {', '.join(sorted(missing_types))}")
+                        except Exception as e:
+                            st.error(f"Error fetching transaction counts: {e}")
+                            df['Transaction Count'] = 0
+                        
+                        # Add columns for merge and delete operations
                         df['Delete'] = False
+                        df['Merge From'] = False
+                        df['Merge To'] = ''
                         
                         # Display editable dataframe
                         edited_df = st.data_editor(
                             df,
                             column_config={
-                                "code": st.column_config.TextColumn("Code", width="small"),
-                                "name": st.column_config.TextColumn("Name", width="medium"),
+                                "code": None,  # Hide the code column since it's the same as name
+                                "name": st.column_config.TextColumn("Policy Type", width="medium"),
+                                "Transaction Count": st.column_config.NumberColumn(
+                                    "Transactions",
+                                    help="Number of transactions using this policy type",
+                                    format="%d",
+                                    width="small"
+                                ),
                                 "category": st.column_config.SelectboxColumn(
                                     "Category",
                                     options=["Personal", "Commercial", "Specialty", "Other"],
                                     width="small"
                                 ),
                                 "active": st.column_config.CheckboxColumn("Active", width="small"),
+                                "Merge From": st.column_config.CheckboxColumn("Merge From", width="small", help="Select this policy type to merge FROM (will be deleted)"),
+                                "Merge To": st.column_config.SelectboxColumn(
+                                    "Merge To",
+                                    options=[""] + [pt['name'] for pt in policy_types_data],
+                                    width="medium",
+                                    help="Select the policy type to merge INTO (will be kept)"
+                                ),
                                 "Delete": st.column_config.CheckboxColumn("Delete", width="small")
                             },
                             hide_index=True,
-                            use_container_width=True
+                            use_container_width=True,
+                            disabled=["Transaction Count"]  # Make transaction count read-only
                         )
                         
                         # Save changes button
                         if st.button("💾 Save Changes", type="primary"):
                             try:
-                                # Filter out deleted items
-                                updated_policy_types = []
+                                # First, handle any merge operations
+                                merge_operations = []
                                 for _, row in edited_df.iterrows():
-                                    if not row.get('Delete', False):
+                                    if row.get('Merge From', False) and row.get('Merge To', ''):
+                                        merge_operations.append({
+                                            'from': row.get('name', ''),
+                                            'to': row.get('Merge To', '')
+                                        })
+                                
+                                # Perform merge operations in the database
+                                if merge_operations:
+                                    supabase = get_supabase_client()
+                                    for merge_op in merge_operations:
+                                        if merge_op['from'] != merge_op['to']:
+                                            # Update all transactions with the merge_from type to use merge_to
+                                            update_response = supabase.table('policies').update({'Policy Type': merge_op['to']}).eq('"Policy Type"', merge_op['from']).execute()
+                                            if update_response.data:
+                                                st.success(f"✅ Merged '{merge_op['from']}' into '{merge_op['to']}'")
+                                            
+                                            # Also update the policy type mappings if the merged type was mapped
+                                            mapping_file = "config_files/policy_type_mappings.json"
+                                            if os.path.exists(mapping_file):
+                                                try:
+                                                    with open(mapping_file, 'r') as f:
+                                                        mappings = json.load(f)
+                                                    
+                                                    # Update any mappings that pointed to the merged type
+                                                    updated_mappings = False
+                                                    for key, value in mappings.items():
+                                                        if value == merge_op['from']:
+                                                            mappings[key] = merge_op['to']
+                                                            updated_mappings = True
+                                                    
+                                                    if updated_mappings:
+                                                        with open(mapping_file, 'w') as f:
+                                                            json.dump(mappings, f, indent=2)
+                                                except:
+                                                    pass
+                                
+                                # Filter out deleted items and merged items
+                                updated_policy_types = []
+                                merged_types = [op['from'] for op in merge_operations]
+                                
+                                for _, row in edited_df.iterrows():
+                                    if not row.get('Delete', False) and row.get('name', '') not in merged_types:
                                         updated_policy_types.append({
                                             "code": row.get('code', ''),
                                             "name": row.get('name', ''),
@@ -10145,220 +10244,14 @@ SOLUTION NEEDED:
                                     json.dump(config_data, f, indent=2)
                                 
                                 st.success("✅ Policy types updated successfully!")
+                                
+                                # Clear the cache to reflect changes
+                                clear_policies_cache()
+                                
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error saving changes: {e}")
                     
-                    # Merge Policy Types Section
-                    st.divider()
-                    st.markdown("### 🔀 Merge Policy Types")
-                    st.info("Merge duplicate policy types into a single type. All transactions will be updated to use the target type.")
-                    st.warning("🥚 **Golden Goose Egg Tip**: If you get 'Please select two different policy types to merge' even when you've selected different types, try refreshing the page or selecting different values first then re-selecting. This error can occur if the form state isn't properly capturing your selections.")
-                    
-                    # Check for any policy types in the database
-                    try:
-                        # Get unique policy types from the database
-                        supabase = get_supabase_client()
-                        response = supabase.table('policies').select('"Policy Type"').execute()
-                        
-                        if response.data:
-                            db_policy_types = set()
-                            for record in response.data:
-                                if record.get('Policy Type'):
-                                    db_policy_types.add(record['Policy Type'])
-                            
-                            # Count transactions for each policy type
-                            type_counts = {}
-                            for pt in db_policy_types:
-                                count_response = supabase.table('policies').select('count', count='exact').eq('"Policy Type"', pt).execute()
-                                type_counts[pt] = count_response.count if count_response else 0
-                            
-                            # Sort by name for better display
-                            sorted_types = sorted(list(db_policy_types))
-                            
-                            with st.form("merge_policy_types_form"):
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    merge_from = st.selectbox(
-                                        "Merge From (will be deleted)",
-                                        options=[""] + sorted_types,
-                                        help="Select the policy type to merge FROM (this type will be removed)"
-                                    )
-                                    if merge_from:
-                                        st.caption(f"📊 {type_counts.get(merge_from, 0)} transactions use this type")
-                                
-                                with col2:
-                                    # Filter out the selected merge_from option
-                                    merge_to_options = [""] + [pt for pt in sorted_types if pt != merge_from]
-                                    merge_to = st.selectbox(
-                                        "Merge Into (will be kept)",
-                                        options=merge_to_options,
-                                        help="Select the policy type to merge INTO (all transactions will use this type)"
-                                    )
-                                    if merge_to:
-                                        st.caption(f"📊 {type_counts.get(merge_to, 0)} transactions use this type")
-                                
-                                # Show preview of what will happen
-                                if merge_from and merge_to:
-                                    st.warning(f"⚠️ This will update {type_counts.get(merge_from, 0)} transactions from '{merge_from}' to '{merge_to}'")
-                                    st.info("💡 This action cannot be undone. Make sure to backup your data first!")
-                                
-                                merge_submitted = st.form_submit_button("🔀 Merge Policy Types", type="primary")
-                                
-                                if merge_submitted:
-                                    if merge_from and merge_to and merge_from != merge_to:
-                                        try:
-                                            # Update all transactions with the merge_from type to use merge_to
-                                            update_response = supabase.table('policies').update({'Policy Type': merge_to}).eq('"Policy Type"', merge_from).execute()
-                                            
-                                            if update_response.data:
-                                                updated_count = len(update_response.data)
-                                                st.success(f"✅ Successfully merged '{merge_from}' into '{merge_to}'. Updated {updated_count} transactions.")
-                                                
-                                                # Clear the cache to reflect changes
-                                                clear_policies_cache()
-                                                
-                                                # Also update the policy type mappings if the merged type was mapped
-                                                mapping_file = "config_files/policy_type_mappings.json"
-                                                if os.path.exists(mapping_file):
-                                                    try:
-                                                        with open(mapping_file, 'r') as f:
-                                                            mappings = json.load(f)
-                                                        
-                                                        # Update any mappings that pointed to the merged type
-                                                        updated_mappings = False
-                                                        for key, value in mappings.items():
-                                                            if value == merge_from:
-                                                                mappings[key] = merge_to
-                                                                updated_mappings = True
-                                                        
-                                                        if updated_mappings:
-                                                            with open(mapping_file, 'w') as f:
-                                                                json.dump(mappings, f, indent=2)
-                                                            st.info("📝 Also updated policy type mappings to use the merged type")
-                                                    except:
-                                                        pass
-                                                
-                                                st.rerun()
-                                            else:
-                                                st.info("No transactions were updated (the types may have already been merged)")
-                                        except Exception as e:
-                                            st.error(f"Error merging policy types: {e}")
-                                    else:
-                                        st.error("Please select two different policy types to merge")
-                        else:
-                            st.info("No policy types found in the database")
-                    
-                    except Exception as e:
-                        st.error(f"Error loading policy types from database: {e}")
-                    
-                    # Rename Policy Types Section
-                    st.divider()
-                    st.markdown("### ✏️ Rename Policy Types")
-                    st.info("Rename existing policy types to new standardized names. All transactions will be updated.")
-                    
-                    try:
-                        # Get unique policy types from the database (reuse from merge section if available)
-                        if 'db_policy_types' not in locals() or 'type_counts' not in locals():
-                            supabase = get_supabase_client()
-                            response = supabase.table('policies').select('"Policy Type"').execute()
-                            
-                            if response.data:
-                                db_policy_types = set()
-                                for record in response.data:
-                                    if record.get('Policy Type'):
-                                        db_policy_types.add(record['Policy Type'])
-                                
-                                # Count transactions for each policy type
-                                type_counts = {}
-                                for pt in db_policy_types:
-                                    count_response = supabase.table('policies').select('count', count='exact').eq('"Policy Type"', pt).execute()
-                                    type_counts[pt] = count_response.count if count_response else 0
-                        
-                        if db_policy_types:
-                            sorted_types = sorted(list(db_policy_types))
-                            
-                            with st.form("rename_policy_type_form"):
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    rename_from = st.selectbox(
-                                        "Current Name",
-                                        options=[""] + sorted_types,
-                                        help="Select the policy type to rename"
-                                    )
-                                    if rename_from:
-                                        st.caption(f"📊 {type_counts.get(rename_from, 0)} transactions use this type")
-                                
-                                with col2:
-                                    rename_to = st.text_input(
-                                        "New Name",
-                                        placeholder="Enter new name (e.g., AUTO, HOME, CONDO)",
-                                        help="Enter the new standardized name"
-                                    )
-                                    if rename_to and rename_from:
-                                        # Check if new name already exists
-                                        if rename_to in db_policy_types and rename_to != rename_from:
-                                            st.error(f"⚠️ '{rename_to}' already exists! Use Merge instead.")
-                                        elif rename_to == rename_from:
-                                            st.warning("New name is the same as current name")
-                                
-                                # Show preview
-                                if rename_from and rename_to and rename_to != rename_from and rename_to not in db_policy_types:
-                                    st.success(f"✅ Will rename '{rename_from}' to '{rename_to}' in {type_counts.get(rename_from, 0)} transactions")
-                                
-                                rename_submitted = st.form_submit_button("✏️ Rename Policy Type", type="primary")
-                                
-                                if rename_submitted:
-                                    if rename_from and rename_to and rename_to != rename_from:
-                                        if rename_to in db_policy_types:
-                                            st.error(f"'{rename_to}' already exists in the database. Use the Merge feature instead.")
-                                        else:
-                                            try:
-                                                # Update all transactions with the new name
-                                                update_response = supabase.table('policies').update({'Policy Type': rename_to}).eq('"Policy Type"', rename_from).execute()
-                                                
-                                                if update_response.data:
-                                                    updated_count = len(update_response.data)
-                                                    st.success(f"✅ Successfully renamed '{rename_from}' to '{rename_to}'. Updated {updated_count} transactions.")
-                                                    
-                                                    # Clear the cache to reflect changes
-                                                    clear_policies_cache()
-                                                    
-                                                    # Also update the policy type mappings if the renamed type was mapped
-                                                    mapping_file = "config_files/policy_type_mappings.json"
-                                                    if os.path.exists(mapping_file):
-                                                        try:
-                                                            with open(mapping_file, 'r') as f:
-                                                                mappings = json.load(f)
-                                                            
-                                                            # Update any mappings that pointed to the old name
-                                                            updated_mappings = False
-                                                            for key, value in mappings.items():
-                                                                if value == rename_from:
-                                                                    mappings[key] = rename_to
-                                                                    updated_mappings = True
-                                                            
-                                                            if updated_mappings:
-                                                                with open(mapping_file, 'w') as f:
-                                                                    json.dump(mappings, f, indent=2)
-                                                                st.info("📝 Also updated policy type mappings to use the new name")
-                                                        except:
-                                                            pass
-                                                    
-                                                    st.rerun()
-                                                else:
-                                                    st.info("No transactions were updated")
-                                            except Exception as e:
-                                                st.error(f"Error renaming policy type: {e}")
-                                    else:
-                                        st.error("Please select a policy type and enter a new name")
-                        else:
-                            st.info("No policy types found in the database")
-                    
-                    except Exception as e:
-                        st.error(f"Error loading policy types: {e}")
                     
                     # Backup/Download section
                     st.divider()
@@ -12358,14 +12251,20 @@ SOLUTION NEEDED:
         if selected_policy_type and selected_policy_type != "Select...":
             filtered_data = filtered_data[filtered_data["Policy Type"] == selected_policy_type]
         
-        # Get effective dates based on filtered data
-        effective_dates = filtered_data["Effective Date"].dropna().unique().tolist() if "Effective Date" in filtered_data.columns else []
+        # Get effective dates based on filtered data - ONLY from NEW/RWL transactions
+        # This ensures we only show policy term start dates, not endorsement or payment dates
+        if "Transaction Type" in filtered_data.columns and "Effective Date" in filtered_data.columns:
+            policy_start_data = filtered_data[filtered_data["Transaction Type"].isin(["NEW", "RWL"])]
+            effective_dates = policy_start_data["Effective Date"].dropna().unique().tolist()
+        else:
+            effective_dates = filtered_data["Effective Date"].dropna().unique().tolist() if "Effective Date" in filtered_data.columns else []
         
         with search_col3:
             selected_effective_date = st.selectbox(
                 "Select Policy Effective Date:", 
                 ["Select...", "All Dates"] + sorted(effective_dates), 
-                key="ledger_effectivedate_select"
+                key="ledger_effectivedate_select",
+                help="Shows only NEW and RWL transaction dates (policy term starts)"
             )
         
         # Further filter based on effective date
@@ -13694,10 +13593,13 @@ TO "New Column Name";
                     if "prl_statement_month_selectbox" not in st.session_state:
                         st.session_state.prl_statement_month_selectbox = "All Months"
                     
+                    # Help text explaining the filter behavior
+                    help_text = "Filter by the month when policies started (NEW/RWL transactions). Shows all transactions for those policy terms."
+                    
                     selected_month = st.selectbox(
                         "Select Statement Month:",
                         options=month_options,
-                        help="Filter by the month when policies became effective (your monthly sales cohort)",
+                        help=help_text,
                         key="prl_statement_month_selectbox"
                     )
                 else:
@@ -13711,33 +13613,79 @@ TO "New Column Name";
                     selected_ym = selected_date.strftime('%Y-%m')
                     
                     # Find all NEW/RWL transactions effective in the selected month
+                    # First ensure we have the Year-Month column properly set
+                    if 'Year-Month' not in working_data.columns:
+                        working_data['Year-Month'] = pd.to_datetime(working_data['Effective Date'], errors='coerce').dt.strftime('%Y-%m')
+                    
                     new_rwl_in_month = working_data[
                         (working_data['Transaction Type'].isin(['NEW', 'RWL'])) & 
                         (working_data['Year-Month'] == selected_ym)
                     ]
                     
                     if not new_rwl_in_month.empty:
-                        # Get unique combinations of Client ID + Policy Number for these policies
-                        if 'Client ID' in new_rwl_in_month.columns:
-                            # Get all unique client_id + policy_number combinations
-                            policy_identifiers = new_rwl_in_month[['Client ID', 'Policy Number']].drop_duplicates()
+                        month_data = pd.DataFrame()
+                        
+                        # Process each NEW/RWL transaction to find its term boundaries
+                        for _, term_defining_row in new_rwl_in_month.iterrows():
+                            policy_num = term_defining_row['Policy Number']
+                            term_eff_date = pd.to_datetime(term_defining_row['Effective Date'])
+                            term_x_date = pd.to_datetime(term_defining_row['X-DATE']) if pd.notna(term_defining_row.get('X-DATE')) else None
                             
-                            # Now get ALL transactions for these policies
-                            month_data = pd.DataFrame()
-                            for _, row in policy_identifiers.iterrows():
-                                client_id = row['Client ID']
-                                policy_num = row['Policy Number']
-                                
-                                # Get all transactions for this policy
+                            # Get all transactions for this specific policy
+                            if 'Client ID' in working_data.columns and pd.notna(term_defining_row.get('Client ID')):
                                 policy_transactions = working_data[
-                                    (working_data['Client ID'] == client_id) & 
+                                    (working_data['Client ID'] == term_defining_row['Client ID']) & 
                                     (working_data['Policy Number'] == policy_num)
-                                ]
-                                month_data = pd.concat([month_data, policy_transactions], ignore_index=True)
-                        else:
-                            # Fallback to policy number only
-                            policy_numbers = new_rwl_in_month['Policy Number'].unique()
-                            month_data = working_data[working_data['Policy Number'].isin(policy_numbers)].copy()
+                                ].copy()
+                            else:
+                                policy_transactions = working_data[
+                                    working_data['Policy Number'] == policy_num
+                                ].copy()
+                            
+                            # Filter to only include transactions within this specific term
+                            term_transactions = []
+                            
+                            for _, trans_row in policy_transactions.iterrows():
+                                trans_type = trans_row.get('Transaction Type', '')
+                                trans_id = str(trans_row.get('Transaction ID', ''))
+                                trans_eff_date = pd.to_datetime(trans_row.get('Effective Date'), errors='coerce')
+                                
+                                include_transaction = False
+                                
+                                # For NEW/RWL transactions, be very strict - only include if in selected month
+                                if trans_type in ['NEW', 'RWL']:
+                                    trans_year_month = trans_eff_date.strftime('%Y-%m') if pd.notna(trans_eff_date) else ''
+                                    # Only include if this NEW/RWL is in our selected month
+                                    if trans_year_month == selected_ym:
+                                        include_transaction = True
+                                # Include END transactions within the term dates
+                                elif trans_type == 'END' and pd.notna(trans_eff_date) and term_x_date:
+                                    if term_eff_date <= trans_eff_date <= term_x_date:
+                                        include_transaction = True
+                                # Include STMT/VOID transactions within term
+                                elif '-STMT-' in trans_id or '-VOID-' in trans_id:
+                                    stmt_date = pd.to_datetime(trans_row.get('STMT DATE'), errors='coerce')
+                                    if pd.notna(stmt_date) and term_x_date and term_eff_date <= stmt_date <= term_x_date:
+                                        include_transaction = True
+                                    # Also check if they reference the same term based on effective date
+                                    elif trans_eff_date == term_eff_date:
+                                        include_transaction = True
+                                # Include other transactions (CAN, PMT, etc.) within the term dates
+                                elif pd.notna(trans_eff_date) and term_x_date:
+                                    if term_eff_date <= trans_eff_date <= term_x_date:
+                                        include_transaction = True
+                                
+                                if include_transaction:
+                                    term_transactions.append(trans_row.to_dict())
+                            
+                            # Add this term's transactions to the month data
+                            if term_transactions:
+                                term_df = pd.DataFrame(term_transactions)
+                                month_data = pd.concat([month_data, term_df], ignore_index=True)
+                        
+                        # Remove any duplicates that might have been added
+                        if not month_data.empty and 'Transaction ID' in month_data.columns:
+                            month_data = month_data.drop_duplicates(subset=['Transaction ID'])
                     else:
                         # No NEW/RWL transactions in this month
                         month_data = pd.DataFrame()
@@ -13750,6 +13698,7 @@ TO "New Column Name";
                         policies_in_month = new_rwl_in_month['Policy Number'].nunique() if not new_rwl_in_month.empty else 0
                         st.info(f"📊 {policies_in_month} policies started in {selected_month}")
                     else:
+                        # For detailed view, count policies that started in the month
                         policies_in_month = new_rwl_in_month['Policy Number'].nunique() if not new_rwl_in_month.empty else 0
                         st.info(f"📊 {len(month_data)} total transactions for {policies_in_month} policies that started in {selected_month}")
                     
@@ -14472,19 +14421,13 @@ TO "New Column Name";
                     pagination_col1, pagination_col2, pagination_col3 = st.columns([2, 1, 1])
                     
                     with pagination_col1:
-                        # Get current index based on session state
+                        # Get page options
                         page_options = [20, 50, 100, 200, 500, "All"]
-                        current_page_size_index = 0
-                        if "prl_records_per_page" in st.session_state:
-                            try:
-                                current_page_size_index = page_options.index(st.session_state.prl_records_per_page)
-                            except ValueError:
-                                current_page_size_index = 0
                         
+                        # Use the key parameter to manage state automatically
                         records_per_page = st.selectbox(
                             "Records per page:",
                             options=page_options,
-                            index=current_page_size_index,
                             key="prl_records_per_page"
                         )
                     
