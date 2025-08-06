@@ -156,7 +156,7 @@
 
 ## ⚙️ Admin Panel
 
-**What it does**: Advanced administrative functions for managing the database structure
+**What it does**: Advanced administrative functions for managing the database structure and system configuration
 
 **⚠️ Warning**: This section can affect your entire database. Use with caution!
 
@@ -166,12 +166,24 @@
 - **Header Renaming**: Change column names
 - **Enhanced Backup & Restore**: Database protection and recovery
 - **File Upload Mapping**: Configure mapping from uploaded files
+- **Policy Types**: Manage policy type categories and configurations
+- **Transaction Types & Mapping**: Complete transaction type management system
+
+**Transaction Types & Mapping Tab** (NEW):
+- **View All Types**: See database transaction types with live counts
+- **Edit Descriptions**: Document what each transaction type means
+- **Merge Types**: Consolidate duplicate types (e.g., STL → PMT)
+- **Delete Unused**: Remove types with 0 transactions
+- **Add New Types**: Create new transaction types as needed
+- **Statement Mapping**: Map reconciliation codes to standard types
+- **Metrics Dashboard**: Total types, transactions, active, and unused counts
 
 **Common Admin Tasks**:
 1. **Backup Database**: Always create Enhanced backup before making changes
 2. **Column Mapping**: Ensure app functions work with your data structure
 3. **Add Columns**: Add new fields as your business needs evolve
-4. **Restore**: Recover from backups if needed
+4. **Transaction Type Management**: Keep transaction types organized and documented
+5. **Restore**: Recover from backups if needed
 
 ---
 

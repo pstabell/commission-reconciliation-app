@@ -9002,7 +9002,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Type Mapping"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping"])
         
         with tab1:
             st.subheader("Database Information")
@@ -10438,8 +10438,288 @@ SOLUTION NEEDED:
                 """)
         
         with tab10:
-            st.subheader("🔄 Transaction Type Mapping")
-            st.info("Map transaction types from reconciliation statements to your standardized transaction types")
+            col_title, col_refresh = st.columns([10, 1])
+            with col_title:
+                st.subheader("📋 Transaction Types & Mapping")
+            with col_refresh:
+                if st.button("🔄", help="Refresh page"):
+                    st.rerun()
+            
+            st.info("Manage transaction types used in your database and map statement codes to standardized types")
+            
+            # Load all transaction types from database
+            supabase = get_supabase_client()
+            
+            # Get unique transaction types from database with counts
+            try:
+                # Query to get all unique transaction types and their counts
+                trans_type_data = supabase.table('policies').select('"Transaction Type"').execute()
+                
+                if trans_type_data.data:
+                    trans_types_list = [row.get('Transaction Type') for row in trans_type_data.data if row.get('Transaction Type')]
+                    trans_type_counts = pd.Series(trans_types_list).value_counts().to_dict()
+                else:
+                    trans_type_counts = {}
+            except Exception as e:
+                st.error(f"Error loading transaction types: {e}")
+                trans_type_counts = {}
+            
+            # Load transaction type definitions
+            trans_types_file = "config_files/transaction_types.json"
+            try:
+                if os.path.exists(trans_types_file):
+                    with open(trans_types_file, 'r') as f:
+                        loaded_data = json.load(f)
+                        # Check if it's the old format with transaction_types key
+                        if isinstance(loaded_data, dict) and 'transaction_types' in loaded_data:
+                            # Convert from old format
+                            trans_type_definitions = {}
+                            for item in loaded_data.get('transaction_types', []):
+                                if isinstance(item, dict):
+                                    code = item.get('code', item.get('type', ''))
+                                    if code:
+                                        trans_type_definitions[code] = {
+                                            "description": item.get('name', item.get('description', '')),
+                                            "active": item.get('active', True)
+                                        }
+                        elif isinstance(loaded_data, dict):
+                            # Already in the correct format
+                            trans_type_definitions = loaded_data
+                        else:
+                            # Convert list format to dict if needed
+                            trans_type_definitions = {}
+                            if isinstance(loaded_data, list):
+                                for item in loaded_data:
+                                    if isinstance(item, dict):
+                                        code = item.get('code', item.get('type', ''))
+                                        if code:
+                                            trans_type_definitions[code] = {
+                                                "description": item.get('name', item.get('description', '')),
+                                                "active": item.get('active', True)
+                                            }
+                else:
+                    # Default transaction type definitions
+                    trans_type_definitions = {
+                        "NEW": {"description": "New business policy", "active": True},
+                        "RWL": {"description": "Renewal of existing policy", "active": True},
+                        "END": {"description": "Endorsement (policy modification)", "active": True},
+                        "CAN": {"description": "Cancellation of policy", "active": True},
+                        "PMT": {"description": "Payment-driven commission (as-earned)", "active": True},
+                        "XCL": {"description": "Exclusion/cancellation variant", "active": True},
+                        "PCH": {"description": "Policy change", "active": True},
+                        "STL": {"description": "Statement line item", "active": True},
+                        "BoR": {"description": "Book of Record", "active": True},
+                        "REWRITE": {"description": "Policy rewrite", "active": True},
+                        "NBS": {"description": "New business special", "active": True}
+                    }
+                    # Save default definitions
+                    os.makedirs("config_files", exist_ok=True)
+                    with open(trans_types_file, 'w') as f:
+                        json.dump(trans_type_definitions, f, indent=2)
+            except Exception as e:
+                st.error(f"Error loading transaction type definitions: {e}")
+                trans_type_definitions = {}
+            
+            # Ensure trans_type_definitions is always a dictionary
+            if not isinstance(trans_type_definitions, dict):
+                trans_type_definitions = {}
+            
+            # Section 1: Transaction Types List
+            st.markdown("### 📊 Transaction Types in Database")
+            
+            # Summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Types", len(trans_type_counts))
+            with col2:
+                st.metric("Total Transactions", sum(trans_type_counts.values()))
+            with col3:
+                active_count = sum(1 for k, v in trans_type_definitions.items() 
+                                 if isinstance(v, dict) and v.get('active', True))
+                st.metric("Active Types", active_count)
+            with col4:
+                undefined_count = len([t for t in trans_type_counts.keys() if t not in trans_type_definitions])
+                st.metric("Undefined Types", undefined_count)
+            
+            # Display transaction types table
+            type_data = []
+            all_types = set(trans_type_counts.keys()) | set(trans_type_definitions.keys())
+            
+            # Get list of types for merge dropdown
+            type_list = sorted(all_types)
+            
+            for trans_type in type_list:
+                count = trans_type_counts.get(trans_type, 0)
+                definition = trans_type_definitions.get(trans_type, {})
+                # Ensure definition is a dictionary
+                if not isinstance(definition, dict):
+                    definition = {}
+                type_data.append({
+                    "Type": trans_type,
+                    "Count": count,
+                    "Description": definition.get('description', ''),
+                    "Active": definition.get('active', True),
+                    "In Database": count > 0,
+                    "Delete": False,
+                    "Merge To": ""
+                })
+            
+            # Create editable dataframe
+            type_df = pd.DataFrame(type_data)
+            
+            edited_type_df = st.data_editor(
+                type_df,
+                key="trans_type_editor",
+                column_config={
+                    "Type": st.column_config.TextColumn("Type", disabled=True),
+                    "Count": st.column_config.NumberColumn("Count", disabled=True),
+                    "Description": st.column_config.TextColumn("Description", help="Add a description for this transaction type"),
+                    "Active": st.column_config.CheckboxColumn("Active", help="Uncheck to deactivate this type"),
+                    "In Database": st.column_config.CheckboxColumn("In Database", disabled=True),
+                    "Delete": st.column_config.CheckboxColumn("Delete", help="Check to delete this type (only if not in database)"),
+                    "Merge To": st.column_config.SelectboxColumn(
+                        "Merge To",
+                        help="Select a type to merge this one into",
+                        options=[""] + type_list,
+                        required=False
+                    )
+                },
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+            
+            # Save changes button for transaction types
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                if st.button("💾 Save Transaction Type Changes", type="primary", key="save_trans_types"):
+                    # Track operations
+                    merges_to_perform = []
+                    types_to_delete = []
+                    
+                    # First pass - collect operations
+                    new_definitions = {}
+                    for idx, row in edited_type_df.iterrows():
+                        trans_type = row["Type"]
+                        merge_to = row.get("Merge To", "")
+                        
+                        # Check for merge operation - handle both None and empty string
+                        if merge_to and merge_to.strip() and merge_to != trans_type:
+                            merges_to_perform.append({
+                                "from": trans_type,
+                                "to": merge_to,
+                                "count": row["Count"]
+                            })
+                            # Don't include merged types in the new definitions
+                        # Check for delete operation
+                        elif row["Delete"]:
+                            if row["Count"] > 0:
+                                st.error(f"❌ Cannot delete '{trans_type}' - has {row['Count']} transactions in database")
+                            else:
+                                types_to_delete.append(trans_type)
+                        else:
+                            # Regular update
+                            new_definitions[trans_type] = {
+                                "description": row["Description"],
+                                "active": row["Active"]
+                            }
+                    
+                    # Show what we're about to do
+                    if merges_to_perform:
+                        st.write("**Merges to perform:**")
+                        for merge in merges_to_perform:
+                            st.write(f"- {merge['from']} → {merge['to']} ({merge['count']} transactions)")
+                    
+                    # Perform merges
+                    if merges_to_perform:
+                        st.info(f"Performing {len(merges_to_perform)} merge operations...")
+                        for merge in merges_to_perform:
+                            try:
+                                # Update all transactions in database
+                                update_result = supabase.table('policies').update({
+                                    'Transaction Type': merge["to"]
+                                }).eq('Transaction Type', merge["from"]).execute()
+                                
+                                # Count actual updates
+                                updated_count = len(update_result.data) if update_result.data else 0
+                                st.success(f"✅ Merged {updated_count} transactions from '{merge['from']}' to '{merge['to']}' (expected {merge['count']})")
+                                
+                                # Don't save the merged type
+                                if merge["from"] in new_definitions:
+                                    del new_definitions[merge["from"]]
+                                    
+                            except Exception as e:
+                                st.error(f"Error merging {merge['from']}: {e}")
+                    
+                    # Remove deleted types
+                    for type_to_delete in types_to_delete:
+                        if type_to_delete in new_definitions:
+                            del new_definitions[type_to_delete]
+                        st.info(f"🗑️ Deleted type '{type_to_delete}'")
+                    
+                    # Save to file
+                    try:
+                        with open(trans_types_file, 'w') as f:
+                            json.dump(new_definitions, f, indent=2)
+                        st.success("✅ Transaction type changes saved successfully!")
+                        
+                        # Clear cache if database was modified
+                        if merges_to_perform:
+                            clear_policies_cache()
+                        
+                        # Clear debug info
+                        if 'trans_type_debug' in st.session_state:
+                            del st.session_state['trans_type_debug']
+                        
+                        # Auto refresh after successful operations
+                        if merges_to_perform or types_to_delete:
+                            time.sleep(2)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving definitions: {e}")
+            
+            with col2:
+                st.caption("ℹ️ **Delete**: Only available for types with 0 transactions | **Merge**: Moves all transactions to target type")
+            
+            st.divider()
+            
+            # Section 2: Add New Transaction Type
+            st.markdown("### ➕ Add New Transaction Type")
+            
+            with st.form("add_trans_type_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_type_code = st.text_input("Type Code", placeholder="e.g., REI", max_chars=10)
+                with col2:
+                    new_type_desc = st.text_input("Description", placeholder="e.g., Reinstatement")
+                
+                submitted = st.form_submit_button("Add Transaction Type", type="primary")
+                
+                if submitted and new_type_code:
+                    new_type_code = new_type_code.upper()
+                    if new_type_code in trans_type_definitions:
+                        st.error(f"Transaction type '{new_type_code}' already exists!")
+                    else:
+                        # Add new type
+                        trans_type_definitions[new_type_code] = {
+                            "description": new_type_desc,
+                            "active": True
+                        }
+                        
+                        # Save to file
+                        try:
+                            with open(trans_types_file, 'w') as f:
+                                json.dump(trans_type_definitions, f, indent=2)
+                            st.success(f"✅ Added transaction type: {new_type_code}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error saving: {e}")
+            
+            st.divider()
+            
+            # Section 4: Transaction Type Mapping (moved to bottom)
+            st.markdown("### 🔀 Statement Transaction Type Mapping")
+            st.info("Map transaction types from reconciliation statements to your standardized types")
             
             # Load or initialize mappings
             mapping_file = "config_files/transaction_type_mappings.json"
@@ -10460,11 +10740,11 @@ SOLUTION NEEDED:
                 st.error(f"Error loading mappings: {e}")
                 trans_mappings = {"STL": "PMT"}
             
-            # Define valid transaction types
-            valid_transaction_types = ["NEW", "RWL", "END", "CAN", "PMT"]
+            # Get active transaction types for mapping
+            valid_transaction_types = [t for t, d in trans_type_definitions.items() 
+                                     if isinstance(d, dict) and d.get('active', True)]
             
             # Display current mappings
-            st.markdown("### Current Mappings")
             if trans_mappings:
                 # Create editable dataframe for mappings
                 mapping_data = []
@@ -10559,34 +10839,43 @@ SOLUTION NEEDED:
             st.divider()
             
             # Mapping summary
-            st.markdown("### Mapping Summary")
-            col1, col2 = st.columns(2)
+            st.markdown("### Summary")
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Total Mappings", len(trans_mappings))
+                st.metric("Statement Mappings", len(trans_mappings))
             with col2:
-                st.metric("Valid Transaction Types", len(valid_transaction_types))
+                st.metric("Active Types", len(valid_transaction_types))
+            with col3:
+                unused_types = [t for t in trans_type_definitions.keys() if trans_type_counts.get(t, 0) == 0]
+                st.metric("Unused Types", len(unused_types))
             
             # Help text
-            with st.expander("ℹ️ How Transaction Type Mapping Works"):
+            with st.expander("ℹ️ How Transaction Types & Mapping Works"):
                 st.markdown("""
-                **Purpose**: Ensure consistent transaction types during reconciliation by mapping statement codes to your standardized types.
+                **Transaction Types Section**:
+                - View all transaction types in your database with counts
+                - Add descriptions to document what each type means
+                - Activate/deactivate types as needed
+                - Add new transaction types for future use
+                - Merge duplicate or incorrect types
                 
-                **Valid Transaction Types**:
-                - **NEW**: New business policy
-                - **RWL**: Renewal
-                - **END**: Endorsement
-                - **CAN**: Cancellation
-                - **PMT**: Payment (as-earned commission from customer payments)
+                **Statement Mapping Section**:
+                - Map codes from statements to your standardized types
+                - During import, system automatically converts mapped types
+                - Import stops if unmapped type is found
                 
-                **How it works**:
-                1. During reconciliation import, the system checks each transaction type
-                2. If a mapping exists, it automatically uses your standardized type
-                3. If no mapping exists, the import will stop and ask you to add the mapping
+                **Commission Calculation by Type**:
+                - **NEW**: 50% of agency commission
+                - **RWL**: 25% of agency commission (renewals)
+                - **END**: Depends on policy age (50% if new, 25% if renewal)
+                - **CAN/XCL**: Negative commission (chargeback)
+                - **PMT**: Payment-driven commission (as-earned)
                 
-                **Common Mappings**:
-                - STL → PMT (as-earned payments)
-                - XCL → CAN (exclusion/cancellation)
-                - NBS → NEW (new business special)
+                **Best Practices**:
+                1. Keep descriptions updated for clarity
+                2. Deactivate unused types rather than deleting
+                3. Use merge feature to consolidate duplicates
+                4. Map all statement codes before importing
                 
                 **Special Note on PMT**:
                 PMT represents commissions paid when customers make payments on their policies. 

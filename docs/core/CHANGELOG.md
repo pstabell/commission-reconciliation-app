@@ -5,6 +5,39 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.36] - 2025-08-06 - Transaction Types Management System
+
+### Added
+- **Complete Transaction Types Management in Admin Panel**
+  - Renamed tab to "Transaction Types & Mapping" combining all transaction type features
+  - View all transaction types from database with live counts
+  - Editable descriptions for each transaction type
+  - Active/Inactive toggle to enable/disable types
+  - Delete functionality for unused types (0 transactions only)
+  - Merge functionality directly in table - select target type in "Merge To" column
+  - Add new transaction types with code and description
+  - Metrics showing total types, transactions, active types, and unused types
+  - Refresh button to update view without re-login
+
+### Enhanced
+- **Transaction Type Configuration**
+  - Stores definitions in `config_files/transaction_types.json`
+  - Handles legacy file formats automatically
+  - Shows which types are in database vs just defined
+  - Comprehensive help section explaining commission calculations by type
+
+### Fixed
+- **Merge Operations**
+  - Fixed database column name error during merge operations
+  - Properly updates all transactions when merging types
+  - Removes merged types from configuration after successful merge
+  - Clear success/error messages during operations
+
+### Technical
+- Added session state handling for data editor selections
+- Improved error handling for malformed configuration files
+- Auto-refresh after successful merge/delete operations
+
 ## [3.9.35] - 2025-08-06 - Policy Revenue Ledger Effective Date Filter Enhancement
 
 ### Enhanced
