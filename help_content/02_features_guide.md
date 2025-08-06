@@ -461,9 +461,15 @@
 - **MGA Management**: Add, edit, and view Managing General Agencies
 - **Commission Rules**: Define rates for carrier/MGA/policy type combinations
 - **Search Functionality**: Universal search across all contacts and rules
-- **Quick Add**: Fast addition of new carriers and MGAs
+- **Unified Add Contact**: Single button to add either carriers or MGAs
 
 **How to use**:
+
+### Adding New Contacts:
+1. **Click "➕ Add Contact"**: Opens selection modal
+2. **Choose Type**: Select either "🏢 Add Carrier" or "🤝 Add MGA"
+3. **Fill Form**: Complete the required information
+4. **Save**: Click appropriate button to save
 
 ### Managing Carriers:
 1. **View Carriers**: See recent carriers on the main page or search for specific ones
@@ -480,10 +486,21 @@
 ### Commission Rules:
 1. **View Rules**: Click on a carrier to see its commission rules
 2. **Add Rule**: Click "➕ Add Rule" and fill in the details
-3. **End-Date Rules**: Better than deleting - preserves history
-4. **Set Rates**: Define NEW and RWL rates separately
+3. **Edit Rules**: Click "✏️" to modify rates, dates, and descriptions
+4. **Retroactive Changes**: System warns if changing effective date to past
+   - All affected transactions will be recalculated automatically
+   - Shows count of transactions that will be updated
+5. **End-Date Rules**: Click "📅" to deactivate rules while preserving history
+6. **Set Rates**: Define NEW and RWL rates separately
+
+**Important Rule Management Features**:
+- **No Delete Button**: Rules cannot be deleted to maintain data integrity
+- **Edit with Retroactive Dates**: Change rates retroactively with automatic recalculation
+- **End Dating**: Preferred method to deactivate rules
+- **Historical Tracking**: Complete audit trail of all rate changes
 
 **Integration**:
 - Commission rules auto-populate when adding/editing policies
 - You can override rates with reason tracking
 - Historical data is preserved when rules change
+- Retroactive changes update all affected transactions

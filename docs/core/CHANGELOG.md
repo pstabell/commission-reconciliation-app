@@ -5,6 +5,43 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.37] - 2025-08-06 - Commission Rule Edit & Contact UI Improvements
+
+### Added
+- **Commission Rule Editing**
+  - New edit button (✏️) for commission rules replacing delete functionality
+  - Edit rates, effective dates, payment terms, and descriptions
+  - Retroactive date detection with warning when changing to earlier dates
+  - Automatic recalculation of all affected transactions when retroactive changes are made
+  - Shows count of transactions that will be updated
+  - Preserves data integrity by preventing deletion of rules in use
+
+### Changed
+- **Contact Management UI**
+  - Replaced Quick Add dropdown with single "➕ Add Contact" button
+  - New selection modal lets users choose between adding Carrier or MGA
+  - Cleaner, more intuitive workflow for adding contacts
+  - Removed confusing dropdown that retained selection state
+
+### Removed
+- **Delete Button for Commission Rules**
+  - Replaced with edit functionality to maintain data integrity
+  - Rules referenced by policies cannot be deleted (foreign key constraint)
+  - End-dating is the preferred method for deactivating rules
+
+### Fixed
+- **Commission Rule Action Menu**
+  - Replaced problematic selectbox with individual action buttons
+  - Fixed infinite loop issue when trying to delete rules
+  - Better error handling with user-friendly messages
+  - Clear guidance to use End Date instead of delete when appropriate
+
+### Enhanced
+- **Error Messages**
+  - Foreign key constraint errors now show helpful message
+  - Suggests using End Date feature when deletion fails
+  - Clear feedback for all user actions
+
 ## [3.9.36] - 2025-08-06 - Transaction Types Management System
 
 ### Added

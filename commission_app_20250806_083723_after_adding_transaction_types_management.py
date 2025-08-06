@@ -10967,34 +10967,17 @@ SOLUTION NEEDED:
                 )
             
             with col2:
-                if st.button("➕ Add Contact", type="primary", use_container_width=True):
-                    st.session_state['show_add_contact'] = True
-        
-        # Add contact type selection modal
-        if st.session_state.get('show_add_contact'):
-            st.markdown("### Add New Contact")
-            col1, col2, col3 = st.columns([1, 1, 1])
-            
-            with col1:
-                if st.button("🏢 Add Carrier", use_container_width=True):
+                quick_add = st.selectbox(
+                    "",
+                    ["Quick Add ➕", "Add Carrier", "Add MGA", "Add Rule"],
+                    label_visibility="collapsed",
+                    key="quick_add_select"
+                )
+                
+                if quick_add == "Add Carrier":
                     st.session_state['show_add_carrier'] = True
-                    del st.session_state['show_add_contact']
-                    st.rerun()
-                st.caption("Insurance companies")
-            
-            with col2:
-                if st.button("🤝 Add MGA", use_container_width=True):
+                elif quick_add == "Add MGA":
                     st.session_state['show_add_mga'] = True
-                    del st.session_state['show_add_contact']
-                    st.rerun()
-                st.caption("Managing General Agencies")
-            
-            with col3:
-                if st.button("❌ Cancel", use_container_width=True):
-                    del st.session_state['show_add_contact']
-                    st.rerun()
-            
-            st.markdown("---")
         
         # Add carrier modal - MOVED TO TOP FOR VISIBILITY
         if st.session_state.get('show_add_carrier'):
@@ -11468,18 +11451,20 @@ SOLUTION NEEDED:
                                 st.caption(rule['payment_terms'])
                         
                         with col4:
-                            # Action buttons
-                            action_col1, action_col2 = st.columns(2)
+                            # Action menu
+                            action = st.selectbox(
+                                "",
+                                ["Actions", "End Date", "Delete"],
+                                key=f"action_{rule['rule_id']}",
+                                label_visibility="collapsed"
+                            )
                             
-                            with action_col1:
-                                if st.button("✏️", key=f"edit_btn_{rule['rule_id']}", help="Edit Rule"):
-                                    st.session_state[f'edit_rule_{rule["rule_id"]}'] = True
-                                    st.rerun()
-                            
-                            with action_col2:
-                                if st.button("📅", key=f"enddate_btn_{rule['rule_id']}", help="End Date"):
-                                    st.session_state[f'end_date_{rule["rule_id"]}'] = True
-                                    st.rerun()
+                            if action == "End Date":
+                                st.session_state[f'end_date_{rule["rule_id"]}'] = True
+                                st.rerun()
+                            elif action == "Delete":
+                                st.session_state[f'delete_{rule["rule_id"]}'] = True
+                                st.rerun()
                         
                         # Inline end date form
                         if st.session_state.get(f'end_date_{rule["rule_id"]}'):
@@ -11511,86 +11496,24 @@ SOLUTION NEEDED:
                                         del st.session_state[f'end_date_{rule["rule_id"]}']
                                         st.rerun()
                         
-                        # Inline edit form
-                        if st.session_state.get(f'edit_rule_{rule["rule_id"]}'):
-                            with st.form(f"edit_rule_form_{rule['rule_id']}"):
-                                st.markdown("#### Edit Commission Rule")
-                                col1, col2, col3 = st.columns(3)
-                                
-                                with col1:
-                                    new_rate = st.number_input("NEW %", min_value=0.0, max_value=100.0, value=float(rule['new_rate']), step=0.5)
-                                    renewal_rate = st.number_input("RWL %", min_value=0.0, max_value=100.0, value=float(rule.get('renewal_rate', rule['new_rate'])), step=0.5)
-                                
-                                with col2:
-                                    current_eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
-                                    effective_date = st.date_input("Effective Date", value=current_eff_date)
-                                    payment_terms = st.selectbox("Terms", ["", "Advanced", "As Earned"], 
-                                                                index=[0, 1, 2].index(rule.get('payment_terms', '')) if rule.get('payment_terms', '') in ["", "Advanced", "As Earned"] else 0)
-                                
-                                with col3:
-                                    rule_description = st.text_area("Description", value=rule.get('rule_description', ''), height=100)
-                                
-                                # Check if retroactive date
-                                is_retroactive = effective_date < current_eff_date
-                                if is_retroactive:
-                                    st.warning("⚠️ **Retroactive Date Detected!**")
-                                    st.info("All existing transactions using this rule will have their commission rates recalculated based on the new rates.")
-                                
-                                col1, col2, col3 = st.columns([1, 1, 3])
-                                with col1:
-                                    if st.form_submit_button("💾 Save Changes", type="primary"):
-                                        try:
-                                            update_data = {
-                                                "new_rate": new_rate,
-                                                "renewal_rate": renewal_rate,
-                                                "effective_date": effective_date.isoformat(),
-                                                "payment_terms": payment_terms if payment_terms else None,
-                                                "rule_description": rule_description if rule_description else None
-                                            }
-                                            
-                                            supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
-                                            
-                                            # If retroactive, update all affected policies
-                                            if is_retroactive:
-                                                # Get all policies using this rule
-                                                affected_policies = supabase.table('policies').select('*').eq('commission_rule_id', rule['rule_id']).execute()
-                                                
-                                                if affected_policies.data:
-                                                    updated_count = 0
-                                                    for policy in affected_policies.data:
-                                                        # Recalculate commission based on transaction type
-                                                        trans_type = policy.get('Transaction Type', '')
-                                                        agency_comm = policy.get('Agency Estimated Comm $', 0)
-                                                        
-                                                        if trans_type == 'NEW':
-                                                            new_agent_comm = agency_comm * (new_rate / 100)
-                                                        elif trans_type == 'RWL':
-                                                            new_agent_comm = agency_comm * (renewal_rate / 100)
-                                                        else:
-                                                            continue  # Skip other types
-                                                        
-                                                        # Update policy with new agent commission
-                                                        supabase.table('policies').update({
-                                                            'Agent Estimated Comm $': new_agent_comm
-                                                        }).eq('_id', policy['_id']).execute()
-                                                        
-                                                        updated_count += 1
-                                                    
-                                                    st.success(f"✅ Rule updated! {updated_count} transactions recalculated.")
-                                                else:
-                                                    st.success("✅ Rule updated! No existing transactions to update.")
-                                            else:
-                                                st.success("✅ Rule updated successfully!")
-                                            
-                                            del st.session_state[f'edit_rule_{rule["rule_id"]}']
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Error: {e}")
-                                
-                                with col2:
-                                    if st.form_submit_button("Cancel"):
-                                        del st.session_state[f'edit_rule_{rule["rule_id"]}']
+                        # Inline delete confirmation
+                        if st.session_state.get(f'delete_{rule["rule_id"]}'):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.warning("Are you sure you want to delete this rule?")
+                            with col2:
+                                if st.button("Delete", type="primary", key=f"confirm_delete_{rule['rule_id']}"):
+                                    try:
+                                        supabase.table('commission_rules').delete().eq('rule_id', rule['rule_id']).execute()
+                                        del st.session_state[f'delete_{rule["rule_id"]}']
+                                        st.success("Rule deleted")
                                         st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                                
+                                if st.button("Cancel", key=f"cancel_delete_{rule['rule_id']}"):
+                                    del st.session_state[f'delete_{rule["rule_id"]}']
+                                    st.rerun()
                         
                         st.markdown("---")
                 
