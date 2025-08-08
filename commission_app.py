@@ -15661,11 +15661,45 @@ TO "New Column Name";
                                             term_name = f"{policy_num} - Term {term_idx + 1}"
                                             term_dates = f"{term_eff_date.strftime('%m/%d/%Y')} to {term_x_date.strftime('%m/%d/%Y')}"
                                             
-                                            # MODIFIED: Include ALL transactions for this policy regardless of dates
+                                            # MASTER POLICY TERM RULES: Assign transactions to correct term
+                                            # Check if there's a next term (renewal)
+                                            next_term = None
+                                            if term_idx + 1 < len(term_defining):
+                                                next_term = term_defining.iloc[term_idx + 1]
+                                            
                                             for idx, row in policy_data.iterrows():
-                                                # Assign ALL transactions to this term group - no date filtering
-                                                editable_data.at[idx, '_term_group'] = term_name
-                                                editable_data.at[idx, '_term_dates'] = term_dates
+                                                trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
+                                                trans_type = row.get('Transaction Type', '')
+                                                trans_id = str(row.get('Transaction ID', ''))
+                                                
+                                                # Skip if no valid effective date
+                                                if pd.isna(trans_eff_date):
+                                                    continue
+                                                
+                                                # RULE 1: One transaction = one term (no duplicates)
+                                                # Check if already assigned to a term
+                                                if pd.notna(editable_data.at[idx, '_term_group']):
+                                                    continue
+                                                
+                                                # RULE 2: X-DATE Boundary Rule
+                                                if trans_eff_date == term_x_date and next_term is not None:
+                                                    # Transaction falls on X-DATE and renewal exists
+                                                    if trans_type == 'CAN':
+                                                        # CAN transactions stay with expiring term
+                                                        editable_data.at[idx, '_term_group'] = term_name
+                                                        editable_data.at[idx, '_term_dates'] = term_dates
+                                                    else:
+                                                        # All other transactions go to renewal term
+                                                        continue  # Will be assigned when processing next term
+                                                elif term_eff_date <= trans_eff_date < term_x_date:
+                                                    # Transaction falls within term boundaries (not on X-DATE)
+                                                    editable_data.at[idx, '_term_group'] = term_name
+                                                    editable_data.at[idx, '_term_dates'] = term_dates
+                                                elif trans_eff_date == term_x_date and next_term is None:
+                                                    # Edge case: X-DATE transaction with no renewal
+                                                    editable_data.at[idx, '_term_group'] = term_name
+                                                    editable_data.at[idx, '_term_dates'] = term_dates
+                                                # Note: Transactions with dates outside any term won't be assigned here
                                             
                                             all_term_groups.append(term_name)
                                     else:

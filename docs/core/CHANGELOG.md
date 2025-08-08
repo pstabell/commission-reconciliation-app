@@ -5,6 +5,27 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.37] - 2025-08-08 - Master Policy Term Rules Implementation
+
+### Added
+- **MASTER POLICY TERM RULES** for proper transaction assignment
+  - Rule 1: One transaction = one term (prevents duplicates)
+  - Rule 2: X-DATE Boundary Rule for renewals
+  - Transactions on X-DATE go to renewal term (if exists)
+  - EXCEPT: CAN transactions always stay with expiring term
+  - Edge case: No renewal = transactions stay with current term
+
+### Fixed
+- **Transaction Duplication Bug**: Fixed issue where transactions appeared in multiple policy terms
+- **RWL in Wrong Term**: Renewal transactions no longer show in original policy term
+- **Proper Date Boundaries**: Transactions now correctly assigned based on effective dates
+- **X-DATE Handling**: Special logic for transactions falling on expiration dates
+
+### Technical
+- Replaced "include all transactions" logic with proper date-based term assignment
+- Added next term detection for X-DATE boundary handling
+- Maintains transaction uniqueness across terms
+
 ## [3.9.36] - 2025-08-08 - Reconciliation UI Improvements & Documentation Updates
 
 ### Changed
