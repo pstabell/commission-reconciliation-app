@@ -2,6 +2,7 @@
   "POLICY TERMS v3": {
     "columns": [
       "Transaction ID",
+      "Client ID",
       "Transaction Type",
       "Customer",
       "Policy Number",
@@ -25,7 +26,8 @@
       "Policy Balance Due"
     ],
     "created": "2025-08-02 22:36:03",
-    "updated": "2025-08-02 22:57:12",
+    "view_mode": "Detailed Transactions",
+    "updated": "2025-08-07 21:53:25",
     "is_default": true
   },
   "Aggregated By Policy": {

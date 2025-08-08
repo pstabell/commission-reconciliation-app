@@ -1037,6 +1037,58 @@ Major feature addition implementing comprehensive carrier and MGA management wit
 
 ---
 
+---
+
+### Version 3.9.38 (August 8, 2025) - X-DATE Orphan Rules & MGA Refresh Enhancement
+
+Major policy term assignment rule changes implementing strict X-DATE boundary handling and improved MGA dropdown functionality:
+
+#### X-DATE Orphan Transaction Rules
+- **Strict Boundary Implementation**:
+  - Transactions with Effective Date = X-DATE now become orphans
+  - Forces proper renewal policy term entry for boundary transactions
+  - Prevents ambiguous term assignments at policy boundaries
+  - NO EXCEPTIONS - ensures data integrity
+
+- **Visual Orphan Indicators**:
+  - Orphan transactions appear at top of Policy Revenue Ledger
+  - Header/footer rows with solid block separators (█████)
+  - Red warning message: "ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!"
+  - All non-customer cells filled with solid blocks for strong visual impact
+  - Creates unmistakable visual barrier requiring user attention
+
+- **STMT Date Filtering Fix**:
+  - Changed from STMT DATE to Effective Date for term assignment
+  - Ensures STMT transactions stay with their policy terms
+  - Consistent date handling across all transaction types
+
+#### MGA Dropdown Enhancement
+- **Refresh Button Addition**:
+  - Added 🔄 Refresh button next to MGA dropdown in Edit Transaction form
+  - Clears all MGA caches (keys starting with 'mgas_for_carrier_')
+  - Immediate visibility of newly created commission rules
+  - Resolves issue where Johnson and Johnson MGA wasn't showing for Evanston Insurance
+
+- **Cache Management**:
+  - Commission rule creation already clears specific carrier cache
+  - New refresh button provides manual cache clearing option
+  - Ensures commission rule → MGA associations always current
+
+#### Technical Implementation
+- **Term Assignment Logic**:
+  - Modified comparison operators from <= to < for X-DATE (lines 15711, 15717, 15723)
+  - Orphan detection: transactions where effective_date == term_x_date
+  - Visual styling with cell-specific formatting (red text for customer, white for others)
+
+- **Session State Management**:
+  - Comprehensive MGA cache clearing on refresh
+  - Success message with brief pause for user feedback
+  - Automatic page rerun to reload fresh data
+
+**Impact**: Enforces clear policy term boundaries preventing ambiguous transaction assignments. Orphaned transactions require explicit renewal term creation, improving data quality. MGA refresh capability ensures immediate access to newly created commission rules without manual cache management.
+
+---
+
 *Document Created: July 3, 2025*  
-*Last Updated: July 13, 2025*  
-*Current Application Version: 3.6.2*
+*Last Updated: August 8, 2025*  
+*Current Application Version: 3.9.38*

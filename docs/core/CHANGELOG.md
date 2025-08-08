@@ -5,6 +5,32 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.38] - 2025-08-08 - X-DATE Orphan Rules & MGA Refresh Button
+
+### Added
+- **X-DATE Orphan Transaction Rules**
+  - Transactions with Effective Date = X-DATE now become orphans (no term assignment)
+  - Forces proper renewal entry for boundary transactions
+  - Visual orphan indicators with solid block separators (█████)
+  - Red warning message: "ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!"
+  - Orphan transactions appear at top of Policy Revenue Ledger with header/footer rows
+
+- **MGA Refresh Button in Edit Transaction Form**
+  - Added 🔄 Refresh button next to MGA dropdown
+  - Clears all MGA caches when new commission rules are added
+  - Ensures newly created commission rules immediately show MGAs in dropdown
+  - Fixes issue where Johnson and Johnson MGA wasn't showing for Evanston Insurance
+
+### Fixed
+- **STMT Date Filtering**: Changed from STMT DATE to Effective Date for term assignment
+- **X-DATE Boundary Logic**: Implemented strict < comparison (not <=) for X-DATE
+- **Orphan Transaction Styling**: Enhanced visual indicators with solid blocks and red text
+
+### Technical
+- Modified term assignment logic in lines 15711, 15717, 15723 (changed <= to <)
+- Enhanced orphan row styling with cell-specific formatting
+- Added cache clearing functionality for MGA dropdowns
+
 ## [3.9.37] - 2025-08-08 - Master Policy Term Rules Implementation
 
 ### Added

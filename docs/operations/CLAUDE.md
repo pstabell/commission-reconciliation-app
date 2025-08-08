@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: August 8, 2025  
-**Current Version**: 3.9.36
+**Current Version**: 3.9.38
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,20 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.38)
+1. **X-DATE Orphan Transaction Rules**:
+   - **New Rule**: Transactions with Effective Date = X-DATE become orphans (no term assignment)
+   - **Visual Indicators**: Red warning message with solid block separators (█████)
+   - **Enforcement**: NO EXCEPTIONS - forces proper renewal term entry
+   - **Technical**: Changed term assignment from <= to < for X-DATE boundaries
+   - **STMT Filtering**: Fixed to use Effective Date instead of STMT DATE
+
+2. **MGA Refresh Button in Edit Transaction Form**:
+   - **Added Feature**: 🔄 Refresh button next to MGA dropdown
+   - **Functionality**: Clears all MGA caches (keys starting with 'mgas_for_carrier_')
+   - **Use Case**: Ensures newly created commission rules immediately show MGAs
+   - **Bug Fix**: Resolved Johnson and Johnson MGA not showing for Evanston Insurance
 
 ## Recent Major Changes (v3.9.36)
 1. **Proactive Agent Deployment Directive**:

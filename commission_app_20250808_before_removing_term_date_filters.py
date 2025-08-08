@@ -6305,7 +6305,7 @@ def main():
                             # Use container to better control rendering
                             carrier_container = st.container()
                             with carrier_container:
-                                col1, col2, col3 = st.columns([2, 2, 1])
+                                col1, col2 = st.columns(2)
                                 with col1:
                                     # Carrier dropdown with search capability
                                     carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
@@ -6376,18 +6376,6 @@ def main():
                                 if not selected_carrier_name:
                                     mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
                                     st.session_state['edit_mga_name_manual'] = mga_name_manual
-                                
-                                with col3:
-                                    st.write("")  # Add spacing to align with selectboxes
-                                    st.write("")  # Add more spacing
-                                    if st.button("🔄 Refresh", help="Refresh MGA list if you've added new commission rules", key="refresh_mga_cache"):
-                                        # Clear all MGA caches
-                                        keys_to_clear = [key for key in st.session_state.keys() if key.startswith('mgas_for_carrier_')]
-                                        for key in keys_to_clear:
-                                            del st.session_state[key]
-                                        st.success("✅ MGA lists refreshed!")
-                                        time.sleep(0.5)
-                                        st.rerun()
                             
                             # Store final values for form submission
                             if selected_carrier_name:
@@ -13441,34 +13429,13 @@ SOLUTION NEEDED:
                         with term_col2:
                             st.info(f"📆 Term: {term_eff_date.strftime('%Y-%m-%d')} to {term_x_date.strftime('%Y-%m-%d')}")
                         
-                        # Filter policy_rows to include:
-                        # 1. NEW/RWL transaction with this X-DATE
-                        # 2. END transactions with effective dates between term dates
-                        # 3. STMT/VOID/ADJ transactions within the term period
+                        # MODIFIED: Include ALL transactions regardless of dates
+                        # Simply include all rows when a specific term is selected
                         filtered_rows = []
                         
                         for idx, row in policy_rows.iterrows():
-                            trans_type = row.get("Transaction Type", "")
-                            trans_eff_date = pd.to_datetime(row.get("Effective Date"), errors='coerce')
-                            trans_x_date = row.get("X-DATE")
-                            
-                            # Check for STMT/VOID transactions FIRST (they might have various transaction types)
-                            if "-STMT-" in str(row.get("Transaction ID", "")) or "-VOID-" in str(row.get("Transaction ID", "")):
-                                # Include if Effective Date falls within term
-                                if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
-                            # Include NEW/RWL with matching X-DATE
-                            elif trans_type in ["NEW", "RWL"] and trans_x_date == selected_xdate:
-                                filtered_rows.append(idx)
-                            # Include END within the term dates
-                            elif trans_type == "END" and pd.notna(trans_eff_date):
-                                if term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
-                            # Include other payment/adjustment transactions
-                            elif trans_type in ["STMT", "VOID", "ADJ"]:
-                                # Check if Effective Date falls within term
-                                if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
+                            # Include ALL transactions - no date filtering
+                            filtered_rows.append(idx)
                         
                         # Apply the filter
                         if filtered_rows:
@@ -14649,7 +14616,8 @@ TO "New Column Name";
                                     working_data['Policy Number'] == policy_num
                                 ].copy()
                             
-                            # Filter to only include transactions within this specific term
+                            # Include ALL transactions for this policy, regardless of dates
+                            # This modification removes all date-based filtering
                             term_transactions = []
                             
                             for _, trans_row in policy_transactions.iterrows():
@@ -14657,28 +14625,13 @@ TO "New Column Name";
                                 trans_id = str(trans_row.get('Transaction ID', ''))
                                 trans_eff_date = pd.to_datetime(trans_row.get('Effective Date'), errors='coerce')
                                 
-                                include_transaction = False
+                                # MODIFIED: Include ALL transactions regardless of dates
+                                include_transaction = True
                                 
-                                # For NEW/RWL transactions, be very strict - only include if in selected month
-                                if trans_type in ['NEW', 'RWL']:
-                                    trans_year_month = trans_eff_date.strftime('%Y-%m') if pd.notna(trans_eff_date) else ''
-                                    # Only include if this NEW/RWL is in our selected month
-                                    if trans_year_month == selected_ym:
-                                        include_transaction = True
-                                # Include END transactions within the term dates
-                                elif trans_type == 'END' and pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date <= term_x_date:
-                                        include_transaction = True
-                                # Include STMT/VOID transactions within term (using Effective Date only)
-                                elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                    # Use Effective Date just like other transactions
-                                    if pd.notna(trans_eff_date) and term_x_date:
-                                        if term_eff_date <= trans_eff_date <= term_x_date:
-                                            include_transaction = True
-                                # Include other transactions (CAN, PMT, etc.) within the term dates
-                                elif pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date <= term_x_date:
-                                        include_transaction = True
+                                # Optional: You can still filter by transaction type if needed
+                                # For example, to exclude certain types:
+                                # if trans_type in ['EXCLUDE_TYPE1', 'EXCLUDE_TYPE2']:
+                                #     include_transaction = False
                                 
                                 if include_transaction:
                                     term_transactions.append(trans_row.to_dict())
@@ -15708,33 +15661,11 @@ TO "New Column Name";
                                             term_name = f"{policy_num} - Term {term_idx + 1}"
                                             term_dates = f"{term_eff_date.strftime('%m/%d/%Y')} to {term_x_date.strftime('%m/%d/%Y')}"
                                             
-                                            # Find all transactions within this term's date range
+                                            # MODIFIED: Include ALL transactions for this policy regardless of dates
                                             for idx, row in policy_data.iterrows():
-                                                trans_type = row.get('Transaction Type', '')
-                                                trans_id = str(row.get('Transaction ID', ''))
-                                                
-                                                # Include the NEW/RWL transaction that defines this term
-                                                if row['X-DATE'] == term_row['X-DATE'] and trans_type in ['NEW', 'RWL']:
-                                                    editable_data.at[idx, '_term_group'] = term_name
-                                                    editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include END transactions within the term dates (but not on X-DATE)
-                                                elif trans_type == 'END':
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include STMT/VOID transactions within term (but not on X-DATE)
-                                                elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include all other transactions within term (but not on X-DATE)
-                                                else:
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
+                                                # Assign ALL transactions to this term group - no date filtering
+                                                editable_data.at[idx, '_term_group'] = term_name
+                                                editable_data.at[idx, '_term_dates'] = term_dates
                                             
                                             all_term_groups.append(term_name)
                                     else:
@@ -15758,45 +15689,6 @@ TO "New Column Name";
                             
                             # Sort transactions within each term group with enhanced logic
                             sorted_dfs = []
-                            
-                            # First, check for orphaned transactions (no term group) and add them at TOP with indicators
-                            no_group = editable_data[editable_data['_term_group'] == '']
-                            if len(no_group) > 0:
-                                # Create header row for orphaned transactions
-                                orphan_header = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_header.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_header.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                # Use a long string of blocks to ensure full cell coverage
-                                warning_msg = '█' * 50  # 50 solid blocks to fill most column widths
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_header.at[0, col] = warning_msg
-                                
-                                orphan_header['_term_group'] = 'ORPHAN_HEADER'
-                                
-                                # Add the orphaned transactions
-                                no_group_copy = no_group.copy()
-                                
-                                # Create footer row for orphaned transactions
-                                orphan_footer = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_footer.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_footer.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_footer.at[0, col] = warning_msg
-                                
-                                orphan_footer['_term_group'] = 'ORPHAN_FOOTER'
-                                
-                                # Add header, orphans, and footer to the beginning
-                                sorted_dfs.append(orphan_header)
-                                sorted_dfs.append(no_group_copy)
-                                sorted_dfs.append(orphan_footer)
-                            
-                            # Then process all grouped transactions
                             for group_name in unique_groups:
                                 group_df = editable_data[editable_data['_term_group'] == group_name].copy()
                                 
@@ -15847,7 +15739,10 @@ TO "New Column Name";
                                     
                                     sorted_dfs.append(sorted_group)
                             
-                            # Orphaned transactions are now handled at the beginning with visual indicators
+                            # Also include any rows without a term group (shouldn't happen, but just in case)
+                            no_group = editable_data[editable_data['_term_group'] == '']
+                            if len(no_group) > 0:
+                                sorted_dfs.append(no_group)
                             
                             # Rebuild editable_data with the sorted order
                             if sorted_dfs:
@@ -15879,12 +15774,8 @@ TO "New Column Name";
                                 else:
                                     group_indicators.append('')  # No indicator for rows without term group
                             
-                            # Insert group indicator after Select column (only if it doesn't exist)
-                            if 'Group' not in editable_data.columns:
-                                editable_data.insert(1, 'Group', group_indicators)
-                            else:
-                                # Update existing Group column
-                                editable_data['Group'] = group_indicators
+                            # Insert group indicator after Select column
+                            editable_data.insert(1, 'Group', group_indicators)
                             
                             # Create subtotal rows for each term group
                             numeric_columns = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
@@ -16178,23 +16069,9 @@ TO "New Column Name";
                         
                         # Apply combined styling for special transactions and subtotals
                         def combined_styling(row):
-                            # First check if it's a subtotal row (either '=' or solid blocks for orphan rows)
-                            if 'Group' in row and (row['Group'] == '=' or '█' in str(row['Group'])):
-                                # Check if this is an orphan header/footer row
-                                if 'Customer' in row and row['Customer'] == 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!':
-                                    # Create cell-specific styling
-                                    styles = []
-                                    for col in row.index:
-                                        if col == 'Customer':
-                                            # Red text for the Customer column
-                                            styles.append('background-color: #4a4a4a; color: #ff0000; font-weight: bold')
-                                        else:
-                                            # White text for other columns
-                                            styles.append('background-color: #4a4a4a; color: white; font-weight: bold')
-                                    return styles
-                                else:
-                                    # Regular subtotal row styling
-                                    return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
+                            # First check if it's a subtotal row
+                            if 'Group' in row and row['Group'] == '=':
+                                return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
                             
                             # Then check for special transaction types
                             if 'Transaction ID' in row.index:

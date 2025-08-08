@@ -6305,7 +6305,7 @@ def main():
                             # Use container to better control rendering
                             carrier_container = st.container()
                             with carrier_container:
-                                col1, col2, col3 = st.columns([2, 2, 1])
+                                col1, col2 = st.columns(2)
                                 with col1:
                                     # Carrier dropdown with search capability
                                     carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
@@ -6376,18 +6376,6 @@ def main():
                                 if not selected_carrier_name:
                                     mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
                                     st.session_state['edit_mga_name_manual'] = mga_name_manual
-                                
-                                with col3:
-                                    st.write("")  # Add spacing to align with selectboxes
-                                    st.write("")  # Add more spacing
-                                    if st.button("🔄 Refresh", help="Refresh MGA list if you've added new commission rules", key="refresh_mga_cache"):
-                                        # Clear all MGA caches
-                                        keys_to_clear = [key for key in st.session_state.keys() if key.startswith('mgas_for_carrier_')]
-                                        for key in keys_to_clear:
-                                            del st.session_state[key]
-                                        st.success("✅ MGA lists refreshed!")
-                                        time.sleep(0.5)
-                                        st.rerun()
                             
                             # Store final values for form submission
                             if selected_carrier_name:
@@ -9031,29 +9019,72 @@ def main():
                             max_height = 600
                             display_height = min(calculated_height, max_height)
                             
-                            # Initialize edit state if not exists
-                            if 'reconciliation_edit_selected' not in st.session_state:
-                                st.session_state.reconciliation_edit_selected = None
+                            # Use data editor for checkbox selection
+                            edited_transactions = st.data_editor(
+                                display_recon_sorted,
+                                column_config={
+                                    "Edit": st.column_config.CheckboxColumn(
+                                        "Edit",
+                                        help="Select to edit transaction",
+                                        default=False,
+                                        width="small"
+                                    ),
+                                    "Policy Type": st.column_config.TextColumn(
+                                        help="Type of insurance policy"
+                                    ),
+                                    "Carrier Name": st.column_config.TextColumn(
+                                        help="Insurance carrier"
+                                    ),
+                                    "Effective Date": st.column_config.DateColumn(
+                                        format="MM/DD/YYYY"
+                                    ),
+                                    "X-DATE": st.column_config.DateColumn(
+                                        format="MM/DD/YYYY",
+                                        help="Transaction X-DATE for statement processing"
+                                    ),
+                                    "Agent Comm %": st.column_config.NumberColumn(
+                                        format="%.2f",
+                                        help="Agent commission percentage"
+                                    ),
+                                    "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Reconciliation Status": st.column_config.TextColumn(
+                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
+                                    ),
+                                    "Batch ID": st.column_config.TextColumn(
+                                        help="Batch ID this transaction belongs to"
+                                    ),
+                                    "Is Void Entry": st.column_config.TextColumn(
+                                        help="Yes = This is a reversal entry, No = Original entry"
+                                    )
+                                },
+                                disabled=[col for col in display_columns if col != 'Edit'],
+                                use_container_width=True,
+                                hide_index=True,
+                                height=display_height,
+                                key="reconciliation_transactions_editor"
+                            )
                             
-                            # Check if we need to show the edit form (BEFORE the data table)
-                            if st.session_state.reconciliation_edit_selected is not None:
+                            # Check if a transaction is selected for editing
+                            selected_for_edit = edited_transactions[edited_transactions['Edit'] == True]
+                            
+                            if len(selected_for_edit) > 0:
                                 st.divider()
                                 
-                                # Get the selected transaction data
-                                selected_trans_id = st.session_state.reconciliation_edit_selected
-                                selected_row = display_recon[display_recon['Transaction ID'] == selected_trans_id]
-                                
-                                if not selected_row.empty:
-                                    selected_row = selected_row.iloc[0]
+                                if len(selected_for_edit) > 1:
+                                    st.warning("⚠️ Please select only one transaction to edit at a time")
+                                else:
+                                    # Get the selected transaction
+                                    selected_row = selected_for_edit.iloc[0]
                                     
-                                    # Create edit form header with close button
-                                    col1, col2 = st.columns([6, 1])
-                                    with col1:
-                                        st.subheader("✏️ Edit Reconciled Statement Transaction Details")
-                                    with col2:
-                                        if st.button("❌ Cancel", key="cancel_edit", help="Cancel editing"):
-                                            st.session_state.reconciliation_edit_selected = None
-                                            st.rerun()
+                                    # Add visual separator and anchor point
+                                    st.markdown("---")
+                                    
+                                    # Add empty anchor to maintain scroll position
+                                    anchor_container = st.empty()
+                                    
+                                    # Create edit form header
+                                    st.subheader("✏️ Edit Reconciled Statement Transaction Details")
                                     
                                     # Use a form to ensure proper styling
                                     with st.form("edit_reconciled_transaction_form"):
@@ -9216,9 +9247,6 @@ def main():
                                                     # Store success message in session state
                                                     st.session_state['reconciliation_update_success'] = f"✅ Successfully updated transaction {selected_row['Transaction ID']}"
                                                     
-                                                    # Clear the edit selection
-                                                    st.session_state.reconciliation_edit_selected = None
-                                                    
                                                     # Clear cache
                                                     clear_policies_cache()
                                                     
@@ -9231,70 +9259,6 @@ def main():
                                                     
                                             except Exception as e:
                                                 st.error(f"❌ Error updating transaction: {str(e)}")
-                                
-                                st.divider()
-                            
-                            # Show the data table (NOW APPEARS AFTER THE EDIT FORM)
-                            st.write("**Transaction List**")
-                            
-                            # Use data editor for checkbox selection
-                            edited_transactions = st.data_editor(
-                                display_recon_sorted,
-                                column_config={
-                                    "Edit": st.column_config.CheckboxColumn(
-                                        "Edit",
-                                        help="Select to edit transaction",
-                                        default=False,
-                                        width="small"
-                                    ),
-                                    "Policy Type": st.column_config.TextColumn(
-                                        help="Type of insurance policy"
-                                    ),
-                                    "Carrier Name": st.column_config.TextColumn(
-                                        help="Insurance carrier"
-                                    ),
-                                    "Effective Date": st.column_config.DateColumn(
-                                        format="MM/DD/YYYY"
-                                    ),
-                                    "X-DATE": st.column_config.DateColumn(
-                                        format="MM/DD/YYYY",
-                                        help="Transaction X-DATE for statement processing"
-                                    ),
-                                    "Agent Comm %": st.column_config.NumberColumn(
-                                        format="%.2f",
-                                        help="Agent commission percentage"
-                                    ),
-                                    "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Reconciliation Status": st.column_config.TextColumn(
-                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
-                                    ),
-                                    "Batch ID": st.column_config.TextColumn(
-                                        help="Batch ID this transaction belongs to"
-                                    ),
-                                    "Is Void Entry": st.column_config.TextColumn(
-                                        help="Yes = This is a reversal entry, No = Original entry"
-                                    )
-                                },
-                                disabled=[col for col in display_columns if col != 'Edit'],
-                                use_container_width=True,
-                                hide_index=True,
-                                height=display_height,
-                                key="reconciliation_transactions_editor"
-                            )
-                            
-                            # Check if a transaction is selected for editing
-                            selected_for_edit = edited_transactions[edited_transactions['Edit'] == True]
-                            
-                            if len(selected_for_edit) > 0:
-                                if len(selected_for_edit) > 1:
-                                    st.warning("⚠️ Please select only one transaction to edit at a time")
-                                else:
-                                    # Get the selected transaction and store in session state
-                                    selected_row = selected_for_edit.iloc[0]
-                                    if st.session_state.reconciliation_edit_selected != selected_row['Transaction ID']:
-                                        st.session_state.reconciliation_edit_selected = selected_row['Transaction ID']
-                                        st.rerun()
                     else:
                         st.info("No reconciliations found in the selected date range")
                 else:
@@ -14669,12 +14633,14 @@ TO "New Column Name";
                                 elif trans_type == 'END' and pd.notna(trans_eff_date) and term_x_date:
                                     if term_eff_date <= trans_eff_date <= term_x_date:
                                         include_transaction = True
-                                # Include STMT/VOID transactions within term (using Effective Date only)
+                                # Include STMT/VOID transactions within term
                                 elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                    # Use Effective Date just like other transactions
-                                    if pd.notna(trans_eff_date) and term_x_date:
-                                        if term_eff_date <= trans_eff_date <= term_x_date:
-                                            include_transaction = True
+                                    stmt_date = pd.to_datetime(trans_row.get('STMT DATE'), errors='coerce')
+                                    if pd.notna(stmt_date) and term_x_date and term_eff_date <= stmt_date <= term_x_date:
+                                        include_transaction = True
+                                    # Also check if they reference the same term based on effective date
+                                    elif trans_eff_date == term_eff_date:
+                                        include_transaction = True
                                 # Include other transactions (CAN, PMT, etc.) within the term dates
                                 elif pd.notna(trans_eff_date) and term_x_date:
                                     if term_eff_date <= trans_eff_date <= term_x_date:
@@ -15717,22 +15683,22 @@ TO "New Column Name";
                                                 if row['X-DATE'] == term_row['X-DATE'] and trans_type in ['NEW', 'RWL']:
                                                     editable_data.at[idx, '_term_group'] = term_name
                                                     editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include END transactions within the term dates (but not on X-DATE)
+                                                # Include END transactions within the term dates
                                                 elif trans_type == 'END':
                                                     trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
+                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
                                                         editable_data.at[idx, '_term_group'] = term_name
                                                         editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include STMT/VOID transactions within term (but not on X-DATE)
+                                                # Include STMT/VOID transactions within term
                                                 elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
+                                                    stmt_date = pd.to_datetime(row.get('STMT DATE'), errors='coerce')
+                                                    if pd.notna(stmt_date) and term_eff_date <= stmt_date <= term_x_date:
                                                         editable_data.at[idx, '_term_group'] = term_name
                                                         editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include all other transactions within term (but not on X-DATE)
+                                                # Include all other transactions (STL, etc.) within the term dates
                                                 else:
                                                     trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
+                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
                                                         editable_data.at[idx, '_term_group'] = term_name
                                                         editable_data.at[idx, '_term_dates'] = term_dates
                                             
@@ -15758,45 +15724,6 @@ TO "New Column Name";
                             
                             # Sort transactions within each term group with enhanced logic
                             sorted_dfs = []
-                            
-                            # First, check for orphaned transactions (no term group) and add them at TOP with indicators
-                            no_group = editable_data[editable_data['_term_group'] == '']
-                            if len(no_group) > 0:
-                                # Create header row for orphaned transactions
-                                orphan_header = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_header.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_header.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                # Use a long string of blocks to ensure full cell coverage
-                                warning_msg = '█' * 50  # 50 solid blocks to fill most column widths
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_header.at[0, col] = warning_msg
-                                
-                                orphan_header['_term_group'] = 'ORPHAN_HEADER'
-                                
-                                # Add the orphaned transactions
-                                no_group_copy = no_group.copy()
-                                
-                                # Create footer row for orphaned transactions
-                                orphan_footer = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_footer.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_footer.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_footer.at[0, col] = warning_msg
-                                
-                                orphan_footer['_term_group'] = 'ORPHAN_FOOTER'
-                                
-                                # Add header, orphans, and footer to the beginning
-                                sorted_dfs.append(orphan_header)
-                                sorted_dfs.append(no_group_copy)
-                                sorted_dfs.append(orphan_footer)
-                            
-                            # Then process all grouped transactions
                             for group_name in unique_groups:
                                 group_df = editable_data[editable_data['_term_group'] == group_name].copy()
                                 
@@ -15847,7 +15774,10 @@ TO "New Column Name";
                                     
                                     sorted_dfs.append(sorted_group)
                             
-                            # Orphaned transactions are now handled at the beginning with visual indicators
+                            # Also include any rows without a term group (shouldn't happen, but just in case)
+                            no_group = editable_data[editable_data['_term_group'] == '']
+                            if len(no_group) > 0:
+                                sorted_dfs.append(no_group)
                             
                             # Rebuild editable_data with the sorted order
                             if sorted_dfs:
@@ -15879,12 +15809,8 @@ TO "New Column Name";
                                 else:
                                     group_indicators.append('')  # No indicator for rows without term group
                             
-                            # Insert group indicator after Select column (only if it doesn't exist)
-                            if 'Group' not in editable_data.columns:
-                                editable_data.insert(1, 'Group', group_indicators)
-                            else:
-                                # Update existing Group column
-                                editable_data['Group'] = group_indicators
+                            # Insert group indicator after Select column
+                            editable_data.insert(1, 'Group', group_indicators)
                             
                             # Create subtotal rows for each term group
                             numeric_columns = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
@@ -16178,23 +16104,9 @@ TO "New Column Name";
                         
                         # Apply combined styling for special transactions and subtotals
                         def combined_styling(row):
-                            # First check if it's a subtotal row (either '=' or solid blocks for orphan rows)
-                            if 'Group' in row and (row['Group'] == '=' or '█' in str(row['Group'])):
-                                # Check if this is an orphan header/footer row
-                                if 'Customer' in row and row['Customer'] == 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!':
-                                    # Create cell-specific styling
-                                    styles = []
-                                    for col in row.index:
-                                        if col == 'Customer':
-                                            # Red text for the Customer column
-                                            styles.append('background-color: #4a4a4a; color: #ff0000; font-weight: bold')
-                                        else:
-                                            # White text for other columns
-                                            styles.append('background-color: #4a4a4a; color: white; font-weight: bold')
-                                    return styles
-                                else:
-                                    # Regular subtotal row styling
-                                    return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
+                            # First check if it's a subtotal row
+                            if 'Group' in row and row['Group'] == '=':
+                                return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
                             
                             # Then check for special transaction types
                             if 'Transaction ID' in row.index:

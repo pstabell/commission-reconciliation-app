@@ -6305,7 +6305,7 @@ def main():
                             # Use container to better control rendering
                             carrier_container = st.container()
                             with carrier_container:
-                                col1, col2, col3 = st.columns([2, 2, 1])
+                                col1, col2 = st.columns(2)
                                 with col1:
                                     # Carrier dropdown with search capability
                                     carrier_options = [""] + [c['carrier_name'] for c in carriers_list]
@@ -6376,18 +6376,6 @@ def main():
                                 if not selected_carrier_name:
                                     mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
                                     st.session_state['edit_mga_name_manual'] = mga_name_manual
-                                
-                                with col3:
-                                    st.write("")  # Add spacing to align with selectboxes
-                                    st.write("")  # Add more spacing
-                                    if st.button("🔄 Refresh", help="Refresh MGA list if you've added new commission rules", key="refresh_mga_cache"):
-                                        # Clear all MGA caches
-                                        keys_to_clear = [key for key in st.session_state.keys() if key.startswith('mgas_for_carrier_')]
-                                        for key in keys_to_clear:
-                                            del st.session_state[key]
-                                        st.success("✅ MGA lists refreshed!")
-                                        time.sleep(0.5)
-                                        st.rerun()
                             
                             # Store final values for form submission
                             if selected_carrier_name:
@@ -15764,16 +15752,7 @@ TO "New Column Name";
                             if len(no_group) > 0:
                                 # Create header row for orphaned transactions
                                 orphan_header = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_header.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_header.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                # Use a long string of blocks to ensure full cell coverage
-                                warning_msg = '█' * 50  # 50 solid blocks to fill most column widths
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_header.at[0, col] = warning_msg
-                                
+                                orphan_header.at[0, 'Customer'] = '=== ORPHANED TRANSACTIONS REQUIRING RENEWAL POLICY TERM ==='
                                 orphan_header['_term_group'] = 'ORPHAN_HEADER'
                                 
                                 # Add the orphaned transactions
@@ -15781,14 +15760,7 @@ TO "New Column Name";
                                 
                                 # Create footer row for orphaned transactions
                                 orphan_footer = pd.DataFrame([{col: '' for col in editable_data.columns}])
-                                orphan_footer.at[0, 'Customer'] = 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!'
-                                orphan_footer.at[0, 'Group'] = '█' * 5  # Fill Group column with solid blocks too
-                                
-                                # Add solid blocks to fill all other cells except Customer
-                                for col in editable_data.columns:
-                                    if col not in ['Customer', 'Group', '_term_group']:
-                                        orphan_footer.at[0, col] = warning_msg
-                                
+                                orphan_footer.at[0, 'Customer'] = '=== ORPHANED TRANSACTIONS REQUIRING RENEWAL POLICY TERM ==='
                                 orphan_footer['_term_group'] = 'ORPHAN_FOOTER'
                                 
                                 # Add header, orphans, and footer to the beginning
@@ -15879,12 +15851,8 @@ TO "New Column Name";
                                 else:
                                     group_indicators.append('')  # No indicator for rows without term group
                             
-                            # Insert group indicator after Select column (only if it doesn't exist)
-                            if 'Group' not in editable_data.columns:
-                                editable_data.insert(1, 'Group', group_indicators)
-                            else:
-                                # Update existing Group column
-                                editable_data['Group'] = group_indicators
+                            # Insert group indicator after Select column
+                            editable_data.insert(1, 'Group', group_indicators)
                             
                             # Create subtotal rows for each term group
                             numeric_columns = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
@@ -16178,23 +16146,9 @@ TO "New Column Name";
                         
                         # Apply combined styling for special transactions and subtotals
                         def combined_styling(row):
-                            # First check if it's a subtotal row (either '=' or solid blocks for orphan rows)
-                            if 'Group' in row and (row['Group'] == '=' or '█' in str(row['Group'])):
-                                # Check if this is an orphan header/footer row
-                                if 'Customer' in row and row['Customer'] == 'ORPHANED TRANSACTIONS REQUIRE RWL POLICY TERM!':
-                                    # Create cell-specific styling
-                                    styles = []
-                                    for col in row.index:
-                                        if col == 'Customer':
-                                            # Red text for the Customer column
-                                            styles.append('background-color: #4a4a4a; color: #ff0000; font-weight: bold')
-                                        else:
-                                            # White text for other columns
-                                            styles.append('background-color: #4a4a4a; color: white; font-weight: bold')
-                                    return styles
-                                else:
-                                    # Regular subtotal row styling
-                                    return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
+                            # First check if it's a subtotal row
+                            if 'Group' in row and row['Group'] == '=':
+                                return ['background-color: #4a4a4a; color: white; font-weight: bold'] * len(row)
                             
                             # Then check for special transaction types
                             if 'Transaction ID' in row.index:
