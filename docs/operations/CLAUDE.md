@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: August 8, 2025  
-**Current Version**: 3.9.35
+**Current Version**: 3.9.36
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,14 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.36)
+1. **Proactive Agent Deployment Directive**:
+   - **Added Critical Guideline**: Always use Task agents for search and analysis operations
+   - **Automatic Deployment**: Agents should be deployed proactively for code searches
+   - **Benefits**: High-speed parallel searching with pin-point accuracy
+   - **Use Cases**: Finding implementations, tracking dependencies, analyzing patterns
+   - **Documentation**: Added as top priority (#0) in Development Guidelines
 
 ## Recent Major Changes (v3.9.35)
 1. **MGA Dropdown Fixed for Commission Rules**:
@@ -376,6 +384,33 @@ This file contains important context and guidelines for AI assistants (like Clau
 4. **Agency Comm Optional**: Moved to optional fields, allowing reconciliation without it
 5. **Smart Warning Logic**: Only shows warnings for genuine customer name mismatches
 
+## Streamlit Framework Limitations
+
+### Tab Component Limitations
+- **Cannot programmatically select tabs** - Always resets to first tab on rerun
+- **Cannot dynamically reorder tab content** - Tab order is fixed at creation
+- **Workarounds:**
+  - Minimize reruns (use forms, avoid callbacks)
+  - Keep frequently-used functionality on first tab
+  - Use success messages instead of immediate refresh
+  - Open in multiple browser tabs for different workflows
+
+### Form Limitations
+- **Cannot modify form fields based on other form fields** - All form state is isolated
+- **Cannot have nested forms**
+- **Workarounds:**
+  - Use session state for complex interactions
+  - Break complex forms into steps
+  - Use regular widgets outside forms when real-time updates needed
+
+### State Management
+- **Page reruns reset all widget states unless explicitly stored**
+- **Session state persists but can cause stale data issues**
+- **Workarounds:**
+  - Be selective about what goes in session state
+  - Clear relevant session state when context changes
+  - Use unique keys for widgets to prevent conflicts
+
 ## Known Issues & Solutions
 
 ### 1. Column Names with Spaces
@@ -611,7 +646,41 @@ supabase.table('policies').select('"Transaction ID"')
 
 ## Development Guidelines
 
-### 1. Before Making Changes
+### 0. Proactive Agent Deployment (CRITICAL)
+- **ALWAYS use Task agents for search and analysis operations**
+- **Automatically deploy agents when:**
+  - Searching for where functionality is implemented
+  - Finding all usages of a function or pattern
+  - Analyzing code dependencies or relationships
+  - Investigating bugs across multiple files
+  - Understanding complex feature implementations
+- **Benefits of agent deployment:**
+  - High-speed parallel searching
+  - Pin-point accuracy in finding code patterns
+  - Comprehensive analysis without missing edge cases
+  - Reduced context usage for large searches
+- **Example use cases:**
+  - "Where is commission calculation handled?" → Deploy agent
+  - "Find all places that update reconciliation status" → Deploy agent
+  - "How does the MGA dropdown populate?" → Deploy agent
+- **Agent results**: Trust agent findings but verify critical changes
+
+### 1. Know When to Stop
+- **If a solution is getting complex, STOP and reassess**
+- **Warning signs of over-complexity:**
+  - Multiple failed attempts with increasing complexity
+  - Workarounds that require more workarounds
+  - Fighting against framework limitations (like Streamlit's tab behavior)
+  - Code that's hard to explain or understand
+  - Solutions that might break existing functionality
+- **Better approaches:**
+  - Acknowledge the limitation and explain why
+  - Suggest simpler alternatives
+  - Revert changes if they're not working
+  - Ask: "Is this worth the complexity?"
+- **Example**: Tab reordering seemed simple but required dynamic content mapping that Streamlit doesn't support. Better to acknowledge this than create a confusing half-solution.
+
+### 2. Before Making Changes
 - Always create timestamped backup of commission_app.py
 - Check column_mapping_config.py for field name mappings
 - Verify field exists in database before operations

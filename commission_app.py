@@ -686,8 +686,8 @@ def apply_formula_display(df, show_formulas=True):
         
         # Calculate Total Agent Commission
         df['Total Agent Comm'] = df.apply(
-            lambda row: (
-                row['_formula_agent'] + row['Broker Fee Agent Comm']
+            lambda row: round(
+                row['_formula_agent'] + row['Broker Fee Agent Comm'], 2
             ),
             axis=1
         )
@@ -1080,6 +1080,37 @@ def format_currency_columns(df):
     return df
 
 # --- Helper Functions ---
+
+def inject_scroll_to_top():
+    """Inject JavaScript to scroll to top of page."""
+    st.markdown("""
+    <script>
+        // Delay to ensure page is rendered
+        setTimeout(function() {
+            // Scroll to top of page
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+            // Also try the Streamlit container
+            const stApp = document.querySelector('[data-testid="stAppViewContainer"]');
+            if (stApp) {
+                stApp.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            }
+            // Try the main content area too
+            const mainContent = document.querySelector('.main');
+            if (mainContent) {
+                mainContent.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
+    </script>
+    """, unsafe_allow_html=True)
 
 # Column mapping persistence functions
 def load_saved_column_mappings():
@@ -6364,6 +6395,7 @@ def main():
                                 commission_rule = None
                                 policy_type = modal_data.get('Policy Type', '')
                                 
+                                
                                 if selected_mga_id:
                                     # Try carrier + MGA + policy type first
                                     commission_rule = lookup_commission_rule(selected_carrier_id, selected_mga_id, policy_type)
@@ -7531,6 +7563,7 @@ def main():
     
     # --- Reconciliation ---
     elif page == "Reconciliation":
+        inject_scroll_to_top()
         col_title, col_refresh = st.columns([6, 1])
         with col_title:
             st.title("💳 Commission Reconciliation")
@@ -8596,7 +8629,16 @@ def main():
         with rec_tab3:
             # Mark this tab as active
             st.session_state.reconciliation_selected_tab = "Reconciliation History"
+            
             st.subheader("📜 Reconciliation History")
+            
+            # Reload data for this tab to ensure we have the latest
+            all_data = load_policies_data()
+            
+            # Display any success message from previous update
+            if 'reconciliation_update_success' in st.session_state:
+                st.success(st.session_state['reconciliation_update_success'])
+                del st.session_state['reconciliation_update_success']
             
             # Define callback function for preserving tab state
             def preserve_reconciliation_tab():
@@ -8815,8 +8857,7 @@ def main():
                                 hide_index=True,
                                 disabled=[col for col in display_columns if col != 'Select'],
                                 height=table_height,
-                                key="batch_selection_editor",
-                                on_change=preserve_reconciliation_tab
+                                key="batch_selection_editor"
                             )
                             
                             # Add delete functionality
@@ -8965,8 +9006,8 @@ def main():
                             # Only include columns that exist
                             display_columns = [col for col in display_columns if col in display_recon.columns]
                             
-                            # Sort by STMT DATE descending (most recent first)
-                            display_recon_sorted = display_recon[display_columns].sort_values('STMT DATE', ascending=False)
+                            # Sort by Customer name first, then STMT DATE descending
+                            display_recon_sorted = display_recon[display_columns].sort_values(['Customer', 'STMT DATE'], ascending=[True, False])
                             
                             # Calculate height to show all rows plus 2 extra
                             num_rows = len(display_recon_sorted)
@@ -8978,67 +9019,29 @@ def main():
                             max_height = 600
                             display_height = min(calculated_height, max_height)
                             
-                            # Use data editor for checkbox selection
-                            edited_transactions = st.data_editor(
-                                display_recon_sorted,
-                                column_config={
-                                    "Edit": st.column_config.CheckboxColumn(
-                                        "Edit",
-                                        help="Select to edit transaction",
-                                        default=False,
-                                        width="small"
-                                    ),
-                                    "Policy Type": st.column_config.TextColumn(
-                                        help="Type of insurance policy"
-                                    ),
-                                    "Carrier Name": st.column_config.TextColumn(
-                                        help="Insurance carrier"
-                                    ),
-                                    "Effective Date": st.column_config.DateColumn(
-                                        format="MM/DD/YYYY"
-                                    ),
-                                    "X-DATE": st.column_config.DateColumn(
-                                        format="MM/DD/YYYY",
-                                        help="Transaction X-DATE for statement processing"
-                                    ),
-                                    "Agent Comm %": st.column_config.NumberColumn(
-                                        format="%.2f",
-                                        help="Agent commission percentage"
-                                    ),
-                                    "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
-                                    "Reconciliation Status": st.column_config.TextColumn(
-                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
-                                    ),
-                                    "Batch ID": st.column_config.TextColumn(
-                                        help="Batch ID this transaction belongs to"
-                                    ),
-                                    "Is Void Entry": st.column_config.TextColumn(
-                                        help="Yes = This is a reversal entry, No = Original entry"
-                                    )
-                                },
-                                disabled=[col for col in display_columns if col != 'Edit'],
-                                use_container_width=True,
-                                hide_index=True,
-                                height=display_height,
-                                key="reconciliation_transactions_editor",
-                                on_change=preserve_reconciliation_tab
-                            )
+                            # Initialize edit state if not exists
+                            if 'reconciliation_edit_selected' not in st.session_state:
+                                st.session_state.reconciliation_edit_selected = None
                             
-                            # Check if a transaction is selected for editing
-                            selected_for_edit = edited_transactions[edited_transactions['Edit'] == True]
-                            
-                            if len(selected_for_edit) > 0:
+                            # Check if we need to show the edit form (BEFORE the data table)
+                            if st.session_state.reconciliation_edit_selected is not None:
                                 st.divider()
                                 
-                                if len(selected_for_edit) > 1:
-                                    st.warning("⚠️ Please select only one transaction to edit at a time")
-                                else:
-                                    # Get the selected transaction
-                                    selected_row = selected_for_edit.iloc[0]
+                                # Get the selected transaction data
+                                selected_trans_id = st.session_state.reconciliation_edit_selected
+                                selected_row = display_recon[display_recon['Transaction ID'] == selected_trans_id]
+                                
+                                if not selected_row.empty:
+                                    selected_row = selected_row.iloc[0]
                                     
-                                    # Create edit form
-                                    st.subheader("✏️ Edit Reconciled Statement Transaction Details")
+                                    # Create edit form header with close button
+                                    col1, col2 = st.columns([6, 1])
+                                    with col1:
+                                        st.subheader("✏️ Edit Reconciled Statement Transaction Details")
+                                    with col2:
+                                        if st.button("❌ Cancel", key="cancel_edit", help="Cancel editing"):
+                                            st.session_state.reconciliation_edit_selected = None
+                                            st.rerun()
                                     
                                     # Use a form to ensure proper styling
                                     with st.form("edit_reconciled_transaction_form"):
@@ -9174,7 +9177,7 @@ def main():
                                             )
                                         
                                         # Submit button for the form
-                                        submitted = st.form_submit_button("💾 Save Changes", type="primary")
+                                        submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
                                         
                                         if submitted:
                                             # Update the database
@@ -9198,20 +9201,88 @@ def main():
                                                 response = supabase.table('policies').update(update_data).eq('Transaction ID', selected_row['Transaction ID']).execute()
                                                 
                                                 if response.data:
-                                                    st.success(f"✅ Successfully updated transaction {selected_row['Transaction ID']}")
+                                                    # Store success message in session state
+                                                    st.session_state['reconciliation_update_success'] = f"✅ Successfully updated transaction {selected_row['Transaction ID']}"
                                                     
-                                                    # Set the active tab to preserve it during rerun
-                                                    st.session_state.reconciliation_selected_tab = "Reconciliation History"
+                                                    # Clear the edit selection
+                                                    st.session_state.reconciliation_edit_selected = None
                                                     
-                                                    # Clear cache and rerun
+                                                    # Clear cache
                                                     clear_policies_cache()
-                                                    time.sleep(1)
+                                                    
+                                                    # Show success message and rerun to refresh data
+                                                    st.success(st.session_state['reconciliation_update_success'])
+                                                    time.sleep(1)  # Brief pause to see success message
                                                     st.rerun()
                                                 else:
                                                     st.error("Failed to update transaction")
                                                     
                                             except Exception as e:
                                                 st.error(f"❌ Error updating transaction: {str(e)}")
+                                
+                                st.divider()
+                            
+                            # Show the data table (NOW APPEARS AFTER THE EDIT FORM)
+                            st.write("**Transaction List**")
+                            
+                            # Use data editor for checkbox selection
+                            edited_transactions = st.data_editor(
+                                display_recon_sorted,
+                                column_config={
+                                    "Edit": st.column_config.CheckboxColumn(
+                                        "Edit",
+                                        help="Select to edit transaction",
+                                        default=False,
+                                        width="small"
+                                    ),
+                                    "Policy Type": st.column_config.TextColumn(
+                                        help="Type of insurance policy"
+                                    ),
+                                    "Carrier Name": st.column_config.TextColumn(
+                                        help="Insurance carrier"
+                                    ),
+                                    "Effective Date": st.column_config.DateColumn(
+                                        format="MM/DD/YYYY"
+                                    ),
+                                    "X-DATE": st.column_config.DateColumn(
+                                        format="MM/DD/YYYY",
+                                        help="Transaction X-DATE for statement processing"
+                                    ),
+                                    "Agent Comm %": st.column_config.NumberColumn(
+                                        format="%.2f",
+                                        help="Agent commission percentage"
+                                    ),
+                                    "Agent Paid Amount (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Agency Comm Received (STMT)": st.column_config.NumberColumn(format="$%.2f"),
+                                    "Reconciliation Status": st.column_config.TextColumn(
+                                        help="RECONCILED = Normal entry, VOID = Void reversal entry"
+                                    ),
+                                    "Batch ID": st.column_config.TextColumn(
+                                        help="Batch ID this transaction belongs to"
+                                    ),
+                                    "Is Void Entry": st.column_config.TextColumn(
+                                        help="Yes = This is a reversal entry, No = Original entry"
+                                    )
+                                },
+                                disabled=[col for col in display_columns if col != 'Edit'],
+                                use_container_width=True,
+                                hide_index=True,
+                                height=display_height,
+                                key="reconciliation_transactions_editor"
+                            )
+                            
+                            # Check if a transaction is selected for editing
+                            selected_for_edit = edited_transactions[edited_transactions['Edit'] == True]
+                            
+                            if len(selected_for_edit) > 0:
+                                if len(selected_for_edit) > 1:
+                                    st.warning("⚠️ Please select only one transaction to edit at a time")
+                                else:
+                                    # Get the selected transaction and store in session state
+                                    selected_row = selected_for_edit.iloc[0]
+                                    if st.session_state.reconciliation_edit_selected != selected_row['Transaction ID']:
+                                        st.session_state.reconciliation_edit_selected = selected_row['Transaction ID']
+                                        st.rerun()
                     else:
                         st.info("No reconciliations found in the selected date range")
                 else:
@@ -11956,7 +12027,7 @@ SOLUTION NEEDED:
                                         
                                         response = supabase.table('commission_rules').insert(new_rule).execute()
                                         # Clear MGA cache for this carrier since we added a new rule
-                                        cache_key = f'mgas_for_carrier_{carrier_id}'
+                                        cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
                                         if cache_key in st.session_state:
                                             del st.session_state[cache_key]
                                         st.success("✅ Rule added")

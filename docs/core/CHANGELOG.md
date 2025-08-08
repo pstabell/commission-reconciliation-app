@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.36] - 2025-08-08 - Reconciliation UI Improvements & Documentation Updates
+
+### Changed
+- **Reconciliation History Edit Form**
+  - Removed Close button from edit form (caused confusion and tab jumping)
+  - Save button now full width for better UI
+  - Save action now refreshes data automatically after 1-second success message
+  - Attempted multiple scroll-to-top solutions (documented for future reference)
+
+### Added
+- **CLAUDE.md Documentation Enhancements**
+  - Added "Proactive Agent Deployment" as top-priority guideline (#0)
+  - Agents should be automatically deployed for search and analysis tasks
+  - Benefits include high-speed parallel searching and pin-point accuracy
+  - Added "Know When to Stop" guideline for managing solution complexity
+  - Added Streamlit Framework Limitations section documenting tab and form constraints
+
+### Technical
+- Created `inject_scroll_to_top()` helper function (attempted but Streamlit limitations prevent reliable scrolling)
+- Documented various scroll implementation attempts for future reference
+- Session continues to track tab state despite framework limitations
+
 ## [3.9.35] - 2025-08-08 - MGA Dropdown Fixed for Commission Rules
 
 ### Fixed
