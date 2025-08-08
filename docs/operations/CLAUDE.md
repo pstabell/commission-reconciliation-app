@@ -648,21 +648,26 @@ supabase.table('policies').select('"Transaction ID"')
 
 ### 0. Proactive Agent Deployment (CRITICAL)
 - **ALWAYS use Task agents for search and analysis operations**
+- **15-SECOND RULE**: If a search or analysis takes longer than 15 seconds, IMMEDIATELY deploy the whole team of agents
 - **Automatically deploy agents when:**
   - Searching for where functionality is implemented
   - Finding all usages of a function or pattern
   - Analyzing code dependencies or relationships
   - Investigating bugs across multiple files
   - Understanding complex feature implementations
+  - ANY search taking more than 15 seconds
+- **Deploy MULTIPLE agents in parallel**: Think like a coach - send the whole team out, don't wait for one player
 - **Benefits of agent deployment:**
   - High-speed parallel searching
   - Pin-point accuracy in finding code patterns
   - Comprehensive analysis without missing edge cases
   - Reduced context usage for large searches
+  - MUCH faster results with parallel execution
 - **Example use cases:**
   - "Where is commission calculation handled?" → Deploy agent
   - "Find all places that update reconciliation status" → Deploy agent
   - "How does the MGA dropdown populate?" → Deploy agent
+  - "Fix this bug" → Deploy MULTIPLE agents to find all related code
 - **Agent results**: Trust agent findings but verify critical changes
 
 ### 1. Know When to Stop

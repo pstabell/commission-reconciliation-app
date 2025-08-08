@@ -13429,34 +13429,13 @@ SOLUTION NEEDED:
                         with term_col2:
                             st.info(f"📆 Term: {term_eff_date.strftime('%Y-%m-%d')} to {term_x_date.strftime('%Y-%m-%d')}")
                         
-                        # Filter policy_rows to include:
-                        # 1. NEW/RWL transaction with this X-DATE
-                        # 2. END transactions with effective dates between term dates
-                        # 3. STMT/VOID/ADJ transactions within the term period
+                        # MODIFIED: Include ALL transactions regardless of dates
+                        # Simply include all rows when a specific term is selected
                         filtered_rows = []
                         
                         for idx, row in policy_rows.iterrows():
-                            trans_type = row.get("Transaction Type", "")
-                            trans_eff_date = pd.to_datetime(row.get("Effective Date"), errors='coerce')
-                            trans_x_date = row.get("X-DATE")
-                            
-                            # Check for STMT/VOID transactions FIRST (they might have various transaction types)
-                            if "-STMT-" in str(row.get("Transaction ID", "")) or "-VOID-" in str(row.get("Transaction ID", "")):
-                                # Include if Effective Date falls within term
-                                if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
-                            # Include NEW/RWL with matching X-DATE
-                            elif trans_type in ["NEW", "RWL"] and trans_x_date == selected_xdate:
-                                filtered_rows.append(idx)
-                            # Include END within the term dates
-                            elif trans_type == "END" and pd.notna(trans_eff_date):
-                                if term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
-                            # Include other payment/adjustment transactions
-                            elif trans_type in ["STMT", "VOID", "ADJ"]:
-                                # Check if Effective Date falls within term
-                                if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                    filtered_rows.append(idx)
+                            # Include ALL transactions - no date filtering
+                            filtered_rows.append(idx)
                         
                         # Apply the filter
                         if filtered_rows:
@@ -14637,7 +14616,8 @@ TO "New Column Name";
                                     working_data['Policy Number'] == policy_num
                                 ].copy()
                             
-                            # Filter to only include transactions within this specific term
+                            # Include ALL transactions for this policy, regardless of dates
+                            # This modification removes all date-based filtering
                             term_transactions = []
                             
                             for _, trans_row in policy_transactions.iterrows():
@@ -14645,30 +14625,13 @@ TO "New Column Name";
                                 trans_id = str(trans_row.get('Transaction ID', ''))
                                 trans_eff_date = pd.to_datetime(trans_row.get('Effective Date'), errors='coerce')
                                 
-                                include_transaction = False
+                                # MODIFIED: Include ALL transactions regardless of dates
+                                include_transaction = True
                                 
-                                # For NEW/RWL transactions, be very strict - only include if in selected month
-                                if trans_type in ['NEW', 'RWL']:
-                                    trans_year_month = trans_eff_date.strftime('%Y-%m') if pd.notna(trans_eff_date) else ''
-                                    # Only include if this NEW/RWL is in our selected month
-                                    if trans_year_month == selected_ym:
-                                        include_transaction = True
-                                # Include END transactions within the term dates
-                                elif trans_type == 'END' and pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date <= term_x_date:
-                                        include_transaction = True
-                                # Include STMT/VOID transactions within term
-                                elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                    stmt_date = pd.to_datetime(trans_row.get('STMT DATE'), errors='coerce')
-                                    if pd.notna(stmt_date) and term_x_date and term_eff_date <= stmt_date <= term_x_date:
-                                        include_transaction = True
-                                    # Also check if they reference the same term based on effective date
-                                    elif trans_eff_date == term_eff_date:
-                                        include_transaction = True
-                                # Include other transactions (CAN, PMT, etc.) within the term dates
-                                elif pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date <= term_x_date:
-                                        include_transaction = True
+                                # Optional: You can still filter by transaction type if needed
+                                # For example, to exclude certain types:
+                                # if trans_type in ['EXCLUDE_TYPE1', 'EXCLUDE_TYPE2']:
+                                #     include_transaction = False
                                 
                                 if include_transaction:
                                     term_transactions.append(trans_row.to_dict())
@@ -15698,33 +15661,11 @@ TO "New Column Name";
                                             term_name = f"{policy_num} - Term {term_idx + 1}"
                                             term_dates = f"{term_eff_date.strftime('%m/%d/%Y')} to {term_x_date.strftime('%m/%d/%Y')}"
                                             
-                                            # Find all transactions within this term's date range
+                                            # MODIFIED: Include ALL transactions for this policy regardless of dates
                                             for idx, row in policy_data.iterrows():
-                                                trans_type = row.get('Transaction Type', '')
-                                                trans_id = str(row.get('Transaction ID', ''))
-                                                
-                                                # Include the NEW/RWL transaction that defines this term
-                                                if row['X-DATE'] == term_row['X-DATE'] and trans_type in ['NEW', 'RWL']:
-                                                    editable_data.at[idx, '_term_group'] = term_name
-                                                    editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include END transactions within the term dates
-                                                elif trans_type == 'END':
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include STMT/VOID transactions within term
-                                                elif '-STMT-' in trans_id or '-VOID-' in trans_id:
-                                                    stmt_date = pd.to_datetime(row.get('STMT DATE'), errors='coerce')
-                                                    if pd.notna(stmt_date) and term_eff_date <= stmt_date <= term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
-                                                # Include all other transactions (STL, etc.) within the term dates
-                                                else:
-                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
-                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
-                                                        editable_data.at[idx, '_term_group'] = term_name
-                                                        editable_data.at[idx, '_term_dates'] = term_dates
+                                                # Assign ALL transactions to this term group - no date filtering
+                                                editable_data.at[idx, '_term_group'] = term_name
+                                                editable_data.at[idx, '_term_dates'] = term_dates
                                             
                                             all_term_groups.append(term_name)
                                     else:
