@@ -706,6 +706,34 @@ Simplified reconciliation requirements:
 - **Focus on Agent**: Emphasizes agent payment reconciliation
 - **Flexibility**: Allows reconciliation without full agency data
 
+### Financial Fields Exclusion (v3.9.34 - August 7, 2025)
+Enhanced reconciliation import to prevent unwanted financial data:
+- **Excluded by Default**: Financial calculation fields no longer imported unless explicitly mapped
+- **Fields Affected**:
+  - Premium Sold
+  - Policy Taxes & Fees
+  - Commissionable Premium
+  - Policy Gross Comm %
+  - Broker Fee
+  - Broker Fee Agent Comm
+- **Clean Imports**: These fields won't appear (not even as zeros) unless you specifically map them
+- **Focus on Payments**: Reconciliation is about matching payments, not recalculating commissions
+
+### UI Improvements (v3.9.34 - August 7, 2025)
+Major improvements to reconciliation import interface:
+- **Layout Fix**: Statement Details moved to top, customer matching below (as requested)
+- **"Use" Button Positioning**: Buttons moved to far left, immediately next to customer names
+- **Duplicate Prevention**: Added deduplication for unmatched transactions list
+- **Key Naming Fix**: Fixed duplicate widget key errors in "Show all at once" mode
+- **Clearer Association**: Use buttons now clearly associated with their respective customers
+
+### Import Integrity Issues Identified (v3.9.34 - August 7, 2025)
+- **Issue**: Orphaned batch records appearing in history even when import aborted
+- **Root Cause**: Client records being created outside of atomic transaction batch
+- **Expected Behavior**: System should validate everything before creating ANY records
+- **Current State**: Three batch records showing as ACTIVE despite only one successful import
+- **Note**: Full atomic transaction support exists but may have timing issues
+
 ---
 
-*This comprehensive documentation consolidates all reconciliation system knowledge through July 13, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*
+*This comprehensive documentation consolidates all reconciliation system knowledge through August 7, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*

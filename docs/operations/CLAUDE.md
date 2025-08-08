@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: August 5, 2025  
-**Current Version**: 3.9.33
+**Last Updated**: August 7, 2025  
+**Current Version**: 3.9.34
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,15 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.34)
+1. **Reconciliation Import Improvements**:
+   - **Financial Fields Exclusion**: Premium Sold, Policy Taxes & Fees, Commissionable Premium, Policy Gross Comm %, Broker Fee, and Broker Fee Agent Comm no longer imported unless explicitly mapped
+   - **UI Layout Fix**: Statement Details moved to top of left column, customer matching below
+   - **"Use" Button Positioning**: Moved to far left, immediately next to customer names for clear association
+   - **Duplicate Prevention**: Added deduplication for unmatched transactions to prevent duplicates like "Stephen Randall" appearing twice
+   - **Widget Key Fixes**: Fixed duplicate key errors in "Show all at once" mode by adding unique suffixes
+   - **Import Integrity Issue**: Identified orphaned batch records in reconciliation history from aborted imports
 
 ## Recent Major Changes (v3.9.33)
 1. **Transaction Type Mapping Implementation**:

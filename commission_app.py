@@ -467,7 +467,12 @@ def clean_data_for_database(data):
         'expiration_date',  # This maps to X-DATE in the database
         'Days Until Expiration',  # Calculated field
         'Status',  # UI display field
-        '_id'  # Internal row identifier
+        '_id',  # Internal row identifier
+        '_balance',  # Calculated balance field for display only
+        'balance',  # Also a calculated field, not in database
+        '_customer_match',  # Temporary field for matching logic
+        '_match_type',  # Temporary field for matching logic
+        '_match_score'  # Temporary field for matching logic
     }
     
     # Create a copy of the data to avoid modifying the original
@@ -1876,11 +1881,15 @@ def find_potential_customer_matches(search_name, existing_customers):
     
     return result
 
-def calculate_transaction_balances(all_data):
+def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     """
     Calculate outstanding balances for all transactions.
     Reuses the exact logic from Unreconciled Transactions tab.
     Returns DataFrame with _balance column added.
+    
+    Args:
+        all_data: DataFrame with all transaction data
+        show_all_for_reconciliation: If True, returns all transactions from past 18 months regardless of balance
     """
     if all_data.empty:
         return pd.DataFrame()
@@ -1911,8 +1920,8 @@ def calculate_transaction_balances(all_data):
     
     # Calculate balance for each transaction
     for idx, row in original_trans.iterrows():
-        # Calculate credits (commission owed)
-        credit = float(row.get('Agent Estimated Comm $', 0) or 0)
+        # Calculate credits (commission owed) - use Total Agent Comm which includes broker fees
+        credit = float(row.get('Total Agent Comm', 0) or 0)
         
         # Calculate debits (total paid for this policy)
         policy_num = row['Policy Number']
@@ -1945,8 +1954,22 @@ def calculate_transaction_balances(all_data):
         balance = credit - debit
         original_trans.at[idx, '_balance'] = balance
     
-    # Return only transactions with outstanding balance
-    return original_trans[original_trans['_balance'] > 0.01]
+    # For reconciliation, optionally show all transactions from past 18 months
+    if show_all_for_reconciliation:
+        # Filter to past 18 months
+        cutoff_date = pd.Timestamp.now() - pd.DateOffset(months=18)
+        
+        # Parse effective dates for filtering
+        original_trans['_parsed_date'] = pd.to_datetime(original_trans['Effective Date'], errors='coerce')
+        
+        # Return all transactions from past 18 months with balance info
+        recent_trans = original_trans[original_trans['_parsed_date'] >= cutoff_date].copy()
+        recent_trans = recent_trans.drop('_parsed_date', axis=1)
+        
+        return recent_trans
+    else:
+        # Normal mode - return only transactions with outstanding balance
+        return original_trans[original_trans['_balance'] > 0.01]
 
 def match_statement_transactions(statement_df, column_mapping, existing_data, statement_date):
     """
@@ -1958,8 +1981,31 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     unmatched = []
     can_create = []
     
-    # Get transactions with outstanding balances using the same logic as Unreconciled tab
-    outstanding_trans = calculate_transaction_balances(existing_data)
+    # REMOVE DUPLICATES from statement before processing
+    # Create a key for each row based on customer, policy, amount, and date
+    if not statement_df.empty:
+        # Create columns for deduplication
+        dedup_cols = []
+        if 'Customer' in column_mapping and column_mapping['Customer'] in statement_df.columns:
+            dedup_cols.append(column_mapping['Customer'])
+        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in statement_df.columns:
+            dedup_cols.append(column_mapping['Policy Number'])
+        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in statement_df.columns:
+            dedup_cols.append(column_mapping['Effective Date'])
+        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns:
+            dedup_cols.append(column_mapping['Agent Paid Amount (STMT)'])
+        
+        if dedup_cols:
+            # Remove duplicates based on key columns
+            original_count = len(statement_df)
+            statement_df = statement_df.drop_duplicates(subset=dedup_cols, keep='first')
+            duplicate_count = original_count - len(statement_df)
+            
+            if duplicate_count > 0:
+                st.warning(f"⚠️ Removed {duplicate_count} duplicate rows from the statement import")
+    
+    # Get all transactions from past 18 months for reconciliation matching
+    outstanding_trans = calculate_transaction_balances(existing_data, show_all_for_reconciliation=True)
     
     # Build lookup dictionaries
     existing_lookup = {}
@@ -1992,6 +2038,9 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     all_customers = []
     if not existing_data.empty:
         all_customers = existing_data['Customer'].dropna().unique().tolist()
+    
+    # Track processed statement rows to prevent duplicates
+    processed_statement_rows = set()
     
     # Process each statement row
     for idx, row in statement_df.iterrows():
@@ -2163,14 +2212,47 @@ def show_import_results(statement_date, all_data):
     st.divider()
     st.markdown("### 📊 Import Preview")
     
-    # Create tabs for different result types
-    result_tabs = st.tabs([
-        f"✅ Matched ({len(st.session_state.matched_transactions)})",
-        f"❌ Unmatched ({len(st.session_state.unmatched_transactions)})",
-        f"➕ Can Create ({len(st.session_state.transactions_to_create)})"
-    ])
+    # Initialize or get the current view preference
+    if 'import_view_preference' not in st.session_state:
+        # Default to unmatched if there are any
+        if len(st.session_state.unmatched_transactions) > 0:
+            st.session_state.import_view_preference = 'unmatched'
+        else:
+            st.session_state.import_view_preference = 'matched'
     
-    with result_tabs[0]:  # Matched transactions
+    # Create button-based navigation that preserves state
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button(f"✅ Matched ({len(st.session_state.matched_transactions)})", 
+                    type="secondary" if st.session_state.import_view_preference != 'matched' else "primary",
+                    use_container_width=True):
+            st.session_state.import_view_preference = 'matched'
+            st.rerun()
+    
+    with col2:
+        if st.button(f"❌ Unmatched ({len(st.session_state.unmatched_transactions)})", 
+                    type="secondary" if st.session_state.import_view_preference != 'unmatched' else "primary",
+                    use_container_width=True):
+            st.session_state.import_view_preference = 'unmatched'
+            st.rerun()
+    
+    with col3:
+        if st.button(f"➕ Can Create ({len(st.session_state.transactions_to_create)})", 
+                    type="secondary" if st.session_state.import_view_preference != 'create' else "primary",
+                    use_container_width=True):
+            st.session_state.import_view_preference = 'create'
+            st.rerun()
+    
+    # Get the current selection
+    tab_selection = st.session_state.import_view_preference
+    
+    # Clear the focus flag if set
+    if 'focus_unmatched_tab' in st.session_state:
+        del st.session_state['focus_unmatched_tab']
+    
+    # Show content based on selection
+    if tab_selection == 'matched':
         if st.session_state.matched_transactions:
             matched_df = []
             for item in st.session_state.matched_transactions:
@@ -2193,6 +2275,7 @@ def show_import_results(statement_date, all_data):
                     confidence_label = "low"
                 
                 matched_df.append({
+                    'Unmatch': False,  # Add checkbox column
                     'Status': '✅',
                     'Transaction ID': item['match'].get('Transaction ID', 'N/A'),
                     'Type': item['match'].get('Transaction Type', 'N/A'),
@@ -2202,403 +2285,499 @@ def show_import_results(statement_date, all_data):
                     'Statement Amt': item.get('amount', 0),
                     'DB Balance': item['match'].get('balance', item.get('amount', 0)),
                     'Confidence': f"{confidence}% {confidence_label}",
-                    'Match Type': item['match_type']
+                    'Match Type': item.get('match_type', 'Unknown')
                 })
             
             df = pd.DataFrame(matched_df)
-            # Apply special styling for STMT and VOID transactions
-            styled_df = style_special_transactions(df)
             
-            st.dataframe(
-                styled_df,
+            # Make it editable to allow unmatch selection
+            edited_df = st.data_editor(
+                df,
                 column_config={
+                    "Unmatch": st.column_config.CheckboxColumn("Unmatch", help="Check to unmatch this transaction"),
                     "Statement Amt": st.column_config.NumberColumn(format="$%.2f"),
                     "DB Balance": st.column_config.NumberColumn(format="$%.2f")
                 },
+                disabled=['Status', 'Transaction ID', 'Type', 'Customer', 'Policy', 'Eff Date', 
+                         'Statement Amt', 'DB Balance', 'Confidence', 'Match Type'],
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                key="matched_editor"
             )
+            
+            # Add unmatch button
+            if edited_df['Unmatch'].any():
+                selected_count = edited_df['Unmatch'].sum()
+                if st.button(f"↩️ Unmatch {selected_count} selected transaction(s)", type="secondary"):
+                    # Move selected items back to unmatched
+                    items_to_unmatch = []
+                    remaining_matched = []
+                    
+                    for idx, (_, row) in enumerate(edited_df.iterrows()):
+                        if row['Unmatch']:
+                            # Get the original item from matched_transactions
+                            original_item = st.session_state.matched_transactions[idx]
+                            # Remove the 'match' info to make it unmatched again
+                            unmatched_item = {
+                                'customer': original_item.get('customer'),
+                                'policy_number': original_item.get('policy_number'),
+                                'effective_date': original_item.get('effective_date'),
+                                'amount': original_item.get('amount'),
+                                'agency_amount': original_item.get('agency_amount', 0),
+                                'statement_data': original_item.get('statement_data', {}),
+                                'row_index': original_item.get('row_index', idx)
+                            }
+                            items_to_unmatch.append(unmatched_item)
+                        else:
+                            remaining_matched.append(st.session_state.matched_transactions[idx])
+                    
+                    # Update the lists
+                    st.session_state.matched_transactions = remaining_matched
+                    st.session_state.unmatched_transactions.extend(items_to_unmatch)
+                    
+                    st.success(f"✅ Unmatched {len(items_to_unmatch)} transaction(s)")
+                    st.rerun()
             
             total_matched = sum(item.get('amount', 0) for item in st.session_state.matched_transactions)
             st.metric("Total Matched Amount", f"${total_matched:,.2f}")
         else:
             st.info("No matched transactions")
     
-    with result_tabs[1]:  # Unmatched transactions
+    elif tab_selection == 'unmatched':
+        # Clear the old processed tracking since we now properly remove items from the list
+        if 'processed_unmatched_ids' in st.session_state:
+            del st.session_state.processed_unmatched_ids
+        if 'processed_unmatched_indices' in st.session_state:
+            del st.session_state.processed_unmatched_indices
+            
         if st.session_state.unmatched_transactions:
-            st.warning("These transactions need manual review")
+            total_unmatched = len(st.session_state.unmatched_transactions)
+            remaining_unmatched = total_unmatched  # All items in the list are unprocessed now
+            
+            if remaining_unmatched > 0:
+                st.warning(f"These transactions need manual review ({remaining_unmatched} remaining)")
+                st.info("💡 Click 'Use' to select customers, then 'Confirm Match' or check 'Create new transaction'.")
             
             # Create session state for manual matches if not exists
             if 'manual_matches' not in st.session_state:
                 st.session_state.manual_matches = {}
+                
+            # Initialize state for all unmatched items to preserve user work
+            if 'unmatched_state' not in st.session_state:
+                st.session_state.unmatched_state = {}
             
-            for idx, item in enumerate(st.session_state.unmatched_transactions):
-                with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=True):
-                    col1, col2 = st.columns([2, 1])
+            # Track processed items
+            processed_indices = st.session_state.get('processed_unmatched_indices', set())
+            
+            # Add option to show one at a time or all
+            show_mode = st.radio(
+                "Display mode:",
+                ["Show one at a time", "Show all at once"],
+                index=0,
+                horizontal=True,
+                key="unmatched_display_mode"
+            )
+            
+            if show_mode == "Show one at a time":
+                # Initialize current index if not set
+                if 'current_unmatched_index' not in st.session_state:
+                    st.session_state.current_unmatched_index = 0
+                
+                # Get current index
+                current_idx = st.session_state.current_unmatched_index
+                
+                # Check if we have any items left
+                if current_idx >= len(st.session_state.unmatched_transactions):
+                    st.info("No more items to process in this view. Switch to 'Show all at once' to see all items.")
+                    # Reset index for next time
+                    st.session_state.current_unmatched_index = 0
+                else:
+                    # Navigation buttons
+                    col_prev, col_current, col_next = st.columns([1, 2, 1])
                     
-                    with col1:
-                        st.markdown(f"**Statement Details:**")
-                        st.text(f"Policy: {item.get('policy_number', '')}")
-                        st.text(f"Effective Date: {item.get('effective_date', '')}")
-                        st.text(f"Amount: ${item.get('amount', 0):,.2f}")
+                    with col_prev:
+                        if current_idx > 0:
+                            if st.button("⬅️ Previous", use_container_width=True):
+                                st.session_state.current_unmatched_index = max(0, current_idx - 1)
+                                st.rerun()
+                    
+                    with col_current:
+                        st.info(f"Item {current_idx + 1} of {total_unmatched}")
+                    
+                    with col_next:
+                        if current_idx < total_unmatched - 1:
+                            if st.button("Next ➡️", use_container_width=True):
+                                st.session_state.current_unmatched_index = min(total_unmatched - 1, current_idx + 1)
+                                st.rerun()
+                    
+                    # Show only the current item
+                    item = st.session_state.unmatched_transactions[current_idx]
+                    idx = current_idx
+                    # Create a unique identifier for this item
+                    item_id = f"{item.get('customer', 'Unknown')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{idx}"
+                    
+                    # Don't need to check if processed since we already found an unprocessed item above
+                    st.markdown(f'<div id="item_{idx}"></div>', unsafe_allow_html=True)
+                    
+                    with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=True):
+                        col1, col2 = st.columns([2, 1])
                         
-                        # Show additional statement details if available
-                        if 'statement_data' in item:
-                            stmt_data = item['statement_data']
-                            # Track if we found a direct Rate column
-                            found_rate = False
-                            
-                            # Try to show LOB/Chg, Tran, and Rate from the statement
-                            for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
-                                if col_name in stmt_data:
-                                    value = stmt_data[col_name]
-                                    if pd.notna(value) and str(value).strip():
-                                        # Clean up the column name for display
-                                        display_name = col_name.strip()
-                                        if display_name == 'LOB/Chg' or display_name == 'LOB':
-                                            st.text(f"LOB/Chg: {value}")
-                                        elif display_name in ['Tran', 'Transaction']:
-                                            st.text(f"Transaction: {value}")
-                                        elif display_name == 'Rate':
-                                            found_rate = True
-                                            # Format rate as percentage if it's a number
-                                            try:
-                                                rate_val = float(value)
-                                                if rate_val < 1:  # Decimal format
-                                                    st.text(f"Rate: {rate_val:.2%}")
-                                                else:  # Already percentage
-                                                    st.text(f"Rate: {rate_val}%")
-                                            except:
-                                                st.text(f"Rate: {value}")
-                            
-                            # Only show mapped Rate field if we didn't find a direct Rate column
-                            # or if the mapped column is different from 'Rate'
-                            if 'Rate' in st.session_state.column_mapping:
-                                rate_col = st.session_state.column_mapping['Rate']
-                                if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
-                                    try:
-                                        rate_val = float(stmt_data[rate_col])
-                                        if rate_val < 1:  # Decimal format
-                                            st.text(f"Rate: {rate_val:.2%}")
-                                        else:  # Already percentage
-                                            st.text(f"Rate: {rate_val}%")
-                                    except:
-                                        st.text(f"Rate: {stmt_data[rate_col]}")
-                    
-                    with col2:
-                        # Check if we have potential customers
-                        if 'potential_customers' in item:
-                            st.markdown("**Potential Matches Found:**")
-                            
-                            customer_options = []
-                            for cust, match_type, score in item['potential_customers'][:10]:
-                                customer_options.append(f"{cust} ({match_type}: {score}%)")
-                            
-                            selected_customer_idx = st.selectbox(
-                                "Select Customer",
-                                range(len(customer_options)),
-                                format_func=lambda x: customer_options[x],
-                                key=f"customer_select_{idx}"
-                            )
-                            
-                            if selected_customer_idx is not None:
-                                selected_customer = item['potential_customers'][selected_customer_idx][0]
-                                
-                                # Show transactions for selected customer
-                                # First try to get from potential_matches if available
-                                customer_trans = []
-                                if 'potential_matches' in item:
-                                    customer_trans = [t for t in item['potential_matches'] 
-                                                    if t.get('_customer_match') == selected_customer]
-                                
-                                # If no transactions found in potential_matches, fetch directly
-                                if not customer_trans:
-                                    # Get transactions with balance for this customer
-                                    trans_with_balance = calculate_transaction_balances(all_data)
-                                    customer_trans_df = trans_with_balance[
-                                        trans_with_balance['Customer'] == selected_customer
-                                    ]
-                                    if not customer_trans_df.empty:
-                                        # Convert to list of dicts for consistency
-                                        customer_trans = []
-                                        for _, trans in customer_trans_df.iterrows():
-                                            trans_dict = trans.to_dict()
-                                            trans_dict['balance'] = trans.get('_balance', 0)
-                                            customer_trans.append(trans_dict)
-                                
-                                if customer_trans:
-                                    st.markdown("**Available Transactions:**")
-                                    
-                                    trans_options = []
-                                    for trans in customer_trans:
-                                        trans_desc = f"ID: {trans['Transaction ID']} | "
-                                        trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
-                                        trans_desc += f"Policy Type: {trans.get('Policy Type', 'N/A')} | "
-                                        trans_desc += f"Policy: {trans['Policy Number']} | "
-                                        trans_desc += f"Eff: {trans['Effective Date']} | "
-                                        trans_desc += f"Balance: ${trans['balance']:,.2f}"
-                                        trans_options.append(trans_desc)
-                                    
-                                    selected_trans_idx = st.selectbox(
-                                        "Select Transaction",
-                                        range(len(trans_options)),
-                                        format_func=lambda x: trans_options[x],
-                                        key=f"trans_select_{idx}"
-                                    )
-                                    
-                                    col_match, col_skip = st.columns(2)
-                                    with col_match:
-                                        if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
-                                            # Immediately move to matched transactions
-                                            matched_item = item.copy()
-                                            matched_item['match'] = customer_trans[selected_trans_idx]
-                                            matched_item['confidence'] = 100
-                                            matched_item['match_type'] = 'Manual - Selected'
-                                            matched_item['matched_customer'] = selected_customer
-                                            
-                                            # Add to matched list
-                                            st.session_state.matched_transactions.append(matched_item)
-                                            
-                                            # Remove from unmatched list
-                                            st.session_state.unmatched_transactions = [
-                                                unmatched for i, unmatched in enumerate(st.session_state.unmatched_transactions) 
-                                                if i != idx
-                                            ]
-                                            
-                                            # Clear any manual match entry for this index
-                                            if idx in st.session_state.manual_matches:
-                                                del st.session_state.manual_matches[idx]
-                                            
-                                            st.success("Match confirmed and moved to matched list!")
-                                            st.rerun()
-                                    
-                                    with col_skip:
-                                        # Check if confidence is low
-                                        if 'potential_customers' in item and item['potential_customers']:
-                                            max_confidence = max(score for _, _, score in item['potential_customers'])
-                                            if max_confidence < 90:
-                                                if st.button("⏭️ Skip (Leave Unmatched)", key=f"skip_{idx}"):
-                                                    st.info("Transaction will remain unmatched. You can handle it manually later.")
-                                                    # Just provide feedback - item stays in unmatched list
-                                else:
-                                    st.info("No transactions with balance for this customer")
-                                    
-                                    # Debug mode - show why transactions aren't available
-                                    if st.checkbox("🔍 Show debug info", key=f"debug_{idx}"):
-                                        # Get ALL transactions for this customer (not just those with balance)
-                                        all_customer_trans = all_data[
-                                            (all_data['Customer'] == selected_customer) &
-                                            (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
-                                        ]
-                                        
-                                        if not all_customer_trans.empty:
-                                            st.write(f"Found {len(all_customer_trans)} total transactions for {selected_customer}:")
-                                            for _, trans in all_customer_trans.iterrows():
-                                                # Calculate balance for this transaction
-                                                credit = float(trans.get('Agent Estimated Comm $', 0) or 0)
-                                                policy_num = trans['Policy Number']
-                                                effective_date = trans['Effective Date']
-                                                
-                                                # Get reconciliation entries
-                                                recon_entries = all_data[
-                                                    (all_data['Policy Number'] == policy_num) &
-                                                    (all_data['Effective Date'] == effective_date) &
-                                                    (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
-                                                ]
-                                                
-                                                debit = 0
-                                                if not recon_entries.empty:
-                                                    debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
-                                                
-                                                balance = credit - debit
-                                                
-                                                st.write(f"- **{trans['Transaction ID']}**: Policy {policy_num}, Credit: ${credit:,.2f}, Debit: ${debit:,.2f}, Balance: ${balance:,.2f}")
-                                                if balance <= 0.01:
-                                                    st.write(f"  ⚠️ Not shown because balance is ${balance:,.2f}")
-                                        else:
-                                            st.warning(f"No transactions found for customer '{selected_customer}' in database. Check for name variations.")
-                        else:
-                            st.info("No potential matches found")
-                    
-                    # Options for handling the transaction
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # Option to create new
-                        statement_customer = item.get('customer', 'Unknown')
-                        create_checkbox_label = f"Create new transaction for: {statement_customer} (from statement)"
+                        with col1:
+                            st.markdown(f"**Statement Details:**")
+                            st.text(f"Policy: {item.get('policy_number', '')}")
+                            st.text(f"Effective Date: {item.get('effective_date', '')}")
+                            st.text(f"Amount: ${item.get('amount', 0):,.2f}")
                         
-                        if st.checkbox(create_checkbox_label, key=f"create_new_{idx}"):
-                            st.caption("✓ Mapped client transaction details will be pre-filled from statement")
+                            # Show additional statement details if available
+                            if 'statement_data' in item:
+                                stmt_data = item['statement_data']
+                                # Track if we found a direct Rate column
+                                found_rate = False
                             
-                            # Client matching section
-                            st.markdown("**🔍 Client Match Options:**")
+                                # Try to show LOB/Chg, Tran, and Rate from the statement
+                                for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
+                                    if col_name in stmt_data:
+                                        value = stmt_data[col_name]
+                                        if pd.notna(value) and str(value).strip():
+                                            # Clean up the column name for display
+                                            display_name = col_name.strip()
+                                            if display_name == 'LOB/Chg' or display_name == 'LOB':
+                                                st.text(f"LOB/Chg: {value}")
+                                            elif display_name in ['Tran', 'Transaction']:
+                                                st.text(f"Transaction: {value}")
+                                            elif display_name == 'Rate':
+                                                found_rate = True
+                                                # Format rate as percentage if it's a number
+                                                try:
+                                                    rate_val = float(value)
+                                                    if rate_val < 1:  # Decimal format
+                                                        st.text(f"Rate: {rate_val:.2%}")
+                                                    else:  # Already percentage
+                                                        st.text(f"Rate: {rate_val}%")
+                                                except:
+                                                    st.text(f"Rate: {value}")
                             
-                            # Look for existing clients with similar names
-                            try:
-                                supabase = get_supabase_client()
-                                
-                                # First try exact match
-                                exact_match = supabase.table('clients').select('*').eq('client_name', statement_customer).execute()
-                                
-                                # Also search for similar names
-                                all_clients = supabase.table('clients').select('client_id', 'client_name').execute()
-                                similar_clients = []
-                                
-                                if all_clients.data:
-                                    # Use the same fuzzy matching logic as transaction matching
-                                    for client in all_clients.data:
-                                        client_name = client.get('client_name', '')
-                                        if client_name and client_name != statement_customer:
-                                            # Check for name variations
-                                            if (statement_customer.lower() in client_name.lower() or 
-                                                client_name.lower() in statement_customer.lower() or
-                                                (len(statement_customer) > 3 and statement_customer.lower()[:3] == client_name.lower()[:3])):
-                                                similar_clients.append(client)
-                                
-                                # Build radio button options
-                                client_options = []
-                                client_values = []
-                                
-                                # If exact match found, add it first
-                                if exact_match.data:
-                                    client = exact_match.data[0]
-                                    client_options.append(f'Link to existing: "{client["client_name"]}" (Client ID: {client["client_id"]})')
-                                    client_values.append(('existing', client['client_id'], client['client_name']))
-                                
-                                # Add similar clients
-                                for client in similar_clients[:3]:  # Limit to top 3 similar
-                                    client_options.append(f'Link to existing: "{client["client_name"]}" (Client ID: {client["client_id"]})')
-                                    client_values.append(('existing', client['client_id'], client['client_name']))
-                                
-                                # Always add option to create new
-                                client_options.append(f'Create as NEW client (new Client ID will be assigned)')
-                                client_values.append(('new', None, statement_customer))
-                                
-                                # Default selection
-                                default_index = 0 if exact_match.data else len(client_options) - 1
-                                
-                                selected_client_option = st.radio(
-                                    "Select client option:",
-                                    client_options,
-                                    index=default_index,
-                                    key=f"client_match_{idx}"
+                                # Only show mapped Rate field if we didn't find a direct Rate column
+                                # or if the mapped column is different from 'Rate'
+                                if 'Rate' in st.session_state.column_mapping:
+                                    rate_col = st.session_state.column_mapping['Rate']
+                                    if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
+                                        try:
+                                            rate_val = float(stmt_data[rate_col])
+                                            if rate_val < 1:  # Decimal format
+                                                st.text(f"Rate: {rate_val:.2%}")
+                                            else:  # Already percentage
+                                                st.text(f"Rate: {rate_val}%")
+                                        except:
+                                            st.text(f"Rate: {stmt_data[rate_col]}")
+                    
+                        with col2:
+                            # Check if we have potential customers
+                            if 'potential_customers' in item:
+                                st.markdown("**Potential Matches Found:**")
+                            
+                                customer_options = []
+                                for cust, match_type, score in item['potential_customers'][:10]:
+                                    customer_options.append(f"{cust} ({match_type}: {score}%)")
+                            
+                                selected_customer_idx = st.selectbox(
+                                    "Select Customer",
+                                    range(len(customer_options)),
+                                    format_func=lambda x: customer_options[x],
+                                    key=f"customer_select_{idx}"
                                 )
+                            
+                                if selected_customer_idx is not None:
+                                    selected_customer = item['potential_customers'][selected_customer_idx][0]
                                 
-                                # Get the selected client info
-                                selected_index = client_options.index(selected_client_option)
-                                client_action, client_id, client_name = client_values[selected_index]
+                                    # Show transactions for selected customer
+                                    # First try to get from potential_matches if available
+                                    customer_trans = []
+                                    if 'potential_matches' in item:
+                                        customer_trans = [t for t in item['potential_matches'] 
+                                                        if t.get('_customer_match') == selected_customer]
                                 
-                            except Exception as e:
-                                # Silently handle missing clients table - just default to creating new
-                                # This is expected if the clients feature isn't implemented
-                                client_action = 'new'
-                                client_id = None
-                                client_name = statement_customer
-                                # No UI feedback needed - this is expected behavior
-                            
-                            # Show transaction type selector
-                            transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
-                            default_type = "NEW"
-                            
-                            # Try to guess from statement if available with mapping applied
-                            if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
-                                stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                    # If no transactions found in potential_matches, fetch directly
+                                    if not customer_trans:
+                                        # Get ALL transactions from past 18 months for this customer
+                                        trans_with_balance = calculate_transaction_balances(all_data, show_all_for_reconciliation=True)
+                                        customer_trans_df = trans_with_balance[
+                                            trans_with_balance['Customer'] == selected_customer
+                                        ]
+                                        if not customer_trans_df.empty:
+                                            # Convert to list of dicts for consistency
+                                            customer_trans = []
+                                            for _, trans in customer_trans_df.iterrows():
+                                                trans_dict = trans.to_dict()
+                                                trans_dict['balance'] = trans.get('_balance', 0)
+                                                customer_trans.append(trans_dict)
                                 
-                                # Load and apply transaction type mappings
-                                trans_type_mappings = {}
-                                trans_mapping_file = "config_files/transaction_type_mappings.json"
-                                try:
-                                    if os.path.exists(trans_mapping_file):
-                                        with open(trans_mapping_file, 'r') as f:
-                                            trans_type_mappings = json.load(f)
-                                except:
-                                    trans_type_mappings = {}
-                                
-                                # Apply mapping if available
-                                mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
-                                
-                                if mapped_type in transaction_types:
-                                    default_type = mapped_type
-                            
-                            selected_type = st.selectbox(
-                                "Transaction Type",
-                                transaction_types,
-                                index=transaction_types.index(default_type),
-                                key=f"trans_type_{idx}"
-                            )
-                            
-                            # Show if mapping was applied
-                            if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
-                                orig_type = str(item['statement_data'].get('Transaction Type', '')).strip()
-                                if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
-                                    st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
-                            
-                            st.session_state.manual_matches[idx] = {
-                                'statement_item': item,
-                                'create_new': True,
-                                'transaction_type': selected_type,
-                                'client_action': client_action,
-                                'client_id': client_id,
-                                'client_name': client_name
-                            }
-                            
-                            if client_action == 'existing':
-                                st.success(f"Will create {selected_type} transaction linked to Client ID: {client_id}")
+                                    if customer_trans:
+                                        st.markdown("**Available Transactions (Past 18 Months):**")
+                                        st.caption("📋 Showing ALL transactions including those with zero or negative balances")
+                                    
+                                        trans_options = []
+                                        for trans in customer_trans:
+                                            trans_desc = f"ID: {trans['Transaction ID']} | "
+                                            trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
+                                            trans_desc += f"Policy Type: {trans.get('Policy Type', 'N/A')} | "
+                                            trans_desc += f"Policy: {trans['Policy Number']} | "
+                                            trans_desc += f"Eff: {trans['Effective Date']} | "
+                                            balance = trans['balance']
+                                            if balance <= 0:
+                                                trans_desc += f"Balance: ${balance:,.2f} ⚠️"
+                                            else:
+                                                trans_desc += f"Balance: ${balance:,.2f}"
+                                            trans_options.append(trans_desc)
+                                    
+                                        selected_trans_idx = st.selectbox(
+                                            "Select Transaction",
+                                            range(len(trans_options)),
+                                            format_func=lambda x: trans_options[x],
+                                            key=f"trans_select_{idx}"
+                                        )
+                                    
+                                        col_match, col_skip = st.columns(2)
+                                        with col_match:
+                                            if st.button("✅ Confirm Match", key=f"confirm_{idx}", type="primary"):
+                                                # Immediately move to matched transactions
+                                                matched_item = item.copy()
+                                                matched_item['match'] = customer_trans[selected_trans_idx]
+                                                matched_item['confidence'] = 100
+                                                matched_item['match_type'] = 'Manual - Selected'
+                                                matched_item['matched_customer'] = selected_customer
+                                                
+                                                # Add to matched list
+                                                st.session_state.matched_transactions.append(matched_item)
+                                                
+                                                # IMMEDIATELY remove from unmatched list to prevent duplicates
+                                                # Find and remove this specific item from unmatched_transactions
+                                                new_unmatched = []
+                                                for i, unmatched_item in enumerate(st.session_state.unmatched_transactions):
+                                                    if i != idx:  # Keep all items except the one we just matched
+                                                        new_unmatched.append(unmatched_item)
+                                                st.session_state.unmatched_transactions = new_unmatched
+                                                
+                                                # Clear any manual match entry for this index
+                                                if idx in st.session_state.manual_matches:
+                                                    del st.session_state.manual_matches[idx]
+                                                
+                                                # Show success and immediately refresh
+                                                st.success("✅ Match confirmed! This item has been moved to the matched list.")
+                                                time.sleep(0.5)  # Brief pause to show success message
+                                                st.rerun()
+                                    
+                                        with col_skip:
+                                            # Check if confidence is low
+                                            if 'potential_customers' in item and item['potential_customers']:
+                                                max_confidence = max(score for _, _, score in item['potential_customers'])
+                                                if max_confidence < 90:
+                                                    if st.button("⏭️ Skip (Leave Unmatched)", key=f"skip_{idx}"):
+                                                        st.info("Transaction will remain unmatched. You can handle it manually later.")
+                                                        # Just provide feedback - item stays in unmatched list
+                                    else:
+                                        st.info("No transactions with balance for this customer")
+                                        
+                                        # Debug mode - show why transactions aren't available
+                                        if st.checkbox("🔍 Show debug info", key=f"debug_{idx}"):
+                                            # Get ALL transactions for this customer (not just those with balance)
+                                            all_customer_trans = all_data[
+                                                (all_data['Customer'] == selected_customer) &
+                                                (~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False))
+                                            ]
+                                        
+                                            if not all_customer_trans.empty:
+                                                st.write(f"Found {len(all_customer_trans)} total transactions for {selected_customer}:")
+                                                for _, trans in all_customer_trans.iterrows():
+                                                    # Calculate balance for this transaction
+                                                    credit = float(trans.get('Total Agent Comm', 0) or 0)
+                                                    policy_num = trans['Policy Number']
+                                                    effective_date = trans['Effective Date']
+                                                
+                                                    # Get reconciliation entries
+                                                    recon_entries = all_data[
+                                                        (all_data['Policy Number'] == policy_num) &
+                                                        (all_data['Effective Date'] == effective_date) &
+                                                        (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+                                                    ]
+                                                    
+                                                    debit = 0
+                                                    if not recon_entries.empty:
+                                                        debit = recon_entries['Agent Paid Amount (STMT)'].fillna(0).sum()
+                                                    
+                                                    balance = credit - debit
+                                                    
+                                                    st.write(f"- **{trans['Transaction ID']}**: Policy {policy_num}, Credit: ${credit:,.2f}, Debit: ${debit:,.2f}, Balance: ${balance:,.2f}")
+                                                    if balance <= 0.01:
+                                                        st.write(f"  ⚠️ Not shown because balance is ${balance:,.2f}")
+                                            else:
+                                                st.warning(f"No transactions found for customer '{selected_customer}' in database. Check for name variations.")
                             else:
-                                st.success(f"Will create {selected_type} transaction with NEW client")
-                        st.caption("*(Use for new policies or endorsements not yet in system)*")
+                                st.info("No potential matches found")
                     
-                    with col2:
-                        # Option to match existing transaction
-                        if 'potential_customers' in item and selected_customer_idx is not None:
-                            selected_customer = item['potential_customers'][selected_customer_idx][0]
-                            
-                            # Get the selected transaction ID if available
-                            transaction_id = "N/A"
-                            if customer_trans and 'trans_select_' + str(idx) in st.session_state:
-                                trans_idx = st.session_state['trans_select_' + str(idx)]
-                                if trans_idx < len(customer_trans):
-                                    transaction_id = customer_trans[trans_idx].get('Transaction ID', 'N/A')
-                            
-                            # Get match type and confidence
-                            match_type = item['potential_customers'][selected_customer_idx][1]
-                            confidence = item['potential_customers'][selected_customer_idx][2]
-                            
-                            # Check if names match
-                            statement_customer = item.get('customer', 'Unknown')
-                            names_match = statement_customer.lower() == selected_customer.lower()
-                            
-                            # Smarter warning logic
-                            should_warn = False
-                            if not names_match:
-                                # Don't warn if it's a high-confidence name reversal
-                                if match_type == "name_reversed" and confidence >= 95:
-                                    should_warn = False
-                                # Don't warn if it's an exact match (just different case)
-                                elif match_type == "exact" and confidence == 100:
-                                    should_warn = False
-                                # Don't warn for high confidence business name variations
-                                elif match_type == "business_normalized" and confidence >= 95:
-                                    should_warn = False
-                                # Warn for everything else
+                        # Options for handling the transaction
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            # PHASE 1: Display potential customer matches
+                            st.markdown("**🔍 Potential Customer Matches:**")
+                        if 'potential_customers' in item and item['potential_customers']:
+                            for i, (cust, match_type, score) in enumerate(item['potential_customers'][:3]):
+                                button_col, text_col = st.columns([0.8, 5])
+                                with button_col:
+                                    if st.button("Use", key=f"use_potential_{idx}_{i}"):
+                                        st.session_state[f"selected_customer_override_{idx}"] = cust
+                                        st.session_state[f"customer_just_selected_{idx}"] = True
+                                        # Store which item we're working on to maintain focus
+                                        st.session_state['current_unmatched_focus'] = idx
+                                with text_col:
+                                    st.text(f"{cust} ({match_type}: {score}%)")
+                            else:
+                                st.text("• No automatic matches found")
+                        
+                            # PHASE 2: Manual customer search
+                            st.markdown("**── OR Search Manually ──**")
+                            search_query = st.text_input(
+                                "Search for different customer",
+                                key=f"manual_customer_search_{idx}",
+                                placeholder="Type at least 3 characters..."
+                            )
+                        
+                            # Display search results (read-only for now)
+                            if search_query and len(search_query) >= 3:
+                                # Search in all_data for customers
+                                search_lower = search_query.lower()
+                                matching_customers = all_data[
+                                    all_data['Customer'].str.lower().str.contains(search_lower, na=False)
+                                ]['Customer'].unique()
+                                
+                                if len(matching_customers) > 0:
+                                    st.markdown("**Search Results:**")
+                                    for i, customer in enumerate(matching_customers[:5]):  # Limit to 5 results
+                                        button_col, text_col = st.columns([0.8, 5])
+                                        with button_col:
+                                            if st.button("Use", key=f"use_customer_{idx}_{i}"):
+                                                st.session_state[f"selected_customer_override_{idx}"] = customer
+                                                st.session_state[f"customer_just_selected_{idx}"] = True
+                                        with text_col:
+                                            st.text(f"{customer}")
                                 else:
-                                    should_warn = True
+                                    st.text("No customers found matching your search")
+                        
+                            st.divider()
                             
-                            # Build checkbox label
-                            checkbox_label = f"Force match to selected customer: {selected_customer} (Transaction ID: {transaction_id})"
+                            # Option to create new
+                            statement_customer = item.get('customer', 'Unknown')
                             
-                            if st.checkbox(checkbox_label, key=f"match_existing_{idx}"):
+                            # PHASE 3: Use override if selected
+                            override_key = f"selected_customer_override_{idx}"
+                            display_customer = st.session_state.get(override_key, statement_customer)
+                            
+                            # Check if user clicked Use on a potential match
+                            manually_confirmed = override_key in st.session_state
+                        
+                            # Show if override is active or manually confirmed
+                            if manually_confirmed:
+                                col_msg, col_clear = st.columns([3, 1])
+                                with col_msg:
+                                    # Show extra feedback if just selected
+                                    if st.session_state.get(f"customer_just_selected_{idx}", False):
+                                        st.success(f"✓ Customer confirmed: {display_customer} (selection saved!)")
+                                        # Clear the flag after showing
+                                        st.session_state[f"customer_just_selected_{idx}"] = False
+                                    else:
+                                        st.success(f"✓ Customer confirmed: {display_customer}")
+                                with col_clear:
+                                    if st.button("Clear", key=f"clear_customer_{idx}"):
+                                        del st.session_state[override_key]
+                                        if f"customer_just_selected_{idx}" in st.session_state:
+                                            del st.session_state[f"customer_just_selected_{idx}"]
+                        
+                            create_checkbox_label = f"Create new transaction for: {display_customer}"
+                            if manually_confirmed:
+                                create_checkbox_label += " (confirmed existing customer)"
+                            elif display_customer == statement_customer:
+                                create_checkbox_label += " (from statement)"
+                            else:
+                                create_checkbox_label += " (manually selected)"
+                        
+                            # Use regular checkbox - Streamlit preserves checkbox state with keys
+                            create_checked = st.checkbox(create_checkbox_label, key=f"create_new_{idx}")
+                            
+                            if create_checked:
+                                st.caption("✓ Mapped client transaction details will be pre-filled from statement")
+                            
+                                # PHASE 5: Simplified client action based on manual confirmation
+                                # No more broken client table lookups - we use manual confirmation instead
+                                if manually_confirmed:
+                                    client_action = 'existing'
+                                    client_id = None  # We don't have the ID but we know it exists
+                                    client_name = display_customer
+                                else:
+                                    client_action = 'new'
+                                    client_id = None
+                                    client_name = display_customer
+                            
+                                # Show transaction type selector
+                                transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
+                                default_type = "NEW"
+                            
+                                # Try to guess from statement if available with mapping applied
+                                if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                    stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                
+                                    # Load and apply transaction type mappings
+                                    trans_type_mappings = {}
+                                    trans_mapping_file = "config_files/transaction_type_mappings.json"
+                                    try:
+                                        if os.path.exists(trans_mapping_file):
+                                            with open(trans_mapping_file, 'r') as f:
+                                                trans_type_mappings = json.load(f)
+                                    except:
+                                        trans_type_mappings = {}
+                                
+                                    # Apply mapping if available
+                                    mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                    
+                                    if mapped_type in transaction_types:
+                                        default_type = mapped_type
+                            
+                                selected_type = st.selectbox(
+                                    "Transaction Type",
+                                    transaction_types,
+                                    index=transaction_types.index(default_type),
+                                    key=f"trans_type_{idx}"
+                                )
+                            
+                                # Show if mapping was applied
+                                if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                    orig_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                    if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
+                                        st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
+                            
                                 st.session_state.manual_matches[idx] = {
                                     'statement_item': item,
-                                    'match_to_customer': selected_customer,
-                                    'match_existing': True
+                                    'create_new': True,
+                                    'transaction_type': selected_type,
+                                    'client_action': client_action,
+                                    'client_id': client_id,
+                                    'client_name': client_name
                                 }
-                                st.success(f"Will match to {selected_customer}")
                             
-                            # Show warning only when appropriate
-                            if should_warn and st.session_state.get(f"match_existing_{idx}", False):
-                                st.markdown(f"<span style='color: red;'>⚠️ Warning: Customer names don't match ({statement_customer} ≠ {selected_customer})</span>", unsafe_allow_html=True)
+                                # Check if we have a manually confirmed customer
+                                if manually_confirmed:
+                                    # User clicked Use - this customer exists
+                                    st.success(f"Will create {selected_type} transaction linked to EXISTING customer: {display_customer}")
+                                elif client_action == 'existing':
+                                    st.success(f"Will create {selected_type} transaction linked to Client ID: {client_id}")
+                                else:
+                                    st.warning(f"⚠️ Will create {selected_type} transaction with NEW client (no existing match found)")
+                            st.caption("*(Use for new policies or endorsements not yet in system)*")
+                    
+                        with col2:
+                            # Option to match existing transaction
+                            # Note: This section is currently just a placeholder
+                            st.info("Manual transaction matching available above")
             
             # Show confirmed matches
             if st.session_state.manual_matches:
@@ -2682,10 +2861,315 @@ def show_import_results(statement_date, all_data):
                     st.session_state.manual_matches = {}
                     st.success("Manual matches applied!")
                     st.rerun()
+            
+            else:  # Show all at once mode
+                # Show all unmatched items
+                for idx, item in enumerate(st.session_state.unmatched_transactions):
+                    
+                    # Show in "all at once" mode
+                    with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=False):
+                        # Create a unique identifier for this item
+                        item_id = f"{item.get('customer', 'Unknown')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{idx}"
+                        
+                        # Just copy the exact same interface from "Show one at a time" mode
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            # PHASE 1: Statement Details (moved to top)
+                            st.markdown(f"**Statement Details:**")
+                            st.text(f"Customer: {item.get('customer', 'Unknown')}")
+                            st.text(f"Policy: {item.get('policy_number', '')}")
+                            st.text(f"Effective Date: {item.get('effective_date', '')}")
+                            st.text(f"Amount: ${item.get('amount', 0):,.2f}")
+                            
+                            # Show additional statement details if available
+                            if 'statement_data' in item:
+                                stmt_data = item['statement_data']
+                                # Track if we found a direct Rate column
+                                found_rate = False
+                                
+                                # Try to show LOB/Chg, Tran, and Rate from the statement
+                                for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
+                                    if col_name in stmt_data:
+                                        value = stmt_data[col_name]
+                                        if pd.notna(value) and str(value).strip():
+                                            # Clean up the column name for display
+                                            display_name = col_name.strip()
+                                            if display_name == 'LOB/Chg' or display_name == 'LOB':
+                                                st.text(f"LOB/Chg: {value}")
+                                            elif display_name in ['Tran', 'Transaction']:
+                                                st.text(f"Transaction: {value}")
+                                            elif display_name == 'Rate':
+                                                found_rate = True
+                                                # Format rate as percentage if it's a number
+                                                try:
+                                                    rate_val = float(value)
+                                                    if rate_val < 1:  # Decimal format
+                                                        st.text(f"Rate: {rate_val:.2%}")
+                                                    else:  # Already percentage
+                                                        st.text(f"Rate: {rate_val}%")
+                                                except:
+                                                    st.text(f"Rate: {value}")
+                                
+                                # Only show mapped Rate field if we didn't find a direct Rate column
+                                # or if the mapped column is different from 'Rate'
+                                if 'Rate' in st.session_state.column_mapping:
+                                    rate_col = st.session_state.column_mapping['Rate']
+                                    if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
+                                        try:
+                                            rate_val = float(stmt_data[rate_col])
+                                            if rate_val < 1:  # Decimal format
+                                                st.text(f"Rate: {rate_val:.2%}")
+                                            else:  # Already percentage
+                                                st.text(f"Rate: {rate_val}%")
+                                        except:
+                                            st.text(f"Rate: {stmt_data[rate_col]}")
+                            
+                            st.divider()
+                            
+                            # PHASE 2: Display potential customer matches
+                            st.markdown("**🔍 Potential Customer Matches:**")
+                            if 'potential_customers' in item and item['potential_customers']:
+                                for i, (cust, match_type, score) in enumerate(item['potential_customers'][:3]):
+                                    button_col, text_col = st.columns([0.8, 5])
+                                    with button_col:
+                                        if st.button("Use", key=f"use_potential_all_{idx}_{i}"):
+                                            st.session_state[f"selected_customer_override_{idx}"] = cust
+                                            st.session_state[f"customer_just_selected_{idx}"] = True
+                                            st.rerun()
+                                    with text_col:
+                                        st.text(f"{cust} ({match_type}: {score}%)")
+                            else:
+                                st.text("• No automatic matches found")
+                            
+                            # PHASE 3: Manual customer search
+                            st.markdown("**── OR Search Manually ──**")
+                            search_query = st.text_input(
+                                "Search for different customer",
+                                key=f"manual_customer_search_all_{idx}",
+                                placeholder="Type at least 3 characters..."
+                            )
+                            
+                            # Display search results
+                            if search_query and len(search_query) >= 3:
+                                # Search in all_data for customers
+                                search_lower = search_query.lower()
+                                matching_customers = all_data[
+                                    all_data['Customer'].str.lower().str.contains(search_lower, na=False)
+                                ]['Customer'].unique()
+                                
+                                if len(matching_customers) > 0:
+                                    st.markdown("**Search Results:**")
+                                    for i, customer in enumerate(matching_customers[:5]):  # Limit to 5 results
+                                        button_col, text_col = st.columns([0.8, 5])
+                                        with button_col:
+                                            if st.button("Use", key=f"use_customer_all_{idx}_{i}"):
+                                                st.session_state[f"selected_customer_override_{idx}"] = customer
+                                                st.session_state[f"customer_just_selected_{idx}"] = True
+                                                st.rerun()
+                                        with text_col:
+                                            st.text(f"{customer}")
+                                else:
+                                    st.text("No customers found matching your search")
+                            
+                            st.divider()
+                            
+                            # Show current selection status
+                            override_key = f"selected_customer_override_{idx}"
+                            if override_key in st.session_state:
+                                st.success(f"✓ Selected: {st.session_state[override_key]}")
+                                if st.button("Clear", key=f"clear_customer_all_{idx}"):
+                                    del st.session_state[override_key]
+                                    if f"customer_just_selected_{idx}" in st.session_state:
+                                        del st.session_state[f"customer_just_selected_{idx}"]
+                                    st.rerun()
+                        
+                        with col2:
+                            # Check if we have potential customers
+                            if 'potential_customers' in item:
+                                st.markdown("**Potential Matches Found:**")
+                                
+                                customer_options = []
+                                for cust, match_type, score in item['potential_customers'][:10]:
+                                    customer_options.append(f"{cust} ({match_type}: {score}%)")
+                                
+                                selected_customer_idx = st.selectbox(
+                                    "Select Customer",
+                                    range(len(customer_options)),
+                                    format_func=lambda x: customer_options[x],
+                                    key=f"customer_select_all_{idx}"
+                                )
+                                
+                                if selected_customer_idx is not None:
+                                    selected_customer = item['potential_customers'][selected_customer_idx][0]
+                                    
+                                    # Show transactions for selected customer
+                                    # First try to get from potential_matches if available
+                                    customer_trans = []
+                                    if 'potential_matches' in item:
+                                        customer_trans = [t for t in item['potential_matches'] 
+                                                        if t.get('_customer_match') == selected_customer]
+                                    
+                                    # If no transactions found in potential_matches, fetch directly
+                                    if not customer_trans:
+                                        # Get ALL transactions from past 18 months for this customer
+                                        trans_with_balance = calculate_transaction_balances(all_data, show_all_for_reconciliation=True)
+                                        customer_trans_df = trans_with_balance[
+                                            trans_with_balance['Customer'] == selected_customer
+                                        ]
+                                        if not customer_trans_df.empty:
+                                            # Convert to list of dicts for consistency
+                                            customer_trans = []
+                                            for _, trans in customer_trans_df.iterrows():
+                                                trans_dict = trans.to_dict()
+                                                trans_dict['balance'] = trans.get('_balance', 0)
+                                                customer_trans.append(trans_dict)
+                                    
+                                    if customer_trans:
+                                        st.markdown("**Available Transactions (Past 18 Months):**")
+                                        st.caption("📋 Showing ALL transactions including those with zero or negative balances")
+                                        
+                                        trans_options = []
+                                        for trans in customer_trans:
+                                            trans_desc = f"ID: {trans['Transaction ID']} | "
+                                            trans_desc += f"Type: {trans.get('Transaction Type', 'N/A')} | "
+                                            trans_desc += f"Policy Type: {trans.get('Policy Type', 'N/A')} | "
+                                            trans_desc += f"Policy: {trans['Policy Number']} | "
+                                            trans_desc += f"Eff: {trans['Effective Date']} | "
+                                            balance = trans['balance']
+                                            if balance <= 0:
+                                                trans_desc += f"Balance: ${balance:,.2f} ⚠️"
+                                            else:
+                                                trans_desc += f"Balance: ${balance:,.2f}"
+                                            trans_options.append(trans_desc)
+                                        
+                                        selected_trans_idx = st.selectbox(
+                                            "Select Transaction",
+                                            range(len(trans_options)),
+                                            format_func=lambda x: trans_options[x],
+                                            key=f"trans_select_all_{idx}"
+                                        )
+                                        
+                                        col_match, col_skip = st.columns(2)
+                                        with col_match:
+                                            if st.button("✅ Confirm Match", key=f"confirm_all_{idx}", type="primary"):
+                                                # Immediately move to matched transactions
+                                                matched_item = item.copy()
+                                                matched_item['match'] = customer_trans[selected_trans_idx]
+                                                matched_item['confidence'] = 100
+                                                matched_item['match_type'] = 'Manual - Selected'
+                                                matched_item['matched_customer'] = selected_customer
+                                                
+                                                # Add to matched list
+                                                st.session_state.matched_transactions.append(matched_item)
+                                                
+                                                # IMMEDIATELY remove from unmatched list to prevent duplicates
+                                                # Find and remove this specific item from unmatched_transactions
+                                                new_unmatched = []
+                                                for i, unmatched_item in enumerate(st.session_state.unmatched_transactions):
+                                                    if i != idx:  # Keep all items except the one we just matched
+                                                        new_unmatched.append(unmatched_item)
+                                                st.session_state.unmatched_transactions = new_unmatched
+                                                
+                                                # Clear any manual match entry for this index
+                                                if idx in st.session_state.manual_matches:
+                                                    del st.session_state.manual_matches[idx]
+                                                
+                                                # Show success and immediately refresh
+                                                st.success("✅ Match confirmed! This item has been moved to the matched list.")
+                                                time.sleep(0.5)  # Brief pause to show success message
+                                                st.rerun()
+                                    else:
+                                        st.info("No transactions found for this customer")
+                            else:
+                                st.info("No potential matches found")
+                        
+                        # Options for handling the transaction
+                        st.divider()
+                        
+                        # Option to create new transaction
+                        statement_customer = item.get('customer', 'Unknown')
+                        
+                        # Check if user selected a customer override
+                        override_key = f"selected_customer_override_{idx}"
+                        display_customer = st.session_state.get(override_key, statement_customer)
+                        manually_confirmed = override_key in st.session_state
+                        
+                        create_checkbox_label = f"Create new transaction for: {display_customer}"
+                        if manually_confirmed:
+                            create_checkbox_label += " (confirmed existing customer)"
+                        
+                        # Use regular checkbox
+                        create_checked = st.checkbox(create_checkbox_label, key=f"create_new_all_{idx}")
+                        
+                        if create_checked:
+                            st.caption("✓ Transaction will be created on import")
+                            
+                            # Show transaction type selector
+                            transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
+                            default_type = "NEW"
+                            
+                            # Try to guess from statement if available
+                            if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                
+                                # Load and apply transaction type mappings
+                                trans_type_mappings = {}
+                                trans_mapping_file = "config_files/transaction_type_mappings.json"
+                                try:
+                                    if os.path.exists(trans_mapping_file):
+                                        with open(trans_mapping_file, 'r') as f:
+                                            trans_type_mappings = json.load(f)
+                                except:
+                                    trans_type_mappings = {}
+                                
+                                # Apply mapping if available
+                                mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                
+                                if mapped_type in transaction_types:
+                                    default_type = mapped_type
+                            
+                            selected_type = st.selectbox(
+                                "Transaction Type",
+                                transaction_types,
+                                index=transaction_types.index(default_type),
+                                key=f"trans_type_all_{idx}"
+                            )
+                            
+                            # Determine client action based on manual confirmation
+                            if manually_confirmed:
+                                client_action = 'existing'
+                                client_name = display_customer
+                            else:
+                                client_action = 'new'
+                                client_name = display_customer
+                            
+                            # Update manual matches
+                            st.session_state.manual_matches[idx] = {
+                                'statement_item': item,
+                                'create_new': True,
+                                'transaction_type': selected_type,
+                                'client_action': client_action,
+                                'client_id': None,
+                                'client_name': client_name
+                            }
+                            
+                            if manually_confirmed:
+                                st.success(f"Will create {selected_type} transaction linked to EXISTING customer: {display_customer}")
+                            else:
+                                st.warning(f"⚠️ Will create {selected_type} transaction with NEW client (no existing match found)")
+                        else:
+                            # Remove from manual matches if unchecked
+                            if idx in st.session_state.get('manual_matches', {}):
+                                del st.session_state.manual_matches[idx]
+                
+            # Only show completion message if truly all processed
+            if len(st.session_state.unmatched_transactions) == 0:
+                st.success("🎉 All unmatched transactions have been processed! Check the Matched tab or proceed with import.")
         else:
             st.success("All transactions were matched!")
     
-    with result_tabs[2]:  # Can create
+    elif tab_selection == 'create':
         if st.session_state.transactions_to_create:
             st.info("These transactions don't exist in the database but can be created")
             
@@ -2781,6 +3265,7 @@ def show_import_results(statement_date, all_data):
                     st.warning(f"⚠️ Missing ${difference:,.2f} from statement")
                 else:
                     st.error(f"❌ Exceeding statement by ${abs(difference):,.2f}")
+                    st.warning("🔍 **Possible duplicate entries detected!** Check the unmatched tab for duplicate transactions with the same customer and amount.")
     
     # Import button - allow if we have matched transactions OR transactions to create OR pending manual matches
     has_matched = len(st.session_state.matched_transactions) > 0
@@ -2894,10 +3379,8 @@ def show_import_results(statement_date, all_data):
                                 'Policy Number': item['policy_number'],
                                 'Effective Date': item['effective_date'],
                                 'Transaction Type': final_trans_type,
-                                'Premium Sold': item['statement_data'].get(st.session_state.column_mapping.get('Premium Sold', ''), 0),
-                                'Agent Estimated Comm $': item['amount'],  # Use statement amount as estimated
-                                'Agency Estimated Comm/Revenue (CRM)': item['amount'],
-                                'NOTES': f"Created from statement import {batch_id}"
+                                'Total Agent Comm': item['amount'],  # Use statement amount as placeholder
+                                'NOTES': f"Created from statement import {batch_id} - Review policy paperwork to calculate accurate premium, taxes, fees and commission"
                             }
                             
                             # Add Client ID if we have one
@@ -2916,7 +3399,23 @@ def show_import_results(statement_date, all_data):
                                         new_trans['Client ID'] = existing_client_id
                             
                             # Add other mapped fields with special handling for Policy Type
+                            # BUT exclude payment fields and financial calculation fields
+                            fields_to_exclude = [
+                                'Agent Paid Amount (STMT)', 
+                                'Agency Comm Received (STMT)',
+                                'Premium Sold',
+                                'Policy Taxes & Fees',
+                                'Commissionable Premium',
+                                'Policy Gross Comm %',
+                                'Broker Fee',
+                                'Broker Fee Agent Comm'
+                            ]
+                            
                             for sys_field, stmt_field in st.session_state.column_mapping.items():
+                                # Skip excluded fields unless explicitly mapped
+                                if sys_field in fields_to_exclude:
+                                    continue
+                                    
                                 if sys_field not in new_trans and stmt_field in item['statement_data']:
                                     value = item['statement_data'][stmt_field]
                                     
@@ -2960,7 +3459,7 @@ def show_import_results(statement_date, all_data):
                     # Start with all fields from the matched transaction
                     recon_entry = item['match'].copy() if 'match' in item and item['match'] else {}
                     
-                    # Define financial fields that should NOT be copied (use 0 or statement values instead)
+                    # Define financial fields that should NOT be copied (remove entirely unless mapped)
                     financial_fields_to_exclude = [
                         'Premium Sold',
                         'Policy Taxes & Fees', 
@@ -2971,15 +3470,13 @@ def show_import_results(statement_date, all_data):
                         'Agent Estimated Comm $',
                         'Broker Fee',
                         'Broker Fee Agent Comm',
-                        'Total Agent Comm',
-                        'Agency Comm Received (STMT)',
-                        'Agent Paid Amount (STMT)'
+                        'Total Agent Comm'
                     ]
                     
-                    # Zero out all financial estimate fields
+                    # Remove all financial estimate fields entirely (don't set to 0)
                     for field in financial_fields_to_exclude:
                         if field in recon_entry:
-                            recon_entry[field] = 0
+                            del recon_entry[field]
                     
                     # Now override with reconciliation-specific values
                     recon_entry.update({
@@ -2989,7 +3486,6 @@ def show_import_results(statement_date, all_data):
                         'Policy Number': item['match'].get('Policy Number', item.get('policy_number', '')),
                         'Effective Date': item['match'].get('Effective Date', item.get('effective_date', '')),
                         'Transaction Type': item['match'].get('Transaction Type', ''),
-                        'Premium Sold': 0,  # Always 0 for reconciliation entries
                         'Agency Comm Received (STMT)': item.get('agency_amount', 0),  # From statement
                         'Agent Paid Amount (STMT)': item['amount'],  # From statement (primary)
                         'STMT DATE': statement_date.strftime('%Y-%m-%d'),
@@ -3033,6 +3529,12 @@ def show_import_results(statement_date, all_data):
                 st.session_state.column_mapping = {}
                 if 'statement_file_total' in st.session_state:
                     del st.session_state.statement_file_total
+                if 'processed_unmatched_indices' in st.session_state:
+                    del st.session_state.processed_unmatched_indices
+                if 'processed_unmatched_ids' in st.session_state:
+                    del st.session_state.processed_unmatched_ids
+                if 'import_view_preference' in st.session_state:
+                    del st.session_state.import_view_preference
                 
                 st.success(f"""
                 ✅ Import completed successfully!
@@ -3056,6 +3558,10 @@ def show_import_results(statement_date, all_data):
                 
                 Please fix the issue and try again. All transactions remain unchanged.
                 """)
+                
+                # Clear cache on failure to prevent stale data issues
+                clear_policies_cache()
+                st.info("ℹ️ Cache has been cleared. You may need to refresh the page or use the Refresh Data button.")
                 st.exception(e)
                 
                 # Log which operation failed if possible
@@ -7040,7 +7546,38 @@ def main():
     
     # --- Reconciliation ---
     elif page == "Reconciliation":
-        st.title("💳 Commission Reconciliation")
+        col_title, col_refresh = st.columns([6, 1])
+        with col_title:
+            st.title("💳 Commission Reconciliation")
+        with col_refresh:
+            if st.button("🔄 Refresh Data", help="Clear cache and reload data from database"):
+                # Clear the data cache
+                clear_policies_cache()
+                
+                # Clear import-related session state that might be stuck after failed imports
+                import_keys = [
+                    'import_data', 'matched_transactions', 'unmatched_transactions',
+                    'transactions_to_create', 'column_mapping', 'statement_file_total',
+                    'manual_matches'
+                ]
+                for key in import_keys:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
+                # Clear any customer override keys (they follow pattern selected_customer_override_{idx})
+                override_keys = [key for key in st.session_state.keys() if key.startswith('selected_customer_override_')]
+                for key in override_keys:
+                    del st.session_state[key]
+                
+                # Clear processed IDs
+                if 'processed_unmatched_ids' in st.session_state:
+                    del st.session_state.processed_unmatched_ids
+                if 'processed_unmatched_indices' in st.session_state:
+                    del st.session_state.processed_unmatched_indices
+                
+                st.success("✅ Cache cleared and data refreshed!")
+                time.sleep(0.5)
+                st.rerun()
         
         # Load fresh data for this page
         all_data = load_policies_data()
@@ -7960,8 +8497,31 @@ def main():
                                     )
                                     
                                     st.session_state.matched_transactions = matched
-                                    st.session_state.unmatched_transactions = unmatched
+                                    
+                                    # Remove any duplicates from unmatched list before storing
+                                    # Create a unique key for each unmatched item
+                                    seen_unmatched = set()
+                                    unique_unmatched = []
+                                    for item in unmatched:
+                                        # Create a key based on customer, policy, amount, and date
+                                        key = f"{item.get('customer', '')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{item.get('effective_date', '')}"
+                                        if key not in seen_unmatched:
+                                            seen_unmatched.add(key)
+                                            unique_unmatched.append(item)
+                                    
+                                    if len(unique_unmatched) < len(unmatched):
+                                        st.warning(f"⚠️ Removed {len(unmatched) - len(unique_unmatched)} duplicate unmatched items")
+                                    
+                                    st.session_state.unmatched_transactions = unique_unmatched
                                     st.session_state.transactions_to_create = to_create
+                                    # Clear any previous processed indices when loading new data
+                                    if 'processed_unmatched_indices' in st.session_state:
+                                        del st.session_state.processed_unmatched_indices
+                                    if 'processed_unmatched_ids' in st.session_state:
+                                        del st.session_state.processed_unmatched_ids
+                                    # Reset view preference to unmatched if there are any
+                                    if len(unmatched) > 0:
+                                        st.session_state.import_view_preference = 'unmatched'
                                     
                                     # Show summary
                                     st.success("✅ Matching complete!")
@@ -8027,7 +8587,7 @@ def main():
                     display_df['Outstanding Balance'] = display_df['_balance']
                     display_cols = display_df[[
                         'Transaction ID', 'Customer', 'Policy Number', 
-                        'Effective Date', 'Agent Estimated Comm $', 
+                        'Effective Date', 'Total Agent Comm', 
                         'Outstanding Balance'
                     ]]
                     
@@ -8037,7 +8597,7 @@ def main():
                     st.dataframe(
                         styled_display,
                         column_config={
-                            "Agent Estimated Comm $": st.column_config.NumberColumn(format="$%.2f"),
+                            "Total Agent Comm": st.column_config.NumberColumn(format="$%.2f"),
                             "Outstanding Balance": st.column_config.NumberColumn(format="$%.2f")
                         },
                         use_container_width=True,
