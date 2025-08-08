@@ -1342,7 +1342,7 @@ def load_carriers_for_dropdown():
         return []
 
 def load_mgas_for_carrier(carrier_id):
-    """Load MGAs associated with a specific carrier through relationships OR commission rules."""
+    """Load MGAs associated with a specific carrier."""
     # Check session state cache first
     cache_key = f'mgas_for_carrier_{carrier_id}'
     if cache_key in st.session_state:
@@ -1350,40 +1350,55 @@ def load_mgas_for_carrier(carrier_id):
     
     try:
         supabase = get_supabase_client()
-        mga_ids = set()  # Use set to avoid duplicates
         
-        # Method 1: Get MGAs from carrier_mga_relationships table
+        # First try to get MGAs from carrier_mga_relationships table
         try:
+            # Get relationships for this carrier
             response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
+            
             if response.data:
+                # Get the MGA details for each relationship
+                mgas = []
                 for rel in response.data:
                     if rel.get('mga_id'):
-                        mga_ids.add(rel['mga_id'])
-        except Exception:
+                        # Get MGA details
+                        mga_response = supabase.table('mgas').select('mga_id, mga_name, status').eq('mga_id', rel['mga_id']).execute()
+                        if mga_response.data and mga_response.data[0].get('status') != 'Inactive':
+                            mga = mga_response.data[0]
+                            mgas.append({
+                                'mga_id': mga['mga_id'],
+                                'mga_name': mga['mga_name']
+                            })
+                
+                if mgas:  # If we found MGAs through relationships, return them
+                    mgas.sort(key=lambda x: x['mga_name'])
+                    st.session_state[cache_key] = mgas  # Cache the result
+                    return mgas
+        except Exception as e:
+            # Log the error for debugging but continue to fallbacks
             # Silent fail - continue to other methods
             pass
         
-        # Method 2: Get MGAs that have commission rules with this carrier
-        try:
-            response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
-            if response.data:
-                for rule in response.data:
-                    if rule.get('mga_id'):
-                        mga_ids.add(rule['mga_id'])
-        except Exception:
-            # Silent fail - continue
-            pass
+        # Fallback: Get MGAs that have commission rules with this carrier
+        # First get commission rules for this carrier
+        response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
         
-        # Get MGA details for all collected mga_ids
+        # Filter out null mga_ids and get unique MGA details
+        mga_ids = []
+        for rule in response.data:
+            if rule.get('mga_id') and rule['mga_id'] not in mga_ids:
+                mga_ids.append(rule['mga_id'])
+        
+        # Get MGA details for valid mga_ids
         if mga_ids:
-            mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
+            mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', mga_ids).eq('status', 'Active').execute()
             if mga_response.data:
                 mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in mga_response.data]
                 mgas.sort(key=lambda x: x['mga_name'])
                 st.session_state[cache_key] = mgas  # Cache the result
                 return mgas
         
-        # If no MGAs found, return empty list
+        # If no MGAs found through commission rules, return empty list
         # Wright Flood and other carriers might not have MGAs
         st.session_state[cache_key] = []  # Cache empty result too
         return []
@@ -11955,10 +11970,6 @@ SOLUTION NEEDED:
                                         }
                                         
                                         response = supabase.table('commission_rules').insert(new_rule).execute()
-                                        # Clear MGA cache for this carrier since we added a new rule
-                                        cache_key = f'mgas_for_carrier_{carrier_id}'
-                                        if cache_key in st.session_state:
-                                            del st.session_state[cache_key]
                                         st.success("✅ Rule added")
                                         del st.session_state['show_inline_add_rule']
                                         st.rerun()
@@ -12050,10 +12061,6 @@ SOLUTION NEEDED:
                                                 update_data['rule_description'] = f"{current_desc} | Ended: {reason}"
                                             
                                             supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
-                                            # Clear MGA cache for this carrier since we updated a rule
-                                            cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
-                                            if cache_key in st.session_state:
-                                                del st.session_state[cache_key]
                                             del st.session_state[f'end_date_{rule["rule_id"]}']
                                             st.success("Rule updated")
                                             st.rerun()
@@ -12102,11 +12109,6 @@ SOLUTION NEEDED:
                                             }
                                             
                                             supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
-                                            
-                                            # Clear MGA cache for this carrier since we updated a rule
-                                            cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
-                                            if cache_key in st.session_state:
-                                                del st.session_state[cache_key]
                                             
                                             # If retroactive, update all affected policies
                                             if is_retroactive:

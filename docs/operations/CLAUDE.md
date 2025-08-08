@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: August 7, 2025  
-**Current Version**: 3.9.34
+**Last Updated**: August 8, 2025  
+**Current Version**: 3.9.35
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,16 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v3.9.35)
+1. **MGA Dropdown Fixed for Commission Rules**:
+   - **Issue**: MGAs with commission rules weren't showing in transaction edit dropdown
+   - **Root Cause**: Dropdown only checked carrier_mga_relationships table, not commission rules
+   - **Fix**: Modified `load_mgas_for_carrier()` to include MGAs from BOTH sources:
+     - carrier_mga_relationships table (existing functionality)
+     - commission_rules table (new functionality)
+   - **Cache Management**: Added automatic cache clearing when commission rules are created/updated
+   - **Impact**: CRC Group and other MGAs now appear in dropdown when linked via commission rules
 
 ## Recent Major Changes (v3.9.34)
 1. **Reconciliation Import Improvements**:

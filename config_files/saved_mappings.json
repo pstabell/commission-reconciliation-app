@@ -1,18 +1,16 @@
 {
-  "SWFL Insurance": {
+  "SWFL Insurance v2": {
     "mapping": {
       "Customer": "Insured Name",
       "Policy Number": "Policy",
       "Effective Date": "Eff Date",
       "Agent Paid Amount (STMT)": "Pay Amount",
-      "Agency Comm Received (STMT)": "Agency Comm",
       "Policy Type": "LOB/Chg",
       "Transaction Type": "Tran",
       "NOTES": "Inv#",
-      "Rate": "Rate",
-      "Premium Sold": "Agency Gross"
+      "Rate": "Rate"
     },
-    "created": "2025-07-11 22:27",
-    "field_count": 10
+    "created": "2025-08-07 12:11",
+    "field_count": 8
   }
 }

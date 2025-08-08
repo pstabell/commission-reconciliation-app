@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.35] - 2025-08-08 - MGA Dropdown Fixed for Commission Rules
+
+### Fixed
+- **MGA Dropdown in Transaction Edit**
+  - MGAs linked via commission rules now appear in dropdown (not just carrier_mga_relationships)
+  - Modified `load_mgas_for_carrier()` to check both relationship sources
+  - Added automatic cache clearing when commission rules are created/updated
+  - Resolves issue where CRC Group wasn't showing despite having commission rule
+
+### Technical
+- Combined MGA loading from two sources using set to avoid duplicates
+- Cache key format: `mgas_for_carrier_{carrier_id}`
+- Silent error handling to prevent transient DB errors from breaking UI
+
 ## [3.9.37] - 2025-08-06 - Commission Rule Edit & Contact UI Improvements
 
 ### Added
