@@ -5,6 +5,28 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.39] - 2025-08-08 - Enhanced Reconciliation Field Visibility
+
+### Added
+- **Complete Field Visibility in Matched Transactions Table**
+  - Shows Client ID that will be populated from matched transaction
+  - Shows Carrier Name that will be populated from matched transaction
+  - Shows MGA Name that will be populated from matched transaction
+  - Shows Policy Origination Date that will be populated from matched transaction
+  - Shows X-DATE that will be populated from matched transaction
+  - Fields display "N/A" if missing from matched transaction for transparency
+
+### Improved
+- **Reconciliation Import Transparency**
+  - Users can now see ALL fields that will be populated in STMT transactions
+  - No more guessing what data will be carried over from matched transactions
+  - Easier to identify missing data before finalizing import
+  - Prevents need for manual fixes after reconciliation
+
+### Technical
+- Enhanced matched transactions DataFrame to include all critical policy fields
+- Added fields to disabled columns list to prevent accidental editing
+
 ## [3.9.38] - 2025-08-08 - X-DATE Orphan Rules & MGA Refresh Button
 
 ### Added

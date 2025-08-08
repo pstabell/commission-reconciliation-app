@@ -1,6 +1,6 @@
 # Reconciliation System - Comprehensive Documentation
 **Created**: July 4, 2025  
-**Last Updated**: August 5, 2025  
+**Last Updated**: August 8, 2025  
 **Purpose**: Complete reference for the commission reconciliation system implementation
 
 ## Table of Contents
@@ -403,6 +403,30 @@ if create_new_client:
 - Maintains referential integrity in database
 - Enables accurate client-based reporting
 - Prevents orphaned transactions
+
+### Enhanced Field Visibility in Matched Transactions (Added v3.9.39)
+
+Complete transparency in what fields will be populated when creating STMT transactions:
+
+#### Matched Transactions Table Display
+The matched transactions table now shows ALL critical fields that will be copied from the matched transaction:
+- **Client ID**: Shows the Client ID from the matched transaction
+- **Carrier Name**: Shows the carrier that will be populated
+- **MGA Name**: Shows the MGA/appointment that will be populated
+- **Policy Orig Date**: Shows the Policy Origination Date that will be copied
+- **X-DATE**: Shows the expiration date that will be populated
+
+#### Benefits
+- **No More Guessing**: See exactly what data will be carried over before finalizing
+- **Data Validation**: Fields show "N/A" if missing from the matched transaction
+- **Prevent Manual Fixes**: Identify missing data before creating STMT transactions
+- **Complete Transparency**: All inherited fields visible in one view
+
+#### Technical Details
+- Enhanced matched_df DataFrame to include all policy-related fields
+- Fields pulled from item['match'] dictionary
+- All fields set as disabled in data_editor to prevent accidental changes
+- Maintains existing unmatch functionality
 
 ## Technical Implementation
 
