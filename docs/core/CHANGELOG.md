@@ -5,6 +5,27 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.40] - 2025-08-08 - X-DATE Reports Boundary Fix
+
+### Fixed
+- **Policy Revenue Ledger Reports X-DATE Handling**
+  - Fixed inconsistency between individual ledger and reports pages
+  - Changed boundary comparisons from `<= term_x_date` to `< term_x_date`
+  - Transactions with Effective Date = X-DATE now properly become orphans
+  - Prevents duplicate transactions appearing in wrong month reports
+  - Example: Carol Goldenberg transactions dated 12/14/2024 no longer appear in June 2024 report
+
+### Technical
+- Updated three boundary checks in Policy Revenue Ledger Reports (lines 14688, 14694, 14698)
+- Made reports page consistent with individual Policy Revenue Ledger page
+- Created rollback plan documentation for safety
+- Maintains X-DATE orphan rule: NO transactions on expiration date stay in term
+
+### Impact
+- Eliminates duplicate transactions in monthly reports
+- Ensures X-DATE transactions require proper renewal term assignment
+- Improves data accuracy in commission reporting
+
 ## [3.9.39] - 2025-08-08 - Enhanced Reconciliation Field Visibility
 
 ### Added

@@ -1,7 +1,8 @@
 # MASTER POLICY TERM RULES 📋
 
 **Created**: August 8, 2025  
-**Version**: 1.0  
+**Last Updated**: August 8, 2025  
+**Version**: 1.1  
 **Purpose**: Define the unbreakable rules for assigning transactions to policy terms
 
 ## Overview
@@ -20,16 +21,14 @@ The MASTER POLICY TERM RULES ensure that transactions are correctly assigned to 
 
 ### Rule 2: X-DATE Boundary Rule 📅
 
-**Principle**: Transactions on expiration dates belong to the renewal (with one exception).
+**Principle**: Transactions on expiration dates become ORPHANS - NO EXCEPTIONS (Updated v1.1).
 
 When a transaction's Effective Date equals the X-DATE (expiration date) of a policy term:
+- Transaction becomes an ORPHAN requiring renewal term entry
+- Appears at top of ledger with warning indicators
+- Forces proper data entry for renewal terms
 
-1. **IF** a renewal term exists:
-   - **AND** transaction type ≠ CAN → Assign to RENEWAL term
-   - **AND** transaction type = CAN → Assign to EXPIRING term
-   
-2. **IF** no renewal term exists:
-   - → Assign to current/expiring term
+**Implementation**: Use strict `<` comparison (not `<=`) for X-DATE boundaries
 
 ### Rule 3: Standard Date Range Assignment 📊
 
@@ -38,51 +37,48 @@ For all other transactions (not on X-DATE):
 
 ## Examples
 
-### Example 1: Renewal on X-DATE
+### Example 1: Any Transaction on X-DATE
 ```
 Term 1: 06/14/2024 to 12/14/2024
 Term 2: 12/14/2024 to 06/14/2025
 
-RWL Transaction with Effective Date: 12/14/2024
-→ Assigned to Term 2 (renewal term)
+ANY Transaction with Effective Date: 12/14/2024
+→ Becomes ORPHAN (not assigned to any term)
+→ Appears at top with warning indicators
+→ Requires proper renewal term entry
 ```
 
-### Example 2: Cancellation on X-DATE
+### Example 2: Transaction Before X-DATE
 ```
 Term 1: 06/14/2024 to 12/14/2024
+
+END Transaction with Effective Date: 12/13/2024
+→ Assigned to Term 1 (within term boundaries)
+```
+
+### Example 3: Transaction After X-DATE
+```
 Term 2: 12/14/2024 to 06/14/2025
 
-CAN Transaction with Effective Date: 12/14/2024
-→ Assigned to Term 1 (expiring term)
-```
-
-### Example 3: No Renewal Exists
-```
-Term 1: 06/14/2024 to 12/14/2024
-No Term 2
-
-END Transaction with Effective Date: 12/14/2024
-→ Assigned to Term 1 (only available term)
+END Transaction with Effective Date: 12/15/2024
+→ Assigned to Term 2 (within new term boundaries)
 ```
 
 ## Business Logic Rationale
 
-### Why X-DATE transactions go to renewal:
-- Insurance coverage technically renews at 12:01 AM on the X-DATE
-- The old policy expires at 11:59 PM the day before
-- Therefore, transactions on X-DATE logically belong to the new term
-
-### Why CAN is the exception:
-- Cancellations terminate the existing policy
-- They must be associated with the policy being cancelled
-- A cancellation cannot belong to a policy that hasn't started yet
+### Why X-DATE transactions become orphans (Updated v1.1):
+- Eliminates ambiguity about which term a boundary transaction belongs to
+- Forces explicit renewal term creation with proper dates
+- Prevents accidental assignment to wrong terms
+- Ensures data integrity and accurate commission tracking
+- Visual warnings make orphans impossible to miss
 
 ## Implementation Details
 
 ### Location in Code
 - File: `commission_app.py`
-- Section: Policy Revenue Ledger Reports
-- Lines: ~15664-15702
+- Individual Policy Revenue Ledger: Lines ~15711-15753 (uses < for X-DATE)
+- Policy Revenue Ledger Reports: Lines 14688, 14694, 14698 (fixed in v1.1 to use <)
 
 ### Key Variables
 - `term_eff_date`: Start date of the policy term

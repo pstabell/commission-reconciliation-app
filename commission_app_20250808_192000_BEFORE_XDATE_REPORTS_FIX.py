@@ -14685,17 +14685,17 @@ TO "New Column Name";
                                         include_transaction = True
                                 # Include END transactions within the term dates
                                 elif trans_type == 'END' and pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date < term_x_date:
+                                    if term_eff_date <= trans_eff_date <= term_x_date:
                                         include_transaction = True
                                 # Include STMT/VOID transactions within term (using Effective Date only)
                                 elif '-STMT-' in trans_id or '-VOID-' in trans_id:
                                     # Use Effective Date just like other transactions
                                     if pd.notna(trans_eff_date) and term_x_date:
-                                        if term_eff_date <= trans_eff_date < term_x_date:
+                                        if term_eff_date <= trans_eff_date <= term_x_date:
                                             include_transaction = True
                                 # Include other transactions (CAN, PMT, etc.) within the term dates
                                 elif pd.notna(trans_eff_date) and term_x_date:
-                                    if term_eff_date <= trans_eff_date < term_x_date:
+                                    if term_eff_date <= trans_eff_date <= term_x_date:
                                         include_transaction = True
                                 
                                 if include_transaction:
