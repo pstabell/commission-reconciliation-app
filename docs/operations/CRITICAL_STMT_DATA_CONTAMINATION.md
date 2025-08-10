@@ -16,10 +16,14 @@ During the July 2025 reconciliation process, -IMPORT transactions were incorrect
 - `Agency Comm Received (STMT)`
 - `STMT DATE`
 
+Additionally, matched policy transactions may have been incorrectly populated with data in:
+- `Agency Estimated Comm/Revenue (CRM)` - This should NOT be updated during reconciliation
+
 ### Why This Is Wrong
 1. **-IMPORT transactions** are policy transactions created from statement data when no match is found
 2. **-STMT- transactions** are reconciliation entries that record actual payments
 3. The STMT columns should ONLY have values in reconciliation entries, not in policy transactions
+4. **Matched policy transactions** should NEVER be updated with ANY data during reconciliation - only NEW reconciliation entries should be created
 
 ### Example of Contaminated Data
 ```
@@ -81,10 +85,18 @@ The script will:
 ## Prevention
 
 ### Code Review Needed
-1. Review reconciliation import logic
+1. Review reconciliation import logic - it should ONLY:
+   - Create NEW -STMT- transactions for matched items
+   - Create NEW -IMPORT- and -STMT- transactions for unmatched items
+   - NEVER update existing policy transactions
 2. Ensure -IMPORT transactions NEVER receive STMT data
 3. Add validation to prevent STMT data on non-reconciliation transactions
-4. Consider database constraints
+4. Ensure matched policy transactions are NEVER updated with any data
+5. Use the enhanced matched transactions table to provide full transparency
+6. Consider database constraints
+
+### Key Principle
+**The reconciliation process should be READ-ONLY for existing transactions and only CREATE new reconciliation entries**
 
 ### Proposed Validation
 ```python
