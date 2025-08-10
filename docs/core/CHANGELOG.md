@@ -5,6 +5,21 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.43] - 2025-08-10 - Missing Commission Filter Added
+
+### Added
+- **New Filter Button: Show Transactions Missing Commission**
+  - Added "📊 Show Transactions Missing Commission" button to Edit Policy Transactions
+  - Finds ALL transactions with no Total Agent Comm (regardless of payment status)
+  - Excludes reconciliation transactions (-STMT-, -VOID-, -ADJ-)
+  - Complements existing "⚠️ Show Transactions Requiring Attention" filter
+  - Helps identify transactions that need commission data entry
+
+### Clarified
+- **Filter Purposes**:
+  - "Show Transactions Requiring Attention": For data contamination (has payments but no commission)
+  - "Show Transactions Missing Commission": For all missing commission data (comprehensive)
+
 ## [3.9.42] - 2025-08-10 - Critical STMT Data Contamination Discovery
 
 ### Discovered
