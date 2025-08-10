@@ -5,6 +5,32 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.42] - 2025-08-10 - Critical STMT Data Contamination Discovery
+
+### Discovered
+- **CRITICAL: STMT Data Contamination in -IMPORT Transactions**
+  - Found -IMPORT transactions with values in STMT columns (should be NULL)
+  - These columns should ONLY have data in -STMT-, -VOID-, -ADJ- transactions
+  - Affected transactions from July 2025 reconciliation
+  - Created diagnostic script to identify and fix contaminated data
+  - Impact: Incorrect balance calculations and compromised audit trail
+
+### Added
+- **Diagnostic Script**: `fix_import_stmt_contamination.py`
+  - Analyzes all -IMPORT transactions for STMT data
+  - Creates backup before making changes
+  - Clears STMT fields from contaminated transactions
+  - Verifies proper -STMT- entries exist
+- **Documentation**: `CRITICAL_STMT_DATA_CONTAMINATION.md`
+  - Detailed analysis of the issue
+  - Root cause investigation
+  - Solution steps and prevention measures
+
+### Required Actions
+- Run diagnostic script to clean contaminated data
+- Review reconciliation import logic to prevent recurrence
+- Add validation to prevent STMT data on non-reconciliation transactions
+
 ## [3.9.41] - 2025-08-08 - Commission Rule Priority Fix & Import Warning
 
 ### Fixed
