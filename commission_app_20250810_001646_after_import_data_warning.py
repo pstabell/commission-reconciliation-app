@@ -1310,11 +1310,7 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
             if policy_type and rule.get('policy_type'):
                 rule_types = [t.strip() for t in rule['policy_type'].split(',')]
                 if policy_type in rule_types:
-                    # Give exact single policy type match highest priority
-                    if len(rule_types) == 1 and rule_types[0] == policy_type:
-                        priority += 200  # Exact match gets higher priority
-                    else:
-                        priority += 100  # Multi-type rule that includes this type
+                    priority += 100
                 else:
                     continue  # Policy type doesn't match, skip
             elif not rule.get('policy_type'):
@@ -1325,8 +1321,8 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
         if not rules_with_priority:
             return None
         
-        # Sort by priority (highest first), then by effective date (most recent first) for ties
-        rules_with_priority.sort(key=lambda x: (x[0], x[1].get('effective_date', '')), reverse=True)
+        # Sort by priority (highest first) and get the best match
+        rules_with_priority.sort(key=lambda x: x[0], reverse=True)
         best_rule = rules_with_priority[0][1]
         
         # Get carrier and MGA names for display
@@ -6429,9 +6425,6 @@ def main():
                                 commission_rule = None
                                 policy_type = modal_data.get('Policy Type', '')
                                 
-                                # Debug: Show what policy type we're looking for
-                                if policy_type:
-                                    st.caption(f"🔍 Looking for commission rule for policy type: {policy_type}")
                                 
                                 if selected_mga_id:
                                     # Try carrier + MGA + policy type first
@@ -6453,10 +6446,7 @@ def main():
                                     new_rate = commission_rule.get('new_rate', 0)
                                     renewal_rate = commission_rule.get('renewal_rate', new_rate)  # Default to new rate if no renewal rate
                                     
-                                    # Show more detailed information about which rule was found
-                                    rule_desc = commission_rule.get('rule_description', 'Carrier default')
-                                    mga_text = f" through {commission_rule.get('mga_name')}" if commission_rule.get('mga_name') else " (Direct)"
-                                    st.info(f"ℹ️ Commission rule found: {selected_carrier_name} {rule_desc}{mga_text}")
+                                    st.info(f"ℹ️ Commission rule found: {commission_rule.get('rule_description', 'Carrier default')}")
                                     st.success(f"✅ Rates available - New: {new_rate}% | Renewal: {renewal_rate}%")
                                     st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
                                     

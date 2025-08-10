@@ -5,6 +5,29 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.41] - 2025-08-08 - Commission Rule Priority Fix & Import Warning
+
+### Fixed
+- **Commission Rule Selection Priority**
+  - Fixed issue where wrong commission rule was selected when multiple rules exist
+  - Exact single policy type matches now get higher priority (200) than multi-type rules (100)
+  - Example: GL-only rule will be selected over "GL, WC" rule when looking for GL
+  - Added tie-breaker: most recent effective date wins if priorities are equal
+  - Added debug caption showing which policy type is being searched for
+
+### Added
+- **Import Data Warning Message**
+  - Added clear warning to "Import Data" section in Tools → Import/Export
+  - Explains this tool is for ADDING NEW transactions only
+  - Directs users to "Update Existing Transactions" section for updates
+  - Prevents confusion between the two upload areas
+
+### Improved
+- **Commission Rule Display**
+  - Enhanced commission rule found message to show full details
+  - Now displays: "NEXT Workers Comp through Simon Agency" format
+  - Makes it clear which specific rule was matched
+
 ## [3.9.40] - 2025-08-08 - X-DATE Reports Boundary Fix
 
 ### Fixed

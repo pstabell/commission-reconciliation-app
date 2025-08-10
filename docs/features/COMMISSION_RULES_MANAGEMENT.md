@@ -87,6 +87,11 @@ If deletion is attempted (via direct database access):
 - Rules can cover specific policy types or "All Policy Types"
 - Multiple policy types supported (comma-separated)
 - Integrates with policy type configuration
+- **Priority System** (as of v3.9.41):
+  - Exact single policy type match: Priority 200
+  - Multi-type rule containing the policy type: Priority 100
+  - Catch-all rule (no policy type): Priority 10
+  - Example: GL-only rule beats "GL, WC" rule when searching for GL
 
 ## Integration Points
 
