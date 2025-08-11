@@ -134,6 +134,120 @@ def check_password():
     st.info("This application contains sensitive commission data. Authentication is required.")
     return False
 
+# As-Earned Commission Functions
+def get_payment_frequency(payment_plan_text):
+    """Convert payment plan selection to annual frequency."""
+    if not payment_plan_text:
+        return None
+    
+    plan = str(payment_plan_text).upper().strip()
+    
+    # Check if it's the new format (e.g., "12-PAY")
+    if '-PAY' in plan:
+        try:
+            # Extract the number before "-PAY"
+            frequency = int(plan.replace('-PAY', ''))
+            return frequency
+        except ValueError:
+            return None
+    
+    # Direct mapping for old dropdown values (backward compatibility)
+    frequency_map = {
+        'FULL': 1,
+        'ANNUAL': 1,
+        'SEMI-ANNUAL': 2,
+        'QUARTERLY': 4,
+        'MONTHLY': 12,
+        'SEMI-MONTHLY': 24,
+        'BI-WEEKLY': 26,
+        'WEEKLY': 52
+    }
+    
+    return frequency_map.get(plan, None)
+
+def calculate_months_between(start_date, end_date):
+    """Calculate the number of months between two dates."""
+    if not start_date or not end_date:
+        return 0
+    
+    # Convert to datetime if needed
+    if isinstance(start_date, str):
+        start_date = pd.to_datetime(start_date)
+    if isinstance(end_date, str):
+        end_date = pd.to_datetime(end_date)
+    
+    # Calculate months (partial months count as full)
+    months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    
+    # Add 1 because we count the starting month
+    total_months = months + 1
+    
+    # Return 0 if the start date is in the future
+    return max(0, total_months)
+
+def calculate_as_earned_balance(transaction, all_data=None):
+    """Calculate as-earned balance if payment plan exists."""
+    # Get transaction type and ID
+    trans_id = str(transaction.get('Transaction ID', ''))
+    trans_type = transaction.get('Transaction Type', '')
+    
+    # For STMT transactions, show the payment amount as negative (to match Policy Balance Due pattern)
+    if '-STMT-' in trans_id:
+        paid_amount = transaction.get('Agent Paid Amount (STMT)', 0)
+        try:
+            paid_amount = float(paid_amount) if paid_amount is not None else 0
+        except (ValueError, TypeError):
+            paid_amount = 0
+        if pd.isna(paid_amount):
+            paid_amount = 0
+        # Return as negative to show it's a payment/deduction
+        return -paid_amount if paid_amount != 0 else None
+    
+    # Check both possible column names (before and after rename)
+    payment_plan = transaction.get('AS EARNED PMT PLAN') or transaction.get('AS_EARNED_PMT_PLAN')
+    frequency = get_payment_frequency(payment_plan)
+    
+    if not frequency:
+        return None  # Don't show column for this row
+    
+    # Get values with safe defaults
+    effective_date = transaction.get('Effective Date')
+    total_comm = transaction.get('Total Agent Comm', 0)
+    
+    # Convert to float safely
+    try:
+        total_comm = float(total_comm) if total_comm is not None else 0
+    except (ValueError, TypeError):
+        total_comm = 0
+    
+    # Handle NaN values
+    if pd.isna(total_comm):
+        total_comm = 0
+    
+    if not effective_date or total_comm == 0:
+        return None
+    
+    # Calculate months elapsed (simple calendar month counting)
+    current_date = datetime.datetime.now()
+    months_elapsed = calculate_months_between(effective_date, current_date)
+    
+    # If policy hasn't started yet, nothing is earned
+    if months_elapsed <= 0:
+        return 0
+    
+    # Simple calculation: How much have we earned so far?
+    if frequency == 1:  # 1-PAY (FULL) - all earned immediately
+        earned_amount = total_comm
+    else:
+        # Simple: divide total by frequency, multiply by months elapsed
+        # Cap at the number of payments in the plan
+        payment_amount = total_comm / frequency
+        payments_earned = min(months_elapsed, frequency)
+        earned_amount = payment_amount * payments_earned
+    
+    # For non-STMT transactions, just return the earned amount
+    return earned_amount
+
 @st.cache_resource
 def get_supabase_client():
     """Get cached Supabase client."""
@@ -894,7 +1008,7 @@ def get_custom_css():
             border: 2px solid #e6a800 !important;
             border-radius: 6px !important;
         }
-        /* Ensure Transaction Type and FULL OR MONTHLY PMTS selectboxes have yellow styling */
+        /* Ensure Transaction Type and AS_EARNED_PMT_PLAN selectboxes have yellow styling */
         div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
             background-color: #fff3b0 !important;
             border: 2px solid #e6a800 !important;
@@ -1695,7 +1809,7 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     Shows ALL past-due renewals (no lower limit) and future renewals up to 90 days.
     """
     # Filter for relevant transaction types
-    renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL"])].copy()
+    renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL", "REWRITE"])].copy()
     
     # Convert date columns to datetime objects
     renewal_candidates['expiration_date'] = pd.to_datetime(renewal_candidates[get_mapped_column("X-DATE")], errors='coerce')
@@ -1710,9 +1824,10 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     today = pd.to_datetime(datetime.date.today())
     latest_renewals['Days Until Expiration'] = (latest_renewals['expiration_date'] - today).dt.days
     
-    # Filter for policies expiring within 90 days OR already expired (no lower limit on past due)
-    # This will show ALL past-due renewals and future renewals up to 90 days
-    pending_renewals = latest_renewals[latest_renewals['Days Until Expiration'] <= 90].copy()
+    # Filter for policies expiring within 365 days OR already expired (no lower limit on past due)
+    # This will show ALL past-due renewals and future renewals up to 1 year
+    # Changed from 90 to 365 days to show more pending renewals
+    pending_renewals = latest_renewals[latest_renewals['Days Until Expiration'] <= 365].copy()
     
     # Optional: Add a safeguard for very old policies (e.g., more than 1 year past due)
     # Uncomment if needed: pending_renewals = pending_renewals[pending_renewals['Days Until Expiration'] > -365]
@@ -3747,7 +3862,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         # Define field groups for better organization
         client_fields = ['Client ID (CRM)', 'Client ID', 'Customer', 'Client Name', 'Agent Name']
-        policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']
+        policy_fields = ['Writing Code', 'Policy Number', 'Policy #', 'Prior Policy Number', 'Product', 'Carrier', 'Policy Type', 'Carrier Name', 'MGA Name', 'Transaction Type', 'Policy Checklist Complete', 'AS_EARNED_PMT_PLAN', 'NOTES']
         date_fields = ['Policy Issue Date', 'Policy Effective Date', 'As of Date', 'Effective Date', 'Policy Origination Date', 'X-DATE']
         commission_fields = [
             'Premium Sold', 'Policy Taxes & Fees', 'Commissionable Premium',
@@ -3926,7 +4041,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         # Now handle the rest of the policy fields
         field_counter = 0
         for field in policy_fields:
-            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Policy Type', 'Transaction Type', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES']:
+            if field in modal_data.keys() and field not in ['Carrier Name', 'MGA Name', 'Policy Type', 'Transaction Type', 'Policy Checklist Complete', 'AS_EARNED_PMT_PLAN', 'NOTES']:
                 with col3 if field_counter % 2 == 0 else col4:
                     # Regular text input
                     # Make Prior Policy Number read-only for renewals
@@ -4157,14 +4272,14 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         with col6:
             if 'Policy Term' in modal_data.keys():
                 # Policy Term dropdown - now includes "Custom" option
-                policy_terms = [3, 6, 9, 12, "Custom"]
+                policy_terms = [6, 12, "Custom"]
                 
                 # Try to auto-calculate term based on Effective Date and X-DATE
                 calculated_term = None
                 effective_date = updated_data.get('Effective Date')
                 x_date = updated_data.get('X-DATE')
                 
-                # Auto-populate 12-month term for NEW and RWL (except AUTO) - but only as a suggestion
+                # Auto-populate 12-month term for NEW, RWL, and REWRITE (except AUTO) - but only as a suggestion
                 transaction_type = updated_data.get('Transaction Type', modal_data.get('Transaction Type', ''))
                 policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
                 
@@ -4186,12 +4301,12 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         months_diff = (x_date.year - effective_date.year) * 12 + (x_date.month - effective_date.month)
                         
                         # If we get a standard term, use it
-                        if months_diff in [3, 6, 9, 12]:
+                        if months_diff in [6, 12]:
                             calculated_term = months_diff
                         # If it's close to a standard term (within a few days), round to nearest
                         elif months_diff > 0:
                             # Check if it's close to any standard term
-                            for term in [3, 6, 9, 12]:
+                            for term in [6, 12]:
                                 # Allow for dates that are a few days off (e.g., 11.9 months rounds to 12)
                                 days_diff = (x_date - effective_date).days
                                 expected_days = term * 30  # Approximate days in months
@@ -4211,7 +4326,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 else:
                     try:
                         # Check if it's a numeric value
-                        if isinstance(current_term, (int, float)) and int(current_term) in [3, 6, 9, 12]:
+                        if isinstance(current_term, (int, float)) and int(current_term) in [6, 12]:
                             selected_index = policy_terms.index(int(current_term)) + 1
                         elif current_term == "Custom":
                             selected_index = policy_terms.index("Custom") + 1
@@ -4544,7 +4659,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         help_text += f" | CANCELLATION - Chargeback at new business rate (50%)"
                     if is_editable:
                         help_text += " | 🔓 UNLOCKED: You can manually adjust the rate for special cases"
-                elif current_transaction_type not in ["NEW", "RWL", "NBS", "STL", "BoR"]:
+                elif current_transaction_type not in ["NEW", "RWL", "NBS", "STL", "BoR", "REWRITE"]:
                     if prior_policy and str(prior_policy).strip():
                         help_text += f" | Has Prior Policy: {prior_policy} → Renewal rate (25%)"
                     else:
@@ -4667,14 +4782,22 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             ) else 'No'
         
         with col16:
-            # FULL OR MONTHLY PMTS - always show this field
-            payment_types = ["FULL", "MONTHLY", ""]
-            current_payment = modal_data.get('FULL OR MONTHLY PMTS', '')
-            updated_data['FULL OR MONTHLY PMTS'] = st.selectbox(
-                'FULL OR MONTHLY PMTS',
+            # AS_EARNED_PMT_PLAN - always show this field
+            payment_types = ["", "1-PAY", "2-PAY", "4-PAY", "6-PAY", "10-PAY", "11-PAY", "12-PAY", "24-PAY", "26-PAY", "52-PAY"]
+            current_payment = modal_data.get('AS_EARNED_PMT_PLAN', '')
+            
+            # Check if WC policy to show required indicator
+            current_policy_type = updated_data.get('Policy Type', modal_data.get('Policy Type', ''))
+            is_wc_policy = current_policy_type == 'WC'
+            label = 'AS EARNED PMT PLAN*' if is_wc_policy else 'AS EARNED PMT PLAN'
+            help_text = 'Required for Workers Comp policies' if is_wc_policy else None
+            
+            updated_data['AS_EARNED_PMT_PLAN'] = st.selectbox(
+                label,
                 options=payment_types,
-                index=payment_types.index(current_payment) if current_payment in payment_types else 2,
-                key="modal_FULL OR MONTHLY PMTS"
+                index=payment_types.index(current_payment) if current_payment in payment_types else 0,
+                key="modal_AS_EARNED_PMT_PLAN",
+                help=help_text
             )
         
         # NOTES - Full width (always show)
@@ -4781,6 +4904,13 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             # Clear the calculate clicked flag
             if 'calculate_clicked' in st.session_state:
                 del st.session_state['calculate_clicked']
+            
+            # WC Policy Validation - payment plan required for Workers Comp
+            policy_type = updated_data.get('Policy Type', '')
+            payment_plan = updated_data.get('AS_EARNED_PMT_PLAN', '')
+            if policy_type == 'WC' and not payment_plan:
+                st.error("❌ Payment plan is required for Workers Comp policies. Please select a payment plan.")
+                st.stop()
             
             # Convert date objects to strings
             # REMOVED: Date formatting to preserve YYYY-MM-DD format
@@ -5364,7 +5494,7 @@ def main():
                 'Policy Gross Comm %', 'Agency Estimated Comm/Revenue (CRM)',
                 'Agent Estimated Comm $', 'Broker Fee', 'Broker Fee Agent Comm', 'Total Agent Comm',
                 'Agency Comm Received (STMT)', 'Agent Paid Amount (STMT)',
-                'STMT DATE', 'Policy Checklist Complete', 'FULL OR MONTHLY PMTS', 'NOTES'
+                'STMT DATE', 'Policy Checklist Complete', 'AS_EARNED_PMT_PLAN', 'NOTES'
             ]
             
             # Reorder columns - keep preferred order columns that exist, then add any remaining
@@ -5526,6 +5656,15 @@ def main():
                         st.session_state.show_attention_filter = False
                         st.session_state.show_missing_commission_filter = False
                         st.rerun()
+            with col4:
+                if st.button("🔄 Refresh Page", type="secondary", help="Clear all cached data and refresh the page"):
+                    # Clear relevant session state for this page
+                    keys_to_clear = [key for key in st.session_state.keys() if 'edit_policies' in key or 'edit_results' in key or 'edit_search' in key]
+                    for key in keys_to_clear:
+                        del st.session_state[key]
+                    # Clear cache
+                    clear_policies_cache()
+                    st.rerun()
             
             # Track filter state
             if show_attention_needed:
@@ -5802,6 +5941,10 @@ def main():
                                 "Select",
                                 help="Select rows to delete",
                                 default=False,
+                            ),
+                            "AS_EARNED_PMT_PLAN": st.column_config.TextColumn(
+                                "AS EARNED PMT PLAN",
+                                help="Payment plan for as-earned commission tracking"
                             )
                         }
                         
@@ -7114,8 +7257,8 @@ def main():
             with col2:
                 policy_term = st.selectbox(
                     "Policy Term",
-                    options=[None, 3, 6, 9, 12],
-                    format_func=lambda x: "" if x is None else f"{x} months",
+                    options=[None, 6, 12, "Custom"],
+                    format_func=lambda x: "" if x is None else (x if x == "Custom" else f"{x} months"),
                     help="Select policy duration in months"
                 )
             
@@ -7146,7 +7289,16 @@ def main():
                 else:
                     x_date = st.date_input("X-DATE", value=x_date_default, help="Expiration date", key="add_x_date")
             with col2:
-                full_or_monthly = st.selectbox("FULL OR MONTHLY PMTS", ["FULL", "MONTHLY", ""])
+                # Check if WC policy to show required indicator
+                is_wc_policy = policy_type == 'WC'
+                label = 'AS EARNED PMT PLAN*' if is_wc_policy else 'AS EARNED PMT PLAN'
+                help_text = 'Required for Workers Comp policies' if is_wc_policy else None
+                
+                full_or_monthly = st.selectbox(
+                    label, 
+                    ["", "1-PAY", "2-PAY", "4-PAY", "6-PAY", "10-PAY", "11-PAY", "12-PAY", "24-PAY", "26-PAY", "52-PAY"],
+                    help=help_text
+                )
             
             # Row 5: Checklist and Notes
             col1, col2 = st.columns(2)
@@ -7369,6 +7521,9 @@ def main():
                 # Validate override requirements
                 if use_override and not override_reason.strip():
                     st.error("❌ Override reason is required when using a custom commission rate.")
+                # WC Policy Validation - payment plan required for Workers Comp
+                elif policy_type == 'WC' and not full_or_monthly:
+                    st.error("❌ Payment plan is required for Workers Comp policies. Please select a payment plan.")
                 elif customer and policy_number:
                     try:
                         # Agent rate is already correctly set based on Prior Policy Number
@@ -7406,7 +7561,7 @@ def main():
                             "Agent Estimated Comm $": clean_numeric_value(agent_est_comm),
                             "Broker Fee Agent Comm": clean_numeric_value(broker_fee_agent_comm),
                             "Total Agent Comm": clean_numeric_value(total_agent_comm),
-                            "FULL OR MONTHLY PMTS": full_or_monthly,
+                            "AS_EARNED_PMT_PLAN": full_or_monthly,
                             "NOTES": notes
                         }
                         
@@ -9149,6 +9304,16 @@ def main():
                                                 key="edit_new_trans_type"
                                             )
                                             
+                                            # Agent commission percentage (moved up)
+                                            agent_comm_pct = float(original_data.get('Agent Comm %', 0) or 0)
+                                            new_agent_comm_pct = st.number_input(
+                                                f"Agent Comm % *(was: {agent_comm_pct:.2f})*",
+                                                value=agent_comm_pct,
+                                                format="%.2f",
+                                                step=0.01,
+                                                key="edit_new_agent_comm_pct"
+                                            )
+                                            
                                             new_customer = st.text_input(
                                                 f"Customer *(was: {original_data['Customer']})*",
                                                 value=original_data['Customer'],
@@ -9202,16 +9367,6 @@ def main():
                                                 key="edit_new_effective_date"
                                             )
                                             
-                                            # Agent commission percentage
-                                            agent_comm_pct = float(original_data.get('Agent Comm %', 0) or 0)
-                                            new_agent_comm_pct = st.number_input(
-                                                f"Agent Comm % *(was: {agent_comm_pct:.2f})*",
-                                                value=agent_comm_pct,
-                                                format="%.2f",
-                                                step=0.01,
-                                                key="edit_new_agent_comm_pct"
-                                            )
-                                            
                                             # Policy Origination Date
                                             pol_orig_date_value = original_data.get('Policy Origination Date', '')
                                             if pd.notna(pol_orig_date_value):
@@ -9249,6 +9404,22 @@ def main():
                                                 value=x_date_obj,
                                                 key="edit_new_x_date"
                                             )
+                                            
+                                            # Policy Term
+                                            current_term = original_data.get('Policy Term', '')
+                                            if isinstance(current_term, (int, float)) and int(current_term) in [6, 12]:
+                                                default_term = int(current_term)
+                                            else:
+                                                default_term = "Custom"
+                                            
+                                            new_policy_term = st.selectbox(
+                                                f"Policy Term *(was: {current_term})*",
+                                                options=[6, 12, "Custom"],
+                                                format_func=lambda x: f"{x} months" if isinstance(x, int) else x,
+                                                index=[6, 12, "Custom"].index(default_term),
+                                                key="edit_new_policy_term",
+                                                help="Select policy duration in months"
+                                            )
                                         
                                         # Submit button for the form
                                         submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
@@ -9269,7 +9440,8 @@ def main():
                                                     'Effective Date': new_effective_date.strftime('%Y-%m-%d') if new_effective_date else None,
                                                     'Agent Comm %': new_agent_comm_pct,
                                                     'Policy Origination Date': new_policy_origination_date.strftime('%Y-%m-%d') if new_policy_origination_date else None,
-                                                    'X-DATE': new_x_date.strftime('%Y-%m-%d') if new_x_date else None
+                                                    'X-DATE': new_x_date.strftime('%Y-%m-%d') if new_x_date else None,
+                                                    'Policy Term': new_policy_term
                                                 }
                                                 
                                                 response = supabase.table('policies').update(update_data).eq('Transaction ID', selected_row['Transaction ID']).execute()
@@ -9436,7 +9608,7 @@ def main():
                                     'reconciliation_id': f"ADJ-{trans_id}",
                                     'is_reconciliation_entry': True,
                                     'Client ID': orig_row.get('Client ID', ''),
-                                    'FULL OR MONTHLY PMTS': orig_row.get('FULL OR MONTHLY PMTS', ''),
+                                    'AS_EARNED_PMT_PLAN': orig_row.get('AS_EARNED_PMT_PLAN', ''),
                                     'X-DATE': orig_row.get('X-DATE', ''),
                                     'Description': f"Adjustment: {adjustment_reason}"
                                 }
@@ -12527,7 +12699,7 @@ SOLUTION NEEDED:
                 **Step 3: Create Commission Rules**
                 - Click on a carrier card to open it
                 - Add rules for different policy types and rates
-                - Set NEW and RWL (renewal) rates separately
+                - Set NEW, RWL (renewal), and REWRITE rates separately
                 
                 **Step 4: Integration with Policies**
                 - When adding new policies, select carrier from dropdown
@@ -13330,7 +13502,7 @@ SOLUTION NEEDED:
         # Get effective dates based on filtered data - ONLY from NEW/RWL transactions
         # This ensures we only show policy term start dates, not endorsement or payment dates
         if "Transaction Type" in filtered_data.columns and "Effective Date" in filtered_data.columns:
-            policy_start_data = filtered_data[filtered_data["Transaction Type"].isin(["NEW", "RWL"])]
+            policy_start_data = filtered_data[filtered_data["Transaction Type"].isin(["NEW", "RWL", "REWRITE"])]
             effective_dates = policy_start_data["Effective Date"].dropna().unique().tolist()
         else:
             effective_dates = filtered_data["Effective Date"].dropna().unique().tolist() if "Effective Date" in filtered_data.columns else []
@@ -13340,7 +13512,7 @@ SOLUTION NEEDED:
                 "Select Policy Effective Date:", 
                 ["Select...", "All Dates"] + sorted(effective_dates), 
                 key="ledger_effectivedate_select",
-                help="Shows only NEW and RWL transaction dates (policy term starts)"
+                help="Shows only NEW, RWL, and REWRITE transaction dates (policy term starts)"
             )
         
         # Further filter based on effective date
@@ -13447,7 +13619,7 @@ SOLUTION NEEDED:
                             display_text = f"{xdate} 🚫 {trans_type}"
                         elif trans_type == "XCL":
                             display_text = f"{xdate} ❌ {trans_type}"
-                        elif trans_type in ["NEW", "RWL"]:
+                        elif trans_type in ["NEW", "RWL", "REWRITE"]:
                             display_text = f"{xdate} ✅ {trans_type}"
                         elif trans_type == "END":
                             display_text = f"{xdate} 📝 {trans_type}"
@@ -13500,7 +13672,7 @@ SOLUTION NEEDED:
                     # Find the term's effective date (from NEW or RWL transaction with this X-DATE)
                     term_transactions = policy_rows[
                         (policy_rows["X-DATE"] == selected_xdate) & 
-                        (policy_rows["Transaction Type"].isin(["NEW", "RWL"]))
+                        (policy_rows["Transaction Type"].isin(["NEW", "RWL", "REWRITE"]))
                     ]
                     
                     if not term_transactions.empty:
@@ -13527,7 +13699,7 @@ SOLUTION NEEDED:
                                 if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
                                     filtered_rows.append(idx)
                             # Include NEW/RWL with matching X-DATE
-                            elif trans_type in ["NEW", "RWL"] and trans_x_date == selected_xdate:
+                            elif trans_type in ["NEW", "RWL", "REWRITE"] and trans_x_date == selected_xdate:
                                 filtered_rows.append(idx)
                             # Include END within the term dates
                             elif trans_type == "END" and pd.notna(trans_eff_date):
@@ -14670,7 +14842,7 @@ TO "New Column Name";
                         st.session_state.prl_statement_month_selectbox = "All Months"
                     
                     # Help text explaining the filter behavior
-                    help_text = "Filter by the month when policies started (NEW/RWL transactions). Shows all transactions for those policy terms."
+                    help_text = "Filter by the month when policies started (NEW/RWL/REWRITE transactions). Shows all transactions for those policy terms."
                     
                     selected_month = st.selectbox(
                         "Select Statement Month:",
@@ -14688,13 +14860,13 @@ TO "New Column Name";
                     selected_date = pd.to_datetime(selected_month)
                     selected_ym = selected_date.strftime('%Y-%m')
                     
-                    # Find all NEW/RWL transactions effective in the selected month
+                    # Find all NEW/RWL/REWRITE transactions effective in the selected month
                     # First ensure we have the Year-Month column properly set
                     if 'Year-Month' not in working_data.columns:
                         working_data['Year-Month'] = pd.to_datetime(working_data['Effective Date'], errors='coerce').dt.strftime('%Y-%m')
                     
                     new_rwl_in_month = working_data[
-                        (working_data['Transaction Type'].isin(['NEW', 'RWL'])) & 
+                        (working_data['Transaction Type'].isin(['NEW', 'RWL', 'REWRITE'])) & 
                         (working_data['Year-Month'] == selected_ym)
                     ]
                     
@@ -14728,10 +14900,10 @@ TO "New Column Name";
                                 
                                 include_transaction = False
                                 
-                                # For NEW/RWL transactions, be very strict - only include if in selected month
-                                if trans_type in ['NEW', 'RWL']:
+                                # For NEW/RWL/REWRITE transactions, be very strict - only include if in selected month
+                                if trans_type in ['NEW', 'RWL', 'REWRITE']:
                                     trans_year_month = trans_eff_date.strftime('%Y-%m') if pd.notna(trans_eff_date) else ''
-                                    # Only include if this NEW/RWL is in our selected month
+                                    # Only include if this NEW/RWL/REWRITE is in our selected month
                                     if trans_year_month == selected_ym:
                                         include_transaction = True
                                 # Include END transactions within the term dates
@@ -14901,7 +15073,22 @@ TO "New Column Name";
                 else:
                     st.session_state.prl_templates = {}
             
-            # Get all available columns
+            # Check if we need to add As Earned Balance Due column
+            has_payment_plans = False
+            if 'AS_EARNED_PMT_PLAN' in working_data.columns:
+                has_payment_plans = working_data['AS_EARNED_PMT_PLAN'].notna().any() and (working_data['AS_EARNED_PMT_PLAN'] != '').any()
+                
+                # Rename AS_EARNED_PMT_PLAN to display properly BEFORE calculation
+                working_data = working_data.rename(columns={'AS_EARNED_PMT_PLAN': 'AS EARNED PMT PLAN'})
+            
+            # Calculate As Earned Balance Due if payment plans exist
+            if has_payment_plans:
+                working_data['As Earned Balance Due'] = working_data.apply(
+                    lambda row: calculate_as_earned_balance(row, working_data), 
+                    axis=1
+                )
+            
+            # Get all available columns (including the new column if added)
             all_columns = list(working_data.columns)
             
             # Default column selection based on view mode
@@ -15011,11 +15198,15 @@ TO "New Column Name";
                     st.markdown("**Select Columns:**")
                     
                     # Available columns multiselect (restored to original style)
-                    # Use the session state value directly as default
+                    # Use the session state value directly as default, but filter to only existing columns
+                    default_cols = st.session_state.get('prl_selected_columns', available_default_columns)
+                    # Ensure all default columns exist in all_columns
+                    valid_default_cols = [col for col in default_cols if col in all_columns]
+                    
                     selected_columns = st.multiselect(
                         "Choose columns to display in your report",
                         options=all_columns,
-                        default=st.session_state.get('prl_selected_columns', available_default_columns),
+                        default=valid_default_cols,
                         key="prl_column_multiselect"
                     )
                     
@@ -15484,6 +15675,16 @@ TO "New Column Name";
                 # Filter to only include columns that exist
                 valid_columns = [col for col in selected_columns if col in working_data.columns]
                 
+                # Add As Earned Balance Due column after Policy Balance Due if it exists
+                if 'As Earned Balance Due' in working_data.columns and 'As Earned Balance Due' not in valid_columns:
+                    if 'Policy Balance Due' in valid_columns:
+                        # Find the position of Policy Balance Due and insert after it
+                        pbd_index = valid_columns.index('Policy Balance Due')
+                        valid_columns.insert(pbd_index + 1, 'As Earned Balance Due')
+                    else:
+                        # If Policy Balance Due isn't selected, add at the end
+                        valid_columns.append('As Earned Balance Due')
+                
                 # Replace "Agent Estimated Comm $" with "Total Agent Comm" if selected
                 # This ensures we show the total commission including broker fees
                 if "Agent Estimated Comm $" in valid_columns and "Total Agent Comm" in working_data.columns:
@@ -15555,7 +15756,7 @@ TO "New Column Name";
                         "Agent Comm", "Agent Comm %",
                         "Agent Estimated Comm", "Agent Estimated Comm $",
                         "Agent Paid Amount", "Agent Paid Amount (STMT)",
-                        "Policy Balance Due", "Balance Due",
+                        "Policy Balance Due", "Balance Due", "As Earned Balance Due",
                         "Agency Estimated Comm/Revenue (CRM)",
                         "Agency Comm Received (STMT)",
                         "Premium Sold", "Broker Fee", "Broker Fee Agent Comm",
@@ -15581,9 +15782,9 @@ TO "New Column Name";
                     
                     # Calculate height based on actual number of rows
                     # Each row is approximately 35 pixels, header is 35 pixels
-                    # Show actual rows + header, but cap at 11 visible rows max
+                    # Show actual rows + header + 2 extra rows, but cap at 11 visible rows max
                     num_data_rows = min(len(display_data), 11)  # 11 data rows max
-                    display_height = 35 * (num_data_rows + 1)  # +1 for header
+                    display_height = 35 * (num_data_rows + 3)  # +1 for header, +2 for extra rows
                     
                     # Minimum height to show at least header + 2 rows
                     display_height = max(display_height, 105)
@@ -15642,6 +15843,9 @@ TO "New Column Name";
                         # For detailed view, ensure subtotal columns are included even if not selected
                         if view_mode != "Aggregated by Policy":
                             subtotal_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
+                            # Add As Earned Balance Due if it exists
+                            if 'As Earned Balance Due' in working_data.columns:
+                                subtotal_cols.append('As Earned Balance Due')
                             for col in subtotal_cols:
                                 if col not in editable_data.columns and col in working_data.columns:
                                     editable_data[col] = working_data[col]
@@ -15732,6 +15936,9 @@ TO "New Column Name";
                         # Add column config for numeric columns with proper width
                         numeric_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due', 
                                       'Premium Sold', 'Broker Fee', 'Broker Fee Agent Comm']
+                        # Add As Earned Balance Due if it exists
+                        if 'As Earned Balance Due' in editable_data.columns:
+                            numeric_cols.append('As Earned Balance Due')
                         for col in numeric_cols:
                             if col in editable_data.columns and col not in column_config:
                                 column_config[col] = st.column_config.NumberColumn(
@@ -15760,9 +15967,9 @@ TO "New Column Name";
                                 policy_data = editable_data[policy_mask].copy()
                                 
                                 if 'X-DATE' in policy_data.columns and 'Transaction Type' in policy_data.columns:
-                                    # Find all NEW/RWL transactions with X-DATEs (these define terms)
+                                    # Find all NEW/RWL/REWRITE transactions with X-DATEs (these define terms)
                                     term_defining = policy_data[
-                                        (policy_data['Transaction Type'].isin(['NEW', 'RWL'])) & 
+                                        (policy_data['Transaction Type'].isin(['NEW', 'RWL', 'REWRITE'])) & 
                                         (policy_data['X-DATE'].notna())
                                     ].sort_values('Effective Date')
                                     
@@ -15782,8 +15989,8 @@ TO "New Column Name";
                                                 trans_type = row.get('Transaction Type', '')
                                                 trans_id = str(row.get('Transaction ID', ''))
                                                 
-                                                # Include the NEW/RWL transaction that defines this term
-                                                if row['X-DATE'] == term_row['X-DATE'] and trans_type in ['NEW', 'RWL']:
+                                                # Include the NEW/RWL/REWRITE transaction that defines this term
+                                                if row['X-DATE'] == term_row['X-DATE'] and trans_type in ['NEW', 'RWL', 'REWRITE']:
                                                     editable_data.at[idx, '_term_group'] = term_name
                                                     editable_data.at[idx, '_term_dates'] = term_dates
                                                 # Include END transactions within the term dates (but not on X-DATE)
@@ -15878,7 +16085,7 @@ TO "New Column Name";
                                         # Check if it's STMT/VOID
                                         if '-STMT-' in trans_id or '-VOID-' in trans_id:
                                             # STMT/VOID get higher numbers to appear last
-                                            if trans_type in ['NEW', 'RWL']:
+                                            if trans_type in ['NEW', 'RWL', 'REWRITE']:
                                                 return 4
                                             elif trans_type == 'END':
                                                 return 5
@@ -15886,7 +16093,7 @@ TO "New Column Name";
                                                 return 6
                                         else:
                                             # Regular transactions
-                                            if trans_type in ['NEW', 'RWL']:
+                                            if trans_type in ['NEW', 'RWL', 'REWRITE']:
                                                 return 1
                                             elif trans_type == 'END':
                                                 return 2
@@ -15957,6 +16164,9 @@ TO "New Column Name";
                             
                             # Create subtotal rows for each term group
                             numeric_columns = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
+                            # Add As Earned Balance Due if it exists
+                            if 'As Earned Balance Due' in editable_data.columns:
+                                numeric_columns.append('As Earned Balance Due')
                             
                             # Process each unique term group
                             for group_name in unique_groups:
@@ -16665,7 +16875,7 @@ TO "New Column Name";
                                 # Ensure we only include the selected columns plus the special columns
                                 special_cols = ['Reviewed', 'Group', 'Type →']
                                 # Also ensure subtotal columns are included
-                                subtotal_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due']
+                                subtotal_cols = ['Total Agent Comm', 'Agent Paid Amount (STMT)', 'Policy Balance Due', 'As Earned Balance Due']
                                 
                                 export_cols = []
                                 for col in special_cols:
@@ -16917,7 +17127,14 @@ TO "New Column Name";
     
     # --- Pending Policy Renewals ---
     elif page == "Pending Policy Renewals":
-        st.subheader("Pending Policy Renewals")
+        # Add refresh button in the header
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.subheader("Pending Policy Renewals")
+        with col2:
+            if st.button("🔄 Refresh Page", key="refresh_pending_renewals", help="Refresh the pending renewals list"):
+                clear_policies_cache()
+                st.rerun()
         
         # Add helpful tip about removing renewals in a collapsible expander
         with st.expander("💡 **Tip: How to Remove a Policy from This List**", expanded=False):
@@ -17011,7 +17228,7 @@ TO "New Column Name";
             with col_filter1:
                 filter_option = st.radio(
                     "Show Renewals:",
-                    ["All Renewals", "Past Due Only", "Due This Week", "Due in 30 Days", "Due in 60 Days", "Due in 90 Days"],
+                    ["All Renewals", "Past Due Only", "Due This Week", "Due in 30 Days", "Due in 60 Days", "Due in 90 Days", "Due in 180 Days", "Due in 365 Days"],
                     help="Filter renewals by time range"
                 )
             
@@ -17035,6 +17252,13 @@ TO "New Column Name";
             display_df = filtered_df
 
         if not display_df.empty:
+            # Debug: Show what's in the dataframe
+            st.write(f"Debug: display_df has {len(display_df)} rows before display")
+            if st.checkbox("Show debug data", key="debug_pending_renewals"):
+                debug_cols = ['Customer', 'Policy Number', 'Policy Type', 'X-DATE', 'Days Until Expiration', 'Transaction Type']
+                available_debug_cols = [col for col in debug_cols if col in display_df.columns]
+                st.dataframe(display_df[available_debug_cols])
+            
             # Format dates to MM/DD/YYYY before displaying
             date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE']
             # REMOVED: Date formatting to show raw dates as stored in database

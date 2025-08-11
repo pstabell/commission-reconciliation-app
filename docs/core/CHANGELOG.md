@@ -5,7 +5,131 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.9.43] - 2025-08-10 - Missing Commission Filter Added
+## [3.9.47] - 2025-08-11 - REWRITE Policy Term Implementation
+
+### Fixed
+- **REWRITE Transaction as Policy Term Trigger**
+  - REWRITE transactions now treated as policy term starts (like NEW and RWL)
+  - Updated all 9 code locations to include REWRITE:
+    - Line 1812: Pending Renewals eligibility filter
+    - Line 13505: Policy Revenue Ledger effective date filter
+    - Line 13515: Effective date dropdown help text
+    - Line 13622: Transaction type display logic with ✅ icon
+    - Line 13675: Term transaction filter in ledger
+    - Line 13702: Policy term filtering logic
+    - Line 4662: Commission rate determination (critical fix)
+    - Line 4282: Comment about auto-populating 12-month term
+    - Line 12702: Help text for commission rules
+  - REWRITE policies now appear in Pending Renewals when due
+  - Transaction 2A92ZR7-IMPORT now properly starts its own term
+
+### Technical Details
+- No database changes required
+- Changes isolated to transaction type lists
+- REWRITE continues to use renewal commission rates (correct behavior)
+- Prior Policy Number functionality unchanged
+
+## [3.9.46] - 2025-08-11 - REWRITE Policy Term Requirement Identified
+
+### Discovered
+- **REWRITE Transaction Issue**
+  - REWRITE transactions are not being treated as policy term starts
+  - Currently only NEW and RWL trigger new policy terms
+  - This causes REWRITE transactions to be incorrectly grouped with previous terms
+  - Example: Transaction 2A92ZR7-IMPORT being grouped with wrong term
+  - REWRITE policies don't appear in Pending Renewals when due
+
+### To Be Fixed
+- **Policy Term Triggers**
+  - REWRITE needs to be added alongside NEW and RWL as term triggers
+  - Affects: Policy Revenue Ledger grouping
+  - Affects: Policy Revenue Ledger Reports filtering
+  - Affects: Pending Policy Renewals eligibility
+  - Total of 9 code locations identified for update
+  - Implementation plan created in docs/features/REWRITE_IMPLEMENTATION_PLAN.md
+
+## [3.9.45] - 2025-08-10 - As-Earned Phase 1, 2, 3 & 4 Implementation
+
+### Changed
+- **Phase 1: Database Column Rename**
+  - Renamed "FULL OR MONTHLY PMTS" to "AS_EARNED_PMT_PLAN" in database
+  - Updated all code references (12 in commission_app.py, 1 in column_mapping_config.py)
+  - Column displays as "AS EARNED PMT PLAN" in UI
+
+- **Phase 2: Dropdown Expansion & WC Validation**
+  - Expanded dropdown options from ["FULL", "MONTHLY", ""] to include:
+    - QUARTERLY, SEMI-ANNUAL, ANNUAL, WEEKLY, BI-WEEKLY, SEMI-MONTHLY
+  - Added validation: Workers Comp (WC) policies REQUIRE a payment plan
+  - Added visual indicator (asterisk) when Policy Type = WC
+  - Shows error message if trying to save WC policy without payment plan
+
+- **Phase 3: Payment Frequency Recognition Functions**
+  - Added `get_payment_frequency()` function to map payment plans to annual frequencies
+  - Added `calculate_months_between()` helper function for date calculations
+  - Added `calculate_as_earned_balance()` function for earned amount calculations
+  - Functions handle all payment types with proper calculation logic
+
+- **Phase 4: Display-Only Column in Reports**
+  - Added "As Earned Balance Due" column to Policy Revenue Ledger Reports
+  - Column ONLY appears when payment plan data exists
+  - Automatically positioned after "Policy Balance Due" column
+  - Included in numeric formatting and Excel exports
+  - NO changes to existing "Policy Balance Due" calculations
+
+### Calculation Logic
+- FULL/ANNUAL: 1 payment/year (all earned immediately)
+- SEMI-ANNUAL: 2 payments/year
+- QUARTERLY: 4 payments/year  
+- MONTHLY: 12 payments/year
+- SEMI-MONTHLY: 24 payments/year
+- BI-WEEKLY: 26 payments/year
+- WEEKLY: 52 payments/year
+
+### Technical Details
+- Edit Transaction Modal dropdown: Line 4671
+- Add New Transaction dropdown: Line 7178  
+- WC validation added to both forms
+- Calculation functions added at lines 138-207
+- Help text shows "Required for Workers Comp policies" when applicable
+
+## [3.9.44] - 2025-08-10 - As-Earned Commissions Plan Revised
+
+### Updated
+- **As-Earned Commissions Implementation Plan - Version 6.0**
+  - DISCOVERED existing dropdown for "FULL OR MONTHLY PMTS" field!
+  - Currently has ["FULL", "MONTHLY", ""] options
+  - Plan updated to simply expand existing dropdown options
+  - **NEW: Payment plan REQUIRED for all WC (Workers Comp) policies**
+  - No changes to existing "Policy Balance Due" calculations
+  - Adds new "As Earned Balance Due" column for Excel export
+  - Column only appears when payment plan value exists
+  - All existing app math remains unchanged
+
+### Existing Dropdown Locations
+- Edit Transaction Modal: Line 4671
+- Add New Transaction Form: Line 7158
+
+### New Dropdown Options to Add
+- QUARTERLY → 4 payments/year
+- SEMI-ANNUAL → 2 payments/year
+- ANNUAL → 1 payment/year
+- WEEKLY → 52 payments/year
+- BI-WEEKLY → 26 payments/year
+- SEMI-MONTHLY → 24 payments/year
+
+### WC Policy Requirement
+- Workers Comp policies must have a payment plan selected
+- Validation added to prevent saving WC policies without payment plan
+- Error message: "Payment plan is required for Workers Comp policies"
+
+### Key Changes from Previous Plan
+- No need to build dropdown - it already exists!
+- Just update the payment_types array
+- Add validation for WC policy type
+- Much simpler implementation
+- Uses existing UI patterns
+
+## [3.9.43] - 2025-08-10 - Missing Commission Filter & Refresh Button Added
 
 ### Added
 - **New Filter Button: Show Transactions Missing Commission**
@@ -14,6 +138,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Excludes reconciliation transactions (-STMT-, -VOID-, -ADJ-)
   - Complements existing "⚠️ Show Transactions Requiring Attention" filter
   - Helps identify transactions that need commission data entry
+
+- **Refresh Page Button**
+  - Added "🔄 Refresh Page" button to Edit Policy Transactions
+  - Clears all cached data and session state for the page
+  - Fixes issue where search results show stale data
+  - No need to hit F5 or re-login
+
+### Fixed
+- **Search Display Issue**
+  - Search was finding correct transactions but displaying old data
+  - Refresh button provides quick fix without page reload
 
 ### Clarified
 - **Filter Purposes**:

@@ -78,6 +78,7 @@
 **A**: Commission calculations depend on the Transaction Type:
 - **NEW business**: 50% of agency commission
 - **Renewals (RWL)**: 25% of agency commission
+- **Rewrites (REWRITE)**: Uses renewal rate (25%) with Prior Policy Number link
 - **Endorsements (END)**: 50% if new policy, 25% if existing
 - **Cancellations (CAN)**: 0%
 

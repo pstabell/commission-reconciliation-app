@@ -7,23 +7,30 @@
 The Pending Policy Renewals feature is now live with the following capabilities:
 
 ### Key Features:
-1. **Automatic Renewal Detection**: Identifies policies expiring within 60 days
+1. **Automatic Renewal Detection**: Identifies policies expiring within 365 days
 2. **Policy Term Support**: Uses actual policy terms (3, 6, 9, 12 months) for accurate renewal calculations
-3. **Transaction Type Filtering**: Only considers NEW and RWL policies for renewal
+3. **Transaction Type Filtering**: Only considers NEW, RWL, and REWRITE policies for renewal
 4. **Batch Operations**: Select multiple policies for renewal at once
 
 ### How It Works:
 1. **Data Source**: Reads from the `policies` table
 2. **Filtering Logic**:
-   - Transaction Type must be "NEW" or "RWL"
-   - Expiration date (X-DATE) within next 60 days
+   - Transaction Type must be "NEW", "RWL", or "REWRITE"
+   - Expiration date (X-DATE) within next 365 days (expanded from 60)
    - Groups by Policy Number to find latest transaction
 3. **Renewal Calculation**:
    - New Effective Date = Previous policy's Expiration Date
    - New Expiration Date = New Effective Date + Policy Term months
    - If no Policy Term specified, defaults to 6 months
 
-### Recent Enhancements (July 10, 2025):
+### Recent Enhancements:
+
+**August 11, 2025:**
+- Added REWRITE transactions as renewal-eligible (like NEW and RWL)
+- Expanded renewal window from 60 days to 365 days for better planning
+- REWRITE policies now properly appear in Pending Renewals when due
+
+**July 10, 2025:**
 - Added Policy Term field to database and UI
 - Updated renewal calculation to use actual policy terms instead of hardcoded 6 months
 - 98 existing policies automatically assigned terms based on date calculations
@@ -53,7 +60,7 @@ The Pending Policy Renewals feature is now live with the following capabilities:
   - Create a new, isolated function to identify policies due for renewal.
   - This function will perform the core data manipulation in memory without affecting the UI:
     - Read all policies into a DataFrame.
-    - Filter for "NEW" and "RWL" transaction types.
+    - Filter for "NEW", "RWL", and "REWRITE" transaction types.
     - Group by policy number and find the latest transaction.
     - Calculate the new policy term dates based on the original term length.
 - **Step 2.2: Implement Data Duplication:** 
