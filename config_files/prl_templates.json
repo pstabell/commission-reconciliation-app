@@ -23,11 +23,13 @@
       "Total Agent Comm",
       "STMT DATE",
       "Agent Paid Amount (STMT)",
-      "Policy Balance Due"
+      "Policy Balance Due",
+      "As Earned Balance Due",
+      "AS EARNED PMT PLAN"
     ],
     "created": "2025-08-02 22:36:03",
     "view_mode": "Detailed Transactions",
-    "updated": "2025-08-07 21:53:25",
+    "updated": "2025-08-10 12:14:34",
     "is_default": true
   },
   "Aggregated By Policy": {

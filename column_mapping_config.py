@@ -71,7 +71,7 @@ class ColumnMapper:
             # Other fields
             "Description": "Description",
             "NOTES": "NOTES",
-            "FULL OR MONTHLY PMTS": "FULL OR MONTHLY PMTS",
+            "AS_EARNED_PMT_PLAN": "AS_EARNED_PMT_PLAN",
             
             # New broker fee and tax fields
             "Broker Fee": "Broker Fee",

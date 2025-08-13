@@ -5,6 +5,39 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.49] - 2025-08-13 - Add New Policy Transaction Refresh Button
+
+### Added
+- **Refresh Page Button for Add New Policy Transaction**
+  - Added refresh button in top-right corner of page (next to title)
+  - Clears all form fields and session state when clicked
+  - Helps resolve issues where client ID or other fields get stuck
+  - Shows success message confirming form has been cleared
+  - Automatically refreshes page to reset all components
+
+### Technical Details
+- Clears 36 different session state keys related to the form
+- Includes client search, carrier/MGA selections, commission rules
+- Also clears data cache to ensure fresh data load
+- Button positioned using column layout for clean UI
+
+## [3.9.48] - 2025-08-11 - Edit Policies Pagination
+
+### Added
+- **Pagination Controls for Edit Policies Page**
+  - Added records per page dropdown (10, 25, 50, 100, 200 options)
+  - Added page number input with proper validation
+  - Shows "Page X of Y (Total: Z records)" for clarity
+  - Properly slices data based on current page
+  - Maintains Customer A-Z sorting across all pages
+  - Replaces hardcoded 50-record limit with flexible pagination
+
+### Technical Details
+- Uses same pagination pattern as Policy Revenue Ledger Reports
+- Session state keys: `edit_policies_per_page` and `edit_policies_current_page`
+- Automatically calculates total pages based on selected records per page
+- Shows exact record range being displayed (e.g., "Showing records 51-100 of 427 total")
+
 ## [3.9.47] - 2025-08-11 - REWRITE Policy Term Implementation
 
 ### Fixed

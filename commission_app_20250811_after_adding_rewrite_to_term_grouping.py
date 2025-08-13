@@ -6885,47 +6885,13 @@ def main():
             if show_all:
                 st.warning("Editing all policies at once can be slow with large datasets")
                 
-                # Sort by Customer A-Z first
+                # Sort by Customer A-Z first, then limit to first 50 records for performance
                 if 'Customer' in all_data.columns:
                     all_data_sorted = all_data.sort_values(by='Customer', ascending=True)
+                    edit_all_data = all_data_sorted.head(50)
                 else:
-                    all_data_sorted = all_data
-                
-                # Pagination controls
-                col1, col2, col3 = st.columns([2, 2, 2])
-                
-                with col1:
-                    records_per_page = st.selectbox(
-                        "Records per page:",
-                        options=[10, 25, 50, 100, 200],
-                        index=2,  # Default to 50
-                        key="edit_policies_per_page"
-                    )
-                
-                # Calculate total pages
-                total_records = len(all_data_sorted)
-                total_pages = max(1, (total_records + records_per_page - 1) // records_per_page)
-                
-                with col2:
-                    current_page = st.number_input(
-                        "Page:",
-                        min_value=1,
-                        max_value=total_pages,
-                        value=1,
-                        key="edit_policies_current_page"
-                    )
-                
-                with col3:
-                    st.write(f"Page {current_page} of {total_pages} (Total: {total_records} records)")
-                
-                # Calculate slice indices
-                start_idx = (current_page - 1) * records_per_page
-                end_idx = start_idx + records_per_page
-                
-                # Get the data for the current page
-                edit_all_data = all_data_sorted.iloc[start_idx:end_idx]
-                
-                st.write(f"Showing records {start_idx + 1}-{min(end_idx, total_records)} of {total_records} total (sorted by Customer A-Z)")
+                    edit_all_data = all_data.head(50)
+                st.write(f"Showing first 50 records for editing out of {len(all_data)} total (sorted by Customer A-Z)")
                 
                 # Find the actual column names dynamically
                 transaction_id_col = None
@@ -7013,60 +6979,7 @@ def main():
     
     # --- Add New Policy Transaction ---
     elif page == "Add New Policy Transaction":
-        col_title, col_refresh = st.columns([6, 1])
-        with col_title:
-            st.title("➕ Add New Policy Transaction")
-        with col_refresh:
-            if st.button("🔄 Refresh Page", help="Clear all form fields and start fresh"):
-                # Clear all form-related session state
-                keys_to_clear = [
-                    'selected_client_id',
-                    'selected_customer_name',
-                    'client_search',
-                    'new_client_name',
-                    'new_carrier_name',
-                    'new_policy_type',
-                    'add_policy_number',
-                    'add_prior_policy_number',
-                    'add_effective_date',
-                    'add_x_date',
-                    'add_policy_orig_date',
-                    'add_policy_carrier_outside',
-                    'add_policy_mga_outside',
-                    'add_policy_type_outside',
-                    'add_policy_carrier',
-                    'add_policy_carrier_manual',
-                    'carrier_manual_outside',
-                    'add_policy_mga',
-                    'add_policy_mga_manual',
-                    'mga_manual_outside',
-                    'add_policy_override',
-                    'add_policy_override_reason',
-                    'policy_gross_comm_details',
-                    'selected_carrier_id',
-                    'selected_carrier_name',
-                    'selected_mga_id',
-                    'selected_mga_name',
-                    'selected_policy_type',
-                    'final_carrier_name',
-                    'final_mga_name',
-                    'commission_new_rate',
-                    'commission_renewal_rate',
-                    'commission_rule_id',
-                    'commission_rule_description',
-                    'has_commission_rule',
-                    'generated_client_id'
-                ]
-                for key in keys_to_clear:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                
-                # Clear the data cache too for good measure
-                clear_policies_cache()
-                
-                st.success("✅ Form cleared! All fields have been reset.")
-                time.sleep(0.5)
-                st.rerun()
+        st.title("➕ Add New Policy Transaction")
         
         # Load fresh data for this page
         all_data = load_policies_data()
