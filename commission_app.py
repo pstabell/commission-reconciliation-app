@@ -4841,17 +4841,47 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             )
             updated_data['Broker Fee Agent Comm'] = broker_fee_agent
         
-        # Total Agent Comm (full width)
-        total_agent_comm = agent_comm + broker_fee_agent
-        st.number_input(
-            'Total Agent Comm',
-            value=total_agent_comm,
-            format="%.2f",
-            key="modal_Total Agent Comm_display",
-            disabled=True,
-            help=f"Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
-        )
-        updated_data['Total Agent Comm'] = total_agent_comm
+        # Calculate Commission button and Total Agent Comm on same row
+        col_calc, col_total = st.columns(2)
+        
+        with col_calc:
+            # Calculate button - moved here from bottom
+            if st.form_submit_button("Calculate Commission", type="primary", help="Click to update commission rates and verify all calculations"):
+                # Set flag that Calculate was clicked
+                st.session_state['calculate_clicked'] = True
+                
+                # Check if we need to update commission rate from carrier selection
+                if st.session_state.get('edit_commission_rate') is not None and 'Policy Gross Comm %' in updated_data:
+                    # The commission rate has already been set from the carrier selection above
+                    pass
+                st.success("✅ Calculations updated! Review the amounts above before saving.")
+                
+                # Special warning for CAN transactions
+                current_trans_type_for_warning = st.session_state.get('modal_Transaction Type', 
+                                        updated_data.get('Transaction Type', 
+                                        modal_data.get('Transaction Type', 'NEW')))
+                if current_trans_type_for_warning == "CAN":
+                    st.warning("""
+                    ⚠️ **VERIFY BEFORE SAVING - Cancellation Values:**
+                    - **Policy Gross Comm %**: Check if this is correct
+                    - **Agent Comm %**: May have reset - verify rate (use manual override if needed)
+                    - **X-DATE**: May have been recalculated - set to actual cancellation date
+                    
+                    Calculate may have reset your manual changes. Please review!
+                    """)
+        
+        with col_total:
+            # Total Agent Comm
+            total_agent_comm = agent_comm + broker_fee_agent
+            st.number_input(
+                'Total Agent Comm',
+                value=total_agent_comm,
+                format="%.2f",
+                key="modal_Total Agent Comm_display",
+                disabled=True,
+                help=f"Agent Comm + Broker Fee Comm = ${agent_comm:.2f} + ${broker_fee_agent:.2f} = ${total_agent_comm:.2f}"
+            )
+            updated_data['Total Agent Comm'] = total_agent_comm
         
         # Additional Fields
         st.markdown("#### Additional Fields")
@@ -4895,54 +4925,6 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
             key="modal_NOTES",
             height=70
         )
-        
-        # Calculate button - make it prominent
-        if st.form_submit_button("🧮 Calculate", type="primary", help="Click to update commission rates, X-DATE, and verify all calculations"):
-            # Set flag that Calculate was clicked
-            st.session_state['calculate_clicked'] = True
-            
-            # X-DATE is now updated immediately when Policy Term is selected
-            # No need for pending calculations
-            
-            # Check if we need to update commission rate from carrier selection
-            if st.session_state.get('edit_commission_rate') is not None and 'Policy Gross Comm %' in updated_data:
-                # The commission rate has already been set from the carrier selection above
-                pass
-            st.success("✅ Calculations updated! Review the amounts above before saving.")
-            
-            # Special warning for CAN transactions
-            current_trans_type_for_warning = st.session_state.get('modal_Transaction Type', 
-                                    updated_data.get('Transaction Type', 
-                                    modal_data.get('Transaction Type', 'NEW')))
-            if current_trans_type_for_warning == "CAN":
-                # Create an anchor point for scrolling
-                st.markdown('<div id="can-warning-anchor"></div>', unsafe_allow_html=True)
-                
-                # Display the warning
-                st.warning("""
-                ⚠️ **VERIFY BEFORE SAVING - Cancellation Values:**
-                - **Policy Gross Comm %**: Check if this is correct
-                - **Agent Comm %**: May have reset - verify rate (use manual override if needed)
-                - **X-DATE**: May have been recalculated - set to actual cancellation date
-                
-                Calculate may have reset your manual changes. Please review!
-                """)
-                
-                # Add JavaScript to scroll to the warning
-                st.markdown("""
-                <script>
-                    // Scroll to the warning after a brief delay to ensure it's rendered
-                    setTimeout(function() {
-                        const element = document.getElementById('can-warning-anchor');
-                        if (element) {
-                            element.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'center'
-                            });
-                        }
-                    }, 100);
-                </script>
-                """, unsafe_allow_html=True)
         
         # Internal Fields (collapsed by default)
         # For -IMPORT transactions, also show payment fields as read-only here

@@ -5,6 +5,21 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.52] - 2025-08-13 - Calculate Commission Button Relocation
+
+### Changed
+- **Relocated Calculate Commission Button**
+  - Moved "Calculate" button from bottom of form to Commission Details section
+  - Positioned in left column where Total Agent Comm was previously
+  - Renamed button from "Calculate" to "Calculate Commission"
+  - Removed calculator icon (🧮) for cleaner appearance
+  - Total Agent Comm field moved to right column on same row as button
+
+### Technical Details
+- Button remains in master edit form, affecting both Edit Policy Transactions and Pending Policy Renewals
+- Maintains all existing functionality (commission rates, warnings for CAN transactions)
+- Improves form flow by placing calculation button closer to commission fields
+
 ## [3.9.51] - 2025-08-13 - Calculate X-DATE Button in Edit Form
 
 ### Added
