@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.54] - 2025-08-17 - Policy Revenue Ledger Export Balance Filter Fix
+
+### Fixed
+- **Excel/CSV Export Now Respects Balance Filter**
+  - Fixed issue where balance filter (Positive/Zero/Negative/Non-Zero) wasn't applied to exports
+  - Export data now matches exactly what's displayed in the report
+  - Both Excel and CSV exports properly filter data for Aggregated by Policy view
+  - Ensures consistency between displayed data and exported files
+
+### Technical Details
+- Export functions now use the already-filtered `working_data` instead of unfiltered data
+- Applies to both CSV and Excel export formats in Policy Revenue Ledger Reports
+- No changes to detailed view exports which have their own term-based filtering
+
 ## [3.9.53] - 2025-08-17 - CAN Transaction X-DATE Exception
 
 ### Fixed

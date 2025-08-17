@@ -16989,6 +16989,7 @@ TO "New Column Name";
                             export_data = export_data.loc[:, final_export_cols].copy()
                         else:
                             # For Aggregated view or if no subtotals, use working_data
+                            # IMPORTANT: working_data has already been filtered by balance filter
                             export_data = working_data[valid_columns].copy()
                         # Use the same all_numeric_columns list from earlier
                         for col in all_numeric_columns:
@@ -17065,6 +17066,7 @@ TO "New Column Name";
                                 excel_export_data = excel_export_data[final_export_cols]
                             else:
                                 # For Aggregated view or if no subtotals, use working_data
+                                # IMPORTANT: working_data has already been filtered by balance filter
                                 excel_export_data = working_data[valid_columns].copy()
                             
                             # Format numeric columns - but skip subtotal rows in detailed view
