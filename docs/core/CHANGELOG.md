@@ -5,6 +5,21 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.53] - 2025-08-17 - CAN Transaction X-DATE Exception
+
+### Fixed
+- **CAN Transactions on X-DATE No Longer Orphaned**
+  - Added exception for CAN (cancellation) transactions that fall on policy X-DATE
+  - CAN transactions on X-DATE now assigned to expiring policy term
+  - Prevents orphaned cancellations that cannot be reconciled
+  - All other transaction types maintain original orphan behavior on X-DATE
+
+### Technical Details
+- Modified policy term assignment logic in Policy Revenue Ledger Reports
+- CAN transactions use `<=` comparison for X-DATE boundary (instead of `<`)
+- Updated MASTER_POLICY_TERM_RULES.md to version 1.2 documenting the exception
+- Business logic: cancellations on expiration date belong to the expiring term
+
 ## [3.9.52] - 2025-08-13 - Calculate Commission Button Relocation
 
 ### Changed

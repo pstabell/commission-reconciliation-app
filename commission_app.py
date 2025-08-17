@@ -16162,6 +16162,13 @@ TO "New Column Name";
                                                     if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date < term_x_date:
                                                         editable_data.at[idx, '_term_group'] = term_name
                                                         editable_data.at[idx, '_term_dates'] = term_dates
+                                                # Include CAN transactions - special exception for X-DATE
+                                                elif trans_type == 'CAN':
+                                                    trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')
+                                                    # CAN transactions on X-DATE go to expiring term (use <= instead of <)
+                                                    if pd.notna(trans_eff_date) and term_eff_date <= trans_eff_date <= term_x_date:
+                                                        editable_data.at[idx, '_term_group'] = term_name
+                                                        editable_data.at[idx, '_term_dates'] = term_dates
                                                 # Include all other transactions within term (but not on X-DATE)
                                                 else:
                                                     trans_eff_date = pd.to_datetime(row.get('Effective Date'), errors='coerce')

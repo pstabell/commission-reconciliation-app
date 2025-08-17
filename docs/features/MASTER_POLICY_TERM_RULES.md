@@ -1,8 +1,8 @@
 # MASTER POLICY TERM RULES 📋
 
 **Created**: August 8, 2025  
-**Last Updated**: August 8, 2025  
-**Version**: 1.1  
+**Last Updated**: August 17, 2025  
+**Version**: 1.2  
 **Purpose**: Define the unbreakable rules for assigning transactions to policy terms
 
 ## Overview
@@ -21,14 +21,17 @@ The MASTER POLICY TERM RULES ensure that transactions are correctly assigned to 
 
 ### Rule 2: X-DATE Boundary Rule 📅
 
-**Principle**: Transactions on expiration dates become ORPHANS - NO EXCEPTIONS (Updated v1.1).
+**Principle**: Transactions on expiration dates become ORPHANS - EXCEPT CANCELLATIONS (Updated v1.2).
 
 When a transaction's Effective Date equals the X-DATE (expiration date) of a policy term:
-- Transaction becomes an ORPHAN requiring renewal term entry
-- Appears at top of ledger with warning indicators
+- Most transactions become ORPHANS requiring renewal term entry
+- **EXCEPTION**: CAN (cancellation) transactions on X-DATE are assigned to the expiring term
+- Orphaned transactions appear at top of ledger with warning indicators
 - Forces proper data entry for renewal terms
 
-**Implementation**: Use strict `<` comparison (not `<=`) for X-DATE boundaries
+**Implementation**: 
+- Use strict `<` comparison for most transaction types
+- Use `<=` comparison for CAN transactions only
 
 ### Rule 3: Standard Date Range Assignment 📊
 
@@ -37,15 +40,26 @@ For all other transactions (not on X-DATE):
 
 ## Examples
 
-### Example 1: Any Transaction on X-DATE
+### Example 1: Non-CAN Transaction on X-DATE
 ```
 Term 1: 06/14/2024 to 12/14/2024
 Term 2: 12/14/2024 to 06/14/2025
 
-ANY Transaction with Effective Date: 12/14/2024
+END/STMT/etc Transaction with Effective Date: 12/14/2024
 → Becomes ORPHAN (not assigned to any term)
 → Appears at top with warning indicators
 → Requires proper renewal term entry
+```
+
+### Example 1a: CAN Transaction on X-DATE (Exception)
+```
+Term 1: 06/14/2024 to 12/14/2024
+Term 2: 12/14/2024 to 06/14/2025
+
+CAN Transaction with Effective Date: 12/14/2024
+→ Assigned to Term 1 (expiring term)
+→ Uses <= comparison for CAN transactions
+→ Prevents orphaned cancellations
 ```
 
 ### Example 2: Transaction Before X-DATE
@@ -66,19 +80,24 @@ END Transaction with Effective Date: 12/15/2024
 
 ## Business Logic Rationale
 
-### Why X-DATE transactions become orphans (Updated v1.1):
+### Why X-DATE transactions become orphans (Updated v1.2):
 - Eliminates ambiguity about which term a boundary transaction belongs to
 - Forces explicit renewal term creation with proper dates
 - Prevents accidental assignment to wrong terms
 - Ensures data integrity and accurate commission tracking
 - Visual warnings make orphans impossible to miss
 
+### CAN Transaction Exception Rationale:
+- Cancellations on X-DATE logically belong to the expiring term
+- Prevents orphaned CAN transactions that can't be reconciled
+- Reflects business logic: a policy canceled on expiration date cancels the expiring term
+
 ## Implementation Details
 
 ### Location in Code
 - File: `commission_app.py`
 - Individual Policy Revenue Ledger: Lines ~15711-15753 (uses < for X-DATE)
-- Policy Revenue Ledger Reports: Lines 14688, 14694, 14698 (fixed in v1.1 to use <)
+- Policy Revenue Ledger Reports: Lines 16165-16171 (v1.2 added CAN exception with <=)
 
 ### Key Variables
 - `term_eff_date`: Start date of the policy term
