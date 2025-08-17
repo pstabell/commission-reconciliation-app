@@ -5,6 +5,20 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.50] - 2025-08-13 - Pending Policy Renewals STMT Transaction Fix
+
+### Fixed
+- **Pending Policy Renewals Missing Policies**
+  - Fixed issue where STMT transactions were incorrectly considered as "latest" policy transactions
+  - STMT, VOID, and ADJ transactions are now excluded before deduplication
+  - All eligible policies now appear correctly (e.g., all 3 Gratia Coffee policies now show)
+  - Removed debug displays from the page after fix was verified
+
+### Technical Details
+- Moved STMT/VOID/ADJ filter to beginning of `get_pending_renewals` function
+- Prevents reconciliation transactions from interfering with policy deduplication
+- Ensures only real policy transactions (NEW, RWL, REWRITE) are considered for renewals
+
 ## [3.9.49] - 2025-08-13 - Add New Policy Transaction Refresh Button
 
 ### Added

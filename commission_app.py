@@ -1802,14 +1802,33 @@ def calculate_commission(row):
     except (KeyError, TypeError):
         return revenue * 0.25
 
-def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
+def get_pending_renewals(df: pd.DataFrame, debug=False) -> pd.DataFrame:
     """
     Identifies and generates a DataFrame of policies pending renewal.
     Excludes policies that have already been renewed (appear in Prior Policy Number of another policy).
     Shows ALL past-due renewals (no lower limit) and future renewals up to 90 days.
     """
+    debug_info = {}
+    
     # Filter for relevant transaction types
-    renewal_candidates = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL", "REWRITE"])].copy()
+    all_policies = df[df[get_mapped_column("Transaction Type")].isin(["NEW", "RWL", "REWRITE"])]
+    
+    # IMPORTANT: Exclude STMT, VOID, and ADJ transactions BEFORE deduplication
+    # These are not real policy transactions and should never be considered for renewals
+    if 'Transaction ID' in all_policies.columns:
+        all_policies = all_policies[
+            ~all_policies['Transaction ID'].astype(str).str.contains('-STMT-|-VOID-|-ADJ-', case=False, na=False)
+        ]
+    
+    renewal_candidates = all_policies.copy()
+    
+    if debug:
+        debug_info['total_new_rwl_rewrite'] = len(all_policies)
+        # Check for Gratia Coffee specifically
+        gratia_policies = all_policies[all_policies['Customer'].str.contains('Gratia', case=False, na=False)]
+        debug_info['gratia_total'] = len(gratia_policies)
+        if not gratia_policies.empty:
+            debug_info['gratia_policies'] = gratia_policies[['Transaction ID', 'Policy Number', 'Transaction Type', 'X-DATE']].to_dict('records')
     
     # Convert date columns to datetime objects
     renewal_candidates['expiration_date'] = pd.to_datetime(renewal_candidates[get_mapped_column("X-DATE")], errors='coerce')
@@ -1820,6 +1839,11 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     # Get the most recent transaction for each policy
     latest_renewals = renewal_candidates.drop_duplicates(subset="Policy Number", keep="first")
     
+    if debug:
+        debug_info['after_dedup'] = len(latest_renewals)
+        gratia_after_dedup = latest_renewals[latest_renewals['Customer'].str.contains('Gratia', case=False, na=False)]
+        debug_info['gratia_after_dedup'] = len(gratia_after_dedup)
+    
     # Calculate days until expiration for each policy
     today = pd.to_datetime(datetime.date.today())
     latest_renewals['Days Until Expiration'] = (latest_renewals['expiration_date'] - today).dt.days
@@ -1829,6 +1853,11 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     # Changed from 90 to 365 days to show more pending renewals
     pending_renewals = latest_renewals[latest_renewals['Days Until Expiration'] <= 365].copy()
     
+    if debug:
+        debug_info['after_date_filter'] = len(pending_renewals)
+        gratia_after_date = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]
+        debug_info['gratia_after_date_filter'] = len(gratia_after_date)
+    
     # Optional: Add a safeguard for very old policies (e.g., more than 1 year past due)
     # Uncomment if needed: pending_renewals = pending_renewals[pending_renewals['Days Until Expiration'] > -365]
     
@@ -1837,8 +1866,17 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     if prior_policy_col and prior_policy_col in df.columns:
         # Get all policy numbers that appear as prior policies (meaning they've been renewed)
         renewed_policies = df[df[prior_policy_col].notna()][prior_policy_col].unique()
+        if debug:
+            debug_info['renewed_policies'] = list(renewed_policies)[:10]  # Show first 10
+            # Check if Gratia policies are in renewed list
+            gratia_policy_nums = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]['Policy Number'].unique()
+            debug_info['gratia_in_renewed'] = [p for p in gratia_policy_nums if p in renewed_policies]
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(renewed_policies)]
+        if debug:
+            debug_info['after_renewed_filter'] = len(pending_renewals)
+            gratia_after_renewed = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]
+            debug_info['gratia_after_renewed_filter'] = len(gratia_after_renewed)
     
     # Exclude policies that have been cancelled or excluded
     # Check if any transaction for a policy number has type "CAN" or "XCL"
@@ -1846,18 +1884,31 @@ def get_pending_renewals(df: pd.DataFrame) -> pd.DataFrame:
     if transaction_type_col and transaction_type_col in df.columns:
         # Get all policy numbers that have a CAN or XCL transaction
         cancelled_policies = df[df[transaction_type_col].isin(["CAN", "XCL"])]["Policy Number"].unique()
+        if debug:
+            debug_info['cancelled_policies_count'] = len(cancelled_policies)
+            # Check if Gratia policies are cancelled
+            gratia_policy_nums = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]['Policy Number'].unique()
+            debug_info['gratia_in_cancelled'] = [p for p in gratia_policy_nums if p in cancelled_policies]
         # Exclude these from pending renewals
         pending_renewals = pending_renewals[~pending_renewals["Policy Number"].isin(cancelled_policies)]
-    
-    # Exclude STMT and VOID transactions based on Transaction ID
-    if 'Transaction ID' in pending_renewals.columns:
-        # Filter out any transactions with -STMT- or -VOID- in their Transaction ID
-        pending_renewals = pending_renewals[
-            ~pending_renewals['Transaction ID'].astype(str).str.contains('-STMT-|-VOID-', case=False, na=False)
-        ]
+        if debug:
+            debug_info['after_cancelled_filter'] = len(pending_renewals)
+            gratia_after_cancelled = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]
+            debug_info['gratia_after_cancelled_filter'] = len(gratia_after_cancelled)
     
     # Sort by Days Until Expiration (ascending, so most past-due show first)
     pending_renewals = pending_renewals.sort_values('Days Until Expiration', ascending=True)
+    
+    if debug:
+        debug_info['final_count'] = len(pending_renewals)
+        gratia_final = pending_renewals[pending_renewals['Customer'].str.contains('Gratia', case=False, na=False)]
+        debug_info['gratia_final_count'] = len(gratia_final)
+        if not gratia_final.empty:
+            debug_info['gratia_final_policies'] = gratia_final[['Transaction ID', 'Policy Number', 'Days Until Expiration']].to_dict('records')
+        
+        # Store debug info in session state for display
+        import streamlit as st
+        st.session_state['pending_renewals_debug'] = debug_info
     
     return pending_renewals
 
@@ -17339,13 +17390,6 @@ TO "New Column Name";
             display_df = filtered_df
 
         if not display_df.empty:
-            # Debug: Show what's in the dataframe
-            st.write(f"Debug: display_df has {len(display_df)} rows before display")
-            if st.checkbox("Show debug data", key="debug_pending_renewals"):
-                debug_cols = ['Customer', 'Policy Number', 'Policy Type', 'X-DATE', 'Days Until Expiration', 'Transaction Type']
-                available_debug_cols = [col for col in debug_cols if col in display_df.columns]
-                st.dataframe(display_df[available_debug_cols])
-            
             # Format dates to MM/DD/YYYY before displaying
             date_columns = ['Policy Origination Date', 'Effective Date', 'X-DATE']
             # REMOVED: Date formatting to show raw dates as stored in database
