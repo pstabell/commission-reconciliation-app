@@ -4282,6 +4282,43 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                             key="modal_Policy Origination Date",
                             help="Auto-populated based on transaction type and policy history"
                         )
+            
+            # Add Calculate button in left column, below Policy Origination Date
+            if st.form_submit_button("Calculate X-DATE", type="primary", help="Click to update X-DATE based on Policy Term"):
+                # Set flag that Calculate was clicked
+                st.session_state['calculate_clicked'] = True
+                
+                # Directly calculate X-DATE here
+                policy_term = st.session_state.get('modal_Policy Term')
+                effective_date = updated_data.get('Effective Date')
+                
+                if policy_term and policy_term != "Custom" and effective_date:
+                    try:
+                        # Parse the effective date
+                        if not isinstance(effective_date, pd.Timestamp):
+                            effective_date = pd.to_datetime(effective_date)
+                        
+                        # Calculate new X-DATE based on selected term
+                        new_x_date = effective_date + pd.DateOffset(months=int(policy_term))
+                        
+                        # Update X-DATE immediately
+                        updated_data['X-DATE'] = new_x_date.date()
+                        
+                        # Store the calculated value for the X-DATE widget to pick up
+                        st.session_state['calculated_x_date'] = new_x_date.date()
+                        st.session_state['user_changed_policy_term'] = True
+                        
+                        st.success(f"✅ X-DATE updated to {new_x_date.strftime('%m/%d/%Y')} (Effective Date + {policy_term} months)")
+                    except Exception as e:
+                        st.warning(f"Could not calculate X-DATE: {str(e)}")
+                elif policy_term == "Custom":
+                    st.info("📝 Custom term selected - please enter X-DATE manually")
+                elif not policy_term:
+                    st.warning("⚠️ Please select a Policy Term first")
+                elif not effective_date:
+                    st.warning("⚠️ Please enter an Effective Date first")
+                else:
+                    st.success("✅ X-DATE calculation completed")
         
         # Right column - X-DATE only (aligned with Effective Date)
         with col6:

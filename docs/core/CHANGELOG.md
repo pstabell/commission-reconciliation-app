@@ -5,6 +5,22 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.51] - 2025-08-13 - Calculate X-DATE Button in Edit Form
+
+### Added
+- **Calculate X-DATE Button in Dates Section**
+  - Added red "Calculate X-DATE" button in the Dates section of the master edit form
+  - Appears on both Edit Policy Transactions and Pending Policy Renewals pages
+  - Calculates X-DATE immediately based on Effective Date + Policy Term
+  - Positioned in left column below Policy Origination Date
+  - Eliminates need to scroll to bottom of form to verify X-DATE calculations
+
+### Technical Details
+- Button directly calculates X-DATE on first click (no double-clicking needed)
+- Shows appropriate warnings if Policy Term or Effective Date are missing
+- Works with 6-month and 12-month terms; shows info message for Custom terms
+- Updates both the displayed X-DATE and session state for persistence
+
 ## [3.9.50] - 2025-08-13 - Pending Policy Renewals STMT Transaction Fix
 
 ### Fixed
