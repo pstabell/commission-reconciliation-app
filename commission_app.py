@@ -3699,6 +3699,18 @@ def show_import_results(statement_date, all_data):
                         'NOTES': f"Import batch {batch_id} | Matched to: {item['match'].get('Transaction ID', 'Manual Match')}"
                     })
                     
+                    # Transfer Rate field to Agent Comm % if mapped
+                    if 'Rate' in st.session_state.column_mapping and 'statement_data' in item:
+                        rate_col = st.session_state.column_mapping['Rate']
+                        if rate_col in item['statement_data']:
+                            rate_value = item['statement_data'][rate_col]
+                            if pd.notna(rate_value):
+                                try:
+                                    # Convert to float and store as Agent Comm %
+                                    recon_entry['Agent Comm %'] = float(rate_value)
+                                except:
+                                    pass  # Skip if can't convert to number
+                    
                     # Clean data before queueing for insertion
                     cleaned_recon = clean_data_for_database(recon_entry)
                     
@@ -8687,15 +8699,18 @@ def main():
                             'Premium Sold': 'Premium Amount',
                             'X-DATE': 'Expiration/Cancellation Date',
                             'NOTES': 'Notes/Description',
-                            'Rate': 'Commission Rate %'
+                            'Rate': 'Commission Rate % → Agent Comm %'
                         }
                         
-                        # Create mapping interface
-                        col1, col2 = st.columns(2)
+                        # Create mapping interface - vertical layout
+                        st.markdown("**Required Fields**")
                         
-                        with col1:
-                            st.markdown("**Required Fields**")
-                            for sys_field, description in required_fields.items():
+                        # Required fields in two columns
+                        col1, col2 = st.columns(2)
+                        required_items = list(required_fields.items())
+                        
+                        for idx, (sys_field, description) in enumerate(required_items):
+                            with col1 if idx % 2 == 0 else col2:
                                 # Get the current value from column_mapping
                                 current_value = st.session_state.column_mapping.get(sys_field, '')
                                 
@@ -8719,9 +8734,16 @@ def main():
                                     # Remove from mapping if deselected
                                     del st.session_state.column_mapping[sys_field]
                         
-                        with col2:
-                            st.markdown("**Optional Fields**")
-                            for sys_field, description in optional_fields.items():
+                        # Add space between sections
+                        st.markdown("")
+                        st.markdown("**Optional Fields**")
+                        
+                        # Optional fields in two columns
+                        col3, col4 = st.columns(2)
+                        optional_items = list(optional_fields.items())
+                        
+                        for idx, (sys_field, description) in enumerate(optional_items):
+                            with col3 if idx % 2 == 0 else col4:
                                 # Get the current value from column_mapping
                                 current_value = st.session_state.column_mapping.get(sys_field, '')
                                 

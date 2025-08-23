@@ -203,13 +203,15 @@ When statement contains commissions for missing transactions:
 - Policy Number
 - Effective Date
 - Agent Paid Amount (STMT) - Primary
-- Agency Comm Received (STMT) - Audit
 
 **Optional Fields**:
+- Agency Comm Received (STMT) - Audit
 - Policy Type
 - Transaction Type
 - Premium Amount
+- X-DATE
 - Notes/Description
+- Rate (Commission Rate % → Agent Comm %)
 
 ## Matching Logic & Fixes
 
@@ -758,6 +760,41 @@ Major improvements to reconciliation import interface:
 - **Current State**: Three batch records showing as ACTIVE despite only one successful import
 - **Note**: Full atomic transaction support exists but may have timing issues
 
+### Commission Rate Import Enhancement (v3.9.35 - August 23, 2025)
+Enhanced reconciliation import to properly transfer commission rates from statements:
+
+#### The Issue
+- **Problem**: Rate field from statements wasn't being transferred to Agent Comm % field
+- **Impact**: Imported transactions missing commission rate data despite correct mapping
+- **Root Cause**: Rate value stored in statement_data but never copied to reconciliation entry
+
+#### The Solution
+- **Label Update**: Changed "Commission Rate %" to "Commission Rate % → Agent Comm %" for clarity
+- **Transfer Logic**: Added code to copy Rate value from statement_data to Agent Comm % field
+- **Data Conversion**: Handles both decimal (0.50) and percentage (50) formats
+- **Error Handling**: Gracefully skips non-numeric rate values
+
+#### Technical Implementation
+```python
+# Transfer Rate field to Agent Comm % if mapped
+if 'Rate' in st.session_state.column_mapping and 'statement_data' in item:
+    rate_col = st.session_state.column_mapping['Rate']
+    if rate_col in item['statement_data']:
+        rate_value = item['statement_data'][rate_col]
+        if pd.notna(rate_value):
+            try:
+                # Convert to float and store as Agent Comm %
+                recon_entry['Agent Comm %'] = float(rate_value)
+            except:
+                pass  # Skip if can't convert to number
+```
+
+#### Benefits
+- **Complete Data Import**: Commission rates now properly imported from statements
+- **Clear Mapping**: Users understand Rate field maps to Agent Comm % field
+- **Automatic Transfer**: No manual entry required for commission rates
+- **Data Integrity**: Maintains accurate commission percentage tracking
+
 ---
 
-*This comprehensive documentation consolidates all reconciliation system knowledge through August 7, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*
+*This comprehensive documentation consolidates all reconciliation system knowledge through August 23, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*
