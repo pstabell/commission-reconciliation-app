@@ -795,6 +795,46 @@ if 'Rate' in st.session_state.column_mapping and 'statement_data' in item:
 - **Automatic Transfer**: No manual entry required for commission rates
 - **Data Integrity**: Maintains accurate commission percentage tracking
 
+### Batch Dropdown for Viewing Imported Transactions (v3.9.36 - August 23, 2025)
+Enhanced Edit Policy Transactions page with batch selection dropdown:
+
+#### The Need
+- Users needed an easy way to view policy transactions created during specific reconciliation imports
+- Previously required manual searching or complex filters
+- No clear way to see all transactions from a particular import batch
+
+#### The Solution
+- **New Dropdown**: "📦 View Imported Transactions by Batch" on Edit Policy Transactions page
+- **Shows Last 18 Batches**: Displays recent reconciliation batches in date order
+- **Smart Filtering**: Only shows batches that created policy transactions (excludes pure reconciliation batches)
+- **Clear Feedback**: Shows count of transactions found and search method used
+
+#### Transaction ID Enhancement
+Enhanced imported transaction IDs to include the statement date:
+- **Old Format**: `ABC123D-IMPORT`
+- **New Format**: `ABC123D-IMPORT-20240831`
+
+Benefits:
+- Self-documenting transaction IDs show when they were imported
+- Allows clearing NOTES field as a review indicator
+- Maintains import date information even after NOTES cleared
+
+#### Search Implementation
+The batch dropdown uses a two-tier search approach:
+1. **Primary**: Searches for Transaction ID suffix (e.g., `-IMPORT-20240831`)
+2. **Fallback**: Searches NOTES field for batch ID (for legacy imports)
+
+Visual indicators show how transactions were found:
+- "Found by: Transaction ID suffix" (new method)
+- "Found by: NOTES field (legacy)" (old method)
+- Shows count breakdown when both methods find results
+
+#### Workflow Benefits
+1. Select import batch from dropdown
+2. Review all transactions created in that batch
+3. Clear NOTES field to mark as reviewed
+4. Transaction ID preserves import date for future reference
+
 ---
 
 *This comprehensive documentation consolidates all reconciliation system knowledge through August 23, 2025. For implementation of field locking features, refer to FORMULA_DESIGN.md which shares the visual design specifications.*

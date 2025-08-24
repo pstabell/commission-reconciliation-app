@@ -101,6 +101,13 @@ When adding new documentation:
 
 ## 📅 Recent Updates
 
+### August 23, 2025
+- Added batch dropdown to Edit Policy Transactions page for viewing imported transactions
+- Enhanced imported transaction IDs to include statement date (e.g., ABC123D-IMPORT-20240831)
+- Implemented Rate field mapping to Agent Comm % during reconciliation import
+- Added two-tier search: Transaction ID first, NOTES field as fallback
+- See [RECONCILIATION_SYSTEM.md](features/RECONCILIATION_SYSTEM.md) for details
+
 ### July 8, 2025 (Evening)
 - Major form enhancements for Add New Policy and Edit Transaction
 - Added success confirmations and automatic form clearing

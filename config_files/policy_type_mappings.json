@@ -10,5 +10,7 @@
   "CONDP": "CONDO",
   "FLODC": "FLOOD",
   "FLOOD": "FLOOD",
-  "BOAT": "BOAT"
+  "BOAT": "BOAT",
+  "GL": "GL",
+  "WC": "WC"
 }
