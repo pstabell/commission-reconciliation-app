@@ -5917,10 +5917,11 @@ def main():
                         # Filter for the selected batch
                         mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
                         
-                        # Exclude -STMT-, -VOID-, -ADJ- transactions (we only want the policy transactions)
+                        # Exclude only -STMT-, -VOID-, -ADJ- transactions (but KEEP -IMPORT transactions)
                         transaction_id_col = get_mapped_column("Transaction ID")
                         if transaction_id_col and transaction_id_col in all_data.columns:
-                            mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False)
+                            # Only exclude specific suffixes, not -IMPORT
+                            mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False, regex=True)
                         
                         edit_results = all_data[mask].copy()
                         
@@ -5935,6 +5936,24 @@ def main():
                             all_with_batch = all_data[all_data[reconciliation_id_col] == selected_reconciliation_batch]
                             if not all_with_batch.empty:
                                 st.info(f"Found {len(all_with_batch)} total transactions with this batch ID, but they are all reconciliation entries (-STMT-/-VOID-/-ADJ-).")
+                                
+                                # Show sample of these transactions to debug
+                                with st.expander("Debug: Show sample transactions with this batch ID"):
+                                    if transaction_id_col in all_with_batch.columns:
+                                        sample_trans = all_with_batch[[transaction_id_col, 'Customer', 'Policy Number']].head(5)
+                                        st.write("Sample transactions:")
+                                        st.dataframe(sample_trans)
+                                        
+                                        # Check what types of transaction IDs we have
+                                        trans_ids = all_with_batch[transaction_id_col].astype(str).tolist()
+                                        has_stmt = sum(1 for tid in trans_ids if '-STMT-' in tid)
+                                        has_import = sum(1 for tid in trans_ids if '-IMPORT' in tid)
+                                        has_regular = sum(1 for tid in trans_ids if '-' not in tid)
+                                        
+                                        st.write(f"Transaction ID breakdown:")
+                                        st.write(f"- {has_stmt} with -STMT-")
+                                        st.write(f"- {has_import} with -IMPORT")
+                                        st.write(f"- {has_regular} regular (no dash)")
                             else:
                                 st.info("No transactions found with this reconciliation_id. This batch may have only created reconciliation entries without any new policy transactions.")
                                 
