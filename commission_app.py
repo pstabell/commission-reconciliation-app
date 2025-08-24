@@ -5901,27 +5901,25 @@ def main():
                 elif selected_reconciliation_batch:
                     # Filter for transactions from a specific reconciliation batch
                     # Debug: Show what batch we're looking for
-                    st.info(f"🔍 Searching for policy transactions from batch: {selected_reconciliation_batch}")
+                    st.info(f"🔍 Searching for policy transactions imported in batch: {selected_reconciliation_batch}")
                     
                     # Get the Transaction ID column
                     transaction_id_col = get_mapped_column("Transaction ID")
                     
-                    # Look for the reconciliation_id column
-                    reconciliation_id_col = None
+                    # For imported policy transactions, we need to look in the NOTES field
+                    # They contain "Created from statement import {batch_id}"
+                    notes_col = None
                     for col in all_data.columns:
-                        if col.lower() == 'reconciliation_id' or col == 'reconciliation_id':
-                            reconciliation_id_col = col
+                        if col.upper() == 'NOTES' or col == 'NOTES':
+                            notes_col = col
                             break
                     
-                    if reconciliation_id_col:
-                        # Filter for the selected batch by reconciliation_id
-                        mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
-                        
-                        # Exclude -STMT-, -VOID-, -ADJ- transactions (we only want the policy transactions)
-                        if transaction_id_col and transaction_id_col in all_data.columns:
-                            mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False, regex=True)
+                    if notes_col and (selected_reconciliation_batch.startswith('IMPORT-') or selected_reconciliation_batch.startswith('REC-')):
+                        # Look for the batch ID in the NOTES field
+                        # The NOTES contain "Created from statement import {batch_id}"
+                        mask = all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)
                     else:
-                        st.error("Could not find reconciliation_id column")
+                        st.error("Could not find NOTES column or batch is not an IMPORT/REC batch")
                         mask = pd.Series(False, index=all_data.index)
                     
                     # Apply the mask to get results
@@ -5934,45 +5932,44 @@ def main():
                         # Show more debugging info
                         st.warning(f"No policy transactions found for batch {selected_reconciliation_batch}")
                         
-                        # Check reconciliation_id for debugging
-                        if reconciliation_id_col:
-                            # Check if there are ANY transactions with this reconciliation_id
-                            all_with_batch = all_data[all_data[reconciliation_id_col] == selected_reconciliation_batch]
-                            if not all_with_batch.empty:
-                                st.info(f"Found {len(all_with_batch)} total transactions with reconciliation_id = '{selected_reconciliation_batch}'")
+                        # Debug info for IMPORT batches
+                        if notes_col:
+                            # Check for transactions with this batch ID in NOTES
+                            notes_with_batch = all_data[all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)]
+                            
+                            if not notes_with_batch.empty:
+                                st.info(f"Found {len(notes_with_batch)} transactions with '{selected_reconciliation_batch}' in NOTES field")
                                 
-                                # Show what's being filtered out
-                                if transaction_id_col and transaction_id_col in all_with_batch.columns:
-                                    trans_ids = all_with_batch[transaction_id_col].astype(str).tolist()
-                                    has_stmt = sum(1 for tid in trans_ids if '-STMT-' in tid)
-                                    has_void = sum(1 for tid in trans_ids if '-VOID-' in tid)
-                                    has_adj = sum(1 for tid in trans_ids if '-ADJ-' in tid)
-                                    has_import = sum(1 for tid in trans_ids if '-IMPORT' in tid)
-                                    has_regular = len(trans_ids) - has_stmt - has_void - has_adj - has_import
-                                    
-                                    st.write(f"Transaction ID breakdown:")
-                                    if has_stmt > 0:
-                                        st.write(f"- {has_stmt} with -STMT- (filtered out)")
-                                    if has_void > 0:
-                                        st.write(f"- {has_void} with -VOID- (filtered out)")
-                                    if has_adj > 0:
-                                        st.write(f"- {has_adj} with -ADJ- (filtered out)")
-                                    if has_import > 0:
-                                        st.write(f"- {has_import} with -IMPORT (should be shown)")
-                                    if has_regular > 0:
-                                        st.write(f"- {has_regular} regular policy transactions (should be shown)")
-                                    
-                                    # Show sample
-                                    with st.expander("Debug: Show all transactions with this reconciliation_id"):
-                                        sample_cols = [transaction_id_col]
-                                        if 'Customer' in all_with_batch.columns:
+                                # Show sample of transactions with batch in NOTES
+                                if not notes_with_batch.empty:
+                                    with st.expander("Debug: Show transactions with batch ID in NOTES"):
+                                        sample_cols = []
+                                        if transaction_id_col and transaction_id_col in notes_with_batch.columns:
+                                            sample_cols.append(transaction_id_col)
+                                        if 'Customer' in notes_with_batch.columns:
                                             sample_cols.append('Customer')
-                                        if 'Policy Number' in all_with_batch.columns:
+                                        if 'Policy Number' in notes_with_batch.columns:
                                             sample_cols.append('Policy Number')
+                                        if notes_col in notes_with_batch.columns:
+                                            sample_cols.append(notes_col)
                                         
-                                        st.dataframe(all_with_batch[sample_cols])
+                                        if sample_cols:
+                                            st.dataframe(notes_with_batch[sample_cols].head(10))
                             else:
-                                st.info("No transactions found with this reconciliation_id.")
+                                st.info("No policy transactions found with this batch ID in NOTES field.")
+                                
+                                # Show some sample NOTES to help debug
+                                with st.expander("Debug: Show sample NOTES containing 'import'"):
+                                    notes_sample = all_data[all_data[notes_col].notna()][notes_col]
+                                    import_notes = [note for note in notes_sample if 'import' in str(note).lower()][:10]
+                                    if import_notes:
+                                        st.write("Sample NOTES from imported transactions:")
+                                        for idx, note in enumerate(import_notes):
+                                            st.write(f"{idx+1}. {note[:150]}...")
+                                    else:
+                                        st.write("No NOTES found containing 'import'")
+                        else:
+                            st.error("Could not find NOTES column in the data")
                 
                 # Common processing for both search and attention filter
                 if 'edit_results' in locals() and not edit_results.empty:
