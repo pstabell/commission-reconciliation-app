@@ -5756,9 +5756,9 @@ def main():
             # Query for recent reconciliation batches
             supabase = get_supabase_client()
             
-            # Get distinct reconciliation IDs from the policies table
-            # Filter for batches that created new transactions (not -STMT- entries)
-            batch_query = supabase.table('policies').select('reconciliation_id').not_.is_('reconciliation_id', 'null').not_.like('Transaction ID', '%-STMT-%')
+            # Get reconciliation batch IDs from -STMT- transactions
+            # These represent actual reconciliation imports
+            batch_query = supabase.table('policies').select('reconciliation_id').like('Transaction ID', '%-STMT-%').not_.is_('reconciliation_id', 'null')
             batch_result = batch_query.execute()
             
             if batch_result.data:
