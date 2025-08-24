@@ -5758,7 +5758,7 @@ def main():
             
             # Get distinct reconciliation IDs from the policies table
             # Filter for batches that created new transactions (not -STMT- entries)
-            batch_query = supabase.table('policies').select('reconciliation_id').not_.is_('reconciliation_id', 'null').not_.like('Transaction ID', '%-STMT-%').order('created_at', desc=True)
+            batch_query = supabase.table('policies').select('reconciliation_id').not_.is_('reconciliation_id', 'null').not_.like('Transaction ID', '%-STMT-%')
             batch_result = batch_query.execute()
             
             if batch_result.data:
@@ -5770,6 +5770,21 @@ def main():
                     if batch_id not in seen:
                         seen.add(batch_id)
                         unique_batch_ids.append(batch_id)
+                
+                # Sort batch IDs by date (extracted from the batch ID format)
+                # Batch IDs are like "5D9BMG5-STMT-20240831"
+                def get_batch_date(batch_id):
+                    try:
+                        # Extract date from batch ID
+                        parts = batch_id.split('-')
+                        if len(parts) >= 3:
+                            return parts[-1]  # The date part (YYYYMMDD)
+                        return "00000000"
+                    except:
+                        return "00000000"
+                
+                # Sort by date in descending order (most recent first)
+                unique_batch_ids.sort(key=get_batch_date, reverse=True)
                 
                 # Limit to last 18 batches
                 recent_batches = unique_batch_ids[:18]
