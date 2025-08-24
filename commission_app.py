@@ -5906,39 +5906,23 @@ def main():
                     # Get the Transaction ID column
                     transaction_id_col = get_mapped_column("Transaction ID")
                     
-                    # Check what type of batch this is
-                    if '-STMT-' in selected_reconciliation_batch:
-                        # This is a -STMT- batch, so we need to look for policy transactions by reconciliation_id
-                        # Extract the base batch ID (e.g., "IMPORT-20250831-F20C6AFB" from "1234567-STMT-20250831")
-                        # For -STMT- batches, we need to find by reconciliation_id
+                    # Look for the reconciliation_id column
+                    reconciliation_id_col = None
+                    for col in all_data.columns:
+                        if col.lower() == 'reconciliation_id' or col == 'reconciliation_id':
+                            reconciliation_id_col = col
+                            break
+                    
+                    if reconciliation_id_col:
+                        # Filter for the selected batch by reconciliation_id
+                        mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
                         
-                        reconciliation_id_col = None
-                        for col in all_data.columns:
-                            if col.lower() == 'reconciliation_id' or col == 'reconciliation_id':
-                                reconciliation_id_col = col
-                                break
-                        
-                        if reconciliation_id_col:
-                            # Filter for the selected batch by reconciliation_id
-                            mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
-                            
-                            # Exclude -STMT-, -VOID-, -ADJ- transactions
-                            if transaction_id_col and transaction_id_col in all_data.columns:
-                                mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False, regex=True)
-                        else:
-                            st.error("Could not find reconciliation_id column")
-                            mask = pd.Series(False, index=all_data.index)
-                    else:
-                        # This is an IMPORT batch, look for transactions with this batch ID in their Transaction ID
+                        # Exclude -STMT-, -VOID-, -ADJ- transactions (we only want the policy transactions)
                         if transaction_id_col and transaction_id_col in all_data.columns:
-                            # Look for transactions that start with or contain this batch ID
-                            mask = all_data[transaction_id_col].str.contains(selected_reconciliation_batch, na=False, regex=False)
-                            
-                            # Exclude -STMT-, -VOID-, -ADJ- transactions
                             mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False, regex=True)
-                        else:
-                            st.error("Could not find Transaction ID column")
-                            mask = pd.Series(False, index=all_data.index)
+                    else:
+                        st.error("Could not find reconciliation_id column")
+                        mask = pd.Series(False, index=all_data.index)
                     
                     # Apply the mask to get results
                     edit_results = all_data[mask].copy()
@@ -5950,40 +5934,45 @@ def main():
                         # Show more debugging info
                         st.warning(f"No policy transactions found for batch {selected_reconciliation_batch}")
                         
-                        # Different debugging based on batch type
-                        if '-STMT-' in selected_reconciliation_batch:
-                            # For -STMT- batches, check reconciliation_id
-                            reconciliation_id_col = None
-                            for col in all_data.columns:
-                                if col.lower() == 'reconciliation_id' or col == 'reconciliation_id':
-                                    reconciliation_id_col = col
-                                    break
-                            
-                            if reconciliation_id_col:
-                                # Check if there are ANY transactions with this reconciliation_id
-                                all_with_batch = all_data[all_data[reconciliation_id_col] == selected_reconciliation_batch]
-                                if not all_with_batch.empty:
-                                    st.info(f"Found {len(all_with_batch)} total transactions with this reconciliation_id in the database.")
-                        else:
-                            # For IMPORT batches, check by Transaction ID
-                            if transaction_id_col and transaction_id_col in all_data.columns:
-                                # Check for any transactions containing this batch ID
-                                all_with_batch = all_data[all_data[transaction_id_col].str.contains(selected_reconciliation_batch, na=False, regex=False)]
-                                if not all_with_batch.empty:
-                                    st.info(f"Debug: Found {len(all_with_batch)} total transactions containing '{selected_reconciliation_batch}' in their Transaction ID")
+                        # Check reconciliation_id for debugging
+                        if reconciliation_id_col:
+                            # Check if there are ANY transactions with this reconciliation_id
+                            all_with_batch = all_data[all_data[reconciliation_id_col] == selected_reconciliation_batch]
+                            if not all_with_batch.empty:
+                                st.info(f"Found {len(all_with_batch)} total transactions with reconciliation_id = '{selected_reconciliation_batch}'")
+                                
+                                # Show what's being filtered out
+                                if transaction_id_col and transaction_id_col in all_with_batch.columns:
+                                    trans_ids = all_with_batch[transaction_id_col].astype(str).tolist()
+                                    has_stmt = sum(1 for tid in trans_ids if '-STMT-' in tid)
+                                    has_void = sum(1 for tid in trans_ids if '-VOID-' in tid)
+                                    has_adj = sum(1 for tid in trans_ids if '-ADJ-' in tid)
+                                    has_import = sum(1 for tid in trans_ids if '-IMPORT' in tid)
+                                    has_regular = len(trans_ids) - has_stmt - has_void - has_adj - has_import
+                                    
+                                    st.write(f"Transaction ID breakdown:")
+                                    if has_stmt > 0:
+                                        st.write(f"- {has_stmt} with -STMT- (filtered out)")
+                                    if has_void > 0:
+                                        st.write(f"- {has_void} with -VOID- (filtered out)")
+                                    if has_adj > 0:
+                                        st.write(f"- {has_adj} with -ADJ- (filtered out)")
+                                    if has_import > 0:
+                                        st.write(f"- {has_import} with -IMPORT (should be shown)")
+                                    if has_regular > 0:
+                                        st.write(f"- {has_regular} regular policy transactions (should be shown)")
                                     
                                     # Show sample
-                                    with st.expander("Debug: Show sample transactions"):
+                                    with st.expander("Debug: Show all transactions with this reconciliation_id"):
                                         sample_cols = [transaction_id_col]
                                         if 'Customer' in all_with_batch.columns:
                                             sample_cols.append('Customer')
                                         if 'Policy Number' in all_with_batch.columns:
                                             sample_cols.append('Policy Number')
                                         
-                                        sample_trans = all_with_batch[sample_cols].head(10)
-                                        st.dataframe(sample_trans)
-                                else:
-                                    st.info("No transactions found with this batch ID in their Transaction ID.")
+                                        st.dataframe(all_with_batch[sample_cols])
+                            else:
+                                st.info("No transactions found with this reconciliation_id.")
                 
                 # Common processing for both search and attention filter
                 if 'edit_results' in locals() and not edit_results.empty:
