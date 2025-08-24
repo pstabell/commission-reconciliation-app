@@ -5791,20 +5791,27 @@ def main():
                 
                 if recent_batches:
                     # Create dropdown for batch selection
+                    # Use the session state value as the default if it exists
+                    current_selection = st.session_state.get('selected_reconciliation_batch', None)
+                    if current_selection and current_selection not in recent_batches:
+                        current_selection = None  # Reset if the saved batch is no longer in the list
+                    
                     selected_batch = st.selectbox(
                         "📦 View Imported Transactions by Batch",
                         options=[None] + recent_batches,
                         format_func=lambda x: "Select a reconciliation batch..." if x is None else f"Batch {x}",
                         key="reconciliation_batch_dropdown",
+                        index=0 if current_selection is None else recent_batches.index(current_selection) + 1 if current_selection in recent_batches else 0,
                         help="Select a reconciliation batch to view all transactions that were imported/created during that reconciliation"
                     )
                     
                     # Store selection in session state
-                    if selected_batch:
+                    if selected_batch != current_selection:
                         st.session_state.selected_reconciliation_batch = selected_batch
                         st.session_state.show_attention_filter = False
                         st.session_state.show_missing_commission_filter = False
-                        st.rerun()
+                        if selected_batch:  # Only rerun if a batch was selected
+                            st.rerun()
             
             # Track filter state
             if show_attention_needed:
@@ -5893,6 +5900,9 @@ def main():
                 
                 elif selected_reconciliation_batch:
                     # Filter for transactions from a specific reconciliation batch
+                    # Debug: Show what batch we're looking for
+                    st.info(f"🔍 Searching for policy transactions from batch: {selected_reconciliation_batch}")
+                    
                     # Look for the reconciliation_id column
                     reconciliation_id_col = None
                     for col in all_data.columns:
@@ -5901,6 +5911,9 @@ def main():
                             break
                     
                     if reconciliation_id_col:
+                        # First, let's see all unique reconciliation IDs in the data
+                        unique_recon_ids = all_data[reconciliation_id_col].dropna().unique()
+                        
                         # Filter for the selected batch
                         mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
                         
@@ -5915,8 +5928,22 @@ def main():
                             st.success(f"📦 Found {len(edit_results)} policy transactions from batch {selected_reconciliation_batch}")
                             st.info("These are the new policy transactions that were created during this reconciliation import.")
                         else:
+                            # Show more debugging info
                             st.warning(f"No policy transactions found for batch {selected_reconciliation_batch}")
-                            st.info("This batch may have only created reconciliation entries (-STMT-) without any new policy transactions.")
+                            
+                            # Check if there are ANY transactions with this reconciliation_id
+                            all_with_batch = all_data[all_data[reconciliation_id_col] == selected_reconciliation_batch]
+                            if not all_with_batch.empty:
+                                st.info(f"Found {len(all_with_batch)} total transactions with this batch ID, but they are all reconciliation entries (-STMT-/-VOID-/-ADJ-).")
+                            else:
+                                st.info("No transactions found with this reconciliation_id. This batch may have only created reconciliation entries without any new policy transactions.")
+                                
+                                # Show a sample of reconciliation IDs that DO exist
+                                with st.expander("Debug: Show sample of reconciliation IDs in the data"):
+                                    sample_ids = [id for id in unique_recon_ids if id and str(id) != 'nan'][:10]
+                                    st.write("Sample reconciliation IDs found in data:")
+                                    for id in sample_ids:
+                                        st.write(f"- {id}")
                     else:
                         st.error("Could not find reconciliation_id column in the data")
                         edit_results = pd.DataFrame()
