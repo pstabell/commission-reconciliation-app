@@ -5733,10 +5733,12 @@ def main():
                 show_missing_commission = st.button("📊 Show Transactions Missing Commission", type="secondary")
             with col3:
                 if ('show_attention_filter' in st.session_state and st.session_state.show_attention_filter) or \
-                   ('show_missing_commission_filter' in st.session_state and st.session_state.show_missing_commission_filter):
+                   ('show_missing_commission_filter' in st.session_state and st.session_state.show_missing_commission_filter) or \
+                   ('selected_reconciliation_batch' in st.session_state and st.session_state.selected_reconciliation_batch):
                     if st.button("↩️ Reset Filters", type="secondary"):
                         st.session_state.show_attention_filter = False
                         st.session_state.show_missing_commission_filter = False
+                        st.session_state.selected_reconciliation_batch = None
                         st.rerun()
             with col4:
                 if st.button("🔄 Refresh Page", type="secondary", help="Clear all cached data and refresh the page"):
@@ -5747,6 +5749,47 @@ def main():
                     # Clear cache
                     clear_policies_cache()
                     st.rerun()
+            
+            # Add reconciliation batch dropdown
+            st.write("")  # Add some spacing
+            
+            # Query for recent reconciliation batches
+            supabase = get_supabase_client()
+            
+            # Get distinct reconciliation IDs from the policies table
+            # Filter for batches that created new transactions (not -STMT- entries)
+            batch_query = supabase.table('policies').select('reconciliation_id').not_.is_('reconciliation_id', 'null').not_.like('Transaction ID', '%-STMT-%').order('created_at', desc=True)
+            batch_result = batch_query.execute()
+            
+            if batch_result.data:
+                # Get unique reconciliation IDs
+                all_batch_ids = [item['reconciliation_id'] for item in batch_result.data if item.get('reconciliation_id')]
+                unique_batch_ids = []
+                seen = set()
+                for batch_id in all_batch_ids:
+                    if batch_id not in seen:
+                        seen.add(batch_id)
+                        unique_batch_ids.append(batch_id)
+                
+                # Limit to last 18 batches
+                recent_batches = unique_batch_ids[:18]
+                
+                if recent_batches:
+                    # Create dropdown for batch selection
+                    selected_batch = st.selectbox(
+                        "📦 View Imported Transactions by Batch",
+                        options=[None] + recent_batches,
+                        format_func=lambda x: "Select a reconciliation batch..." if x is None else f"Batch {x}",
+                        key="reconciliation_batch_dropdown",
+                        help="Select a reconciliation batch to view all transactions that were imported/created during that reconciliation"
+                    )
+                    
+                    # Store selection in session state
+                    if selected_batch:
+                        st.session_state.selected_reconciliation_batch = selected_batch
+                        st.session_state.show_attention_filter = False
+                        st.session_state.show_missing_commission_filter = False
+                        st.rerun()
             
             # Track filter state
             if show_attention_needed:
@@ -5773,9 +5816,10 @@ def main():
             # Check if we should show filtered transactions
             show_attention_filter = st.session_state.get('show_attention_filter', False)
             show_missing_commission_filter = st.session_state.get('show_missing_commission_filter', False)
+            selected_reconciliation_batch = st.session_state.get('selected_reconciliation_batch', None)
             
             # Show filtered data for editing
-            if edit_search_term or edit_search_button or show_attention_filter or show_missing_commission_filter:
+            if edit_search_term or edit_search_button or show_attention_filter or show_missing_commission_filter or selected_reconciliation_batch:
                 if show_attention_filter:
                     # Filter for transactions requiring attention
                     # These are transactions that have payments but no total agent commission
@@ -5831,6 +5875,36 @@ def main():
                             mask |= all_data[col].astype(str).str.contains(edit_search_term, case=False, na=False)
                     
                     edit_results = all_data[mask].copy()
+                
+                elif selected_reconciliation_batch:
+                    # Filter for transactions from a specific reconciliation batch
+                    # Look for the reconciliation_id column
+                    reconciliation_id_col = None
+                    for col in all_data.columns:
+                        if col.lower() == 'reconciliation_id' or col == 'reconciliation_id':
+                            reconciliation_id_col = col
+                            break
+                    
+                    if reconciliation_id_col:
+                        # Filter for the selected batch
+                        mask = all_data[reconciliation_id_col] == selected_reconciliation_batch
+                        
+                        # Exclude -STMT-, -VOID-, -ADJ- transactions (we only want the policy transactions)
+                        transaction_id_col = get_mapped_column("Transaction ID")
+                        if transaction_id_col and transaction_id_col in all_data.columns:
+                            mask = mask & ~all_data[transaction_id_col].str.contains('-STMT-|-VOID-|-ADJ-', na=False)
+                        
+                        edit_results = all_data[mask].copy()
+                        
+                        if not edit_results.empty:
+                            st.success(f"📦 Found {len(edit_results)} policy transactions from batch {selected_reconciliation_batch}")
+                            st.info("These are the new policy transactions that were created during this reconciliation import.")
+                        else:
+                            st.warning(f"No policy transactions found for batch {selected_reconciliation_batch}")
+                            st.info("This batch may have only created reconciliation entries (-STMT-) without any new policy transactions.")
+                    else:
+                        st.error("Could not find reconciliation_id column in the data")
+                        edit_results = pd.DataFrame()
                 
                 # Common processing for both search and attention filter
                 if 'edit_results' in locals() and not edit_results.empty:
