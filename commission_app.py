@@ -3521,8 +3521,9 @@ def show_import_results(statement_date, all_data):
                             should_create = create_df.loc[idx, 'Create'] if idx < len(create_df) else True
                         
                         if should_create:
-                            # Generate new transaction ID with -IMPORT suffix
-                            new_trans_id = generate_transaction_id(suffix='-IMPORT')
+                            # Generate new transaction ID with -IMPORT-YYYYMMDD suffix
+                            import_suffix = f"-IMPORT-{statement_date.strftime('%Y%m%d')}"
+                            new_trans_id = generate_transaction_id(suffix=import_suffix)
                             
                             # Check if this item has client info from manual matching
                             client_id_to_use = None
@@ -5918,6 +5919,16 @@ def main():
                         # Look for the batch ID in the NOTES field
                         # The NOTES contain "Created from statement import {batch_id}"
                         mask = all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)
+                        
+                        # Also look for transactions with the batch date in their ID
+                        if transaction_id_col and transaction_id_col in all_data.columns and selected_reconciliation_batch.startswith('IMPORT-'):
+                            # Extract date from batch ID (e.g., "20240831" from "IMPORT-20240831-F20C6AFB")
+                            batch_parts = selected_reconciliation_batch.split('-')
+                            if len(batch_parts) >= 2:
+                                batch_date = batch_parts[1]  # Get the date part
+                                # Look for transactions with -IMPORT-YYYYMMDD suffix
+                                date_suffix_mask = all_data[transaction_id_col].str.contains(f'-IMPORT-{batch_date}', na=False, regex=False)
+                                mask = mask | date_suffix_mask
                     else:
                         st.error("Could not find NOTES column or batch is not an IMPORT/REC batch")
                         mask = pd.Series(False, index=all_data.index)
@@ -5937,8 +5948,20 @@ def main():
                             # Check for transactions with this batch ID in NOTES
                             notes_with_batch = all_data[all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)]
                             
-                            if not notes_with_batch.empty:
-                                st.info(f"Found {len(notes_with_batch)} transactions with '{selected_reconciliation_batch}' in NOTES field")
+                            # Also check for transactions with date suffix in ID
+                            date_suffix_trans = pd.DataFrame()
+                            if transaction_id_col and transaction_id_col in all_data.columns and selected_reconciliation_batch.startswith('IMPORT-'):
+                                batch_parts = selected_reconciliation_batch.split('-')
+                                if len(batch_parts) >= 2:
+                                    batch_date = batch_parts[1]
+                                    date_suffix_trans = all_data[all_data[transaction_id_col].str.contains(f'-IMPORT-{batch_date}', na=False, regex=False)]
+                            
+                            if not notes_with_batch.empty or not date_suffix_trans.empty:
+                                st.info(f"Debug info:")
+                                if not notes_with_batch.empty:
+                                    st.write(f"- Found {len(notes_with_batch)} transactions with '{selected_reconciliation_batch}' in NOTES field")
+                                if not date_suffix_trans.empty:
+                                    st.write(f"- Found {len(date_suffix_trans)} transactions with -IMPORT-{batch_date} in Transaction ID")
                                 
                                 # Show sample of transactions with batch in NOTES
                                 if not notes_with_batch.empty:
