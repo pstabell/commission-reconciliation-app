@@ -5803,8 +5803,11 @@ def main():
                         format_func=lambda x: "Select a reconciliation batch..." if x is None else f"Batch {x}",
                         key="reconciliation_batch_dropdown",
                         index=0 if current_selection is None else recent_batches.index(current_selection) + 1 if current_selection in recent_batches else 0,
-                        help="Select a reconciliation batch to view all transactions that were imported/created during that reconciliation"
+                        help="Searches for imported transactions by: 1) Transaction ID suffix (e.g., -IMPORT-20240831), 2) Batch ID in NOTES field"
                     )
+                    
+                    # Add explanation text
+                    st.caption("🔍 *Searches by Transaction ID suffix first, then NOTES field as fallback*")
                     
                     # Store selection in session state
                     if selected_batch != current_selection:
@@ -5915,29 +5918,55 @@ def main():
                             notes_col = col
                             break
                     
+                    # Initialize empty mask
+                    mask = pd.Series(False, index=all_data.index)
+                    
+                    # PRIORITY 1: Search by Transaction ID suffix (for new imports)
+                    if transaction_id_col and transaction_id_col in all_data.columns and selected_reconciliation_batch.startswith('IMPORT-'):
+                        # Extract date from batch ID (e.g., "20240831" from "IMPORT-20240831-F20C6AFB")
+                        batch_parts = selected_reconciliation_batch.split('-')
+                        if len(batch_parts) >= 2:
+                            batch_date = batch_parts[1]  # Get the date part
+                            # Look for transactions with -IMPORT-YYYYMMDD suffix
+                            mask = all_data[transaction_id_col].str.contains(f'-IMPORT-{batch_date}', na=False, regex=False)
+                    
+                    # PRIORITY 2: Search by NOTES field (for legacy imports)
                     if notes_col and (selected_reconciliation_batch.startswith('IMPORT-') or selected_reconciliation_batch.startswith('REC-')):
                         # Look for the batch ID in the NOTES field
                         # The NOTES contain "Created from statement import {batch_id}"
-                        mask = all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)
-                        
-                        # Also look for transactions with the batch date in their ID
-                        if transaction_id_col and transaction_id_col in all_data.columns and selected_reconciliation_batch.startswith('IMPORT-'):
-                            # Extract date from batch ID (e.g., "20240831" from "IMPORT-20240831-F20C6AFB")
-                            batch_parts = selected_reconciliation_batch.split('-')
-                            if len(batch_parts) >= 2:
-                                batch_date = batch_parts[1]  # Get the date part
-                                # Look for transactions with -IMPORT-YYYYMMDD suffix
-                                date_suffix_mask = all_data[transaction_id_col].str.contains(f'-IMPORT-{batch_date}', na=False, regex=False)
-                                mask = mask | date_suffix_mask
-                    else:
-                        st.error("Could not find NOTES column or batch is not an IMPORT/REC batch")
-                        mask = pd.Series(False, index=all_data.index)
+                        notes_mask = all_data[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)
+                        mask = mask | notes_mask
+                    
+                    # Show error if we couldn't search
+                    if not transaction_id_col and not notes_col:
+                        st.error("Could not find Transaction ID or NOTES columns in the data")
                     
                     # Apply the mask to get results
                     edit_results = all_data[mask].copy()
                     
                     if not edit_results.empty:
+                        # Count how many were found by each method
+                        id_count = 0
+                        notes_count = 0
+                        if transaction_id_col and transaction_id_col in edit_results.columns and selected_reconciliation_batch.startswith('IMPORT-'):
+                            batch_parts = selected_reconciliation_batch.split('-')
+                            if len(batch_parts) >= 2:
+                                batch_date = batch_parts[1]
+                                id_count = len(edit_results[edit_results[transaction_id_col].str.contains(f'-IMPORT-{batch_date}', na=False, regex=False)])
+                        
+                        if notes_col and notes_col in edit_results.columns:
+                            notes_count = len(edit_results[edit_results[notes_col].str.contains(selected_reconciliation_batch, na=False, regex=False)])
+                        
                         st.success(f"📦 Found {len(edit_results)} policy transactions from batch {selected_reconciliation_batch}")
+                        
+                        # Show breakdown if both methods found results
+                        if id_count > 0 and notes_count > 0:
+                            st.caption(f"Found by: Transaction ID ({id_count}), NOTES field ({notes_count})")
+                        elif id_count > 0:
+                            st.caption(f"Found by: Transaction ID suffix")
+                        elif notes_count > 0:
+                            st.caption(f"Found by: NOTES field (legacy)")
+                            
                         st.info("These are the new policy transactions that were created during this reconciliation import.")
                     else:
                         # Show more debugging info
