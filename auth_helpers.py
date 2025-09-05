@@ -90,7 +90,7 @@ def show_login_form():
                             st.success("Login successful (demo mode)!")
                             st.rerun()
             else:
-                st.error("Please enter both email and password")
+                st.error("Please manually enter both email and password")
     with col2:
         if st.button("Forgot Password?", use_container_width=True, key="forgot_button"):
             st.info("Password reset coming soon!")
