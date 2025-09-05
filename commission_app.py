@@ -5102,6 +5102,16 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     return None
 
 def main():
+    # Check for Stripe success redirect
+    query_params = st.query_params
+    if "session_id" in query_params:
+        st.success("🎉 Payment successful! Your subscription is now active.")
+        st.info("You can now log in with your email address.")
+        if st.button("Continue to Login"):
+            st.query_params.clear()
+            st.rerun()
+        st.stop()
+    
     # Check password before showing any content
     if not check_password():
         st.stop()

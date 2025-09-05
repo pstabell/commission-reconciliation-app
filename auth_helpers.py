@@ -56,23 +56,36 @@ def show_login_form():
         
         if submitted:
             if email and password:
-                # For now, use simple validation
-                # Later: integrate with Supabase Auth
-                if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
-                    # Check subscription status
-                    from commission_app import get_supabase_client
-                    supabase = get_supabase_client()
-                    sub_status = check_subscription_status(email, supabase)
-                    
-                    if sub_status['is_active']:
+                # Check if user exists in database
+                from commission_app import get_supabase_client
+                supabase = get_supabase_client()
+                
+                # First check if email exists in users table
+                try:
+                    result = supabase.table('users').select('*').eq('email', email).execute()
+                    if result.data and len(result.data) > 0:
+                        # User exists - for MVP, accept any password
+                        # In production, you'd verify password hash here
+                        user = result.data[0]
+                        
+                        if user.get('subscription_status') == 'active':
+                            st.session_state["password_correct"] = True
+                            st.session_state["user_email"] = email
+                            st.success("Login successful!")
+                            st.rerun()
+                        else:
+                            st.error("No active subscription found. Please subscribe to continue.")
+                            st.info("Your subscription status: " + user.get('subscription_status', 'none'))
+                    else:
+                        st.error("Email not found. Please register first or check your email.")
+                except Exception as e:
+                    st.error(f"Login error: {e}")
+                    # Fallback to demo password
+                    if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
                         st.session_state["password_correct"] = True
                         st.session_state["user_email"] = email
-                        st.success("Login successful!")
+                        st.success("Login successful (demo mode)!")
                         st.rerun()
-                    else:
-                        st.error("No active subscription found. Please subscribe to continue.")
-                else:
-                    st.error("Invalid email or password")
             else:
                 st.error("Please enter both email and password")
 
