@@ -22,14 +22,27 @@ def get_supabase_client():
         return None
     return create_client(url, key)
 
+@app.route('/')
+def home():
+    """Root endpoint."""
+    return jsonify({
+        'service': 'Commission Tracker Webhook Handler',
+        'version': '1.1',
+        'status': 'running'
+    })
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint for Render."""
-    return jsonify({'status': 'healthy'}), 200
+    return jsonify({'status': 'healthy', 'version': '1.1'}), 200
 
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
     """Handle Stripe webhook events."""
+    print("\n" + "="*50)
+    print("WEBHOOK TRIGGERED - Version 1.1")
+    print("="*50)
+    
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
     
