@@ -80,6 +80,13 @@ def stripe_webhook():
     print(f"Event type: {event['type']}")
     print(f"Event ID: {event.get('id', 'Unknown')}")
     
+    # Initialize debug info
+    debug_info = {
+        'status': 'success',
+        'event_received': event.get('type', 'unknown'),
+        'timestamp': datetime.now().isoformat()
+    }
+    
     # Handle the checkout.session.completed event
     if event['type'] == 'checkout.session.completed':
         try:
@@ -223,13 +230,7 @@ def stripe_webhook():
         # You might want to send an email or update status
         # For now, just log it
     
-    # Return detailed info for debugging
-    debug_info = {
-        'status': 'success',
-        'event_received': event.get('type', 'unknown'),
-        'timestamp': datetime.now().isoformat()
-    }
-    
+    # Add additional info for checkout events
     if event['type'] == 'checkout.session.completed':
         debug_info['checkout_processed'] = True
         # Safely check if variables exist
