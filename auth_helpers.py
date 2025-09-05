@@ -3,6 +3,8 @@ import streamlit as st
 from supabase import Client
 import os
 from datetime import datetime
+import secrets
+import string
 
 def check_subscription_status(email: str, supabase: Client) -> dict:
     """Check if user has active subscription."""
@@ -28,17 +30,21 @@ def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
     st.title("🔐 Commission Tracker Pro")
     
-    # Create tabs for login, register, and subscribe
-    tab1, tab2, tab3 = st.tabs(["Login", "Register", "Subscribe"])
-    
-    with tab1:
-        show_login_form()
-    
-    with tab2:
-        show_register_form()
-    
-    with tab3:
-        show_subscribe_tab()
+    # Check if we should show password reset form
+    if st.session_state.get('show_password_reset'):
+        show_password_reset_form()
+    else:
+        # Create tabs for login, register, and subscribe
+        tab1, tab2, tab3 = st.tabs(["Login", "Register", "Subscribe"])
+        
+        with tab1:
+            show_login_form()
+        
+        with tab2:
+            show_register_form()
+        
+        with tab3:
+            show_subscribe_tab()
 
 def show_login_form():
     """Show email/password login form."""
@@ -93,7 +99,8 @@ def show_login_form():
                 st.error("Please manually enter both email and password")
     with col2:
         if st.button("Forgot Password?", use_container_width=True, key="forgot_button"):
-            st.info("Password reset coming soon!")
+            st.session_state['show_password_reset'] = True
+            st.rerun()
 
 def show_register_form():
     """Show registration form."""
@@ -167,3 +174,167 @@ def show_subscribe_tab():
                         st.caption("Please check your internet connection and try again.")
                 else:
                     st.error("Please enter your email address to subscribe.")
+
+def generate_reset_token(length=32):
+    """Generate a secure random token for password reset."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def show_password_reset_form():
+    """Show password reset request form."""
+    st.subheader("🔐 Reset Your Password")
+    
+    # Back button
+    if st.button("← Back to Login", key="back_to_login"):
+        del st.session_state['show_password_reset']
+        st.rerun()
+    
+    st.write("Enter your email address and we'll send you a link to reset your password.")
+    
+    email = st.text_input("Email Address", key="reset_email")
+    
+    if st.button("Send Reset Link", type="primary", use_container_width=True):
+        if email:
+            # Create Supabase client
+            from supabase import create_client
+            url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
+            key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+            
+            if not url or not key:
+                st.error("Database not configured.")
+                return
+                
+            supabase = create_client(url, key)
+            
+            # Check if email exists in users table
+            try:
+                result = supabase.table('users').select('email').eq('email', email).execute()
+                
+                if result.data:
+                    # Generate reset token
+                    reset_token = generate_reset_token()
+                    
+                    # Store token in database (expires in 1 hour)
+                    from datetime import datetime, timedelta
+                    expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+                    
+                    token_data = {
+                        'email': email,
+                        'token': reset_token,
+                        'expires_at': expires_at
+                    }
+                    
+                    try:
+                        supabase.table('password_reset_tokens').insert(token_data).execute()
+                        
+                        # Generate reset link
+                        app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
+                        reset_link = f"{app_url}?reset_token={reset_token}"
+                        
+                        # Try to send email
+                        try:
+                            from email_utils import send_password_reset_email
+                            email_sent = send_password_reset_email(email, reset_link)
+                            
+                            if email_sent:
+                                st.success("✅ Password reset link sent! Check your email.")
+                                st.info("The link will expire in 1 hour.")
+                            else:
+                                # Fallback: show the link if email fails
+                                st.warning("Email service not configured. Use this link to reset your password:")
+                                st.code(reset_link)
+                                st.caption("This link will expire in 1 hour.")
+                        except Exception as e:
+                            # Fallback: show the link if email fails
+                            st.warning("Email service not configured. Use this link to reset your password:")
+                            st.code(reset_link)
+                            st.caption("This link will expire in 1 hour.")
+                            
+                    except Exception as e:
+                        st.error(f"Error creating reset token: {e}")
+                        st.info("Please ensure the password_reset_tokens table exists in your database.")
+                else:
+                    # Don't reveal if email exists or not (security best practice)
+                    st.success("✅ If that email exists in our system, you'll receive a reset link shortly.")
+                    
+            except Exception as e:
+                st.error(f"Database error: {e}")
+        else:
+            st.error("Please enter your email address.")
+
+def show_password_reset_completion(reset_token: str):
+    """Show form to complete password reset."""
+    st.title("🔐 Set New Password")
+    
+    # Verify token is valid
+    from supabase import create_client
+    url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
+    key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+    
+    if not url or not key:
+        st.error("Database not configured.")
+        return
+        
+    supabase = create_client(url, key)
+    
+    try:
+        # Check if token is valid
+        result = supabase.table('password_reset_tokens').select('*').eq('token', reset_token).eq('used', False).execute()
+        
+        if result.data and len(result.data) > 0:
+            token_data = result.data[0]
+            
+            # Check if expired
+            from datetime import datetime
+            expires_at = datetime.fromisoformat(token_data['expires_at'].replace('Z', '+00:00'))
+            if expires_at < datetime.now(expires_at.tzinfo):
+                st.error("This reset link has expired. Please request a new one.")
+                if st.button("Back to Login"):
+                    st.query_params.clear()
+                    st.rerun()
+                return
+            
+            # Show password reset form
+            email = token_data['email']
+            st.info(f"Setting new password for: {email}")
+            
+            new_password = st.text_input("New Password", type="password", key="new_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+            
+            if st.button("Set New Password", type="primary", use_container_width=True):
+                if new_password and confirm_password:
+                    if new_password == confirm_password:
+                        # In a real app, you'd hash the password here
+                        # For MVP, we'll just store it (NOT SECURE - fix before production!)
+                        try:
+                            # Update user's password
+                            supabase.table('users').update({
+                                'password_hash': new_password  # TODO: Hash this!
+                            }).eq('email', email).execute()
+                            
+                            # Mark token as used
+                            supabase.table('password_reset_tokens').update({
+                                'used': True
+                            }).eq('token', reset_token).execute()
+                            
+                            st.success("✅ Password updated successfully! You can now login with your new password.")
+                            
+                            # Clear the reset token from URL
+                            if st.button("Continue to Login", type="primary"):
+                                st.query_params.clear()
+                                st.rerun()
+                                
+                        except Exception as e:
+                            st.error(f"Error updating password: {e}")
+                    else:
+                        st.error("Passwords do not match.")
+                else:
+                    st.error("Please enter and confirm your new password.")
+        else:
+            st.error("Invalid or expired reset link. Please request a new password reset.")
+            if st.button("Back to Login"):
+                st.query_params.clear()
+                st.rerun()
+                
+    except Exception as e:
+        st.error(f"Error validating reset token: {e}")

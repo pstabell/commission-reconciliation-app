@@ -5113,8 +5113,16 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     return None
 
 def main():
-    # Check for Stripe success redirect
+    # Check for special URL parameters
     query_params = st.query_params
+    
+    # Check for password reset token
+    if "reset_token" in query_params and os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+        from auth_helpers import show_password_reset_completion
+        show_password_reset_completion(query_params["reset_token"])
+        st.stop()
+    
+    # Check for Stripe success redirect
     if "session_id" in query_params:
         st.success("🎉 Payment successful! Your subscription is now active.")
         st.info("You can now log in with your email address.")
