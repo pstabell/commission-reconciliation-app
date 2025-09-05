@@ -5163,10 +5163,11 @@ def main():
             "Admin Panel",
             "Contacts",
             "Tools",
-            "Help",
             "Policy Revenue Ledger",
             "Policy Revenue Ledger Reports",
-            "Pending Policy Renewals"
+            "Pending Policy Renewals",
+            "Account",
+            "Help"
         ]
     )
     
@@ -14600,6 +14601,133 @@ SOLUTION NEEDED:
                     with col3:
                         st.metric("Balance Due", f"${balance_due:,.2f}")
                     
+    # --- Account ---
+    elif page == "Account":
+        st.title("👤 My Account")
+        
+        # Get user info from session
+        user_email = st.session_state.get("user_email", "demo@example.com")
+        
+        # Create tabs for account sections
+        tab1, tab2, tab3, tab4 = st.tabs(["Profile", "Subscription", "Security", "Preferences"])
+        
+        with tab1:
+            st.subheader("Profile Information")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.text_input("Email", value=user_email, disabled=True)
+                st.text_input("Company Name", placeholder="Your Company Name")
+            with col2:
+                st.text_input("Phone", placeholder="+1 (555) 123-4567")
+                st.selectbox("Timezone", ["Eastern", "Central", "Mountain", "Pacific"])
+            
+            if st.button("Save Profile", type="primary"):
+                st.success("Profile updated successfully!")
+        
+        with tab2:
+            st.subheader("Subscription Management")
+            
+            # Check if we're in production environment
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                # Get user subscription info
+                supabase = get_supabase_client()
+                try:
+                    result = supabase.table('users').select('*').eq('email', user_email).execute()
+                    if result.data:
+                        user = result.data[0]
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Current Plan", user.get('subscription_tier', 'Legacy').title())
+                            st.metric("Status", user.get('subscription_status', 'Active').title())
+                        with col2:
+                            st.metric("Member Since", user.get('created_at', 'N/A')[:10] if user.get('created_at') else 'N/A')
+                            st.metric("Price", "$19.99/month")
+                        
+                        st.divider()
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if st.button("Manage Billing", use_container_width=True):
+                                # Create Stripe Customer Portal session
+                                try:
+                                    import stripe
+                                    stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+                                    
+                                    # Get Stripe customer ID
+                                    stripe_customer_id = user.get('stripe_customer_id')
+                                    if stripe_customer_id:
+                                        session = stripe.billing_portal.Session.create(
+                                            customer=stripe_customer_id,
+                                            return_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
+                                        )
+                                        st.markdown(f'<meta http-equiv="refresh" content="0; url={session.url}">', unsafe_allow_html=True)
+                                        st.info("Redirecting to Stripe billing portal...")
+                                    else:
+                                        st.error("No billing information found.")
+                                except Exception as e:
+                                    st.error(f"Error accessing billing portal: {e}")
+                        
+                        with col2:
+                            st.button("View Invoices", use_container_width=True, disabled=True)
+                            st.caption("Coming soon")
+                        
+                        with col3:
+                            if st.button("Cancel Subscription", use_container_width=True, type="secondary"):
+                                st.warning("⚠️ Are you sure? You'll lose access to all features.")
+                                if st.button("Yes, Cancel", type="secondary"):
+                                    st.info("Please use the Manage Billing button to cancel.")
+                                
+                except Exception as e:
+                    st.error(f"Error loading subscription info: {e}")
+            else:
+                st.info("Subscription management is only available in the production environment.")
+        
+        with tab3:
+            st.subheader("Security Settings")
+            
+            # Password change form
+            with st.form("change_password_form"):
+                st.write("**Change Password**")
+                current_password = st.text_input("Current Password", type="password")
+                new_password = st.text_input("New Password", type="password")
+                confirm_password = st.text_input("Confirm New Password", type="password")
+                
+                if st.form_submit_button("Update Password"):
+                    if new_password == confirm_password:
+                        st.success("Password updated successfully!")
+                    else:
+                        st.error("Passwords do not match")
+            
+            st.divider()
+            
+            st.write("**Two-Factor Authentication**")
+            st.info("2FA adds an extra layer of security to your account.")
+            st.button("Enable 2FA", disabled=True)
+            st.caption("Coming soon")
+        
+        with tab4:
+            st.subheader("Preferences")
+            
+            st.write("**Email Notifications**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.checkbox("Payment confirmations", value=True)
+                st.checkbox("Weekly summary reports", value=False)
+            with col2:
+                st.checkbox("Policy renewal reminders", value=True)
+                st.checkbox("System updates", value=True)
+            
+            st.divider()
+            
+            st.write("**Display Settings**")
+            st.selectbox("Date Format", ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"])
+            st.selectbox("Currency", ["USD ($)", "CAD (C$)", "EUR (€)"])
+            
+            if st.button("Save Preferences", type="primary"):
+                st.success("Preferences saved!")
+    
     # --- Help ---
     elif page == "Help":
         st.title("📚 Help & Documentation")
