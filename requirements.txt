@@ -11,3 +11,6 @@ supabase
 psycopg2-binary
 python-dotenv
 plotly
+stripe
+Flask
+gunicorn

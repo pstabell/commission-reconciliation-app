@@ -20,6 +20,14 @@ ENV/
 *.sqlite3
 commissions.db
 
+# Migration Scripts
+schema.sql
+
+# Data Files
+*.csv
+*.xlsx
+*.xls
+
 # Logs
 *.log
 
