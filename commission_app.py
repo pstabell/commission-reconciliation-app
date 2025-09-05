@@ -5147,14 +5147,21 @@ def main():
         # Show logged in user info
         if "user_email" in st.session_state:
             st.sidebar.success(f"Logged in as: {st.session_state['user_email']}")
-            if st.sidebar.button("Logout", use_container_width=True):
-                for key in ['password_correct', 'user_email']:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.rerun()
+        
+        # Add logout button right after email
+        if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
+            for key in ['password_correct', 'user_email']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
     else:
         st.sidebar.success("🏠 **Personal Environment**")
         st.sidebar.caption("Connected to personal database")
+        
+        # Add logout button for personal environment too
+        if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
+            st.session_state["password_correct"] = False
+            st.rerun()
     
     st.sidebar.divider()
     
@@ -5179,11 +5186,7 @@ def main():
         ]
     )
     
-    # Add logout button to sidebar
-    st.sidebar.divider()
-    if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-        st.session_state["password_correct"] = False
-        st.rerun()
+    # Removed duplicate logout button since we moved it to the top
     
     # --- Load data with caching for better performance ---
     # Moved all_data loading to individual pages for proper cache refresh
