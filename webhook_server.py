@@ -4,6 +4,9 @@ import json
 from flask import Flask, request, jsonify
 from supabase import create_client, Client
 from datetime import datetime
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from email_utils import send_welcome_email
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -123,6 +126,17 @@ def stripe_webhook():
                     print(f"Updated user: {customer_email}")
                     db_result['success'] = True
                     db_result['action'] = 'updated'
+                    
+                    # Check if this is a reactivation (was cancelled before)
+                    if result.data[0].get('subscription_status') != 'active':
+                        # Send welcome back email
+                        try:
+                            print(f"Sending welcome back email to {customer_email}")
+                            email_sent = send_welcome_email(customer_email)
+                            if email_sent:
+                                print("Welcome back email sent successfully!")
+                        except Exception as e:
+                            print(f"Error sending welcome back email: {e}")
                 else:
                     # Create new user
                     print(f"Creating new user...")
@@ -139,6 +153,18 @@ def stripe_webhook():
                     print(f"Insert result: {insert_result}")
                     db_result['success'] = True
                     db_result['action'] = 'created'
+                    
+                    # Send welcome email to new subscriber
+                    try:
+                        print(f"Sending welcome email to {customer_email}")
+                        email_sent = send_welcome_email(customer_email)
+                        if email_sent:
+                            print("Welcome email sent successfully!")
+                        else:
+                            print("Failed to send welcome email")
+                    except Exception as e:
+                        print(f"Error sending welcome email: {e}")
+                        # Don't fail the webhook if email fails
                     
             except Exception as e:
                 error_msg = f"Database error: {str(e)}"
