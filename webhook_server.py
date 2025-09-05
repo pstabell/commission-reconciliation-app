@@ -99,23 +99,32 @@ def stripe_webhook():
         supabase = get_supabase_client()
         print(f"Supabase client: {'Connected' if supabase else 'Not connected'}")
         
+        # Track database operations in response
+        db_result = {'attempted': False, 'success': False, 'error': None}
+        
         if supabase and customer_email:
+            db_result['attempted'] = True
             try:
                 # Check if user exists
+                print(f"Checking if user exists: {customer_email}")
                 result = supabase.table('users').select("*").eq('email', customer_email).execute()
                 
                 if result.data:
                     # Update existing user
+                    print(f"User exists, updating...")
                     update_data = {
                         'stripe_customer_id': stripe_customer_id,
                         'subscription_id': subscription_id,
                         'subscription_status': 'active',
                         'subscription_updated_at': datetime.now().isoformat()
                     }
-                    supabase.table('users').update(update_data).eq('email', customer_email).execute()
+                    update_result = supabase.table('users').update(update_data).eq('email', customer_email).execute()
                     print(f"Updated user: {customer_email}")
+                    db_result['success'] = True
+                    db_result['action'] = 'updated'
                 else:
                     # Create new user
+                    print(f"Creating new user...")
                     user_data = {
                         'email': customer_email,
                         'stripe_customer_id': stripe_customer_id,
@@ -123,11 +132,21 @@ def stripe_webhook():
                         'subscription_status': 'active',
                         'created_at': datetime.now().isoformat()
                     }
-                    supabase.table('users').insert(user_data).execute()
+                    insert_result = supabase.table('users').insert(user_data).execute()
                     print(f"Created new user: {customer_email}")
+                    print(f"Insert result: {insert_result}")
+                    db_result['success'] = True
+                    db_result['action'] = 'created'
                     
             except Exception as e:
-                print(f"Database error: {e}")
+                error_msg = f"Database error: {str(e)}"
+                print(error_msg)
+                app.logger.error(error_msg)
+                db_result['success'] = False
+                db_result['error'] = str(e)
+        
+        # Add database result to response
+        debug_info['db_operation'] = db_result
     
     # Handle subscription updated
     elif event['type'] == 'customer.subscription.updated':
