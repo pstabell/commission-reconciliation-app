@@ -134,80 +134,9 @@ def show_personal_login():
 
 def show_production_login():
     """Show the multi-user login system for SaaS production."""
-    st.title("🔐 Commission Tracker Pro - Login")
-    
-    # Create tabs for login and subscription
-    tab1, tab2 = st.tabs(["Login", "Subscribe"])
-    
-    with tab1:
-        # For now, use the same simple password system but with different branding
-        # Later this will be replaced with full Supabase Auth
-        def password_entered():
-            """Checks whether a password entered by the user is correct."""
-            # For initial SaaS deployment, still use password but from different env var
-            correct_password = os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!")  
-            
-            if "password" in st.session_state and st.session_state["password"] == correct_password:
-                st.session_state["password_correct"] = True
-                del st.session_state["password"]  # Don't store password
-            else:
-                st.session_state["password_correct"] = False
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.text_input(
-                "Password", 
-                type="password", 
-                on_change=password_entered, 
-                key="password",
-                help="Demo password for testing"
-            )
-            
-            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-                st.error("😕 Password incorrect. Please try again.")
-            
-            st.info("Welcome to Commission Tracker Pro - SaaS Edition")
-            st.caption("Coming soon: Multi-user authentication with email/password")
-    
-    with tab2:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.subheader("Subscribe to Pro")
-            st.write("Unlock all features of Commission Tracker Pro")
-            
-            # Feature list
-            st.markdown("""
-            ✅ **Unlimited Policy Tracking**  
-            ✅ **Advanced Reporting & Analytics**  
-            ✅ **Multi-User Collaboration**  
-            ✅ **Automated Reconciliation**  
-            ✅ **Excel Import/Export**  
-            ✅ **Priority Support**  
-            """)
-            
-            st.markdown("### $19.99/month")
-            st.caption("Cancel anytime. Secure payment via Stripe.")
-            
-            if st.button("🚀 Subscribe Now", type="primary", use_container_width=True):
-                try:
-                    # Create a new Checkout Session for the order
-                    checkout_session = stripe.checkout.Session.create(
-                        line_items=[{
-                            'price': STRIPE_PRICE_ID,
-                            'quantity': 1,
-                        }],
-                        mode='subscription',
-                        success_url=RENDER_APP_URL + "/?session_id={CHECKOUT_SESSION_ID}",
-                        cancel_url=RENDER_APP_URL,
-                    )
-                    # Provide a link for the user to click to go to Stripe Checkout
-                    st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_session.url}">', 
-                               unsafe_allow_html=True)
-                    st.success("Redirecting to secure checkout...")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Error creating checkout session: {e}")
-                    st.caption("Please check your internet connection and try again.")
+    # Import auth helpers
+    from auth_helpers import show_production_login_with_auth
+    show_production_login_with_auth()
 
 def check_password():
     """Returns True if the user had the correct password."""
@@ -5185,6 +5114,15 @@ def main():
     if app_mode == "PRODUCTION":
         st.sidebar.info("🌐 **Production Environment**")
         st.sidebar.caption("Connected to SaaS database")
+        
+        # Show logged in user info
+        if "user_email" in st.session_state:
+            st.sidebar.success(f"Logged in as: {st.session_state['user_email']}")
+            if st.sidebar.button("Logout", use_container_width=True):
+                for key in ['password_correct', 'user_email']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
     else:
         st.sidebar.success("🏠 **Personal Environment**")
         st.sidebar.caption("Connected to personal database")
