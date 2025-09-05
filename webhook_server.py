@@ -39,9 +39,9 @@ def health_check():
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
     """Handle Stripe webhook events."""
-    print("\n" + "="*50)
-    print("WEBHOOK TRIGGERED - Version 1.1")
-    print("="*50)
+    app.logger.info("="*50)
+    app.logger.info("WEBHOOK TRIGGERED - Version 1.1")
+    app.logger.info("="*50)
     
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
@@ -79,17 +79,21 @@ def stripe_webhook():
     
     # Handle the checkout.session.completed event
     if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        
-        # Extract relevant data
-        stripe_customer_id = session.get('customer')
-        customer_email = session.get('customer_details', {}).get('email')
-        subscription_id = session.get('subscription')
-        
-        print(f"Payment successful:")
-        print(f"  Customer ID: {stripe_customer_id}")
-        print(f"  Email: {customer_email}")
-        print(f"  Subscription ID: {subscription_id}")
+        try:
+            session = event['data']['object']
+            
+            # Extract relevant data
+            stripe_customer_id = session.get('customer')
+            customer_email = session.get('customer_details', {}).get('email')
+            subscription_id = session.get('subscription')
+            
+            app.logger.info(f"Payment successful:")
+            app.logger.info(f"  Customer ID: {stripe_customer_id}")
+            app.logger.info(f"  Email: {customer_email}")
+            app.logger.info(f"  Subscription ID: {subscription_id}")
+        except Exception as e:
+            app.logger.error(f"Error processing session: {e}")
+            return jsonify({'error': str(e)}), 500
         
         # Update database (if Supabase is configured)
         supabase = get_supabase_client()
@@ -173,6 +177,19 @@ def stripe_webhook():
         # For now, just log it
     
     return jsonify({'status': 'success'}), 200
+
+@app.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Test endpoint to verify deployment."""
+    print("\n" + "="*50)
+    print("TEST ENDPOINT CALLED")
+    print("="*50)
+    return jsonify({
+        'message': 'Test endpoint working',
+        'version': '1.1',
+        'method': request.method,
+        'timestamp': datetime.now().isoformat()
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
