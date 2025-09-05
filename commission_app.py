@@ -5140,28 +5140,29 @@ def main():
     
     # Show environment indicator in sidebar
     app_mode = os.getenv("APP_ENVIRONMENT")
+    
+    # Add prominent logout section at the very top
+    st.sidebar.markdown("### 👤 User Session")
+    if app_mode == "PRODUCTION":
+        if "user_email" in st.session_state:
+            st.sidebar.info(f"**Logged in as:**  \n{st.session_state['user_email']}")
+    
+    # Logout button with custom styling
+    if st.sidebar.button("🚪 LOGOUT", type="primary", use_container_width=True, key="sidebar_logout_main"):
+        for key in ['password_correct', 'user_email']:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.rerun()
+    
+    st.sidebar.divider()
+    
+    # Environment info
     if app_mode == "PRODUCTION":
         st.sidebar.info("🌐 **Production Environment**")
         st.sidebar.caption("Connected to SaaS database")
-        
-        # Show logged in user info
-        if "user_email" in st.session_state:
-            st.sidebar.success(f"Logged in as: {st.session_state['user_email']}")
-        
-        # Add logout button right after email
-        if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
-            for key in ['password_correct', 'user_email']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
     else:
         st.sidebar.success("🏠 **Personal Environment**")
         st.sidebar.caption("Connected to personal database")
-        
-        # Add logout button for personal environment too
-        if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
-            st.session_state["password_correct"] = False
-            st.rerun()
     
     st.sidebar.divider()
     
@@ -14615,6 +14616,15 @@ SOLUTION NEEDED:
     # --- Account ---
     elif page == "Account":
         st.title("🧑‍💼 My Account")
+        
+        # Add logout button at the top of Account page
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            if st.button("🚪 Logout", type="primary", use_container_width=True, key="account_logout"):
+                for key in ['password_correct', 'user_email']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
         
         # Get user info from session
         user_email = st.session_state.get("user_email", "demo@example.com")
