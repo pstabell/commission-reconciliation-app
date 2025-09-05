@@ -116,6 +116,7 @@ def stripe_webhook():
                         'stripe_customer_id': stripe_customer_id,
                         'subscription_id': subscription_id,
                         'subscription_status': 'active',
+                        'subscription_tier': 'legacy',  # All current users are legacy
                         'subscription_updated_at': datetime.now().isoformat()
                     }
                     update_result = supabase.table('users').update(update_data).eq('email', customer_email).execute()
@@ -130,6 +131,7 @@ def stripe_webhook():
                         'stripe_customer_id': stripe_customer_id,
                         'subscription_id': subscription_id,
                         'subscription_status': 'active',
+                        'subscription_tier': 'legacy',  # All current users are legacy
                         'created_at': datetime.now().isoformat()
                     }
                     insert_result = supabase.table('users').insert(user_data).execute()
