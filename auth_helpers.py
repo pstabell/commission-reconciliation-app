@@ -42,19 +42,13 @@ def show_production_login_with_auth():
 
 def show_login_form():
     """Show email/password login form."""
-    with st.form("login_form"):
-        st.subheader("Login to Your Account")
-        email = st.text_input("Email", key="login_email")
-        password = st.text_input("Password", type="password", key="login_password")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Login", type="primary", use_container_width=True)
-        with col2:
-            if st.form_submit_button("Forgot Password?", use_container_width=True):
-                st.info("Password reset coming soon!")
-        
-        if submitted:
+    st.subheader("Login to Your Account")
+    email = st.text_input("Email", key="login_email")
+    password = st.text_input("Password", type="password", key="login_password")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Login", type="primary", use_container_width=True, key="login_button"):
             if email and password:
                 # Check if user exists in database
                 # Avoid circular import by creating client directly
@@ -64,60 +58,61 @@ def show_login_form():
                 
                 if not url or not key:
                     st.error("Database not configured. Please use demo password.")
-                    return
+                else:
+                    supabase = create_client(url, key)
                     
-                supabase = create_client(url, key)
-                
-                # First check if email exists in users table
-                try:
-                    result = supabase.table('users').select('*').eq('email', email).execute()
-                    if result.data and len(result.data) > 0:
-                        # User exists - for MVP, accept any password
-                        # In production, you'd verify password hash here
-                        user = result.data[0]
-                        
-                        if user.get('subscription_status') == 'active':
+                    # First check if email exists in users table
+                    try:
+                        result = supabase.table('users').select('*').eq('email', email).execute()
+                        if result.data and len(result.data) > 0:
+                            # User exists - for MVP, accept any password
+                            # In production, you'd verify password hash here
+                            user = result.data[0]
+                            
+                            if user.get('subscription_status') == 'active':
+                                st.session_state["password_correct"] = True
+                                st.session_state["user_email"] = email
+                                st.success("Login successful!")
+                                st.rerun()
+                            else:
+                                st.error("No active subscription found. Please subscribe to continue.")
+                                st.info("Your subscription status: " + user.get('subscription_status', 'none'))
+                        else:
+                            st.error("Email not found. Please register first or check your email.")
+                            st.caption(f"Checked email: {email}")
+                    except Exception as e:
+                        st.error("Database connection issue. Using fallback authentication.")
+                        st.caption(f"Technical details: {str(e)}")
+                        # Fallback to demo password
+                        if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
                             st.session_state["password_correct"] = True
                             st.session_state["user_email"] = email
-                            st.success("Login successful!")
+                            st.success("Login successful (demo mode)!")
                             st.rerun()
-                        else:
-                            st.error("No active subscription found. Please subscribe to continue.")
-                            st.info("Your subscription status: " + user.get('subscription_status', 'none'))
-                    else:
-                        st.error("Email not found. Please register first or check your email.")
-                        st.caption(f"Checked email: {email}")
-                except Exception as e:
-                    st.error("Database connection issue. Using fallback authentication.")
-                    st.caption(f"Technical details: {str(e)}")
-                    # Fallback to demo password
-                    if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
-                        st.session_state["password_correct"] = True
-                        st.session_state["user_email"] = email
-                        st.success("Login successful (demo mode)!")
-                        st.rerun()
             else:
                 st.error("Please enter both email and password")
+    with col2:
+        if st.button("Forgot Password?", use_container_width=True, key="forgot_button"):
+            st.info("Password reset coming soon!")
 
 def show_register_form():
     """Show registration form."""
-    with st.form("register_form"):
-        st.subheader("Create New Account")
-        email = st.text_input("Email", key="register_email")
-        password = st.text_input("Password", type="password", key="register_password")
-        confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm")
-        
-        st.info("After registering, you'll need to subscribe to access the app.")
-        
-        if st.form_submit_button("Register", type="primary", use_container_width=True):
-            if email and password and confirm_password:
-                if password == confirm_password:
-                    st.success("Registration successful! Please check your email to verify your account.")
-                    st.info("Once verified, switch to the Subscribe tab to activate your account.")
-                else:
-                    st.error("Passwords do not match")
+    st.subheader("Create New Account")
+    email = st.text_input("Email", key="register_email")
+    password = st.text_input("Password", type="password", key="register_password")
+    confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm")
+    
+    st.info("After registering, you'll need to subscribe to access the app.")
+    
+    if st.button("Register", type="primary", use_container_width=True, key="register_button"):
+        if email and password and confirm_password:
+            if password == confirm_password:
+                st.success("Registration successful! Please check your email to verify your account.")
+                st.info("Once verified, switch to the Subscribe tab to activate your account.")
             else:
-                st.error("Please fill in all fields")
+                st.error("Passwords do not match")
+        else:
+            st.error("Please fill in all fields")
 
 def show_subscribe_tab():
     """Show subscription options."""
@@ -142,14 +137,16 @@ def show_subscribe_tab():
         # Import Stripe only in production
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
             import stripe
-            if st.button("🚀 Subscribe Now", type="primary", use_container_width=True):
-                try:
-                    # Get email from session or ask for it
-                    email = st.session_state.get("user_email", "")
-                    if not email:
-                        email = st.text_input("Enter your email to subscribe:")
-                    
-                    if email:
+            stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+            
+            # Get email from session or ask for it
+            email = st.session_state.get("user_email", "")
+            if not email:
+                email = st.text_input("Enter your email to subscribe:", key="subscribe_email")
+            
+            if st.button("🚀 Subscribe Now", type="primary", use_container_width=True, key="subscribe_button"):
+                if email:
+                    try:
                         # Create checkout session with email
                         checkout_session = stripe.checkout.Session.create(
                             line_items=[{
@@ -165,6 +162,8 @@ def show_subscribe_tab():
                                    unsafe_allow_html=True)
                         st.success("Redirecting to secure checkout...")
                         st.balloons()
-                except Exception as e:
-                    st.error(f"Error creating checkout session: {e}")
-                    st.caption("Please check your internet connection and try again.")
+                    except Exception as e:
+                        st.error(f"Error creating checkout session: {e}")
+                        st.caption("Please check your internet connection and try again.")
+                else:
+                    st.error("Please enter your email address to subscribe.")
