@@ -14603,7 +14603,7 @@ SOLUTION NEEDED:
                     
     # --- Account ---
     elif page == "Account":
-        st.title("👤 My Account")
+        st.title("🧑‍💼 My Account")
         
         # Get user info from session
         user_email = st.session_state.get("user_email", "demo@example.com")
