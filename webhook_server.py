@@ -204,8 +204,13 @@ def stripe_webhook():
     
     if event['type'] == 'checkout.session.completed':
         debug_info['checkout_processed'] = True
-        debug_info['customer_email'] = customer_email if 'customer_email' in locals() else 'not_extracted'
-        debug_info['supabase_connected'] = supabase is not None if 'supabase' in locals() else False
+        # Safely check if variables exist
+        if 'customer_email' in locals():
+            debug_info['customer_email'] = customer_email
+        if 'supabase' in locals():
+            debug_info['supabase_connected'] = supabase is not None
+        if 'db_result' in locals():
+            debug_info['db_operation'] = db_result
     
     return jsonify(debug_info), 200
 
