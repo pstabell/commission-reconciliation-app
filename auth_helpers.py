@@ -78,8 +78,10 @@ def show_login_form():
                             st.info("Your subscription status: " + user.get('subscription_status', 'none'))
                     else:
                         st.error("Email not found. Please register first or check your email.")
+                        st.caption(f"Checked email: {email}")
                 except Exception as e:
-                    st.error(f"Login error: {e}")
+                    st.error("Database connection issue. Using fallback authentication.")
+                    st.caption(f"Technical details: {str(e)}")
                     # Fallback to demo password
                     if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
                         st.session_state["password_correct"] = True
