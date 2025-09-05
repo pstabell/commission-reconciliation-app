@@ -57,8 +57,16 @@ def show_login_form():
         if submitted:
             if email and password:
                 # Check if user exists in database
-                from commission_app import get_supabase_client
-                supabase = get_supabase_client()
+                # Avoid circular import by creating client directly
+                from supabase import create_client
+                url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
+                key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+                
+                if not url or not key:
+                    st.error("Database not configured. Please use demo password.")
+                    return
+                    
+                supabase = create_client(url, key)
                 
                 # First check if email exists in users table
                 try:

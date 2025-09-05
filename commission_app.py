@@ -134,9 +134,20 @@ def show_personal_login():
 
 def show_production_login():
     """Show the multi-user login system for SaaS production."""
-    # Import auth helpers
-    from auth_helpers import show_production_login_with_auth
-    show_production_login_with_auth()
+    try:
+        # Import auth helpers
+        from auth_helpers import show_production_login_with_auth
+        show_production_login_with_auth()
+    except ImportError as e:
+        st.error(f"Import error: {e}")
+        # Fallback to basic login
+        st.title("🔐 Commission Tracker Pro - Login")
+        password = st.text_input("Password", type="password")
+        if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
+            st.session_state["password_correct"] = True
+            st.rerun()
+        elif password:
+            st.error("Invalid password")
 
 def check_password():
     """Returns True if the user had the correct password."""
