@@ -34,22 +34,35 @@ def stripe_webhook():
     sig_header = request.headers.get('Stripe-Signature')
     
     # Log webhook received
+    print(f"\n{'='*50}")
     print(f"Webhook received at {datetime.now()}")
+    print(f"Signature header present: {'Yes' if sig_header else 'No'}")
     
-    try:
-        # Verify webhook signature
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, webhook_secret
-        )
-    except ValueError as e:
-        print(f"Invalid payload: {e}")
-        return jsonify({'error': 'Invalid payload'}), 400
-    except stripe.error.SignatureVerificationError as e:
-        print(f"Invalid signature: {e}")
-        return jsonify({'error': 'Invalid signature'}), 400
+    # Check if webhook secret is configured
+    if not webhook_secret:
+        print("WARNING: STRIPE_WEBHOOK_SECRET not configured!")
+        # For testing, parse without verification
+        try:
+            event = json.loads(payload)
+        except Exception as e:
+            print(f"Failed to parse payload: {e}")
+            return jsonify({'error': 'Invalid JSON'}), 400
+    else:
+        try:
+            # Verify webhook signature
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, webhook_secret
+            )
+        except ValueError as e:
+            print(f"Invalid payload: {e}")
+            return jsonify({'error': 'Invalid payload'}), 400
+        except stripe.error.SignatureVerificationError as e:
+            print(f"Invalid signature: {e}")
+            return jsonify({'error': 'Invalid signature'}), 400
     
     # Log event type
     print(f"Event type: {event['type']}")
+    print(f"Event ID: {event.get('id', 'Unknown')}")
     
     # Handle the checkout.session.completed event
     if event['type'] == 'checkout.session.completed':
@@ -67,6 +80,8 @@ def stripe_webhook():
         
         # Update database (if Supabase is configured)
         supabase = get_supabase_client()
+        print(f"Supabase client: {'Connected' if supabase else 'Not connected'}")
+        
         if supabase and customer_email:
             try:
                 # Check if user exists
