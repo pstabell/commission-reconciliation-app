@@ -176,7 +176,19 @@ def stripe_webhook():
         # You might want to send an email or update status
         # For now, just log it
     
-    return jsonify({'status': 'success'}), 200
+    # Return detailed info for debugging
+    debug_info = {
+        'status': 'success',
+        'event_received': event.get('type', 'unknown'),
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    if event['type'] == 'checkout.session.completed':
+        debug_info['checkout_processed'] = True
+        debug_info['customer_email'] = customer_email if 'customer_email' in locals() else 'not_extracted'
+        debug_info['supabase_connected'] = supabase is not None if 'supabase' in locals() else False
+    
+    return jsonify(debug_info), 200
 
 @app.route('/test', methods=['GET', 'POST'])
 def test_endpoint():
