@@ -301,12 +301,23 @@ def get_supabase_client():
     
     return create_client(url, key)
 
+def add_user_email_to_data(data_dict):
+    """Add current user's email to data dictionary for multi-tenancy."""
+    if "user_email" in st.session_state:
+        data_dict["user_email"] = st.session_state["user_email"]
+    return data_dict
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_policies_data():
-    """Load policies data from Supabase with caching."""
+    """Load policies data from Supabase with caching - filtered by current user."""
     try:
         supabase = get_supabase_client()
-        response = supabase.table('policies').select("*").execute()
+        # In production, filter by user email for multi-tenancy
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+            response = supabase.table('policies').select("*").eq('user_email', st.session_state['user_email']).execute()
+        else:
+            # Personal environment - show all data
+            response = supabase.table('policies').select("*").execute()
         if response.data:
             df = pd.DataFrame(response.data)
             # Ensure numeric columns are properly typed
@@ -6778,7 +6789,9 @@ def main():
                                         try:
                                             # Clean data before insertion
                                             cleaned_insert = clean_data_for_database(insert_dict)
-                                            supabase.table('policies').insert(cleaned_insert).execute()
+                                            # Add user email for multi-tenancy
+                                            cleaned_insert = add_user_email_to_data(cleaned_insert)
+                                            supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
                                             inserted_count += 1
                                         except Exception as insert_error:
                                             st.error(f"Error inserting new record: {insert_error}")
@@ -7055,7 +7068,7 @@ def main():
                                             
                                             # Clean data before insertion
                                             cleaned_save = clean_data_for_database(save_data)
-                                            response = supabase.table('policies').insert(cleaned_save).execute()
+                                            response = supabase.table('policies').insert(add_user_email_to_data(cleaned_save)).execute()
                                             success_message = "✅ Duplicate transaction created successfully!"
                                         elif existing_record or (record_id is not None and record_id != '' and not pd.isna(record_id)):
                                             # Existing record - UPDATE
@@ -7076,7 +7089,7 @@ def main():
                                             
                                             # Clean data before insertion
                                             cleaned_save = clean_data_for_database(save_data)
-                                            response = supabase.table('policies').insert(cleaned_save).execute()
+                                            response = supabase.table('policies').insert(add_user_email_to_data(cleaned_save)).execute()
                                             success_message = "✅ Transaction created successfully!"
                                         
                                         # Check if we have a response - for updates, data might be None but operation succeeded
@@ -7195,7 +7208,8 @@ def main():
                                                 }
                                                 
                                                 try:
-                                                    # Insert into deleted_policies table
+                                                    # Insert into deleted_policies table with user email
+                                                    archive_record = add_user_email_to_data(archive_record)
                                                     supabase.table('deleted_policies').insert(archive_record).execute()
                                                     
                                                     # Then delete from main policies table
@@ -7337,7 +7351,7 @@ def main():
                                     try:
                                         # Clean data before insertion
                                         cleaned_insert = clean_data_for_database(insert_dict)
-                                        supabase.table('policies').insert(cleaned_insert).execute()
+                                        supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
                                         inserted_count += 1
                                     except Exception as insert_error:
                                         st.error(f"Error inserting new record: {insert_error}")
@@ -8019,7 +8033,7 @@ def main():
                         cleaned_policy = clean_data_for_database(new_policy)
                         
                         # Insert into database
-                        supabase.table('policies').insert(cleaned_policy).execute()
+                        supabase.table('policies').insert(add_user_email_to_data(cleaned_policy)).execute()
                         clear_policies_cache()
                         
                         # Set success message in session state to persist after rerun
@@ -8506,7 +8520,7 @@ def main():
                                         cleaned_recon = clean_data_for_database(recon_entry)
                                         
                                         # Insert reconciliation entry
-                                        supabase.table('policies').insert(cleaned_recon).execute()
+                                        supabase.table('policies').insert(add_user_email_to_data(cleaned_recon)).execute()
                                         
                                         # Update original transaction
                                         supabase.table('policies').update({
@@ -10074,7 +10088,7 @@ def main():
                                 cleaned_adjustment = clean_data_for_database(adjustment_entry)
                                 
                                 # Save to database
-                                result = supabase.table('policies').insert(cleaned_adjustment).execute()
+                                result = supabase.table('policies').insert(add_user_email_to_data(cleaned_adjustment)).execute()
                                 
                                 if result.data:
                                     st.success(f"✅ Adjustment {adj_id} created successfully!")
@@ -10266,7 +10280,7 @@ def main():
                                                         cleaned_void = clean_data_for_database(void_entry)
                                                         
                                                         # Insert void entry
-                                                        supabase.table('policies').insert(cleaned_void).execute()
+                                                        supabase.table('policies').insert(add_user_email_to_data(cleaned_void)).execute()
                                                         void_count += 1
                                                     
                                                     # Update original transactions to mark as unreconciled again
@@ -10555,7 +10569,11 @@ def main():
             
             try:
                 # Fetch deleted policies from Supabase
-                deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
+                # Filter by user in production
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', st.session_state['user_email']).order('deleted_at', desc=True).limit(100).execute()
+                else:
+                    deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
                 
                 if deleted_response.data:
                     # Extract policy data from JSONB structure
@@ -10635,7 +10653,7 @@ def main():
                                                         restore_data[col] = value
                                         
                                         # Restore to policies table
-                                        supabase.table('policies').insert(restore_data).execute()
+                                        supabase.table('policies').insert(add_user_email_to_data(restore_data)).execute()
                                         
                                         # Remove from deleted_policies table
                                         deletion_id = row['deletion_id']
@@ -18221,7 +18239,7 @@ TO "New Column Name";
                                 st.error(f"Error checking existing ID: {e}")
                             
                             # Insert to database
-                            supabase.table('policies').insert(new_renewal).execute()
+                            supabase.table('policies').insert(add_user_email_to_data(new_renewal)).execute()
                             clear_policies_cache()
                             
                             # Log the renewal
