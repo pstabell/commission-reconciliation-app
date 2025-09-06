@@ -132,10 +132,10 @@ def show_personal_login():
     
     st.info("This application contains sensitive commission data. Authentication is required.")
     
-    # Add privacy policy link
+    # Add legal links
     st.markdown("""
     <div style="text-align: center; margin-top: 20px; color: #888; font-size: 0.9em;">
-        <a href="?page=privacy">Privacy Policy</a>
+        <a href="?page=terms">Terms of Service</a> | <a href="?page=privacy">Privacy Policy</a>
     </div>
     """, unsafe_allow_html=True)
 
@@ -5138,6 +5138,103 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     
     return None
 
+def show_terms_of_service():
+    """Display terms of service page."""
+    st.title("Terms of Service")
+    st.caption("Effective Date: December 6, 2024")
+    
+    st.markdown("""
+    ## 1. Acceptance of Terms
+    
+    By accessing or using Commission Tracker Pro ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you disagree with any part of these terms, you may not access the Service.
+
+    ## 2. Description of Service
+    
+    Commission Tracker Pro provides commission tracking and reconciliation software for insurance professionals. The Service includes:
+    - Policy commission calculations
+    - Payment reconciliation
+    - Reporting and analytics
+    - Data export capabilities
+
+    ## 3. Subscription and Payment
+    
+    ### Subscription Terms
+    - Service is provided on a monthly subscription basis
+    - Current price: $19.99 per month
+    - Prices subject to change with 30 days notice
+    - 14-day free trial for new users
+
+    ### Payment Processing
+    - All payments processed securely through Stripe
+    - Subscription automatically renews monthly
+    - Cancel anytime through your account settings
+
+    ## 4. User Responsibilities
+    
+    You agree to:
+    - Provide accurate account information
+    - Maintain the security of your password
+    - Use the Service only for lawful purposes
+    - Not attempt to breach security measures
+    - Not share your account with others
+
+    ## 5. Data Ownership and Use
+    
+    - You retain all rights to your commission data
+    - We will not access your data except for support purposes
+    - You can export your data at any time
+    - We will delete your data upon account termination
+
+    ## 6. Service Availability
+    
+    - We strive for 99.9% uptime
+    - Service may be temporarily unavailable for maintenance
+    - No guarantee of uninterrupted service
+    - Not responsible for internet connectivity issues
+
+    ## 7. Limitation of Liability
+    
+    TO THE MAXIMUM EXTENT PERMITTED BY LAW:
+    - Service provided "AS IS" without warranties
+    - Not liable for lost profits or indirect damages
+    - Maximum liability limited to monthly subscription fee
+    - Not responsible for data accuracy or calculation errors
+
+    ## 8. Indemnification
+    
+    You agree to indemnify and hold harmless Commission Tracker Pro from any claims arising from:
+    - Your use of the Service
+    - Violation of these Terms
+    - Infringement of any third-party rights
+
+    ## 9. Termination
+    
+    - Either party may terminate at any time
+    - Upon termination, access to Service will cease
+    - No refunds for partial months
+    - Data available for export for 30 days post-termination
+
+    ## 10. Modifications to Terms
+    
+    - We may modify these Terms at any time
+    - Continued use constitutes acceptance of new Terms
+    - Material changes will be notified via email
+
+    ## 11. Governing Law
+    
+    These Terms are governed by the laws of the United States, without regard to conflict of law principles.
+
+    ## 12. Contact Information
+    
+    For questions about these Terms:
+    - Email: support@commissiontracker.pro
+    - Website: https://commissiontracker.carrd.co
+    """)
+    
+    if st.button("← Back to Login", type="primary"):
+        st.query_params.clear()
+        st.rerun()
+
 def show_privacy_policy():
     """Display privacy policy page."""
     st.title("Privacy Policy")
@@ -5216,6 +5313,11 @@ def main():
     # Check for privacy policy page
     if "page" in query_params and query_params["page"] == "privacy":
         show_privacy_policy()
+        st.stop()
+    
+    # Check for terms of service page
+    if "page" in query_params and query_params["page"] == "terms":
+        show_terms_of_service()
         st.stop()
     
     # Check for Stripe success redirect

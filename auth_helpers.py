@@ -46,11 +46,12 @@ def show_production_login_with_auth():
         with tab3:
             show_subscribe_tab()
         
-        # Add privacy policy link at bottom
+        # Add legal links at bottom
         st.markdown("---")
         st.markdown("""
         <div style="text-align: center; color: #888; font-size: 0.9em;">
-            By using Commission Tracker Pro, you agree to our <a href="?page=privacy">Privacy Policy</a>
+            By using Commission Tracker Pro, you agree to our<br>
+            <a href="?page=terms">Terms of Service</a> and <a href="?page=privacy">Privacy Policy</a>
         </div>
         """, unsafe_allow_html=True)
 
