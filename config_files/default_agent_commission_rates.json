@@ -1,0 +1,6 @@
+{
+  "new_business_rate": 50.0,
+  "renewal_rate": 25.0,
+  "description": "Default agent commission rates (percentage) for transactions when no specific commission rule applies",
+  "last_updated": "2025-01-06"
+}

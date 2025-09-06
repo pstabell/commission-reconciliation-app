@@ -8106,32 +8106,53 @@ def main():
                         help="Rate from commission rule" if applied_rule else "Manual entry rate"
                     )
                 
+                # Load default agent commission rates from config
+                rates_file = "config_files/default_agent_commission_rates.json"
+                try:
+                    with open(rates_file, 'r') as f:
+                        default_rates = json.load(f)
+                    new_business_rate = default_rates.get('new_business_rate', 50.0)
+                    renewal_rate = default_rates.get('renewal_rate', 25.0)
+                except Exception:
+                    # Fallback to defaults if file doesn't exist
+                    new_business_rate = 50.0
+                    renewal_rate = 25.0
+                
                 # Determine agent commission rate based on transaction type and prior policy
                 if transaction_type == "NEW":
-                    # NEW transactions always get 50%
-                    agent_comm_rate = 50.0
+                    # NEW transactions use new business rate
+                    agent_comm_rate = new_business_rate
                 elif transaction_type == "RWL":
-                    # RWL transactions always get 25%
-                    agent_comm_rate = 25.0
+                    # RWL transactions use renewal rate
+                    agent_comm_rate = renewal_rate
                 elif transaction_type in ["NBS", "STL", "BoR"]:
                     # These are typically new business
-                    agent_comm_rate = 50.0
+                    agent_comm_rate = new_business_rate
                 elif transaction_type in ["CAN", "XCL"]:
                     # Cancellations - determine the original rate based on Prior Policy Number
                     if prior_policy_number and str(prior_policy_number).strip():
-                        # Has prior policy = this was a renewal, so chargeback at 25%
-                        agent_comm_rate = 25.0
+                        # Has prior policy = this was a renewal, so chargeback at renewal rate
+                        agent_comm_rate = renewal_rate
                     else:
-                        # No prior policy = this was new business, so chargeback at 50%
-                        agent_comm_rate = 50.0
+                        # No prior policy = this was new business, so chargeback at new business rate
+                        agent_comm_rate = new_business_rate
+                elif transaction_type in ["END", "PCH"]:
+                    # For END/PCH, check if Policy Origination Date = Effective Date
+                    # This matches the batch calculation logic in get_agent_rate()
+                    if policy_orig_date == effective_date:
+                        # Dates match = this is a new policy endorsement
+                        agent_comm_rate = new_business_rate
+                    else:
+                        # Dates don't match = this is a renewal policy endorsement
+                        agent_comm_rate = renewal_rate
                 else:
-                    # For all other transaction types (END, PCH, REWRITE), check Prior Policy Number
+                    # For all other transaction types (REWRITE, etc), check Prior Policy Number
                     if prior_policy_number and str(prior_policy_number).strip():
                         # Has prior policy = this is a renewal policy
-                        agent_comm_rate = 25.0
+                        agent_comm_rate = renewal_rate
                     else:
                         # No prior policy = this is a new policy
-                        agent_comm_rate = 50.0
+                        agent_comm_rate = new_business_rate
                 
                 st.text_input("Agent Comm %", value=f"{agent_comm_rate}%", disabled=True, help="Rate based on transaction type")
                 
@@ -10530,7 +10551,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping", "Default Agent Rates"])
         
         with tab1:
             st.subheader("Database Information")
@@ -12413,6 +12434,111 @@ SOLUTION NEEDED:
                 PMT represents commissions paid when customers make payments on their policies. 
                 These are NOT directly tied to policy actions (NEW, RWL, END) but to customer payment events.
                 """)
+        
+        with tab11:
+            st.subheader("Default Agent Commission Rates")
+            st.info("Configure the default commission rates that agents receive from the agency. These rates are used when creating new transactions.")
+            
+            # Load current rates
+            rates_file = "config_files/default_agent_commission_rates.json"
+            try:
+                with open(rates_file, 'r') as f:
+                    default_rates = json.load(f)
+            except Exception:
+                # If file doesn't exist or has errors, use defaults
+                default_rates = {
+                    "new_business_rate": 50.0,
+                    "renewal_rate": 25.0
+                }
+            
+            # Display current rates
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Current New Business Rate", f"{default_rates.get('new_business_rate', 50.0)}%")
+            with col2:
+                st.metric("Current Renewal Rate", f"{default_rates.get('renewal_rate', 25.0)}%")
+            
+            st.divider()
+            
+            # Edit rates form
+            st.markdown("### Update Default Rates")
+            
+            with st.form("update_default_rates"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    new_business_rate = st.number_input(
+                        "New Business Rate (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(default_rates.get('new_business_rate', 50.0)),
+                        step=0.5,
+                        help="Commission rate for NEW transactions"
+                    )
+                
+                with col2:
+                    renewal_rate = st.number_input(
+                        "Renewal Rate (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(default_rates.get('renewal_rate', 25.0)),
+                        step=0.5,
+                        help="Commission rate for RWL (renewal) transactions"
+                    )
+                
+                submitted = st.form_submit_button("💾 Save Rates", type="primary")
+                
+                if submitted:
+                    # Update rates
+                    default_rates['new_business_rate'] = new_business_rate
+                    default_rates['renewal_rate'] = renewal_rate
+                    default_rates['last_updated'] = datetime.datetime.now().strftime("%Y-%m-%d")
+                    
+                    # Save to file
+                    try:
+                        with open(rates_file, 'w') as f:
+                            json.dump(default_rates, f, indent=2)
+                        st.success("✅ Default agent commission rates updated successfully!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving rates: {e}")
+            
+            st.divider()
+            
+            # Information about how rates are used
+            st.markdown("### How Default Rates Are Used")
+            
+            with st.expander("📘 Rate Application Guide", expanded=True):
+                st.markdown("""
+                **When these rates apply:**
+                - When creating new transactions in the **Add New Policy Transaction** form
+                - When no specific commission rule exists for a carrier/MGA combination
+                - As the default starting point for agent commissions
+                
+                **Transaction type logic:**
+                - **NEW**: Uses the New Business Rate
+                - **RWL**: Uses the Renewal Rate  
+                - **END/PCH**: 
+                  - If Policy Origination Date = Effective Date → New Business Rate
+                  - Otherwise → Renewal Rate
+                - **CAN/XCL**: 
+                  - Uses the appropriate rate (new or renewal) as negative value
+                  - Based on whether Prior Policy Number exists
+                
+                **Important notes:**
+                1. These are **agent** commission rates (what agents receive from the agency)
+                2. These are different from **policy** commission rates (what the agency receives from carriers)
+                3. Rates can be manually overridden when editing individual transactions
+                4. Changes to these rates only affect **new** transactions going forward
+                
+                **Carrier-specific rates:**
+                To set different rates for specific carriers or MGAs, use the **Contacts** page to create commission rules.
+                """)
+            
+            # Show last update info
+            if 'last_updated' in default_rates:
+                st.caption(f"Last updated: {default_rates['last_updated']}")
     
     # --- Contacts ---
     elif page == "Contacts":
