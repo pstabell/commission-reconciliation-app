@@ -107,28 +107,33 @@ if len(st.session_state.rerun_history) > 10:
 
 def show_personal_login():
     """Show the original simple password login for personal use."""
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        correct_password = os.getenv("APP_PASSWORD", "CommissionApp2025!")  # Your personal password
-        
-        if "password" in st.session_state and st.session_state["password"] == correct_password:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
-        else:
-            st.session_state["password_correct"] = False
-
-    # Show input for password
     st.title("🔐 Sales Commission App - Login")
-    st.text_input(
-        "Password", 
-        type="password", 
-        on_change=password_entered, 
-        key="password",
-        help="Contact administrator for password"
-    )
     
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+    # Use a form to allow password managers to work
+    with st.form("login_form"):
+        password = st.text_input(
+            "Password", 
+            type="password",
+            key="password_input",
+            help="Contact administrator for password",
+            autocomplete="current-password"  # Help password managers
+        )
+        
+        submit = st.form_submit_button("Login", type="primary", use_container_width=True)
+        
+        if submit:
+            correct_password = os.getenv("APP_PASSWORD", "CommissionApp2025!")
+            
+            if password == correct_password:
+                st.session_state["password_correct"] = True
+                st.rerun()
+            else:
+                st.session_state["login_error"] = True
+                st.rerun()
+    
+    if st.session_state.get("login_error", False):
         st.error("😕 Password incorrect. Please try again.")
+        del st.session_state["login_error"]
     
     st.info("This application contains sensitive commission data. Authentication is required.")
     
