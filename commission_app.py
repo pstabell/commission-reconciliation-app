@@ -86,7 +86,7 @@ from column_mapping_config import (
     column_mapper, get_mapped_column, get_ui_field_name, 
     is_calculated_field, safe_column_reference
 )
-from utils.styling_minimal import apply_css
+# from utils.styling_minimal import apply_css  # Temporarily disabled for mobile testing
 import stripe
 
 # Configure Stripe (only for production environment)
@@ -5341,8 +5341,8 @@ def main():
     if not check_password():
         st.stop()
     
-    # Apply CSS styling
-    apply_css()
+    # CSS styling disabled for mobile testing
+    # apply_css()
     
     # Show environment indicator in sidebar
     app_mode = os.getenv("APP_ENVIRONMENT")
