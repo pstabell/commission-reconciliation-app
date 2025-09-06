@@ -8,7 +8,69 @@ import streamlit as st
 @st.cache_data
 def get_custom_css():
     """Get cached CSS for better performance."""
-    return """<style>        /* Remove default padding and maximize main block width */
+    return """<style>
+        /* Mobile-friendly responsive design */
+        @media (max-width: 768px) {
+            /* Allow sidebar to collapse on mobile */
+            section[data-testid="stSidebar"] {
+                min-width: auto !important;
+                max-width: auto !important;
+                width: auto !important;
+                position: fixed !important;
+                z-index: 999 !important;
+                transform: none !important;
+            }
+            
+            /* Adjust main content for mobile */
+            .main .block-container {
+                padding: 1rem !important;
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            
+            .main {
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            
+            [data-testid="stAppViewContainer"] > .main {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            
+            section.main {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            
+            [data-testid="stAppViewContainer"] {
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            
+            [data-testid="stHeader"] {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            
+            /* Show collapse button on mobile */
+            button[data-testid="collapsedControl"],
+            button[kind="header"] {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+                width: auto !important;
+                height: auto !important;
+            }
+        }
+        
+        /* Desktop styles - keep sidebar fixed */
+        @media (min-width: 769px) {
+            /* Remove default padding and maximize main block width */
         .main .block-container {
             padding-top: 1rem;
             padding-bottom: 0rem;
@@ -112,6 +174,7 @@ def get_custom_css():
             opacity: 1 !important;
             pointer-events: auto !important;
         }
+        } /* Close desktop media query */
         /* Remove extra margin from header/title */
         .main .block-container h1 {
             margin-bottom: 0.5rem;
@@ -186,6 +249,40 @@ def get_custom_css():
             border: 2px solid #e6a800 !important;
             box-shadow: none !important;
             outline: none !important;
+        }
+        
+        /* Mobile-specific improvements */
+        @media (max-width: 768px) {
+            /* Make data tables scrollable on mobile */
+            .stDataFrame {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            
+            /* Adjust form inputs for mobile */
+            .stTextInput > div > input,
+            .stNumberInput > div > input,
+            .stSelectbox > div,
+            .stDateInput > div > input {
+                font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+            
+            /* Make buttons full width on mobile */
+            .stButton > button {
+                width: 100% !important;
+            }
+            
+            /* Reduce padding on mobile */
+            .block-container {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            
+            /* Stack columns on mobile */
+            [data-testid="column"] {
+                width: 100% !important;
+                flex: 0 0 100% !important;
+            }
         }
         </style>"""
 

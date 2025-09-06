@@ -29,7 +29,8 @@
       "Bash(git pull:*)",
       "Bash(sqlite3:*)",
       "Bash(git restore:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(git branch:*)"
     ],
     "deny": []
   }
