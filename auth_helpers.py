@@ -63,9 +63,7 @@ def show_login_form():
         email = st.text_input("Email", key="login_email", autocomplete="username")
         password = st.text_input("Password", type="password", key="login_password", autocomplete="current-password")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            submit = st.form_submit_button("Login", type="primary", use_container_width=True)
+        submit = st.form_submit_button("Login", type="primary", use_container_width=True)
         
         if submit:
             if email and password:
@@ -112,6 +110,7 @@ def show_login_form():
                 st.error("Please manually enter both email and password")
     
     # Forgot password button outside the form
+    col1, col2 = st.columns(2)
     with col2:
         if st.button("Forgot Password?", use_container_width=True, key="forgot_button"):
             st.session_state['show_password_reset'] = True
