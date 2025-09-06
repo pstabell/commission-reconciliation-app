@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: August 8, 2025  
-**Current Version**: 3.9.38
+**Last Updated**: January 6, 2025  
+**Current Version**: 4.1.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,21 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v4.1.0)
+1. **Configurable Default Agent Commission Rates**:
+   - **New Feature**: Added "Default Agent Rates" tab in Admin Panel
+   - **Configuration**: Rates stored in config_files/default_agent_commission_rates.json
+   - **Functionality**: Users can modify default new business (50%) and renewal (25%) rates
+   - **Implementation**: Add New Policy form now loads rates from config instead of hardcoding
+   - **Bug Fix**: END/PCH transactions now properly check Policy Origination Date = Effective Date
+   - **Documentation**: Created docs/features/configurable_agent_commission_rates.md
+
+2. **Mobile Sidebar Fix**:
+   - **Issue**: Sidebar wouldn't collapse on mobile devices
+   - **Solution**: Disabled all custom CSS to allow Streamlit's native mobile behavior
+   - **Changes**: Commented out CSS import and apply_css() function call
+   - **Result**: Mobile users can now properly collapse/expand sidebar
 
 ## Recent Major Changes (v3.9.38)
 1. **X-DATE Orphan Transaction Rules**:
