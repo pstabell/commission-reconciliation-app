@@ -83,7 +83,7 @@ from column_mapping_config import (
     column_mapper, get_mapped_column, get_ui_field_name, 
     is_calculated_field, safe_column_reference
 )
-from utils.styling import apply_css
+from utils.styling_mobile import apply_css
 import stripe
 
 # Configure Stripe (only for production environment)

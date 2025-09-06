@@ -5,7 +5,7 @@ CSS styling utilities for Commission Management Application
 import streamlit as st
 
 
-@st.cache_data
+@st.cache_data(ttl=60)  # Cache for only 1 minute to allow updates
 def get_custom_css():
     """Get cached CSS for better performance."""
     return """<style>
@@ -175,6 +175,7 @@ def get_custom_css():
             pointer-events: auto !important;
         }
         } /* Close desktop media query */
+        
         /* Remove extra margin from header/title */
         .main .block-container h1 {
             margin-bottom: 0.5rem;
