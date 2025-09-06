@@ -1447,6 +1447,10 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
             is_active
         """)
         
+        # Filter by user in production
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+            query = query.eq('user_email', st.session_state['user_email'])
+        
         # Filter by carrier
         query = query.eq('carrier_id', carrier_id)
         
@@ -1568,7 +1572,11 @@ def load_mgas_for_carrier(carrier_id):
         
         # Method 2: Get MGAs that have commission rules with this carrier
         try:
-            response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
+            # Filter by user in production
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', st.session_state['user_email']).execute()
+            else:
+                response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
                 for rule in response.data:
                     if rule.get('mga_id'):
@@ -5123,6 +5131,71 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
     
     return None
 
+def show_privacy_policy():
+    """Display privacy policy page."""
+    st.title("Privacy Policy")
+    st.caption("Effective Date: December 6, 2024")
+    
+    st.markdown("""
+    ## Introduction
+    
+    Commission Tracker Pro ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information.
+
+    ## Information We Collect
+    
+    ### Information You Provide
+    - **Account Information**: Email address and name when you create an account
+    - **Payment Information**: Processed securely through Stripe (we do not store credit card details)
+    - **Business Data**: Commission data, policy information, and other business records you input
+
+    ### Information Collected Automatically
+    - **Usage Data**: How you interact with our service
+    - **Log Data**: IP address, access times, and pages viewed
+
+    ## How We Use Your Information
+    
+    We use your information to:
+    - Provide and maintain our commission tracking service
+    - Process your subscription payments
+    - Send important service updates
+    - Respond to your support requests
+    - Comply with legal obligations
+
+    ## Data Security
+    
+    We implement industry-standard security measures including:
+    - Encryption of data in transit and at rest
+    - Secure authentication systems
+    - Regular security audits
+    - Limited access to personal information
+
+    ## Data Sharing
+    
+    We do **not** sell or rent your personal information. We may share your information only:
+    - With service providers (Stripe for payments, SendGrid for emails)
+    - To comply with legal requirements
+    - With your explicit consent
+
+    ## Your Rights
+    
+    You have the right to:
+    - Access your personal information
+    - Correct inaccurate data
+    - Request deletion of your account
+    - Export your data
+
+    ## Contact Us
+    
+    If you have questions about this Privacy Policy, please contact us at:
+    - Email: support@commissiontracker.pro
+    - Website: https://commissiontracker.carrd.co
+
+    """)
+    
+    if st.button("← Back to Login", type="primary"):
+        st.query_params.clear()
+        st.rerun()
+
 def main():
     # Check for special URL parameters
     query_params = st.query_params
@@ -5131,6 +5204,11 @@ def main():
     if "reset_token" in query_params and os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
         from auth_helpers import show_password_reset_completion
         show_password_reset_completion(query_params["reset_token"])
+        st.stop()
+    
+    # Check for privacy policy page
+    if "page" in query_params and query_params["page"] == "privacy":
+        show_privacy_policy()
         st.stop()
     
     # Check for Stripe success redirect
@@ -12273,9 +12351,12 @@ SOLUTION NEEDED:
             except Exception:
                 pass
             
-            # Try to load commission rules
+            # Try to load commission rules - filter by user in production
             try:
-                response = supabase.table('commission_rules').select("*").execute()
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    response = supabase.table('commission_rules').select("*").eq('user_email', st.session_state['user_email']).execute()
+                else:
+                    response = supabase.table('commission_rules').select("*").execute()
                 st.session_state.commission_rules = response.data if response.data else []
             except Exception:
                 pass
@@ -12746,6 +12827,8 @@ SOLUTION NEEDED:
                                             "is_active": True
                                         }
                                         
+                                        # Add user email for multi-tenancy
+                                        new_rule = add_user_email_to_data(new_rule)
                                         response = supabase.table('commission_rules').insert(new_rule).execute()
                                         # Clear MGA cache for this carrier since we added a new rule
                                         cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
