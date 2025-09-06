@@ -1,5 +1,8 @@
 import streamlit as st
-st.set_page_config(layout="wide")
+st.set_page_config(
+    layout="wide",
+    initial_sidebar_state="collapsed"  # Start collapsed on mobile
+)
 
 # Custom CSS to make scrollbars more visible and always present
 st.markdown("""
@@ -83,7 +86,7 @@ from column_mapping_config import (
     column_mapper, get_mapped_column, get_ui_field_name, 
     is_calculated_field, safe_column_reference
 )
-from utils.styling_mobile import apply_css
+from utils.styling_minimal import apply_css
 import stripe
 
 # Configure Stripe (only for production environment)
