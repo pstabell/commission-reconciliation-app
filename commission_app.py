@@ -131,6 +131,13 @@ def show_personal_login():
         st.error("😕 Password incorrect. Please try again.")
     
     st.info("This application contains sensitive commission data. Authentication is required.")
+    
+    # Add privacy policy link
+    st.markdown("""
+    <div style="text-align: center; margin-top: 20px; color: #888; font-size: 0.9em;">
+        <a href="?page=privacy">Privacy Policy</a>
+    </div>
+    """, unsafe_allow_html=True)
 
 def show_production_login():
     """Show the multi-user login system for SaaS production."""

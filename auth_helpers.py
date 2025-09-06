@@ -48,11 +48,9 @@ def show_production_login_with_auth():
         
         # Add privacy policy link at bottom
         st.markdown("---")
-        app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
-        privacy_url = f"{app_url}?page=privacy"
-        st.markdown(f"""
+        st.markdown("""
         <div style="text-align: center; color: #888; font-size: 0.9em;">
-            By using Commission Tracker Pro, you agree to our <a href="{privacy_url}" target="_blank">Privacy Policy</a>
+            By using Commission Tracker Pro, you agree to our <a href="?page=privacy">Privacy Policy</a>
         </div>
         """, unsafe_allow_html=True)
 
