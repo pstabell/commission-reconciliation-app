@@ -169,9 +169,6 @@ def show_production_login_with_auth():
     </style>
     """, unsafe_allow_html=True)
     
-    # Create a custom container to push everything to the top
-    st.markdown('<div style="margin-top: -50px !important;">', unsafe_allow_html=True)
-    
     # Display logo inline with title - properly centered
     col1, col2, col3 = st.columns([1.2, 8, 2])  # Even closer
     with col1:
@@ -183,10 +180,10 @@ def show_production_login_with_auth():
             st.write("🔐")  # Fallback emoji
     
     with col2:
-        # Remove spacing - align directly with logo
+        # Add vertical spacing to center-align with logo
+        st.write("")  # Empty line for spacing
+        st.write("")  # Another empty line to bring text down more
         st.markdown("# Agent Commission Tracker")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Check if we should show password reset form
     if st.session_state.get('show_password_reset'):
