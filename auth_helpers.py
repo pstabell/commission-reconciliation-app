@@ -29,12 +29,12 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
     # Display logo inline with title
-    col1, col2 = st.columns([1, 20])
+    col1, col2 = st.columns([2, 10])
     with col1:
         try:
             logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
             if os.path.exists(logo_path):
-                st.image(logo_path, width=40)  # Icon size
+                st.image(logo_path, width=120)  # Triple the size
         except Exception:
             st.write("🔐")  # Fallback emoji
     

@@ -157,12 +157,12 @@ def show_production_login():
         st.error(f"Import error: {e}")
         # Fallback to basic login
         # Display logo inline with title
-        col1, col2 = st.columns([1, 20])
+        col1, col2 = st.columns([2, 10])
         with col1:
             try:
                 logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
                 if os.path.exists(logo_path):
-                    st.image(logo_path, width=40)  # Icon size
+                    st.image(logo_path, width=120)  # Triple the size
             except Exception:
                 st.write("🔐")
         
@@ -5366,7 +5366,7 @@ def main():
     try:
         logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=30)  # Small icon size
+            st.sidebar.image(logo_path, width=90)  # Triple the size
             st.sidebar.markdown("---")
     except Exception:
         # If logo can't be loaded, continue without it
