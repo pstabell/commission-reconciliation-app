@@ -157,7 +157,7 @@ def show_production_login():
         st.error(f"Import error: {e}")
         # Fallback to basic login
         # Display logo inline with title - properly centered
-        col1, col2, col3 = st.columns([1.5, 8, 2])
+        col1, col2, col3 = st.columns([1.2, 8, 2])  # Even closer
         with col1:
             try:
                 logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
@@ -167,8 +167,9 @@ def show_production_login():
                 st.write("🔐")
         
         with col2:
-            # Add vertical spacing to center-align with logo
+            # Add more vertical spacing to center-align with logo
             st.write("")  # Empty line for spacing
+            st.write("")  # Another empty line to bring text down more
             st.markdown("# Agent Commission Tracker - Login")
         password = st.text_input("Password", type="password")
         if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):

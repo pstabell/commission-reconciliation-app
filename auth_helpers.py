@@ -29,7 +29,7 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
     # Display logo inline with title - properly centered
-    col1, col2, col3 = st.columns([1.5, 8, 2])
+    col1, col2, col3 = st.columns([1.2, 8, 2])  # Even closer
     with col1:
         try:
             logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
@@ -39,8 +39,9 @@ def show_production_login_with_auth():
             st.write("🔐")  # Fallback emoji
     
     with col2:
-        # Add vertical spacing to center-align with logo
+        # Add more vertical spacing to center-align with logo
         st.write("")  # Empty line for spacing
+        st.write("")  # Another empty line to bring text down more
         st.markdown("# Agent Commission Tracker")
     
     # Check if we should show password reset form
