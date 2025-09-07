@@ -200,6 +200,7 @@ def show_production_login_with_auth():
             st.markdown("---")
             if st.button("← Back to Login"):
                 st.session_state.show_subscribe_tab = False
+                st.query_params.clear()  # Clear the ?subscribe=true parameter
                 st.rerun()
         else:
             # Normal tabs view - removed Register tab for clarity
