@@ -92,7 +92,7 @@ import stripe
 # Configure Stripe (only for production environment)
 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
     stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-    STRIPE_PRICE_ID = "price_1S3nNU0wB1ZnPw8EFbZzbrQM"  # Your Commission Tracker Pro price ID
+    STRIPE_PRICE_ID = "price_1S3nNU0wB1ZnPw8EFbZzbrQM"  # Your Agent Commission Tracker price ID
     RENDER_APP_URL = "https://commission-tracker-app.onrender.com"  # Your Render app URL
 
 # Debug tracking for reruns
@@ -156,7 +156,7 @@ def show_production_login():
     except ImportError as e:
         st.error(f"Import error: {e}")
         # Fallback to basic login
-        st.title("🔐 Commission Tracker Pro - Login")
+        st.title("🔐 Agent Commission Tracker - Login")
         password = st.text_input("Password", type="password")
         if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
             st.session_state["password_correct"] = True
@@ -5154,11 +5154,11 @@ def show_terms_of_service():
     st.markdown("""
     ## 1. Acceptance of Terms
     
-    By accessing or using Commission Tracker Pro ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you disagree with any part of these terms, you may not access the Service.
+    By accessing or using Agent Commission Tracker ("Service") provided by Metro Technology Solutions LLC ("Company", "we", "our", or "us"), you agree to be bound by these Terms of Service ("Terms"). If you disagree with any part of these terms, you may not access the Service.
 
     ## 2. Description of Service
     
-    Commission Tracker Pro provides commission tracking and reconciliation software for insurance professionals. The Service includes:
+    Agent Commission Tracker provides commission tracking and reconciliation software for insurance professionals. The Service includes:
     - Policy commission calculations
     - Payment reconciliation
     - Reporting and analytics
@@ -5210,7 +5210,7 @@ def show_terms_of_service():
 
     ## 8. Indemnification
     
-    You agree to indemnify and hold harmless Commission Tracker Pro from any claims arising from:
+    You agree to indemnify and hold harmless Agent Commission Tracker from any claims arising from:
     - Your use of the Service
     - Violation of these Terms
     - Infringement of any third-party rights
@@ -5234,9 +5234,9 @@ def show_terms_of_service():
 
     ## 12. Contact Information
     
-    For questions about these Terms:
-    - Email: support@commissiontracker.pro
-    - Website: https://commissiontracker.carrd.co
+    For questions about these Terms, please contact Metro Technology Solutions LLC:
+    - Email: Support@AgentCommissionTracker.com
+    - Website: https://agentcommissiontracker.com
     """)
     
     if st.button("← Back to Login", type="primary"):
@@ -5251,7 +5251,7 @@ def show_privacy_policy():
     st.markdown("""
     ## Introduction
     
-    Commission Tracker Pro ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information.
+    Agent Commission Tracker ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information.
 
     ## Information We Collect
     
@@ -5298,9 +5298,9 @@ def show_privacy_policy():
 
     ## Contact Us
     
-    If you have questions about this Privacy Policy, please contact us at:
-    - Email: support@commissiontracker.pro
-    - Website: https://commissiontracker.carrd.co
+    If you have questions about this Privacy Policy, please contact Metro Technology Solutions LLC at:
+    - Email: Support@AgentCommissionTracker.com
+    - Website: https://agentcommissiontracker.com
 
     """)
     

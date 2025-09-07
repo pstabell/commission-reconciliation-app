@@ -28,7 +28,7 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
-    st.title("🔐 Commission Tracker Pro")
+    st.title("🔐 Agent Commission Tracker")
     
     # Check if we should show password reset form
     if st.session_state.get('show_password_reset'):
@@ -62,7 +62,7 @@ def show_production_login_with_auth():
         st.markdown("---")
         st.markdown("""
         <div style="text-align: center; color: #888; font-size: 0.9em;">
-            By using Commission Tracker Pro, you agree to our<br>
+            By using Agent Commission Tracker, you agree to our<br>
             <a href="?page=terms">Terms of Service</a> and <a href="?page=privacy">Privacy Policy</a>
         </div>
         """, unsafe_allow_html=True)
@@ -152,7 +152,7 @@ def show_subscribe_tab():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.subheader("Subscribe to Pro")
-        st.write("Unlock all features of Commission Tracker Pro")
+        st.write("Unlock all features of Agent Commission Tracker")
         
         # Feature list
         st.markdown("""

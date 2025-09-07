@@ -1,4 +1,4 @@
-"""Email utilities for the Commission Tracker app."""
+"""Email utilities for the Agent Commission Tracker app."""
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -34,7 +34,7 @@ def send_email(to_email: str, subject: str, html_body: str, text_body: str = Non
         # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = f"Commission Tracker <{from_email}>"
+        msg['From'] = f"Agent Commission Tracker <{from_email}>"
         msg['To'] = to_email
         
         # Add text and HTML parts
@@ -58,7 +58,7 @@ def send_email(to_email: str, subject: str, html_body: str, text_body: str = Non
 def send_password_reset_email(to_email: str, reset_link: str):
     """Send password reset email."""
     
-    subject = "Reset Your Commission Tracker Password"
+    subject = "Reset Your Agent Commission Tracker Password"
     
     html_body = f"""
     <!DOCTYPE html>
@@ -76,7 +76,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
     <body>
         <div class="container">
             <div class="header">
-                <h1>Commission Tracker</h1>
+                <h1>Agent Commission Tracker</h1>
             </div>
             <div class="content">
                 <h2>Password Reset Request</h2>
@@ -91,7 +91,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
                 <a href="{reset_link}">{reset_link}</a></p>
             </div>
             <div class="footer">
-                <p>© 2024 Commission Tracker. All rights reserved.</p>
+                <p>© 2024 Metro Technology Solutions LLC. All rights reserved.</p>
             </div>
         </div>
     </body>
@@ -99,7 +99,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
     """
     
     text_body = f"""
-    Commission Tracker - Password Reset Request
+    Agent Commission Tracker - Password Reset Request
     
     Hi there,
     
@@ -111,7 +111,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
     
     If you didn't request a password reset, please ignore this email.
     
-    © 2024 Commission Tracker. All rights reserved.
+    © 2024 Metro Technology Solutions LLC. All rights reserved.
     """
     
     return send_email(to_email, subject, html_body, text_body)
@@ -119,7 +119,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
 def send_welcome_email(to_email: str):
     """Send welcome email after subscription."""
     
-    subject = "Welcome to Commission Tracker Pro!"
+    subject = "Welcome to Agent Commission Tracker!"
     app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
     
     html_body = f"""
@@ -139,11 +139,11 @@ def send_welcome_email(to_email: str):
     <body>
         <div class="container">
             <div class="header">
-                <h1>Welcome to Commission Tracker Pro! 🎉</h1>
+                <h1>Welcome to Agent Commission Tracker! 🎉</h1>
             </div>
             <div class="content">
                 <h2>Your subscription is now active!</h2>
-                <p>Thank you for subscribing to Commission Tracker Pro. You now have full access to all features.</p>
+                <p>Thank you for subscribing to Agent Commission Tracker. You now have full access to all features.</p>
                 
                 <p style="text-align: center;">
                     <a href="{app_url}" class="button">Login to Your Account</a>
@@ -174,8 +174,8 @@ def send_welcome_email(to_email: str):
                 </p>
             </div>
             <div class="footer">
-                <p>© 2024 Commission Tracker. All rights reserved.</p>
-                <p>You're receiving this because you signed up for Commission Tracker Pro.</p>
+                <p>© 2024 Metro Technology Solutions LLC. All rights reserved.</p>
+                <p>You're receiving this because you signed up for Agent Commission Tracker.</p>
             </div>
         </div>
     </body>
@@ -183,11 +183,11 @@ def send_welcome_email(to_email: str):
     """
     
     text_body = f"""
-    Welcome to Commission Tracker Pro! 🎉
+    Welcome to Agent Commission Tracker! 🎉
     
     Your subscription is now active!
     
-    Thank you for subscribing to Commission Tracker Pro. You now have full access to all features.
+    Thank you for subscribing to Agent Commission Tracker. You now have full access to all features.
     
     Login here: {app_url}
     
@@ -204,7 +204,7 @@ def send_welcome_email(to_email: str):
     Plan: Professional ($19.99/month)
     Billing: Manage your subscription anytime from the Account page
     
-    © 2024 Commission Tracker. All rights reserved.
+    © 2024 Metro Technology Solutions LLC. All rights reserved.
     """
     
     return send_email(to_email, subject, html_body, text_body)
