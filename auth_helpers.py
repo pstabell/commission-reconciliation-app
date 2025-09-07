@@ -28,7 +28,7 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
-    # Add CSS for form field styling
+    # Add CSS for form field styling and reduce vertical spacing
     st.markdown("""
     <style>
         /* Style all input fields with gray border */
@@ -57,6 +57,49 @@ def show_production_login_with_auth():
             border-color: #666666 !important;
             outline: none !important;
         }
+        
+        /* Reduce top padding of main container */
+        .main .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 100%;
+        }
+        
+        /* Reduce space around tabs */
+        .stTabs {
+            margin-top: 0.5rem !important;
+        }
+        
+        /* Reduce space in tab content */
+        .stTabs [data-baseweb="tab-panel"] {
+            padding-top: 0.5rem !important;
+        }
+        
+        /* Reduce spacing between form elements */
+        .stForm {
+            padding: 0 !important;
+        }
+        
+        /* Reduce space between inputs */
+        .stTextInput {
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* Reduce subheader margins */
+        h3 {
+            margin-top: 0 !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* Reduce info/error message spacing */
+        .stAlert {
+            margin: 0.5rem 0 !important;
+        }
+        
+        /* Reduce button spacing */
+        .stButton {
+            margin-top: 0.25rem !important;
+        }
     </style>
     """, unsafe_allow_html=True)
     
@@ -71,9 +114,8 @@ def show_production_login_with_auth():
             st.write("🔐")  # Fallback emoji
     
     with col2:
-        # Add more vertical spacing to center-align with logo
-        st.write("")  # Empty line for spacing
-        st.write("")  # Another empty line to bring text down more
+        # Add minimal vertical spacing to center-align with logo
+        st.write("")  # Single line for vertical centering
         st.markdown("# Agent Commission Tracker")
     
     # Check if we should show password reset form
@@ -104,13 +146,13 @@ def show_production_login_with_auth():
             with tab3:
                 show_subscribe_tab()
         
-        # Add professional footer with legal links
+        # Add professional footer with legal links - reduced padding
         st.markdown("---")
         st.markdown("""
-        <div style="text-align: center; color: #666; font-size: 0.85em; padding: 20px 0;">
+        <div style="text-align: center; color: #666; font-size: 0.85em; padding: 10px 0;">
             <a href="?page=terms" style="color: #666;">Terms of Service</a> • 
             <a href="?page=privacy" style="color: #666;">Privacy Policy</a><br>
-            <div style="margin-top: 10px;">
+            <div style="margin-top: 5px;">
                 © 2025 Metro Technology Solutions LLC. All rights reserved.<br>
                 Agent Commission Tracker™ is a trademark of Metro Technology Solutions LLC.
             </div>
