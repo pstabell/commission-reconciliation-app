@@ -202,16 +202,13 @@ def show_production_login_with_auth():
                 st.session_state.show_subscribe_tab = False
                 st.rerun()
         else:
-            # Normal tabs view
-            tab1, tab2, tab3 = st.tabs(["Login", "Register", "Subscribe"])
+            # Normal tabs view - removed Register tab for clarity
+            tab1, tab2 = st.tabs(["Login", "Start Free Trial"])
             
             with tab1:
                 show_login_form()
             
             with tab2:
-                show_register_form()
-            
-            with tab3:
                 show_subscribe_tab()
         
         # Add compact footer with legal links
@@ -294,31 +291,32 @@ def show_login_form():
             st.session_state['show_password_reset'] = True
             st.rerun()
 
-def show_register_form():
-    """Show registration form."""
-    st.subheader("Create New Account")
-    
-    # Use columns to control form width - same as login form
-    col1, col2 = st.columns([2, 3])
-    with col1:
-        with st.form("register_form"):
-            email = st.text_input("Email", key="register_email")
-            password = st.text_input("Password", type="password", key="register_password")
-            confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm")
-            
-            st.info("After registering, you'll need to subscribe to access the app.")
-            
-            submit = st.form_submit_button("Register", type="primary", use_container_width=True)
-            
-            if submit:
-                if email and password and confirm_password:
-                    if password == confirm_password:
-                        st.success("Registration successful! Please check your email to verify your account.")
-                        st.info("Once verified, switch to the Subscribe tab to activate your account.")
-                    else:
-                        st.error("Passwords do not match")
-                else:
-                    st.error("Please fill in all fields")
+# Register form removed - users should use Start Free Trial instead
+# def show_register_form():
+#     """Show registration form."""
+#     st.subheader("Create New Account")
+#     
+#     # Use columns to control form width - same as login form
+#     col1, col2 = st.columns([2, 3])
+#     with col1:
+#         with st.form("register_form"):
+#             email = st.text_input("Email", key="register_email")
+#             password = st.text_input("Password", type="password", key="register_password")
+#             confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm")
+#             
+#             st.info("After registering, you'll need to subscribe to access the app.")
+#             
+#             submit = st.form_submit_button("Register", type="primary", use_container_width=True)
+#             
+#             if submit:
+#                 if email and password and confirm_password:
+#                     if password == confirm_password:
+#                         st.success("Registration successful! Please check your email to verify your account.")
+#                         st.info("Once verified, switch to the Subscribe tab to activate your account.")
+#                     else:
+#                         st.error("Passwords do not match")
+#                 else:
+#                     st.error("Please fill in all fields")
 
 def show_subscribe_tab():
     """Show subscription options."""
