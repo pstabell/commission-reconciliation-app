@@ -161,16 +161,40 @@ def stripe_webhook():
                     db_result['success'] = True
                     db_result['action'] = 'created'
                     
-                    # Send welcome email to new subscriber
+                    # Generate setup token for password creation
+                    from auth_helpers import generate_setup_token
+                    setup_token = generate_setup_token()
+                    
+                    # Store token in database (expires in 1 hour)
+                    from datetime import datetime, timedelta
+                    expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+                    
+                    token_data = {
+                        'email': customer_email,
+                        'token': setup_token,
+                        'expires_at': expires_at,
+                        'used': False
+                    }
+                    
                     try:
-                        print(f"Sending welcome email to {customer_email}")
-                        email_sent = send_welcome_email(customer_email)
+                        # Store the setup token (reusing password_reset_tokens table)
+                        supabase.table('password_reset_tokens').insert(token_data).execute()
+                        print(f"Setup token stored for {customer_email}")
+                        
+                        # Generate setup link
+                        app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
+                        setup_link = f"{app_url}?setup_token={setup_token}"
+                        
+                        # Send password setup email to new subscriber
+                        from email_utils import send_password_setup_email
+                        print(f"Sending password setup email to {customer_email}")
+                        email_sent = send_password_setup_email(customer_email, setup_link)
                         if email_sent:
-                            print("Welcome email sent successfully!")
+                            print("Password setup email sent successfully!")
                         else:
-                            print("Failed to send welcome email")
+                            print("Failed to send password setup email")
                     except Exception as e:
-                        print(f"Error sending welcome email: {e}")
+                        print(f"Error setting up password flow: {e}")
                         # Don't fail the webhook if email fails
                     
             except Exception as e:

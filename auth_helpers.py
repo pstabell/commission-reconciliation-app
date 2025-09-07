@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 import secrets
 import string
+import time
 
 def check_subscription_status(email: str, supabase: Client) -> dict:
     """Check if user has active subscription."""
@@ -253,18 +254,26 @@ def show_login_form():
                         try:
                             result = supabase.table('users').select('*').eq('email', email).execute()
                             if result.data and len(result.data) > 0:
-                                # User exists - for MVP, accept any password
-                                # In production, you'd verify password hash here
                                 user = result.data[0]
                                 
-                                if user.get('subscription_status') == 'active':
-                                    st.session_state["password_correct"] = True
-                                    st.session_state["user_email"] = email
-                                    st.success("Login successful!")
-                                    st.rerun()
+                                # Check if user has set a password
+                                if user.get('password_set', False) and user.get('password_hash'):
+                                    # Verify password (for MVP, simple comparison - should hash in production!)
+                                    if password == user.get('password_hash'):
+                                        if user.get('subscription_status') == 'active':
+                                            st.session_state["password_correct"] = True
+                                            st.session_state["user_email"] = email
+                                            st.success("Login successful!")
+                                            st.rerun()
+                                        else:
+                                            st.error("No active subscription found. Please subscribe to continue.")
+                                            st.info("Your subscription status: " + user.get('subscription_status', 'none'))
+                                    else:
+                                        st.error("Incorrect password. Please try again.")
                                 else:
-                                    st.error("No active subscription found. Please subscribe to continue.")
-                                    st.info("Your subscription status: " + user.get('subscription_status', 'none'))
+                                    # User hasn't set password yet
+                                    st.error("Please set your password first. Check your email for the setup link.")
+                                    st.info("If you haven't received it, use the 'Forgot Password?' button below.")
                             else:
                                 st.error("Email not found. Please register first or check your email.")
                                 st.caption(f"Checked email: {email}")
@@ -374,6 +383,11 @@ def show_subscribe_tab():
 
 def generate_reset_token(length=32):
     """Generate a secure random token for password reset."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def generate_setup_token(length=32):
+    """Generate a secure random token for initial password setup."""
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
@@ -547,3 +561,92 @@ def show_password_reset_completion(reset_token: str):
                 
     except Exception as e:
         st.error(f"Error validating reset token: {e}")
+
+def show_password_setup_form(setup_token: str):
+    """Show form for new users to set their initial password."""
+    st.title("🎉 Welcome to Agent Commission Tracker!")
+    st.subheader("Set Your Password")
+    
+    # Verify token is valid
+    from supabase import create_client
+    url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
+    key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+    
+    if not url or not key:
+        st.error("Database not configured.")
+        return
+        
+    supabase = create_client(url, key)
+    
+    try:
+        # Check if token is valid (using same table as password reset for simplicity)
+        result = supabase.table('password_reset_tokens').select('*').eq('token', setup_token).eq('used', False).execute()
+        
+        if result.data and len(result.data) > 0:
+            token_data = result.data[0]
+            
+            # Check if expired
+            from datetime import datetime
+            expires_at = datetime.fromisoformat(token_data['expires_at'].replace('Z', '+00:00'))
+            if expires_at < datetime.now(expires_at.tzinfo):
+                st.error("This setup link has expired. Please contact support.")
+                return
+            
+            # Show password setup form
+            email = token_data['email']
+            st.info(f"Setting up account for: {email}")
+            
+            # Use columns to control form width - same as other forms
+            col1, col2 = st.columns([2, 3])
+            with col1:
+                with st.form("password_setup_form"):
+                    new_password = st.text_input("Create Password", type="password", key="setup_password")
+                    confirm_password = st.text_input("Confirm Password", type="password", key="setup_confirm")
+                    
+                    st.caption("Password must be at least 8 characters long.")
+                    
+                    submit = st.form_submit_button("Set Password & Continue", type="primary", use_container_width=True)
+                    
+                    if submit:
+                        if new_password and confirm_password:
+                            if len(new_password) < 8:
+                                st.error("Password must be at least 8 characters long.")
+                            elif new_password == confirm_password:
+                                # In a real app, you'd hash the password here
+                                # For MVP, we'll just store it (NOT SECURE - fix before production!)
+                                try:
+                                    # Update user's password
+                                    supabase.table('users').update({
+                                        'password_hash': new_password,  # TODO: Hash this!
+                                        'password_set': True
+                                    }).eq('email', email).execute()
+                                    
+                                    # Mark token as used
+                                    supabase.table('password_reset_tokens').update({
+                                        'used': True
+                                    }).eq('token', setup_token).execute()
+                                    
+                                    # Set session state to log them in automatically
+                                    st.session_state["password_correct"] = True
+                                    st.session_state["user_email"] = email
+                                    
+                                    st.success("✅ Password set successfully! Logging you in...")
+                                    st.balloons()
+                                    
+                                    # Clear the setup token from URL and redirect to main app
+                                    time.sleep(2)  # Brief pause to show success message
+                                    st.query_params.clear()
+                                    st.rerun()
+                                        
+                                except Exception as e:
+                                    st.error(f"Error setting password: {e}")
+                            else:
+                                st.error("Passwords do not match.")
+                        else:
+                            st.error("Please enter and confirm your password.")
+        else:
+            st.error("Invalid or expired setup link.")
+            st.info("If you're having trouble, please contact support.")
+                
+    except Exception as e:
+        st.error(f"Error validating setup token: {e}")

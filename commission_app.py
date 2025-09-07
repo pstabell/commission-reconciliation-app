@@ -5332,6 +5332,12 @@ def main():
         show_password_reset_completion(query_params["reset_token"])
         st.stop()
     
+    # Check for setup token (new user password setup)
+    if "setup_token" in query_params and os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+        from auth_helpers import show_password_setup_form
+        show_password_setup_form(query_params["setup_token"])
+        st.stop()
+    
     # Check for privacy policy page
     if "page" in query_params and query_params["page"] == "privacy":
         show_privacy_policy()
@@ -5344,9 +5350,23 @@ def main():
     
     # Check for Stripe success redirect
     if "session_id" in query_params:
-        st.success("🎉 Payment successful! Your subscription is now active.")
-        st.info("You can now log in with your email address.")
-        if st.button("Continue to Login"):
+        st.success("🎉 Payment successful! Your 14-day free trial has started.")
+        st.warning("⚠️ **Important:** Check your email (including SPAM folder) for a secure link to set your password.")
+        st.info("The email contains a button to create your password and access your account.")
+        
+        # Add email reminder
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            **What to do next:**
+            1. Check your email inbox
+            2. Look for "Set Your Password - Agent Commission Tracker"
+            3. If not in inbox, check your SPAM/Junk folder
+            4. Click the "Set Your Password" button in the email
+            5. Create your password and you'll be logged in automatically
+            """)
+        
+        if st.button("I've set my password - Continue to Login"):
             st.query_params.clear()
             st.rerun()
         st.stop()

@@ -213,3 +213,102 @@ def send_welcome_email(to_email: str):
     """
     
     return send_email(to_email, subject, html_body, text_body)
+
+def send_password_setup_email(to_email: str, setup_link: str):
+    """Send password setup email for new users."""
+    
+    subject = "Set Your Password - Agent Commission Tracker"
+    
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+            .content {{ background-color: #f9f9f9; padding: 30px; }}
+            .button {{ display: inline-block; padding: 15px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }}
+            .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 30px; }}
+            .warning {{ background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Welcome to Agent Commission Tracker!</h1>
+            </div>
+            <div class="content">
+                <h2>Your 14-day free trial is ready! 🎉</h2>
+                <p>Hi there,</p>
+                <p>Thank you for starting your free trial of Agent Commission Tracker. You now have full access to all features for the next 14 days.</p>
+                
+                <p><strong>To get started, you need to set your password:</strong></p>
+                
+                <p style="text-align: center;">
+                    <a href="{setup_link}" class="button">Set Your Password</a>
+                </p>
+                
+                <div class="warning">
+                    <strong>⚠️ Important:</strong> This link expires in 1 hour for security reasons. If it expires, you can request a new one from the login page.
+                </div>
+                
+                <h3>What happens next?</h3>
+                <ul>
+                    <li>Click the button above to set your password</li>
+                    <li>You'll be automatically logged into your account</li>
+                    <li>Start tracking your commissions immediately</li>
+                    <li>No payment until your 14-day trial ends</li>
+                </ul>
+                
+                <p>If the button doesn't work, copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; background-color: #e9ecef; padding: 10px; border-radius: 5px;">
+                    {setup_link}
+                </p>
+                
+                <h3>Your Trial Details:</h3>
+                <p>
+                    <strong>Email:</strong> {to_email}<br>
+                    <strong>Plan:</strong> Professional (14-day free trial)<br>
+                    <strong>Price after trial:</strong> $19.99/month<br>
+                    <strong>Cancel anytime:</strong> No questions asked
+                </p>
+            </div>
+            <div class="footer">
+                <p>© 2025 Metro Technology Solutions LLC. All rights reserved.</p>
+                <p>You're receiving this because you signed up for Agent Commission Tracker.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_body = f"""
+    Welcome to Agent Commission Tracker!
+    
+    Your 14-day free trial is ready! 🎉
+    
+    Thank you for starting your free trial of Agent Commission Tracker. You now have full access to all features for the next 14 days.
+    
+    To get started, you need to set your password:
+    
+    {setup_link}
+    
+    ⚠️ Important: This link expires in 1 hour for security reasons. If it expires, you can request a new one from the login page.
+    
+    What happens next?
+    - Click the link above to set your password
+    - You'll be automatically logged into your account
+    - Start tracking your commissions immediately
+    - No payment until your 14-day trial ends
+    
+    Your Trial Details:
+    Email: {to_email}
+    Plan: Professional (14-day free trial)
+    Price after trial: $19.99/month
+    Cancel anytime: No questions asked
+    
+    © 2025 Metro Technology Solutions LLC. All rights reserved.
+    """
+    
+    return send_email(to_email, subject, html_body, text_body)
