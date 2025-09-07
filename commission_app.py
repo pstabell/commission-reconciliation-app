@@ -156,7 +156,17 @@ def show_production_login():
     except ImportError as e:
         st.error(f"Import error: {e}")
         # Fallback to basic login
-        st.title("🔐 Agent Commission Tracker - Login")
+        # Display logo
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            try:
+                logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+                if os.path.exists(logo_path):
+                    st.image(logo_path, use_container_width=True)
+            except Exception:
+                pass
+        
+        st.title("Agent Commission Tracker - Login")
         password = st.text_input("Password", type="password")
         if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
             st.session_state["password_correct"] = True
@@ -5350,6 +5360,16 @@ def main():
     
     # Show environment indicator in sidebar
     app_mode = os.getenv("APP_ENVIRONMENT")
+    
+    # Add logo at the very top of sidebar
+    try:
+        logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+            st.sidebar.markdown("---")
+    except Exception:
+        # If logo can't be loaded, continue without it
+        pass
     
     # Add prominent logout section at the very top
     st.sidebar.markdown("### 👤 User Session")

@@ -28,7 +28,17 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
-    st.title("🔐 Agent Commission Tracker")
+    # Display logo and title
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        try:
+            logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+            if os.path.exists(logo_path):
+                st.image(logo_path, use_container_width=True)
+        except Exception:
+            pass
+    
+    st.title("Agent Commission Tracker")
     
     # Check if we should show password reset form
     if st.session_state.get('show_password_reset'):
