@@ -1,12 +1,12 @@
-# Changelog: Carrd AI Bot Integration and UI Improvements
+# Changelog: Carrd AI Bot Integration, UI Improvements, and Trial/Password Flow
 
 **Date**: January 7, 2025  
-**Version**: 4.2.0  
+**Version**: 4.2.0 - 4.3.0  
 **Author**: Claude with Patrick Stabell  
 
 ## Summary
 
-This release focused on implementing an AI chatbot for the Carrd landing page, rebranding the application, and improving the login/register/subscribe UI.
+This release focused on implementing an AI chatbot for the Carrd landing page, rebranding the application, improving the login/register/subscribe UI, and adding a complete 14-day free trial with password setup flow.
 
 ## Major Changes
 
@@ -105,9 +105,50 @@ This release focused on implementing an AI chatbot for the Carrd landing page, r
 - CSS changes are client-side only (no backend impact)
 - Logo file required: Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg
 
+### 5. 14-Day Free Trial Implementation (v4.3.0)
+
+**Problem**: Need to offer free trial to reduce barrier to entry.
+
+**Solution**:
+- Added `subscription_data: { trial_period_days: 14 }` to Stripe checkout
+- Updated UI to show "Start Your 14-Day Free Trial"
+- Modified emails to reflect trial period and billing date
+- Credit card required upfront for quality leads
+
+**Benefits**:
+- Zero code disruption - just one parameter to Stripe
+- Automatic conversion after trial
+- Better conversion tracking
+
+### 6. Password Setup Flow for New Users (v4.3.0)
+
+**Problem**: Users couldn't create passwords after Stripe checkout.
+
+**Solution**:
+- Created password setup email with secure link
+- Built password setup form (`show_password_setup_form`)
+- Updated webhook to send setup email instead of generic welcome
+- Added auto-login after password creation
+- Updated success page with clear email/SPAM instructions
+
+**Technical Implementation**:
+- Reuses password_reset_tokens table
+- Tokens expire in 1 hour
+- Added password_set flag to users table
+- Login now verifies actual passwords
+
+**Files Modified**:
+- auth_helpers.py - Added password setup form and token generation
+- email_utils.py - Created send_password_setup_email template
+- webhook_server.py - Updated to generate setup tokens
+- commission_app.py - Added setup_token handling and success page
+
 ## Next Steps
 
 1. Investigate white space issue with Streamlit team or community
 2. Complete chatbot analytics configuration
 3. Test all chatbot conversation paths
 4. Monitor user feedback on new UI changes
+5. Consider adding password hashing before production
+6. Add password strength requirements
+7. Implement "resend setup email" functionality

@@ -3,7 +3,7 @@
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
 **Last Updated**: January 7, 2025  
-**Current Version**: 4.2.0
+**Current Version**: 4.3.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,34 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v4.3.0)
+1. **14-Day Free Trial Implementation**:
+   - **Stripe Integration**: Added subscription_data with trial_period_days: 14
+   - **UI Updates**: Changed "Subscribe Now" to "Start Free Trial"
+   - **Pricing Display**: Shows "Start Your 14-Day Free Trial" then "$19.99/month"
+   - **Email Updates**: Modified subject and content to reflect trial period
+
+2. **Password Setup Flow for New Users**:
+   - **Problem**: Users had no way to create password after Stripe checkout
+   - **Solution**: Implemented complete password creation flow
+   - **Components**:
+     - Password setup email with secure link (expires in 1 hour)
+     - Setup form similar to password reset
+     - Auto-login after password creation
+     - Clear instructions on success page to check email/SPAM
+   - **Database**: Added password_set flag, reuses password_reset_tokens table
+   - **Security**: Login now verifies actual passwords, not accepting any password
+
+3. **Webhook Updates**:
+   - **New User Flow**: Generates setup token instead of generic welcome
+   - **Email Change**: Sends password setup email with secure link
+   - **Token Storage**: Stores in password_reset_tokens table with 1-hour expiry
+
+4. **Success Page Enhancement**:
+   - **Clear Instructions**: 5-step process explaining what to do
+   - **SPAM Reminder**: Multiple mentions to check SPAM/Junk folder
+   - **Email Details**: Shows exact subject line to look for
 
 ## Recent Major Changes (v4.2.0)
 1. **Carrd Pro AI Chatbot Integration**:
