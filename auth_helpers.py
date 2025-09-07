@@ -344,14 +344,16 @@ def show_subscribe_tab():
         import stripe
         stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
         
-        # Get email from session or ask for it
-        email = st.session_state.get("user_email", "")
-        
         # Email input and button in narrow column for consistent width
         col1, col2 = st.columns([2, 3])
         with col1:
-            if not email:
-                email = st.text_input("Enter your email to subscribe:", key="subscribe_email")
+            # Always show email input for autofill/password manager compatibility
+            email = st.text_input(
+                "Enter your email to subscribe:", 
+                value=st.session_state.get("user_email", ""),  # Pre-fill if logged in
+                key="subscribe_email",
+                autocomplete="email"  # Enable browser/password manager autofill
+            )
             
             if st.button("🚀 Start Free Trial", type="primary", use_container_width=True, key="subscribe_button"):
                 if email:
