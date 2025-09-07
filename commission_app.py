@@ -5337,6 +5337,10 @@ def main():
             st.rerun()
         st.stop()
     
+    # Check for subscribe parameter to auto-switch to Subscribe tab
+    if "subscribe" in query_params and query_params["subscribe"] == "true":
+        st.session_state['show_subscribe_tab'] = True
+    
     # Check password before showing any content
     if not check_password():
         st.stop()

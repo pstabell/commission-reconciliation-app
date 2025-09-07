@@ -34,17 +34,29 @@ def show_production_login_with_auth():
     if st.session_state.get('show_password_reset'):
         show_password_reset_form()
     else:
-        # Create tabs for login, register, and subscribe
-        tab1, tab2, tab3 = st.tabs(["Login", "Register", "Subscribe"])
-        
-        with tab1:
-            show_login_form()
-        
-        with tab2:
-            show_register_form()
-        
-        with tab3:
+        # Check if we should show Subscribe tab directly (no tabs)
+        if st.session_state.get('show_subscribe_tab', False):
+            # Show subscribe form directly without tabs
+            st.info("🚀 Start your 14-day free trial!")
             show_subscribe_tab()
+            
+            # Add link to go back to login
+            st.markdown("---")
+            if st.button("← Back to Login"):
+                st.session_state.show_subscribe_tab = False
+                st.rerun()
+        else:
+            # Normal tabs view
+            tab1, tab2, tab3 = st.tabs(["Login", "Register", "Subscribe"])
+            
+            with tab1:
+                show_login_form()
+            
+            with tab2:
+                show_register_form()
+            
+            with tab3:
+                show_subscribe_tab()
         
         # Add legal links at bottom
         st.markdown("---")
