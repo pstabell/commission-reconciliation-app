@@ -72,12 +72,16 @@ def show_production_login_with_auth():
             with tab3:
                 show_subscribe_tab()
         
-        # Add legal links at bottom
+        # Add professional footer with legal links
         st.markdown("---")
         st.markdown("""
-        <div style="text-align: center; color: #888; font-size: 0.9em;">
-            By using Agent Commission Tracker, you agree to our<br>
-            <a href="?page=terms">Terms of Service</a> and <a href="?page=privacy">Privacy Policy</a>
+        <div style="text-align: center; color: #666; font-size: 0.85em; padding: 20px 0;">
+            <a href="?page=terms" style="color: #666;">Terms of Service</a> • 
+            <a href="?page=privacy" style="color: #666;">Privacy Policy</a><br>
+            <div style="margin-top: 10px;">
+                © 2025 Metro Technology Solutions LLC. All rights reserved.<br>
+                Agent Commission Tracker™ is a trademark of Metro Technology Solutions LLC.
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -163,34 +167,36 @@ def show_register_form():
 
 def show_subscribe_tab():
     """Show subscription options."""
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.subheader("Subscribe to Agent Commission Tracker")
-        st.write("Unlock all features of Agent Commission Tracker")
+    # Left-aligned content, no centering columns
+    st.subheader("Subscribe to Agent Commission Tracker")
+    st.write("Unlock all features of Agent Commission Tracker")
+    
+    # Feature list
+    st.markdown("""
+    ✅ **Unlimited Policy Tracking**  
+    ✅ **Advanced Reporting & Analytics**  
+    ✅ **Multi-User Collaboration**  
+    ✅ **Automated Reconciliation**  
+    ✅ **Excel Import/Export**  
+    ✅ **Priority Support**  
+    """)
+    
+    st.markdown("### $19.99/month")
+    st.caption("Cancel anytime. Secure payment via Stripe.")
+    
+    # Import Stripe only in production
+    if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+        import stripe
+        stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
         
-        # Feature list
-        st.markdown("""
-        ✅ **Unlimited Policy Tracking**  
-        ✅ **Advanced Reporting & Analytics**  
-        ✅ **Multi-User Collaboration**  
-        ✅ **Automated Reconciliation**  
-        ✅ **Excel Import/Export**  
-        ✅ **Priority Support**  
-        """)
+        # Get email from session or ask for it
+        email = st.session_state.get("user_email", "")
+        if not email:
+            email = st.text_input("Enter your email to subscribe:", key="subscribe_email")
         
-        st.markdown("### $19.99/month")
-        st.caption("Cancel anytime. Secure payment via Stripe.")
-        
-        # Import Stripe only in production
-        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
-            import stripe
-            stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-            
-            # Get email from session or ask for it
-            email = st.session_state.get("user_email", "")
-            if not email:
-                email = st.text_input("Enter your email to subscribe:", key="subscribe_email")
-            
+        # Left-aligned button in narrow column
+        col1, col2 = st.columns([2, 3])
+        with col1:
             if st.button("🚀 Subscribe Now", type="primary", use_container_width=True, key="subscribe_button"):
                 if email:
                     try:
