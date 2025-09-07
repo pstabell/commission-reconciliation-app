@@ -327,8 +327,9 @@ def show_subscribe_tab():
     ✅ **Priority Support**  
     """)
     
-    st.markdown("### $19.99/month")
-    st.caption("Cancel anytime. Secure payment via Stripe.")
+    st.markdown("### Start Your 14-Day Free Trial")
+    st.markdown("Then $19.99/month")
+    st.caption("No charge for 14 days. Cancel anytime. Secure payment via Stripe.")
     
     # Import Stripe only in production
     if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
@@ -344,10 +345,10 @@ def show_subscribe_tab():
             if not email:
                 email = st.text_input("Enter your email to subscribe:", key="subscribe_email")
             
-            if st.button("🚀 Subscribe Now", type="primary", use_container_width=True, key="subscribe_button"):
+            if st.button("🚀 Start Free Trial", type="primary", use_container_width=True, key="subscribe_button"):
                 if email:
                     try:
-                        # Create checkout session with email
+                        # Create checkout session with 14-day free trial
                         checkout_session = stripe.checkout.Session.create(
                             line_items=[{
                                 'price': os.getenv("STRIPE_PRICE_ID", "price_1S3nNU0wB1ZnPw8EFbZzbrQM"),
@@ -355,6 +356,9 @@ def show_subscribe_tab():
                             }],
                             mode='subscription',
                             customer_email=email,
+                            subscription_data={
+                                'trial_period_days': 14,  # 14-day free trial
+                            },
                             success_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com") + "/?session_id={CHECKOUT_SESSION_ID}",
                             cancel_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com"),
                         )

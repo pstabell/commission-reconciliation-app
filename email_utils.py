@@ -119,7 +119,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
 def send_welcome_email(to_email: str):
     """Send welcome email after subscription."""
     
-    subject = "Welcome to Agent Commission Tracker!"
+    subject = "Your 14-Day Free Trial Has Started - Agent Commission Tracker"
     app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
     
     html_body = f"""
@@ -142,8 +142,9 @@ def send_welcome_email(to_email: str):
                 <h1>Welcome to Agent Commission Tracker! 🎉</h1>
             </div>
             <div class="content">
-                <h2>Your subscription is now active!</h2>
-                <p>Thank you for subscribing to Agent Commission Tracker. You now have full access to all features.</p>
+                <h2>Your 14-day free trial has started!</h2>
+                <p>Welcome to Agent Commission Tracker! You have full access to all features for the next 14 days.</p>
+                <p><strong>No charges until your trial ends.</strong> You can cancel anytime.</p>
                 
                 <p style="text-align: center;">
                     <a href="{app_url}" class="button">Login to Your Account</a>
@@ -169,8 +170,9 @@ def send_welcome_email(to_email: str):
                 <h3>Your Account:</h3>
                 <p>
                     <strong>Email:</strong> {to_email}<br>
-                    <strong>Plan:</strong> Professional ($19.99/month)<br>
-                    <strong>Billing:</strong> Manage your subscription anytime from the Account page
+                    <strong>Plan:</strong> Professional (Free for 14 days, then $19.99/month)<br>
+                    <strong>Trial Ends:</strong> 14 days from today<br>
+                    <strong>Billing:</strong> Your card will be charged after the trial unless you cancel
                 </p>
             </div>
             <div class="footer">
@@ -185,9 +187,11 @@ def send_welcome_email(to_email: str):
     text_body = f"""
     Welcome to Agent Commission Tracker! 🎉
     
-    Your subscription is now active!
+    Your 14-day free trial has started!
     
-    Thank you for subscribing to Agent Commission Tracker. You now have full access to all features.
+    Welcome to Agent Commission Tracker! You have full access to all features for the next 14 days.
+    
+    No charges until your trial ends. You can cancel anytime.
     
     Login here: {app_url}
     
@@ -201,8 +205,9 @@ def send_welcome_email(to_email: str):
     
     Your Account:
     Email: {to_email}
-    Plan: Professional ($19.99/month)
-    Billing: Manage your subscription anytime from the Account page
+    Plan: Professional (Free for 14 days, then $19.99/month)
+    Trial Ends: 14 days from today
+    Billing: Your card will be charged after the trial unless you cancel
     
     © 2024 Metro Technology Solutions LLC. All rights reserved.
     """
