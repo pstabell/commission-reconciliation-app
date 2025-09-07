@@ -151,7 +151,7 @@ def show_subscribe_tab():
     """Show subscription options."""
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.subheader("Subscribe to Pro")
+        st.subheader("Subscribe to Agent Commission Tracker")
         st.write("Unlock all features of Agent Commission Tracker")
         
         # Feature list
