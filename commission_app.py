@@ -156,17 +156,18 @@ def show_production_login():
     except ImportError as e:
         st.error(f"Import error: {e}")
         # Fallback to basic login
-        # Display logo
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
+        # Display logo inline with title
+        col1, col2 = st.columns([1, 20])
+        with col1:
             try:
                 logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
                 if os.path.exists(logo_path):
-                    st.image(logo_path, use_container_width=True)
+                    st.image(logo_path, width=40)  # Icon size
             except Exception:
-                pass
+                st.write("🔐")
         
-        st.title("Agent Commission Tracker - Login")
+        with col2:
+            st.title("Agent Commission Tracker - Login")
         password = st.text_input("Password", type="password")
         if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
             st.session_state["password_correct"] = True
@@ -5365,7 +5366,7 @@ def main():
     try:
         logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, use_container_width=True)
+            st.sidebar.image(logo_path, width=30)  # Small icon size
             st.sidebar.markdown("---")
     except Exception:
         # If logo can't be loaded, continue without it
