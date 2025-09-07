@@ -347,40 +347,44 @@ def show_subscribe_tab():
         # Email input and button in narrow column for consistent width
         col1, col2 = st.columns([2, 3])
         with col1:
-            # Always show email input for autofill/password manager compatibility
-            email = st.text_input(
-                "Enter your email to subscribe:", 
-                value=st.session_state.get("user_email", ""),  # Pre-fill if logged in
-                key="subscribe_email",
-                autocomplete="email"  # Enable browser/password manager autofill
-            )
-            
-            if st.button("🚀 Start Free Trial", type="primary", use_container_width=True, key="subscribe_button"):
-                if email:
-                    try:
-                        # Create checkout session with 14-day free trial
-                        checkout_session = stripe.checkout.Session.create(
-                            line_items=[{
-                                'price': os.getenv("STRIPE_PRICE_ID", "price_1S3nNU0wB1ZnPw8EFbZzbrQM"),
-                                'quantity': 1,
-                            }],
-                            mode='subscription',
-                            customer_email=email,
-                            subscription_data={
-                                'trial_period_days': 14,  # 14-day free trial
-                            },
-                            success_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com") + "/?session_id={CHECKOUT_SESSION_ID}",
-                            cancel_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com"),
-                        )
-                        st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_session.url}">', 
-                                   unsafe_allow_html=True)
-                        st.success("Redirecting to secure checkout...")
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"Error creating checkout session: {e}")
-                        st.caption("Please check your internet connection and try again.")
-                else:
-                    st.error("Please enter your email address to subscribe.")
+            # Use form to properly capture autofilled values
+            with st.form("subscribe_form"):
+                # Always show email input for autofill/password manager compatibility
+                email = st.text_input(
+                    "Enter your email to subscribe:", 
+                    value=st.session_state.get("user_email", ""),  # Pre-fill if logged in
+                    key="subscribe_email",
+                    autocomplete="email"  # Enable browser/password manager autofill
+                )
+                
+                submit = st.form_submit_button("🚀 Start Free Trial", type="primary", use_container_width=True)
+                
+                if submit:
+                    if email:
+                        try:
+                            # Create checkout session with 14-day free trial
+                            checkout_session = stripe.checkout.Session.create(
+                                line_items=[{
+                                    'price': os.getenv("STRIPE_PRICE_ID", "price_1S3nNU0wB1ZnPw8EFbZzbrQM"),
+                                    'quantity': 1,
+                                }],
+                                mode='subscription',
+                                customer_email=email,
+                                subscription_data={
+                                    'trial_period_days': 14,  # 14-day free trial
+                                },
+                                success_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com") + "/?session_id={CHECKOUT_SESSION_ID}",
+                                cancel_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com"),
+                            )
+                            st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_session.url}">', 
+                                       unsafe_allow_html=True)
+                            st.success("Redirecting to secure checkout...")
+                            st.balloons()
+                        except Exception as e:
+                            st.error(f"Error creating checkout session: {e}")
+                            st.caption("Please check your internet connection and try again.")
+                    else:
+                        st.error("Please enter your email address to subscribe.")
 
 def generate_reset_token(length=32):
     """Generate a secure random token for password reset."""
