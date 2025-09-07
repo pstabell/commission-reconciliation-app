@@ -58,16 +58,59 @@ def show_production_login_with_auth():
             outline: none !important;
         }
         
-        /* Reduce top padding of main container */
+        /* Aggressively reduce top and bottom padding */
         .main .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 1rem !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
             max-width: 100%;
+        }
+        
+        /* Remove default Streamlit padding */
+        .css-18e3th9 {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        /* Target the main content area more specifically */
+        section.main > div {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+        
+        /* Remove extra space from app view container */
+        div[data-testid="stAppViewContainer"] {
+            padding-top: 0 !important;
+        }
+        
+        /* Reduce header spacing */
+        header[data-testid="stHeader"] {
+            height: 0 !important;
+        }
+        
+        /* Remove padding from all possible containers */
+        .css-1d391kg, .css-1y0tads, .css-1629p8f {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        /* Target block container more aggressively */
+        [data-testid="block-container"] {
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
+        }
+        
+        /* Remove margins from first and last elements */
+        .main > div > div:first-child {
+            margin-top: 0 !important;
+        }
+        
+        .main > div > div:last-child {
+            margin-bottom: 0 !important;
         }
         
         /* Reduce space around tabs */
         .stTabs {
-            margin-top: 0.5rem !important;
+            margin-top: 0.25rem !important;
         }
         
         /* Reduce space in tab content */
@@ -129,8 +172,7 @@ def show_production_login_with_auth():
             st.write("🔐")  # Fallback emoji
     
     with col2:
-        # Add minimal vertical spacing to center-align with logo
-        st.write("")  # Single line for vertical centering
+        # Remove spacing - align directly with logo
         st.markdown("# Agent Commission Tracker")
     
     # Check if we should show password reset form
@@ -161,16 +203,13 @@ def show_production_login_with_auth():
             with tab3:
                 show_subscribe_tab()
         
-        # Add professional footer with legal links - reduced padding
-        st.markdown("---")
+        # Add compact footer with legal links
         st.markdown("""
-        <div style="text-align: center; color: #666; font-size: 0.85em; padding: 10px 0;">
+        <div style="text-align: center; color: #666; font-size: 0.8em; padding: 5px 0; margin-top: 0.5rem;">
             <a href="?page=terms" style="color: #666;">Terms of Service</a> • 
             <a href="?page=privacy" style="color: #666;">Privacy Policy</a><br>
-            <div style="margin-top: 5px;">
-                © 2025 Metro Technology Solutions LLC. All rights reserved.<br>
-                Agent Commission Tracker™ is a trademark of Metro Technology Solutions LLC.
-            </div>
+            © 2025 Metro Technology Solutions LLC. All rights reserved.<br>
+            Agent Commission Tracker™ is a trademark of Metro Technology Solutions LLC.
         </div>
         """, unsafe_allow_html=True)
 
