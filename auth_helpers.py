@@ -78,6 +78,21 @@ def show_production_login_with_auth():
         /* Reduce spacing between form elements */
         .stForm {
             padding: 0 !important;
+            border: none !important;
+        }
+        
+        /* Remove gray background and border from form containers */
+        .stForm > div {
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        /* Remove any borders from form wrapper */
+        div[data-testid="stForm"] {
+            border: none !important;
+            background-color: transparent !important;
+            box-shadow: none !important;
         }
         
         /* Reduce space between inputs */
