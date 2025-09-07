@@ -28,7 +28,7 @@ def check_subscription_status(email: str, supabase: Client) -> dict:
 
 def show_production_login_with_auth():
     """Show the production login with email/password authentication."""
-    # Add CSS for form field styling and reduce vertical spacing
+    # Add CSS for form field styling and ELIMINATE vertical spacing
     st.markdown("""
     <style>
         /* Style all input fields with gray border */
@@ -58,53 +58,61 @@ def show_production_login_with_auth():
             outline: none !important;
         }
         
-        /* Aggressively reduce top and bottom padding */
+        /* NUCLEAR OPTION - Remove ALL padding and margins */
         .main .block-container {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
+            padding: 0 !important;
+            margin: 0 !important;
             max-width: 100%;
         }
         
-        /* Remove default Streamlit padding */
-        .css-18e3th9 {
+        /* Target ALL Streamlit containers */
+        .css-18e3th9, .css-1d391kg, .css-12oz5g7, .css-1y0tads, .css-1629p8f,
+        .css-k1vhr4, .css-1v3fvcr, .css-1kyxreq, .css-z5fcl1, .css-1n76uvr,
+        [class*="css-"] {
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-        }
-        
-        /* Target the main content area more specifically */
-        section.main > div {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-        }
-        
-        /* Remove extra space from app view container */
-        div[data-testid="stAppViewContainer"] {
-            padding-top: 0 !important;
-        }
-        
-        /* Reduce header spacing */
-        header[data-testid="stHeader"] {
-            height: 0 !important;
-        }
-        
-        /* Remove padding from all possible containers */
-        .css-1d391kg, .css-1y0tads, .css-1629p8f {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-        }
-        
-        /* Target block container more aggressively */
-        [data-testid="block-container"] {
-            padding-top: 0.25rem !important;
-            padding-bottom: 0.25rem !important;
-        }
-        
-        /* Remove margins from first and last elements */
-        .main > div > div:first-child {
             margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
         
-        .main > div > div:last-child {
+        /* Override with specific small padding for main content */
+        section.main > div {
+            padding-top: 20px !important;
+            padding-bottom: 20px !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        /* Force app view container to have no padding */
+        div[data-testid="stAppViewContainer"] {
+            padding: 0 !important;
+        }
+        
+        /* Kill the header completely */
+        header[data-testid="stHeader"] {
+            display: none !important;
+        }
+        
+        /* Target block container with extreme prejudice */
+        [data-testid="block-container"] {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        /* Remove all element spacing */
+        .element-container {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Target the stVerticalBlock containers */
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0 !important;
+        }
+        
+        /* Remove spacing from all divs in main */
+        .main div {
+            margin-top: 0 !important;
             margin-bottom: 0 !important;
         }
         
@@ -161,6 +169,9 @@ def show_production_login_with_auth():
     </style>
     """, unsafe_allow_html=True)
     
+    # Create a custom container to push everything to the top
+    st.markdown('<div style="margin-top: -50px !important;">', unsafe_allow_html=True)
+    
     # Display logo inline with title - properly centered
     col1, col2, col3 = st.columns([1.2, 8, 2])  # Even closer
     with col1:
@@ -174,6 +185,8 @@ def show_production_login_with_auth():
     with col2:
         # Remove spacing - align directly with logo
         st.markdown("# Agent Commission Tracker")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Check if we should show password reset form
     if st.session_state.get('show_password_reset'):
