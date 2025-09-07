@@ -2,8 +2,8 @@
 
 This file contains important context and guidelines for AI assistants (like Claude) working on the Sales Commission App.
 
-**Last Updated**: January 6, 2025  
-**Current Version**: 4.1.0
+**Last Updated**: January 7, 2025  
+**Current Version**: 4.2.0
 
 ## Quick Context
 - **Language**: Python with Streamlit
@@ -12,6 +12,44 @@ This file contains important context and guidelines for AI assistants (like Clau
 - **Authentication**: Password-based (environment variable)
 - **State Management**: Streamlit session state
 - **Caching**: In-memory with manual cache clearing (5-minute TTL)
+
+## Recent Major Changes (v4.2.0)
+1. **Carrd Pro AI Chatbot Integration**:
+   - **Platform**: Implemented Crisp free plan for landing page chatbot
+   - **Configuration**: Fully autonomous AI chatbot with custom conversation flows
+   - **Features**: 
+     - Welcome message for new visitors
+     - Quick action buttons for common questions
+     - AI-powered responses for complex queries
+     - Automatic subscribe link insertion with ?subscribe=true parameter
+   - **Character Limit**: All responses shortened to under 1000 characters
+   - **Landing Page**: Updated from commissiontracker.carrd.co to agentcommissiontracker.com
+
+2. **App Rebranding**:
+   - **Name Change**: "Commission Tracker Pro" → "Agent Commission Tracker" (no "Pro")
+   - **Company**: Added "Metro Technology Solutions LLC" to all legal notices
+   - **Logo Implementation**: 
+     - Added to sidebar (width=90px) on every page
+     - Added to login/register/subscribe pages (width=120px)
+     - Positioned left of app name with proper vertical alignment
+   - **Email Updates**: All templates updated with new branding
+
+3. **Login/Register/Subscribe UI Improvements**:
+   - **Form Field Styling**: 
+     - Added 2px gray borders (#cccccc) to all input fields
+     - Hover effect changes border to #999999
+     - Focus effect changes border to #666666
+   - **Layout Consistency**: 
+     - All forms use column ratio [2, 3] for consistent width
+     - Form fields and buttons have same width
+     - Wrapped in st.form() for better UX
+   - **Subscribe Page**: Left-aligned under logo with professional footer
+   - **Password Reset**: Updated both request and completion forms
+
+4. **Known Issues**:
+   - **White Space**: Excessive padding on login pages despite CSS attempts
+     - Tried multiple approaches including nuclear CSS option
+     - Issue persists - added to backlog for future resolution
 
 ## Recent Major Changes (v4.1.0)
 1. **Configurable Default Agent Commission Rates**:

@@ -32,7 +32,8 @@
       "Bash(true)",
       "Bash(git branch:*)",
       "WebFetch(domain:docs.anthropic.com)",
-      "Bash(streamlit run:*)"
+      "Bash(streamlit run:*)",
+      "Bash(tar:*)"
     ],
     "deny": []
   }
