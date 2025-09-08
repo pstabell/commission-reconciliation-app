@@ -5458,7 +5458,75 @@ def main():
         all_data = load_policies_data()
         
         if all_data.empty:
-            st.warning("No data found in policies table. Please add some policy data first.")
+            # Check if this is a new user (first login)
+            if st.session_state.get('is_new_user', True):
+                # Show welcome message for new users
+                st.balloons()
+                
+                # Welcome card
+                st.markdown("""
+                <div style='background-color: #d4edda; border: 2px solid #28a745; border-radius: 10px; padding: 20px; margin: 10px 0;'>
+                    <h2 style='color: #155724; margin-top: 0;'>🎉 Welcome to Agent Commission Tracker!</h2>
+                    <p style='color: #155724; font-size: 18px; margin: 10px 0;'>You're successfully logged into your account!</p>
+                    <p style='color: #155724; font-size: 16px;'>Your 14-day free trial has started. Let's get you set up!</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Navigation tip with arrow pointing to menu
+                st.markdown("""
+                <div style='background-color: #cfe2ff; border: 2px solid #0066cc; border-radius: 10px; padding: 15px; margin: 10px 0; position: relative;'>
+                    <div style='position: absolute; top: -20px; left: 20px; font-size: 30px; color: #0066cc; animation: bounce 1s infinite;'>↖️</div>
+                    <p style='color: #004085; font-size: 18px; margin: 0;'><strong>💡 Navigation Tip:</strong> Click the <strong>≡</strong> menu icon in the top left corner to navigate through the app!</p>
+                    <p style='color: #004085; font-size: 14px; margin: 5px 0 0 0;'>All your tools are in the sidebar menu - just click those three lines!</p>
+                </div>
+                <style>
+                @keyframes bounce {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10px); }
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Getting started steps
+                st.markdown("### 🚀 Getting Started")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("""
+                    **Step 1: Add Your First Policy**
+                    - Click ≡ menu → Add New Policy Transaction
+                    - Enter your policy details
+                    - Save to start tracking commissions
+                    """)
+                
+                with col2:
+                    st.markdown("""
+                    **Step 2: Import Existing Data**
+                    - Click ≡ menu → Tools
+                    - Download the CSV template
+                    - Upload your policies in bulk
+                    """)
+                
+                with col3:
+                    st.markdown("""
+                    **Step 3: Set Up Contacts**
+                    - Click ≡ menu → Admin Panel → Contacts
+                    - Add carriers and MGAs
+                    - Configure commission rates
+                    """)
+                
+                # Quick actions
+                st.markdown("### 📌 Quick Actions")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("👉 **[Watch Getting Started Video](https://agentcommissiontracker.com)** (Coming Soon)")
+                with col2:
+                    st.markdown("👉 **[Read the Help Guide](/)** - Click ≡ menu → Help")
+                
+                # Set flag to not show this again
+                st.session_state.is_new_user = False
+            else:
+                st.warning("No data found in policies table. Please add some policy data first.")
         else:
             # Calculate metrics
             metrics = calculate_dashboard_metrics(all_data)
