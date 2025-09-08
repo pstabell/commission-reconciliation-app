@@ -5389,14 +5389,13 @@ def main():
     try:
         logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=90)  # Triple the size
+            st.sidebar.image(logo_path, width=150)  # Keep logo at good size
             st.sidebar.markdown("---")
     except Exception:
         # If logo can't be loaded, continue without it
         pass
     
-    # Add prominent logout section at the very top
-    st.sidebar.markdown("### 👤 User Session")
+    # User session info directly under logo
     if app_mode == "PRODUCTION":
         if "user_email" in st.session_state:
             st.sidebar.info(f"**Logged in as:**  \n{st.session_state['user_email']}")
@@ -5407,16 +5406,6 @@ def main():
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
-    
-    st.sidebar.divider()
-    
-    # Environment info
-    if app_mode == "PRODUCTION":
-        st.sidebar.info("🌐 **Production Environment**")
-        st.sidebar.caption("Connected to SaaS database")
-    else:
-        st.sidebar.success("🏠 **Personal Environment**")
-        st.sidebar.caption("Connected to personal database")
     
     st.sidebar.divider()
     
@@ -5440,6 +5429,15 @@ def main():
             "Help"
         ]
     )
+    
+    # Environment info at bottom of sidebar
+    st.sidebar.divider()
+    if app_mode == "PRODUCTION":
+        st.sidebar.info("🌐 **Production Environment**")
+        st.sidebar.caption("Connected to production database")
+    else:
+        st.sidebar.success("🏠 **Personal Environment**")
+        st.sidebar.caption("Connected to personal database")
     
     # Removed duplicate logout button since we moved it to the top
     
@@ -5476,8 +5474,8 @@ def main():
                 st.markdown("""
                 <div style='background-color: #cfe2ff; border: 2px solid #0066cc; border-radius: 10px; padding: 15px; margin: 10px 0; position: relative;'>
                     <div style='position: absolute; top: -20px; left: 20px; font-size: 30px; color: #0066cc; animation: bounce 1s infinite;'>↖️</div>
-                    <p style='color: #004085; font-size: 18px; margin: 0;'><strong>💡 Navigation Tip:</strong> Click the <strong>≡</strong> menu icon in the top left corner to navigate through the app!</p>
-                    <p style='color: #004085; font-size: 14px; margin: 5px 0 0 0;'>All your tools are in the sidebar menu - just click those three lines!</p>
+                    <p style='color: #004085; font-size: 18px; margin: 0;'><strong>💡 Navigation Tip:</strong> Click the <strong>>></strong> menu icon in the top left corner to expand or collapse the navigation menu!</p>
+                    <p style='color: #004085; font-size: 14px; margin: 5px 0 0 0;'>All your tools are in the sidebar menu - just click the >> icon to expand the menu!</p>
                 </div>
                 <style>
                 @keyframes bounce {
