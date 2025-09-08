@@ -5385,15 +5385,38 @@ def main():
     # Show environment indicator in sidebar
     app_mode = os.getenv("APP_ENVIRONMENT")
     
+    # Add CSS to remove extra padding around sidebar elements and center logo
+    st.markdown("""
+    <style>
+        /* Remove extra padding from sidebar */
+        section[data-testid="stSidebar"] > div {
+            padding-top: 0.5rem !important;
+        }
+        /* Remove padding around sidebar image and center it */
+        section[data-testid="stSidebar"] .stImage {
+            margin-top: -1rem !important;
+            margin-bottom: 0 !important;
+            text-align: center !important;
+        }
+        section[data-testid="stSidebar"] .stImage > img {
+            margin: 0 auto !important;
+            display: block !important;
+        }
+        /* Reduce spacing after horizontal rule */
+        section[data-testid="stSidebar"] hr {
+            margin: 0.5rem 0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Add logo at the very top of sidebar
     try:
         logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
         if os.path.exists(logo_path):
             st.sidebar.image(logo_path, width=150)  # Keep logo at good size
-            st.sidebar.markdown("---")
     except Exception:
-        # If logo can't be loaded, continue without it
-        pass
+        # If logo can't be loaded, show text header
+        st.sidebar.header("Agent Commission Tracker")
     
     # User session info directly under logo
     if app_mode == "PRODUCTION":
