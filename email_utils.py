@@ -139,7 +139,8 @@ def send_welcome_email(to_email: str):
     <body>
         <div class="container">
             <div class="header">
-                <h1>Welcome to Agent Commission Tracker! 🎉</h1>
+                <h1 style="margin: 0; padding: 0;">Welcome to Agent</h1>
+                <h1 style="margin: 0; padding: 0;">Commission Tracker! 🎉</h1>
             </div>
             <div class="content">
                 <h2>Your 14-day free trial has started!</h2>
@@ -236,7 +237,8 @@ def send_password_setup_email(to_email: str, setup_link: str):
     <body>
         <div class="container">
             <div class="header">
-                <h1>Welcome to Agent Commission Tracker!</h1>
+                <h1 style="margin: 0; padding: 0;">Welcome to Agent</h1>
+                <h1 style="margin: 0; padding: 0;">Commission Tracker!</h1>
             </div>
             <div class="content">
                 <h2>Your 14-day free trial is ready! 🎉</h2>
