@@ -10,7 +10,7 @@ import time
 def check_subscription_status(email: str, supabase: Client) -> dict:
     """Check if user has active subscription."""
     try:
-        result = supabase.table('users').select('*').eq('email', email).execute()
+        result = supabase.table('users').select('*').ilike('email', email).execute()
         if result.data and len(result.data) > 0:
             user = result.data[0]
             return {
@@ -248,9 +248,9 @@ def show_login_form():
                     else:
                         supabase = create_client(url, key)
                         
-                        # First check if email exists in users table
+                        # First check if email exists in users table (case-insensitive)
                         try:
-                            result = supabase.table('users').select('*').eq('email', email).execute()
+                            result = supabase.table('users').select('*').ilike('email', email).execute()
                             if result.data and len(result.data) > 0:
                                 user = result.data[0]
                                 
@@ -273,8 +273,13 @@ def show_login_form():
                                     st.error("Please set your password first. Check your email for the setup link.")
                                     st.info("If you haven't received it, use the 'Forgot Password?' button below.")
                             else:
-                                st.error("Email not found. Please register first or check your email.")
-                                st.caption(f"Checked email: {email}")
+                                st.error("Email not found. Please check your email address and try again.")
+                                st.info("💡 **Tip**: Make sure you're using the same email address you used during signup. If you're still having trouble, use the 'Forgot Password?' button below.")
+                                # Check if there's a similar email with different case
+                                try:
+                                    case_check = supabase.table('users').select('email').ilike('email', email).execute()
+                                    if case_check.data:
+                                        st.warning(f"Found account with email: {case_check.data[0]['email']} - Please use this exact email to login.")
                         except Exception as e:
                             st.error("Database connection issue. Using fallback authentication.")
                             st.caption(f"Technical details: {str(e)}")
@@ -423,9 +428,9 @@ def show_password_reset_form():
                         
                     supabase = create_client(url, key)
                     
-                    # Check if email exists in users table
+                    # Check if email exists in users table (case-insensitive)
                     try:
-                        result = supabase.table('users').select('email').eq('email', email).execute()
+                        result = supabase.table('users').select('email').ilike('email', email).execute()
                         
                         if result.data:
                             # Generate reset token
