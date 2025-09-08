@@ -55,6 +55,7 @@ st.markdown("""
 import traceback
 import string
 import random
+import base64
 import pandas as pd
 import numpy as np
 import math
@@ -5477,21 +5478,43 @@ def main():
     # Function to display header with logo and app name
     def display_app_header():
         """Display app logo and name in header of each page"""
-        col1, col2, col3 = st.columns([1, 6, 2])
-        with col3:
-            # Right-aligned logo and text
-            try:
-                logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
-                if os.path.exists(logo_path):
-                    # Create a container for logo and text
-                    logo_col, text_col = st.columns([1, 3])
-                    with logo_col:
-                        st.image(logo_path, width=50)
-                    with text_col:
-                        st.markdown("<h3 style='margin: 0; padding-top: 5px;'>Agent Commission Tracker</h3>", unsafe_allow_html=True)
-            except:
-                st.markdown("<h3 style='margin: 0; text-align: right;'>Agent Commission Tracker</h3>", unsafe_allow_html=True)
-        st.markdown("---")
+        # Add CSS to remove ALL spacing
+        st.markdown("""
+        <style>
+            /* Remove all padding from main content area */
+            .main > div:first-child {
+                padding-top: 0 !important;
+            }
+            /* Remove spacing from header container */
+            .header-container {
+                margin-top: -3rem !important;
+                margin-bottom: 0 !important;
+                padding: 0 !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Single line header with logo and text
+        try:
+            logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+            if os.path.exists(logo_path):
+                import base64
+                with open(logo_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                st.markdown(f"""
+                <div class="header-container" style="display: flex; justify-content: flex-end; align-items: center; padding: 0; margin: 0;">
+                    <img src="data:image/jpeg;base64,{encoded}" width="40" style="margin-right: 10px;">
+                    <span style="font-size: 18px; font-weight: bold;">Agent Commission Tracker</span>
+                </div>
+                <hr style="margin: 0.5rem 0;">
+                """, unsafe_allow_html=True)
+        except:
+            st.markdown("""
+            <div class="header-container" style="text-align: right; margin: 0; padding: 0;">
+                <span style="font-size: 18px; font-weight: bold;">Agent Commission Tracker</span>
+            </div>
+            <hr style="margin: 0.5rem 0;">
+            """, unsafe_allow_html=True)
     
     # Function to display footer
     def display_app_footer():
