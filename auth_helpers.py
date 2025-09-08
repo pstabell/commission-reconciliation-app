@@ -280,6 +280,8 @@ def show_login_form():
                                     case_check = supabase.table('users').select('email').ilike('email', email).execute()
                                     if case_check.data:
                                         st.warning(f"Found account with email: {case_check.data[0]['email']} - Please use this exact email to login.")
+                                except:
+                                    pass  # Ignore errors in case check
                         except Exception as e:
                             st.error("Database connection issue. Using fallback authentication.")
                             st.caption(f"Technical details: {str(e)}")
