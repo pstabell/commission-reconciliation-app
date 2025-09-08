@@ -5,6 +5,68 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2025-01-09 - Webhook DateTime Import Fix
+
+### Fixed
+- **Critical Webhook Server Error**
+  - Fixed UnboundLocalError preventing all webhook functionality
+  - Resolved conflicting datetime imports causing webhook crashes
+  - Restored user creation after Stripe checkout
+  - Fixed password setup email delivery
+  - See detailed changelog: `/docs/changelogs/2025-01-09-webhook-datetime-fix.md`
+
+### Added
+- **Project Structure Documentation**
+  - Created comprehensive documentation at `/docs/core/PROJECT_STRUCTURE.md`
+  - Clarifies single repository architecture
+  - Explains webhook server location and deployment
+  - Prevents future confusion about project organization
+
+## [4.3.0] - 2025-01-07 - 14-Day Free Trial and Password Setup Flow
+
+### Added
+- **14-Day Free Trial with Credit Card**
+  - Implemented Stripe subscription with 14-day trial period
+  - No charges during trial, automatic conversion after
+  - Higher quality lead generation with payment method requirement
+  
+- **Complete Password Setup Flow**
+  - New users receive password setup email after checkout
+  - Secure token-based password creation
+  - Auto-login after password is set
+  - Clear instructions on success page including SPAM folder reminder
+
+### Changed
+- **Enhanced Login Security**
+  - Login now verifies actual user passwords (was accepting any password)
+  - Shows appropriate error for users who haven't set password yet
+  
+- **UI Updates**
+  - Removed confusing "Register" tab
+  - Subscribe button text: "🚀 Start Free Trial"
+  - Added comprehensive email delivery instructions
+
+### Technical Details
+- See detailed changelog: `/docs/changelogs/2025-01-07-free-trial-password-flow.md`
+
+## [4.2.0] - 2025-01-07 - Carrd AI Bot Integration
+
+### Added
+- **AI-Powered Support Chatbot**
+  - Integrated Crisp chatbot on landing page
+  - Comprehensive FAQ training for commission tracking
+  - Automatic responses for common questions
+  - Human handoff for complex inquiries
+
+### Changed
+- **Landing Page Updates**
+  - Updated URL from commissiontracker.carrd.co to agentcommissiontracker.com
+  - All chatbot links include ?subscribe=true parameter
+  - Improved chatbot response conciseness (under 1000 chars)
+
+### Technical Details
+- See detailed changelog: `/docs/changelogs/2025-01-07-carrd-ai-bot-integration.md`
+
 ## [3.9.54] - 2025-08-17 - Policy Revenue Ledger Export Balance Filter Fix
 
 ### Fixed
