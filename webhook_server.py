@@ -3,7 +3,7 @@ import stripe
 import json
 from flask import Flask, request, jsonify
 from supabase import create_client, Client
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from email_utils import send_welcome_email
@@ -166,7 +166,6 @@ def stripe_webhook():
                     setup_token = generate_setup_token()
                     
                     # Store token in database (expires in 1 hour)
-                    from datetime import datetime, timedelta
                     expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
                     
                     token_data = {
