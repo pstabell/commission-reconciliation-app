@@ -535,6 +535,14 @@ def show_password_reset_completion(reset_token: str):
                                 # In a real app, you'd hash the password here
                                 # For MVP, we'll just store it (NOT SECURE - fix before production!)
                                 try:
+                                    # First check if user exists
+                                    user_check = supabase.table('users').select('email').eq('email', email).execute()
+                                    
+                                    if not user_check.data:
+                                        st.error("User account not found. Please contact support.")
+                                        st.info("It appears your user account was deleted or not created properly.")
+                                        return
+                                    
                                     # Update user's password
                                     supabase.table('users').update({
                                         'password_hash': new_password  # TODO: Hash this!
@@ -620,8 +628,16 @@ def show_password_setup_form(setup_token: str):
                                 # In a real app, you'd hash the password here
                                 # For MVP, we'll just store it (NOT SECURE - fix before production!)
                                 try:
+                                    # First check if user exists
+                                    user_check = supabase.table('users').select('email').eq('email', email).execute()
+                                    
+                                    if not user_check.data:
+                                        st.error("User account not found. Please contact support.")
+                                        st.info("It appears your user account was not created properly during signup.")
+                                        return
+                                    
                                     # Update user's password
-                                    supabase.table('users').update({
+                                    update_result = supabase.table('users').update({
                                         'password_hash': new_password,  # TODO: Hash this!
                                         'password_set': True
                                     }).eq('email', email).execute()
