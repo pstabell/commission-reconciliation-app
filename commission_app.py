@@ -5401,6 +5401,9 @@ def main():
         section[data-testid="stSidebar"] .stImage > img {
             margin: 0 auto !important;
             display: block !important;
+            /* Try to remove white background */
+            mix-blend-mode: multiply !important;
+            background-color: transparent !important;
         }
         /* Remove spacing from all sidebar elements */
         section[data-testid="stSidebar"] .element-container {
