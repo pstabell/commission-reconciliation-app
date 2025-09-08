@@ -5473,9 +5473,42 @@ def main():
     supabase = get_supabase_client()
     
     # Note: all_data empty check moved to individual pages
+    
+    # Function to display header with logo and app name
+    def display_app_header():
+        """Display app logo and name in header of each page"""
+        col1, col2, col3 = st.columns([1, 6, 2])
+        with col3:
+            # Right-aligned logo and text
+            try:
+                logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+                if os.path.exists(logo_path):
+                    # Create a container for logo and text
+                    logo_col, text_col = st.columns([1, 3])
+                    with logo_col:
+                        st.image(logo_path, width=50)
+                    with text_col:
+                        st.markdown("<h3 style='margin: 0; padding-top: 5px;'>Agent Commission Tracker</h3>", unsafe_allow_html=True)
+            except:
+                st.markdown("<h3 style='margin: 0; text-align: right;'>Agent Commission Tracker</h3>", unsafe_allow_html=True)
+        st.markdown("---")
+    
+    # Function to display footer
+    def display_app_footer():
+        """Display app footer with legal text"""
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; color: #666; font-size: 0.8em; padding: 20px 0;">
+            <a href="?page=terms" style="color: #666;">Terms of Service</a> • 
+            <a href="?page=privacy" style="color: #666;">Privacy Policy</a><br>
+            © 2025 Metro Technology Solutions LLC. All rights reserved.<br>
+            Agent Commission Tracker™ is a trademark of Metro Technology Solutions LLC.
+        </div>
+        """, unsafe_allow_html=True)
 
     # --- Page Navigation ---
     if page == "Dashboard":
+        display_app_header()
         st.title("📊 Commission Dashboard")
         
         # Load fresh data for this page
@@ -5783,8 +5816,11 @@ def main():
                     fig.update_traces(textposition='inside', textinfo='percent+label')
                     st.plotly_chart(fig, use_container_width=True)
     
+        display_app_footer()
+    
     # --- Reports ---
     elif page == "Reports":
+        display_app_header()
         st.title("📈 Reports")
         
         # Load fresh data for this page
@@ -5965,8 +6001,11 @@ def main():
                             help="Export comprehensive multi-sheet Excel report with all data and summaries"
                         )
     
+        display_app_footer()
+    
     # --- All Policy Transactions ---
     elif page == "All Policy Transactions":
+        display_app_header()
         st.title("📋 All Policy Transactions")
         
         # Load fresh data for this page
@@ -6144,8 +6183,11 @@ def main():
                         help="Export all policies as formatted Excel file"
                     )
     
+        display_app_footer()
+    
     # --- Edit Policy Transactions ---
     elif page == "Edit Policy Transactions":
+        display_app_header()
         st.title("✏️ Edit Policy Transactions")
         
         # Load fresh data for this page
@@ -7719,9 +7761,12 @@ def main():
                         
                     except Exception as e:
                         st.error(f"Error saving changes: {e}")
+        
+        display_app_footer()
     
     # --- Add New Policy Transaction ---
     elif page == "Add New Policy Transaction":
+        display_app_header()
         col_title, col_refresh = st.columns([6, 1])
         with col_title:
             st.title("➕ Add New Policy Transaction")
@@ -8434,8 +8479,11 @@ def main():
                 else:
                     st.error("Please fill in at least Customer Name and Policy Number")
     
+        display_app_footer()
+    
     # --- Search & Filter ---
     elif page == "Search & Filter":
+        display_app_header()
         st.title("🔍 Advanced Search & Filter")
         
         # Load fresh data for this page
@@ -8607,8 +8655,11 @@ def main():
             else:
                 st.info("Use the form above to search and filter policies")
     
+        display_app_footer()
+    
     # --- Reconciliation ---
     elif page == "Reconciliation":
+        display_app_header()
         inject_scroll_to_top()
         col_title, col_refresh = st.columns([6, 1])
         with col_title:
@@ -10684,8 +10735,11 @@ def main():
                 else:
                     st.info("No reconciliation data available")
     
+        display_app_footer()
+    
     # --- Admin Panel ---
     elif page == "Admin Panel":
+        display_app_header()
         st.title("⚙️ Admin Panel")
         
         # Load fresh data for this page
@@ -12680,8 +12734,11 @@ SOLUTION NEEDED:
             if 'last_updated' in default_rates:
                 st.caption(f"Last updated: {default_rates['last_updated']}")
     
+        display_app_footer()
+    
     # --- Contacts ---
     elif page == "Contacts":
+        display_app_header()
         # Modern SaaS-style header
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -13653,8 +13710,11 @@ SOLUTION NEEDED:
                 """)
         
     
+        display_app_footer()
+    
     # --- Tools ---
     elif page == "Tools":
+        display_app_header()
         st.title("🛠️ Tools")
         
         # Load fresh data for this page
@@ -14383,8 +14443,11 @@ SOLUTION NEEDED:
                         st.write(f"Error type: {type(e).__name__}")
                         st.write(f"Error details: {str(e)}")
     
+        display_app_footer()
+    
     # --- Policy Revenue Ledger ---
     elif page == "Policy Revenue Ledger":
+        display_app_header()
         st.subheader("Policy Revenue Ledger")
         
         # Add refresh button in the top right
@@ -15097,8 +15160,11 @@ SOLUTION NEEDED:
                     with col3:
                         st.metric("Balance Due", f"${balance_due:,.2f}")
                     
+        display_app_footer()
+                    
     # --- Account ---
     elif page == "Account":
+        display_app_header()
         st.title("🧑‍💼 My Account")
         
         # Add logout button at the top of Account page
@@ -15233,8 +15299,11 @@ SOLUTION NEEDED:
             if st.button("Save Preferences", type="primary"):
                 st.success("Preferences saved!")
     
+        display_app_footer()
+    
     # --- Help ---
     elif page == "Help":
+        display_app_header()
         st.title("📚 Help & Documentation")
         
         # Create tabs for organized help content
@@ -15617,8 +15686,11 @@ TO "New Column Name";
             
             st.success("🎉 Thank you for using the Commission Management Application!")
     
+        display_app_footer()
+    
     # --- Policy Revenue Ledger Reports ---
     elif page == "Policy Revenue Ledger Reports":
+        display_app_header()
         st.subheader("Policy Revenue Ledger Reports")
         
         # Debug info in sidebar
@@ -18211,8 +18283,11 @@ TO "New Column Name";
             
             st.success("✅ Enhanced Policy Revenue Ledger Reports with Templates & Export Parameters!")
     
+        display_app_footer()
+    
     # --- Pending Policy Renewals ---
     elif page == "Pending Policy Renewals":
+        display_app_header()
         # Add refresh button in the header
         col1, col2 = st.columns([4, 1])
         with col1:
@@ -18790,5 +18865,8 @@ TO "New Column Name";
             else:
                 st.info(f"No policies match the selected filter: {filter_option}")
                 st.caption("Try selecting 'All Renewals' or a different time range.")
+    
+        display_app_footer()
+
 # Call main function
 main()
