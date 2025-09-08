@@ -161,7 +161,7 @@ def show_production_login():
         col1, col2, col3 = st.columns([1.2, 8, 2])  # Even closer
         with col1:
             try:
-                logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+                logo_path = "Logo/3pMGFb-LogoMakr (no background) COPY.png"
                 if os.path.exists(logo_path):
                     st.image(logo_path, width=120)  # Triple the size
             except Exception:
@@ -5401,9 +5401,6 @@ def main():
         section[data-testid="stSidebar"] .stImage > img {
             margin: 0 auto !important;
             display: block !important;
-            /* Try to remove white background */
-            mix-blend-mode: multiply !important;
-            background-color: transparent !important;
         }
         /* Remove spacing from all sidebar elements */
         section[data-testid="stSidebar"] .element-container {
@@ -5419,7 +5416,7 @@ def main():
     
     # Add logo at the very top of sidebar - bigger and centered
     try:
-        logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+        logo_path = "Logo/3pMGFb-LogoMakr (no background) COPY.png"
         if os.path.exists(logo_path):
             st.sidebar.image(logo_path, width=200)  # Bigger logo for better centering
     except Exception:
@@ -5499,7 +5496,7 @@ def main():
         
         # Single line header with logo and text
         try:
-            logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
+            logo_path = "Logo/3pMGFb-LogoMakr (no background) COPY.png"
             if os.path.exists(logo_path):
                 import base64
                 with open(logo_path, "rb") as f:
