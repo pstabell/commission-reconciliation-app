@@ -5385,52 +5385,42 @@ def main():
     # Show environment indicator in sidebar
     app_mode = os.getenv("APP_ENVIRONMENT")
     
-    # Add CSS to remove extra padding around sidebar elements and center logo
+    # Add CSS to completely remove padding around sidebar elements
     st.markdown("""
     <style>
-        /* Remove extra padding from sidebar */
+        /* Remove ALL padding from sidebar */
         section[data-testid="stSidebar"] > div {
-            padding-top: 0.5rem !important;
+            padding-top: 0 !important;
         }
-        /* Remove padding around sidebar image and center it */
+        /* Remove ALL padding/margins around sidebar image */
         section[data-testid="stSidebar"] .stImage {
-            margin-top: -1rem !important;
-            margin-bottom: 0 !important;
-            text-align: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         section[data-testid="stSidebar"] .stImage > img {
             margin: 0 auto !important;
             display: block !important;
         }
-        /* Reduce spacing after horizontal rule */
-        section[data-testid="stSidebar"] hr {
-            margin: 0.5rem 0 !important;
+        /* Remove spacing from all sidebar elements */
+        section[data-testid="stSidebar"] .element-container {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        /* Keep minimal spacing for readability */
+        section[data-testid="stSidebar"] .stRadio {
+            padding-top: 1rem !important;
         }
     </style>
     """, unsafe_allow_html=True)
     
-    # Add logo at the very top of sidebar
+    # Add logo at the very top of sidebar - bigger and centered
     try:
         logo_path = "Logo/3pMGFb-LogoMakr-300dpi COPY.jpeg"
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=150)  # Keep logo at good size
+            st.sidebar.image(logo_path, width=200)  # Bigger logo for better centering
     except Exception:
         # If logo can't be loaded, show text header
         st.sidebar.header("Agent Commission Tracker")
-    
-    # User session info directly under logo
-    if app_mode == "PRODUCTION":
-        if "user_email" in st.session_state:
-            st.sidebar.info(f"**Logged in as:**  \n{st.session_state['user_email']}")
-    
-    # Logout button with custom styling
-    if st.sidebar.button("🚪 LOGOUT", type="primary", use_container_width=True, key="sidebar_logout_main"):
-        for key in ['password_correct', 'user_email']:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.rerun()
-    
-    st.sidebar.divider()
     
     # --- Page Selection ---
     page = st.sidebar.radio(
@@ -5452,6 +5442,19 @@ def main():
             "Help"
         ]
     )
+    
+    # User session info and logout button after navigation menu
+    st.sidebar.divider()
+    if app_mode == "PRODUCTION":
+        if "user_email" in st.session_state:
+            st.sidebar.info(f"**Logged in as:**  \n{st.session_state['user_email']}")
+    
+    # Logout button with custom styling
+    if st.sidebar.button("🚪 LOGOUT", type="primary", use_container_width=True, key="sidebar_logout_main"):
+        for key in ['password_correct', 'user_email']:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.rerun()
     
     # Environment info at bottom of sidebar
     st.sidebar.divider()
