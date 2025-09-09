@@ -5586,7 +5586,7 @@ def main():
                 with col1:
                     st.markdown("""
                     **Step 1: Add Your First Policy**
-                    - Click ≡ menu → Add New Policy Transaction
+                    - Click >> menu → Add New Policy Transaction
                     - Enter your policy details
                     - Save to start tracking commissions
                     """)
@@ -5594,7 +5594,7 @@ def main():
                 with col2:
                     st.markdown("""
                     **Step 2: Import Existing Data**
-                    - Click ≡ menu → Tools
+                    - Click >> menu → Tools
                     - Download the CSV template
                     - Upload your policies in bulk
                     """)
@@ -5602,7 +5602,7 @@ def main():
                 with col3:
                     st.markdown("""
                     **Step 3: Set Up Contacts**
-                    - Click ≡ menu → Admin Panel → Contacts
+                    - Click >> menu → Admin Panel → Contacts
                     - Add carriers and MGAs
                     - Configure commission rates
                     """)
@@ -5613,7 +5613,7 @@ def main():
                 with col1:
                     st.markdown("👉 **[Watch Getting Started Video](https://agentcommissiontracker.com)** (Coming Soon)")
                 with col2:
-                    st.markdown("👉 **[Read the Help Guide](/)** - Click ≡ menu → Help")
+                    st.markdown("👉 **[Read the Help Guide](/)** - Click >> menu → Help")
                 
                 # Set flag to not show this again
                 st.session_state.is_new_user = False
