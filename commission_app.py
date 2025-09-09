@@ -5414,11 +5414,23 @@ def main():
     </style>
     """, unsafe_allow_html=True)
     
-    # Add logo at the very top of sidebar - bigger and centered
+    # Add logo at the very top of sidebar - smaller and centered with stacked text
     try:
         logo_path = "Logo/3pMGFb-LogoMakr (no background) COPY.png"
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, width=200)  # Bigger logo for better centering
+            # Center the logo
+            col1, col2, col3 = st.sidebar.columns([1, 2, 1])
+            with col2:
+                st.image(logo_path, width=120)  # Smaller centered logo
+            
+            # Add stacked text under logo
+            st.sidebar.markdown("""
+            <div style="text-align: center; margin-top: -10px;">
+                <div style="font-size: 16px; font-weight: bold; line-height: 1.2;">Agent</div>
+                <div style="font-size: 16px; font-weight: bold; line-height: 1.2;">Commission</div>
+                <div style="font-size: 16px; font-weight: bold; line-height: 1.2;">Tracker</div>
+            </div>
+            """, unsafe_allow_html=True)
     except Exception:
         # If logo can't be loaded, show text header
         st.sidebar.header("Agent Commission Tracker")
