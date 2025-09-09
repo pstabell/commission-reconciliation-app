@@ -15262,30 +15262,71 @@ SOLUTION NEEDED:
                 st.success("Profile updated successfully!")
         
         with tab2:
-            st.subheader("Subscription Management")
+            st.subheader("📊 Subscription Management")
             
             # Check if we're in production environment
             if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
                 # Get user subscription info
                 supabase = get_supabase_client()
                 try:
-                    result = supabase.table('users').select('*').eq('email', user_email).execute()
+                    result = supabase.table('users').select('*').ilike('email', user_email).execute()
                     if result.data:
                         user = result.data[0]
+                        subscription_status = user.get('subscription_status', 'unknown')
                         
+                        # Show subscription status with appropriate styling
+                        if subscription_status == 'active':
+                            st.success("✅ Your subscription is active")
+                        elif subscription_status == 'trialing':
+                            # Calculate trial days remaining
+                            created_at = user.get('created_at', '')
+                            if created_at:
+                                from datetime import datetime, timedelta
+                                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                trial_end = created_date + timedelta(days=14)
+                                days_left = (trial_end - datetime.now(trial_end.tzinfo)).days
+                                st.info(f"🎁 Free trial active - {days_left} days remaining")
+                        elif subscription_status == 'cancelled':
+                            st.warning("⚠️ Your subscription has been cancelled")
+                        else:
+                            st.error("❌ No active subscription")
+                        
+                        # Display subscription details
+                        st.divider()
                         col1, col2 = st.columns(2)
+                        
                         with col1:
-                            st.metric("Current Plan", user.get('subscription_tier', 'Legacy').title())
-                            st.metric("Status", user.get('subscription_status', 'Active').title())
+                            st.markdown("**Plan Details**")
+                            st.markdown(f"**Plan:** Professional")
+                            st.markdown(f"**Price:** $19.99/month")
+                            st.markdown(f"**Status:** {subscription_status.title()}")
+                            
+                            # Show member since date
+                            created_date = user.get('created_at', 'N/A')
+                            if created_date != 'N/A':
+                                created_date = created_date[:10]
+                            st.markdown(f"**Member Since:** {created_date}")
+                        
                         with col2:
-                            st.metric("Member Since", user.get('created_at', 'N/A')[:10] if user.get('created_at') else 'N/A')
-                            st.metric("Price", "$19.99/month")
+                            st.markdown("**Plan Features**")
+                            st.markdown("""
+                            ✅ Unlimited Policy Tracking  
+                            ✅ Advanced Reporting  
+                            ✅ Multi-User Support  
+                            ✅ Automated Reconciliation  
+                            ✅ Excel Import/Export  
+                            ✅ Priority Support
+                            """)
                         
                         st.divider()
                         
+                        # Action buttons
+                        st.markdown("### Manage Your Subscription")
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            if st.button("Manage Billing", use_container_width=True):
+                            if st.button("🔧 Manage Billing", use_container_width=True, type="primary", 
+                                        help="Update payment method, view invoices, or cancel"):
                                 # Create Stripe Customer Portal session
                                 try:
                                     import stripe
@@ -15294,31 +15335,59 @@ SOLUTION NEEDED:
                                     # Get Stripe customer ID
                                     stripe_customer_id = user.get('stripe_customer_id')
                                     if stripe_customer_id:
+                                        # Use the correct app URL
+                                        return_url = os.getenv("RENDER_APP_URL", "https://app.agentcommissiontracker.com")
+                                        
                                         session = stripe.billing_portal.Session.create(
                                             customer=stripe_customer_id,
-                                            return_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
+                                            return_url=return_url
                                         )
                                         st.markdown(f'<meta http-equiv="refresh" content="0; url={session.url}">', unsafe_allow_html=True)
-                                        st.info("Redirecting to Stripe billing portal...")
+                                        st.info("🚀 Redirecting to secure billing portal...")
                                     else:
-                                        st.error("No billing information found.")
+                                        st.error("No billing information found. Please contact support.")
                                 except Exception as e:
                                     st.error(f"Error accessing billing portal: {e}")
+                                    st.info("Please contact support@agentcommissiontracker.com for assistance.")
                         
                         with col2:
-                            st.button("View Invoices", use_container_width=True, disabled=True)
-                            st.caption("Coming soon")
+                            if st.button("📧 Contact Support", use_container_width=True):
+                                st.info("Email: Support@AgentCommissionTracker.com")
                         
                         with col3:
-                            if st.button("Cancel Subscription", use_container_width=True, type="secondary"):
-                                st.warning("⚠️ Are you sure? You'll lose access to all features.")
-                                if st.button("Yes, Cancel", type="secondary"):
-                                    st.info("Please use the Manage Billing button to cancel.")
-                                
+                            if st.button("📚 View Documentation", use_container_width=True):
+                                st.info("Visit our Help section for guides and tutorials")
+                        
+                        # Cancellation notice
+                        st.divider()
+                        st.caption("""
+                        💡 **Note:** To cancel your subscription or update payment methods, use the "Manage Billing" button above. 
+                        This will take you to our secure billing portal powered by Stripe where you can:
+                        - Update your credit card
+                        - Download invoices
+                        - Cancel your subscription
+                        - View billing history
+                        """)
+                        
+                    else:
+                        st.error("No subscription information found.")
+                        st.info("Please contact support if you believe this is an error.")
+                        
                 except Exception as e:
-                    st.error(f"Error loading subscription info: {e}")
+                    st.error("Error loading subscription information.")
+                    st.caption(f"Technical details: {str(e)}")
+                    st.info("Please try refreshing the page or contact support.")
             else:
-                st.info("Subscription management is only available in the production environment.")
+                # Demo/test environment message
+                st.info("💡 Subscription management is only available in the production environment.")
+                st.markdown("""
+                **In production, you'll be able to:**
+                - View your subscription status and plan details
+                - Update payment methods
+                - Download invoices
+                - Cancel or modify your subscription
+                - Contact support
+                """)
         
         with tab3:
             st.subheader("Security Settings")
