@@ -8,26 +8,50 @@ import logging
 logger = logging.getLogger(__name__)
 
 def send_email(to_email: str, subject: str, html_body: str, text_body: str = None):
-    """Send an email using SMTP.
+    """Send an email using SendGrid or SMTP."""
     
-    For production, you'll want to use a service like:
-    - SendGrid
-    - AWS SES
-    - Postmark
-    - Mailgun
+    # Check for SendGrid first (preferred)
+    sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "support@agentcommissiontracker.com")
     
-    For MVP, this uses SMTP with environment variables.
-    """
+    if sendgrid_api_key:
+        # Use SendGrid
+        try:
+            import sendgrid
+            from sendgrid.helpers.mail import Mail, Email, To, Content
+            
+            sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
+            
+            from_email_obj = Email(from_email, "Agent Commission Tracker")
+            to_email_obj = To(to_email)
+            
+            mail = Mail(from_email_obj, to_email_obj, subject)
+            
+            if text_body:
+                mail.content = [Content("text/plain", text_body), Content("text/html", html_body)]
+            else:
+                mail.content = Content("text/html", html_body)
+            
+            response = sg.send(mail)
+            
+            logger.info(f"Email sent successfully via SendGrid to {to_email} (status: {response.status_code})")
+            return response.status_code in [200, 201, 202]
+            
+        except ImportError:
+            logger.error("SendGrid library not installed. Run: pip install sendgrid")
+            return False
+        except Exception as e:
+            logger.error(f"SendGrid email failed: {e}")
+            return False
     
-    # Get email configuration from environment
+    # Fall back to SMTP
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
-    from_email = os.getenv("FROM_EMAIL", smtp_user)
     
     if not smtp_user or not smtp_pass:
-        logger.error("Email configuration missing. Set SMTP_USER and SMTP_PASS environment variables.")
+        logger.error("Email configuration missing. Set SENDGRID_API_KEY or SMTP credentials.")
         return False
     
     try:
@@ -48,11 +72,11 @@ def send_email(to_email: str, subject: str, html_body: str, text_body: str = Non
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
             
-        logger.info(f"Email sent successfully to {to_email}")
+        logger.info(f"Email sent successfully via SMTP to {to_email}")
         return True
         
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"Failed to send SMTP email: {e}")
         return False
 
 def send_password_reset_email(to_email: str, reset_link: str):
