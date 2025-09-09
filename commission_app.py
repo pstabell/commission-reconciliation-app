@@ -5351,9 +5351,39 @@ def main():
     
     # Check for Stripe success redirect
     if "session_id" in query_params:
+        # Display header with logo
+        try:
+            logo_path = "Logo/3pMGFb-LogoMakr (no background) COPY.png"
+            if os.path.exists(logo_path):
+                import base64
+                with open(logo_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                st.markdown(f"""
+                <div style="display: flex; justify-content: center; align-items: center; padding: 1rem 0;">
+                    <img src="data:image/jpeg;base64,{encoded}" width="40" style="margin-right: 10px;">
+                    <span style="font-size: 18px; font-weight: bold;">Agent Commission Tracker</span>
+                </div>
+                <hr style="margin: 0.5rem 0 1rem 0;">
+                """, unsafe_allow_html=True)
+        except:
+            st.markdown("""
+            <div style="text-align: center; padding: 1rem 0;">
+                <span style="font-size: 18px; font-weight: bold;">Agent Commission Tracker</span>
+            </div>
+            <hr style="margin: 0.5rem 0 1rem 0;">
+            """, unsafe_allow_html=True)
+        
         st.success("🎉 Payment successful! Your 14-day free trial has started.")
         st.warning("⚠️ **Important:** Check your email (including SPAM folder) for a secure link to set your password.")
-        st.info("The email contains a button to create your password and access your account.")
+        
+        # Add email recovery message
+        st.info("""
+        📧 **Didn't receive the email?** No problem! You can set your password using the "Forgot Password?" option:
+        1. Click the button below to go to login
+        2. Click "Forgot Password?"
+        3. Enter your email address
+        4. Check your email for the reset link
+        """)
         
         # Add email reminder
         col1, col2 = st.columns([2, 1])
@@ -5367,7 +5397,7 @@ def main():
             5. Create your password and you'll be logged in automatically
             """)
         
-        if st.button("I've set my password - Continue to Login"):
+        if st.button("Continue to Login", type="primary"):
             st.query_params.clear()
             st.rerun()
         st.stop()
