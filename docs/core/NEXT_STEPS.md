@@ -12,7 +12,24 @@
 
 ### Future Improvements Needed
 
-#### 1. Crisp Chatbot Shortcuts Enhancement
+#### 1. Support and Demo Account Setup
+**Priority: Medium - Essential for customer support**
+
+Set up dedicated accounts for support and demonstrations:
+- **Test@AgentCommissionTracker.com** - For reproducing customer issues
+- **Demo@AgentCommissionTracker.com** - Pre-populated with sample data for demos
+- Create 100% off Stripe coupons (limit to these specific emails)
+- Benefits:
+  - Test customer issues without accessing their data
+  - Professional demo environment
+  - Clean separation of test/production data
+- Implementation:
+  - Create coupon in Stripe (when going live)
+  - Set up email aliases (already done)
+  - Document account purposes
+  - Pre-populate demo account with realistic sample data
+
+#### 2. Crisp Chatbot Shortcuts Enhancement
 **Priority: High - Improves customer support efficiency**
 
 Set up Crisp shortcuts to replace repetitive copy/paste responses:

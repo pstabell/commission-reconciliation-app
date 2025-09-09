@@ -552,7 +552,8 @@ def show_password_reset_completion(reset_token: str):
                                     
                                     # Update user's password
                                     supabase.table('users').update({
-                                        'password_hash': new_password  # TODO: Hash this!
+                                        'password_hash': new_password,  # TODO: Hash this!
+                                        'password_set': True
                                     }).eq('email', email).execute()
                                     
                                     # Mark token as used
@@ -561,11 +562,10 @@ def show_password_reset_completion(reset_token: str):
                                     }).eq('token', reset_token).execute()
                                     
                                     st.success("✅ Password updated successfully! You can now login with your new password.")
-                                    
-                                    # Clear the reset token from URL
-                                    if st.button("Continue to Login", type="primary"):
-                                        st.query_params.clear()
-                                        st.rerun()
+                                    # Auto redirect after success
+                                    st.query_params.clear()
+                                    time.sleep(2)
+                                    st.rerun()
                                         
                                 except Exception as e:
                                     st.error(f"Error updating password: {e}")
