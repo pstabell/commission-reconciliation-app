@@ -148,7 +148,7 @@ def stripe_webhook():
                     # Create new user
                     print(f"Creating new user...")
                     user_data = {
-                        'email': customer_email,
+                        'email': customer_email.lower() if customer_email else '',  # Store lowercase
                         'stripe_customer_id': stripe_customer_id,
                         'subscription_id': subscription_id,
                         'subscription_status': 'active',
@@ -169,7 +169,7 @@ def stripe_webhook():
                     expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
                     
                     token_data = {
-                        'email': customer_email,
+                        'email': customer_email.lower() if customer_email else '',  # Store lowercase
                         'token': setup_token,
                         'expires_at': expires_at,
                         'used': False

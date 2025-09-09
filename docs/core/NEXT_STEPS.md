@@ -12,6 +12,19 @@
 
 ### Future Improvements Needed
 
+#### Stripe Retention Coupons
+**Priority: Medium - Reduce churn and win back cancelled users**
+
+Set up retention strategy with Stripe coupons:
+- Create win-back coupons (e.g., 50% off for 3 months)
+- Send automated emails to cancelled users after 30 days
+- Create special offers for users who attempt to cancel
+- Track effectiveness of different coupon strategies
+- Benefits:
+  - Reduce churn rate
+  - Win back former customers
+  - Increase customer lifetime value
+
 #### 1. Support and Demo Account Setup
 **Priority: Medium - Essential for customer support**
 

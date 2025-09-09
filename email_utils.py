@@ -84,6 +84,9 @@ def send_password_reset_email(to_email: str, reset_link: str):
     
     subject = "Reset Your Agent Commission Tracker Password"
     
+    # TODO: Replace with actual hosted logo URL
+    logo_url = os.getenv("LOGO_URL", "https://your-domain.com/logo.png")
+    
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -92,6 +95,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
             .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+            .logo {{ max-width: 200px; height: auto; margin: 0 auto 20px; display: block; }}
             .content {{ background-color: #f9f9f9; padding: 30px; }}
             .button {{ display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
             .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 30px; }}
@@ -100,6 +104,7 @@ def send_password_reset_email(to_email: str, reset_link: str):
     <body>
         <div class="container">
             <div class="header">
+                <img src="{logo_url}" alt="Agent Commission Tracker" class="logo">
                 <h1>Agent Commission Tracker</h1>
             </div>
             <div class="content">
@@ -146,6 +151,9 @@ def send_welcome_email(to_email: str):
     subject = "Your 14-Day Free Trial Has Started - Agent Commission Tracker"
     app_url = os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com")
     
+    # TODO: Replace with actual hosted logo URL
+    logo_url = os.getenv("LOGO_URL", "https://your-domain.com/logo.png")
+    
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -154,6 +162,7 @@ def send_welcome_email(to_email: str):
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
             .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+            .logo {{ max-width: 200px; height: auto; margin: 0 auto 20px; display: block; }}
             .content {{ background-color: #f9f9f9; padding: 30px; }}
             .button {{ display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
             .feature {{ background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }}
@@ -163,6 +172,7 @@ def send_welcome_email(to_email: str):
     <body>
         <div class="container">
             <div class="header">
+                <img src="{logo_url}" alt="Agent Commission Tracker" class="logo">
                 <h1 style="margin: 0; padding: 0;">Welcome to Agent</h1>
                 <h1 style="margin: 0; padding: 0;">Commission Tracker! 🎉</h1>
             </div>
@@ -244,6 +254,9 @@ def send_password_setup_email(to_email: str, setup_link: str):
     
     subject = "Set Your Password - Agent Commission Tracker"
     
+    # TODO: Replace with actual hosted logo URL
+    logo_url = os.getenv("LOGO_URL", "https://your-domain.com/logo.png")
+    
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -252,6 +265,7 @@ def send_password_setup_email(to_email: str, setup_link: str):
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
             .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
+            .logo {{ max-width: 200px; height: auto; margin: 0 auto 20px; display: block; }}
             .content {{ background-color: #f9f9f9; padding: 30px; }}
             .button {{ display: inline-block; padding: 15px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }}
             .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 30px; }}
@@ -261,6 +275,7 @@ def send_password_setup_email(to_email: str, setup_link: str):
     <body>
         <div class="container">
             <div class="header">
+                <img src="{logo_url}" alt="Agent Commission Tracker" class="logo">
                 <h1 style="margin: 0; padding: 0;">Welcome to Agent</h1>
                 <h1 style="margin: 0; padding: 0;">Commission Tracker!</h1>
             </div>

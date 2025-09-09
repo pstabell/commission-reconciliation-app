@@ -443,7 +443,7 @@ def show_password_reset_form():
                             expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
                             
                             token_data = {
-                                'email': email,
+                                'email': email.lower(),  # Store lowercase to match users table
                                 'token': reset_token,
                                 'expires_at': expires_at
                             }
