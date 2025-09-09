@@ -372,7 +372,7 @@ def show_subscribe_tab():
                             # Create checkout session with 14-day free trial
                             checkout_session = stripe.checkout.Session.create(
                                 line_items=[{
-                                    'price': os.getenv("STRIPE_PRICE_ID", "price_1S3nNU0wB1ZnPw8EFbZzbrQM"),
+                                    'price': os.getenv("STRIPE_PRICE_ID"),
                                     'quantity': 1,
                                 }],
                                 mode='subscription',

@@ -93,7 +93,7 @@ import stripe
 # Configure Stripe (only for production environment)
 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
     stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-    STRIPE_PRICE_ID = "price_1S3nNU0wB1ZnPw8EFbZzbrQM"  # Your Agent Commission Tracker price ID
+    STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")  # Your Agent Commission Tracker price ID
     RENDER_APP_URL = "https://commission-tracker-app.onrender.com"  # Your Render app URL
 
 # Debug tracking for reruns
