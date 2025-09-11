@@ -13456,10 +13456,11 @@ SOLUTION NEEDED:
                                 
                                 with col2:
                                     # Handle missing or invalid effective_date
-                                    current_eff_date = datetime.datetime.now().date()
+                                    import datetime as dt
+                                    current_eff_date = dt.datetime.now().date()
                                     if rule.get('effective_date'):
                                         try:
-                                            current_eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
+                                            current_eff_date = dt.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
                                         except:
                                             pass
                                     effective_date = st.date_input("Effective Date", value=current_eff_date)
