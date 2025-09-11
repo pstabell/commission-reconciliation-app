@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commission IQ API Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</head>
+<body class="bg-gray-50" x-data="apiDocs()">
+    
+    <!-- Navigation -->
+    <nav class="sticky top-0 bg-white shadow-sm z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg"></div>
+                    <h1 class="text-xl font-bold text-gray-900">Commission IQ API</h1>
+                    <span class="text-sm text-gray-500">v1.0.0</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/api/docs" class="text-blue-600 hover:text-blue-800">Interactive Docs</a>
+                    <a href="/api/redoc" class="text-blue-600 hover:text-blue-800">ReDoc</a>
+                    <a href="https://github.com/commission-iq/api-examples" class="text-gray-600 hover:text-gray-800">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-md h-screen sticky top-16 overflow-y-auto">
+            <div class="p-4">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Getting Started</h2>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#introduction" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'introduction'}">Introduction</a>
+                    </li>
+                    <li>
+                        <a href="#authentication" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'authentication'}">Authentication</a>
+                    </li>
+                    <li>
+                        <a href="#rate-limits" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'rate-limits'}">Rate Limits</a>
+                    </li>
+                    <li>
+                        <a href="#errors" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'errors'}">Error Handling</a>
+                    </li>
+                </ul>
+
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mt-8 mb-4">Core Resources</h2>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#policies" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'policies'}">Policies</a>
+                    </li>
+                    <li>
+                        <a href="#commissions" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'commissions'}">Commissions</a>
+                    </li>
+                    <li>
+                        <a href="#analytics" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'analytics'}">Analytics</a>
+                    </li>
+                    <li>
+                        <a href="#integrations" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'integrations'}">Integrations</a>
+                    </li>
+                </ul>
+
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mt-8 mb-4">Advanced</h2>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#webhooks" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'webhooks'}">Webhooks</a>
+                    </li>
+                    <li>
+                        <a href="#batch-operations" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'batch-operations'}">Batch Operations</a>
+                    </li>
+                    <li>
+                        <a href="#sdks" class="block px-3 py-2 text-sm rounded hover:bg-gray-100" :class="{'bg-blue-50 text-blue-700': activeSection === 'sdks'}">SDKs & Libraries</a>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-4xl mx-auto px-8 py-12">
+            
+            <!-- Introduction -->
+            <section id="introduction" class="mb-16">
+                <h1 class="text-3xl font-bold text-gray-900 mb-4">API Documentation</h1>
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                    <p class="text-blue-700">
+                        <strong>Base URL:</strong> <code class="bg-blue-100 px-2 py-1 rounded">https://api.commission-intelligence.io/v1</code>
+                    </p>
+                </div>
+                
+                <p class="text-gray-700 mb-6">
+                    The Commission Intelligence Platform API is a RESTful API that provides programmatic access to all platform features. 
+                    Build custom integrations, automate workflows, and access your commission data from any application.
+                </p>
+
+                <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                    <pre><code class="language-bash"># Quick test with curl
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+     https://api.commission-intelligence.io/v1/policies</code></pre>
+                </div>
+            </section>
+
+            <!-- Authentication -->
+            <section id="authentication" class="mb-16">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Authentication</h2>
+                <p class="text-gray-700 mb-6">
+                    The Commission IQ API uses Bearer token authentication. Include your API key in the Authorization header of each request.
+                </p>
+
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3">Getting Your API Key</h3>
+                    <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                        <li>Log in to your Commission IQ dashboard</li>
+                        <li>Navigate to Settings → API Keys</li>
+                        <li>Click "Create New Key" and give it a descriptive name</li>
+                        <li>Copy the key immediately - it won't be shown again</li>
+                    </ol>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-semibold text-gray-900 mb-2">Request Example</h4>
+                        <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                            <pre><code class="language-bash">curl -X GET \
+  https://api.commission-intelligence.io/v1/policies \
+  -H "Authorization: Bearer cipk_live_abc123..."</code></pre>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-900 mb-2">Using with SDKs</h4>
+                        <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                            <pre><code class="language-python">import commission_iq
+
+client = commission_iq.Client(
+    api_key="cipk_live_abc123..."
+)</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rate Limits -->
+            <section id="rate-limits" class="mb-16">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Rate Limits</h2>
+                <p class="text-gray-700 mb-6">
+                    To ensure fair usage and system stability, the API enforces rate limits based on your plan.
+                </p>
+
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-3 px-4">Plan</th>
+                                <th class="text-left py-3 px-4">Requests/Second</th>
+                                <th class="text-left py-3 px-4">Requests/Day</th>
+                                <th class="text-left py-3 px-4">Burst Limit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b">
+                                <td class="py-3 px-4">Starter</td>
+                                <td class="py-3 px-4">10</td>
+                                <td class="py-3 px-4">10,000</td>
+                                <td class="py-3 px-4">20</td>
+                            </tr>
+                            <tr class="border-b">
+                                <td class="py-3 px-4">Professional</td>
+                                <td class="py-3 px-4">50</td>
+                                <td class="py-3 px-4">100,000</td>
+                                <td class="py-3 px-4">100</td>
+                            </tr>
+                            <tr class="border-b">
+                                <td class="py-3 px-4">Enterprise</td>
+                                <td class="py-3 px-4">100</td>
+                                <td class="py-3 px-4">Unlimited</td>
+                                <td class="py-3 px-4">200</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                    <p class="text-yellow-700">
+                        <strong>Rate Limit Headers:</strong> Every response includes headers showing your current usage:
+                    </p>
+                    <ul class="list-disc list-inside mt-2 text-sm">
+                        <li><code>X-RateLimit-Limit</code> - Your rate limit</li>
+                        <li><code>X-RateLimit-Remaining</code> - Requests remaining</li>
+                        <li><code>X-RateLimit-Reset</code> - Reset timestamp</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Policies -->
+            <section id="policies" class="mb-16">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Policies</h2>
+                <p class="text-gray-700 mb-6">
+                    Manage insurance policies and their associated commission data.
+                </p>
+
+                <div class="space-y-8">
+                    <!-- List Policies -->
+                    <div class="bg-white rounded-lg shadow-sm border p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">List Policies</h3>
+                            <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">GET</span>
+                        </div>
+                        
+                        <p class="text-gray-700 mb-4">Retrieve a paginated list of policies with optional filtering.</p>
+                        
+                        <div class="bg-gray-50 rounded p-3 mb-4 font-mono text-sm">
+                            GET /policies
+                        </div>
+
+                        <h4 class="font-semibold mb-2">Query Parameters</h4>
+                        <table class="w-full text-sm mb-4">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">Parameter</th>
+                                    <th class="text-left py-2">Type</th>
+                                    <th class="text-left py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b">
+                                    <td class="py-2"><code>page</code></td>
+                                    <td class="py-2">integer</td>
+                                    <td class="py-2">Page number (default: 1)</td>
+                                </tr>
+                                <tr class="border-b">
+                                    <td class="py-2"><code>per_page</code></td>
+                                    <td class="py-2">integer</td>
+                                    <td class="py-2">Results per page (max: 100)</td>
+                                </tr>
+                                <tr class="border-b">
+                                    <td class="py-2"><code>status</code></td>
+                                    <td class="py-2">string</td>
+                                    <td class="py-2">Filter by status</td>
+                                </tr>
+                                <tr class="border-b">
+                                    <td class="py-2"><code>carrier</code></td>
+                                    <td class="py-2">string</td>
+                                    <td class="py-2">Filter by carrier name</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="font-semibold mb-2">Example Request</h4>
+                                <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                                    <pre><code class="language-bash">curl -X GET \
+  "https://api.commission-intelligence.io/v1/policies?page=1&status=active" \
+  -H "Authorization: Bearer YOUR_API_KEY"</code></pre>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold mb-2">Example Response</h4>
+                                <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                                    <pre><code class="language-json">{
+  "data": [
+    {
+      "id": "pol-1234",
+      "policy_number": "AUTO-123456",
+      "customer": "ABC Insurance",
+      "carrier": "Progressive",
+      "premium": 2500.00,
+      "commission_amount": 312.50
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total": 45
+  }
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Create Policy -->
+                    <div class="bg-white rounded-lg shadow-sm border p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Create Policy</h3>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">POST</span>
+                        </div>
+                        
+                        <p class="text-gray-700 mb-4">Create a new policy record.</p>
+                        
+                        <div class="bg-gray-50 rounded p-3 mb-4 font-mono text-sm">
+                            POST /policies
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="font-semibold mb-2">Request Body</h4>
+                                <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                                    <pre><code class="language-json">{
+  "policy_number": "AUTO-789012",
+  "customer": "XYZ Corp",
+  "carrier": "State Farm",
+  "policy_type": "AUTO",
+  "premium": 3200.00,
+  "effective_date": "2024-01-01",
+  "commission_rate": 12.5
+}</code></pre>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold mb-2">Response</h4>
+                                <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                                    <pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "id": "pol-5678",
+    "policy_number": "AUTO-789012",
+    "commission_amount": 400.00,
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Webhooks -->
+            <section id="webhooks" class="mb-16">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Webhooks</h2>
+                <p class="text-gray-700 mb-6">
+                    Receive real-time notifications when events occur in your account.
+                </p>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Available Events</h3>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-medium mb-2">Policy Events</h4>
+                            <ul class="space-y-1 text-sm text-gray-700">
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">policy.created</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">policy.updated</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">policy.renewed</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">policy.cancelled</code></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-medium mb-2">Commission Events</h4>
+                            <ul class="space-y-1 text-sm text-gray-700">
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">commission.calculated</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">commission.paid</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">commission.reconciled</code></li>
+                                <li><code class="bg-gray-100 px-2 py-1 rounded">commission.discrepancy</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <h3 class="text-lg font-semibold mb-4">Webhook Payload</h3>
+                    <p class="text-gray-700 mb-4">All webhooks send a POST request with this structure:</p>
+                    <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                        <pre><code class="language-json">{
+  "id": "evt_1234567890",
+  "type": "policy.created",
+  "created": "2024-01-15T10:30:00Z",
+  "data": {
+    "object": {
+      "id": "pol-5678",
+      "policy_number": "AUTO-123456",
+      // ... full object data
+    }
+  },
+  "signature": "sha256=abc123..."  // HMAC signature for verification
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SDKs -->
+            <section id="sdks" class="mb-16">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">SDKs & Libraries</h2>
+                <p class="text-gray-700 mb-6">
+                    Official SDKs make it easy to integrate with the Commission IQ API.
+                </p>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-sm border p-6">
+                        <div class="flex items-center mb-4">
+                            <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" class="w-8 h-8 mr-3">
+                            <h3 class="text-lg font-semibold">Python SDK</h3>
+                        </div>
+                        <div class="bg-gray-900 rounded p-3 mb-4 overflow-x-auto">
+                            <pre><code class="language-bash">pip install commission-iq</code></pre>
+                        </div>
+                        <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                            <pre><code class="language-python">import commission_iq
+
+client = commission_iq.Client(api_key="YOUR_KEY")
+
+# List policies
+policies = client.policies.list(status="active")
+
+# Create commission calculation
+result = client.commissions.calculate(
+    premium=2500.00,
+    rate=12.5,
+    type="NEW"
+)</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm border p-6">
+                        <div class="flex items-center mb-4">
+                            <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg" class="w-8 h-8 mr-3">
+                            <h3 class="text-lg font-semibold">JavaScript SDK</h3>
+                        </div>
+                        <div class="bg-gray-900 rounded p-3 mb-4 overflow-x-auto">
+                            <pre><code class="language-bash">npm install @commission-iq/sdk</code></pre>
+                        </div>
+                        <div class="bg-gray-900 rounded p-3 overflow-x-auto">
+                            <pre><code class="language-javascript">import CommissionIQ from '@commission-iq/sdk';
+
+const client = new CommissionIQ({
+  apiKey: 'YOUR_KEY'
+});
+
+// List policies
+const policies = await client.policies.list({
+  status: 'active'
+});
+
+// Calculate commission
+const result = await client.commissions.calculate({
+  premium: 2500.00,
+  rate: 12.5,
+  type: 'NEW'
+});</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        function apiDocs() {
+            return {
+                activeSection: 'introduction',
+                init() {
+                    // Highlight active section on scroll
+                    const sections = document.querySelectorAll('section[id]');
+                    const observerOptions = {
+                        rootMargin: '-20% 0px -70% 0px'
+                    };
+                    
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                this.activeSection = entry.target.id;
+                            }
+                        });
+                    }, observerOptions);
+                    
+                    sections.forEach(section => {
+                        observer.observe(section);
+                    });
+                    
+                    // Re-run Prism syntax highlighting
+                    Prism.highlightAll();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

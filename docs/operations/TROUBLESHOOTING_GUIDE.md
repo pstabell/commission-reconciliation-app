@@ -199,6 +199,75 @@ if 'key_name' not in st.session_state:
 
 ---
 
+## Row Level Security (RLS) Issues
+
+### Carriers, MGAs, and Commission Rules Not Visible
+**Symptoms**:
+- Dropdown lists for Carriers and MGAs appear empty
+- Commission rules don't load or apply
+- Error messages about missing carriers/MGAs when saving
+- Debug logs show "0 carriers found" or "0 MGAs found"
+
+**Cause**: 
+Row Level Security (RLS) is enabled on these tables but no policies are configured, effectively blocking all access.
+
+**Solution**:
+1. **Immediate Fix** - Disable RLS on affected tables:
+```sql
+-- Disable RLS on all affected tables
+ALTER TABLE carriers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE mgas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_rules DISABLE ROW LEVEL SECURITY;
+
+-- Verify RLS is disabled
+SELECT 
+    tablename,
+    rowsecurity as rls_enabled,
+    CASE 
+        WHEN rowsecurity THEN '🔒 RLS ENABLED - Data blocked'
+        ELSE '🔓 RLS DISABLED - Data accessible'
+    END as status
+FROM pg_tables 
+WHERE tablename IN ('carriers', 'mgas', 'commission_rules')
+    AND schemaname = 'public';
+```
+
+2. **Verify Data Access**:
+```sql
+-- Check that data is now accessible
+SELECT COUNT(*) as carrier_count FROM carriers;
+SELECT COUNT(*) as mga_count FROM mgas;
+SELECT COUNT(*) as rule_count FROM commission_rules;
+```
+
+3. **Long-term Solution**: 
+   - Create proper RLS policies for multi-tenant access when needed
+   - For single-tenant apps, keep RLS disabled on these reference tables
+   - Document which tables should have RLS enabled vs disabled
+
+### Testing for RLS Issues
+**Quick diagnostic query**:
+```sql
+-- Check all tables with RLS status
+SELECT 
+    schemaname,
+    tablename,
+    rowsecurity as rls_enabled,
+    hasindexes
+FROM pg_tables 
+WHERE schemaname = 'public'
+ORDER BY rowsecurity DESC, tablename;
+```
+
+**Common tables that may need RLS disabled**:
+- `carriers` - Insurance carrier reference data
+- `mgas` - Managing General Agent reference data  
+- `commission_rules` - Commission rate configurations
+- `policy_types` - Policy type definitions
+- Any other shared reference/lookup tables
+
+---
+
 ## SQL Scripts for Common Fixes
 
 ### Rename Column
@@ -224,4 +293,4 @@ LIMIT 5;
 
 ---
 
-*Last Updated: July 4, 2025*
+*Last Updated: January 11, 2025*

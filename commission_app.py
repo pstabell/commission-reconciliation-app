@@ -13455,7 +13455,13 @@ SOLUTION NEEDED:
                                     renewal_rate = st.number_input("RWL %", min_value=0.0, max_value=100.0, value=float(rule.get('renewal_rate', rule['new_rate'])), step=0.5)
                                 
                                 with col2:
-                                    current_eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
+                                    # Handle missing or invalid effective_date
+                                    current_eff_date = datetime.date.today()
+                                    if rule.get('effective_date'):
+                                        try:
+                                            current_eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
+                                        except:
+                                            pass
                                     effective_date = st.date_input("Effective Date", value=current_eff_date)
                                     payment_terms = st.selectbox("Terms", ["", "Advanced", "As Earned"], 
                                                                 index=[0, 1, 2].index(rule.get('payment_terms', '')) if rule.get('payment_terms', '') in ["", "Advanced", "As Earned"] else 0)

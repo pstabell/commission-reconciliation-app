@@ -189,6 +189,8 @@ Comprehensive documentation is available in the `/docs` directory:
 - **[Next Steps](docs/core/NEXT_STEPS.md)** - Current status and roadmap
 - **[Formula System](docs/features/FORMULA_SYSTEM.md)** - Commission calculation logic
 - **[Reconciliation](docs/features/RECONCILIATION_SYSTEM.md)** - Reconciliation features
+- **[Troubleshooting Guide](docs/operations/TROUBLESHOOTING_GUIDE.md)** - Common issues and solutions
+- **[RLS Troubleshooting](docs/operations/RLS_TROUBLESHOOTING.md)** - Row Level Security issues
 
 ## Quick Start Guide
 
