@@ -13464,8 +13464,13 @@ SOLUTION NEEDED:
                                         except:
                                             pass
                                     effective_date = st.date_input("Effective Date", value=current_eff_date)
-                                    payment_terms = st.selectbox("Terms", ["", "Advanced", "As Earned"], 
-                                                                index=[0, 1, 2].index(rule.get('payment_terms', '')) if rule.get('payment_terms', '') in ["", "Advanced", "As Earned"] else 0)
+                                    terms_options = ["", "Advanced", "As Earned"]
+                                    current_terms = rule.get('payment_terms', '')
+                                    try:
+                                        terms_index = terms_options.index(current_terms) if current_terms in terms_options else 0
+                                    except:
+                                        terms_index = 0
+                                    payment_terms = st.selectbox("Terms", terms_options, index=terms_index)
                                 
                                 with col3:
                                     rule_description = st.text_area("Description", value=rule.get('rule_description', ''), height=100)
