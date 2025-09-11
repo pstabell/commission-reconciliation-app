@@ -13456,7 +13456,7 @@ SOLUTION NEEDED:
                                 
                                 with col2:
                                     # Handle missing or invalid effective_date
-                                    current_eff_date = datetime.date.today()
+                                    current_eff_date = datetime.datetime.now().date()
                                     if rule.get('effective_date'):
                                         try:
                                             current_eff_date = datetime.datetime.strptime(rule['effective_date'][:10], '%Y-%m-%d').date()
