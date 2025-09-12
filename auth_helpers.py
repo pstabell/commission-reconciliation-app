@@ -380,6 +380,7 @@ def show_subscribe_tab():
                                 subscription_data={
                                     'trial_period_days': 14,  # 14-day free trial
                                 },
+                                payment_method_collection='if_required',  # Don't require payment for 100% off coupons
                                 success_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com") + "/?session_id={CHECKOUT_SESSION_ID}",
                                 cancel_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com"),
                                 allow_promotion_codes=True,  # Enable coupon code field in checkout
