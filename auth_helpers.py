@@ -382,6 +382,7 @@ def show_subscribe_tab():
                                 },
                                 success_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com") + "/?session_id={CHECKOUT_SESSION_ID}",
                                 cancel_url=os.getenv("RENDER_APP_URL", "https://commission-tracker-app.onrender.com"),
+                                allow_promotion_codes=True,  # Enable coupon code field in checkout
                             )
                             st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_session.url}">', 
                                        unsafe_allow_html=True)
