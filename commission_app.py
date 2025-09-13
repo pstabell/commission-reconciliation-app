@@ -13886,36 +13886,36 @@ SOLUTION NEEDED:
                 
                 # Find transactions missing Policy Origination Date
                 missing_origination = regular_transactions[
-                (regular_transactions['Policy Origination Date'].isna()) | 
-                (regular_transactions['Policy Origination Date'] == '')
-            ].copy()
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Transactions", len(all_data))
-            with col2:
-                st.metric("Regular Transactions", len(regular_transactions))
-            with col3:
-                st.metric("Missing Origination Date", len(missing_origination))
-            
-            if len(missing_origination) == 0:
-                st.success("✅ All transactions already have Policy Origination Date populated!")
-            else:
-                # Show preview
-                if st.checkbox("Show transactions that need origination dates"):
-                    st.dataframe(
-                        missing_origination[['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 'Effective Date']].head(20),
-                        use_container_width=True
-                    )
-                    if len(missing_origination) > 20:
-                        st.caption(f"Showing first 20 of {len(missing_origination)} transactions")
+                    (regular_transactions['Policy Origination Date'].isna()) | 
+                    (regular_transactions['Policy Origination Date'] == '')
+                ].copy()
                 
-                # Process button
-                if st.button("🔍 Analyze Missing Dates", type="primary", key="analyze_origination_dates"):
-                    updates = []
-                    errors = []
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Transactions", len(all_data))
+                with col2:
+                    st.metric("Regular Transactions", len(regular_transactions))
+                with col3:
+                    st.metric("Missing Origination Date", len(missing_origination))
+                
+                if len(missing_origination) == 0:
+                    st.success("✅ All transactions already have Policy Origination Date populated!")
+                else:
+                    # Show preview
+                    if st.checkbox("Show transactions that need origination dates"):
+                        st.dataframe(
+                            missing_origination[['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 'Effective Date']].head(20),
+                            use_container_width=True
+                        )
+                        if len(missing_origination) > 20:
+                            st.caption(f"Showing first 20 of {len(missing_origination)} transactions")
                     
-                    progress_bar = st.progress(0)
+                    # Process button
+                    if st.button("🔍 Analyze Missing Dates", type="primary", key="analyze_origination_dates"):
+                        updates = []
+                        errors = []
+                        
+                        progress_bar = st.progress(0)
                     status_text = st.empty()
                     
                     # Process each missing transaction
