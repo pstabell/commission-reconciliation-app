@@ -1,14 +1,10 @@
 import pandas as pd
 import random
 
+# --- Anonymization Functions (from before) ---
 def anonymize_realistic_name(name):
-    """Anonymizes a name to look realistic by making slight, plausible changes."""
-    if not isinstance(name, str):
-        return name
-
+    if not isinstance(name, str): return name
     name_parts = name.split()
-    
-    # --- For Company Names (containing LLC, Inc., etc.) ---
     if any(suffix in name.upper() for suffix in ['LLC', 'INC', 'L.L.C.', 'INC.']):
         first_word = name_parts[0]
         business_words = ['Apex', 'Summit', 'Pinnacle', 'Horizon', 'Vanguard', 'Matrix', 'Synergy', 'Quantum', 'Stellar', 'Orion']
@@ -17,15 +13,11 @@ def anonymize_realistic_name(name):
             new_first_word = random.choice(business_words)
         name_parts[0] = new_first_word
         return " ".join(name_parts)
-    
-    # --- For Personal Names (assuming format "First Last") ---
     if len(name_parts) == 2:
         first_name, last_name = name_parts
         if len(last_name) > 2:
-            if last_name.lower().endswith('s'):
-                last_name = last_name[:-1] + 'z' # Gomes -> GomeZ
-            elif last_name.lower().endswith('n'):
-                 last_name = last_name[:-1] + 'm' # Jackson -> Jacksom
+            if last_name.lower().endswith('s'): last_name = last_name[:-1] + 'z'
+            elif last_name.lower().endswith('n'): last_name = last_name[:-1] + 'm'
             else:
                 vowels = "aeiou"
                 last_name_list = list(last_name)
@@ -35,11 +27,9 @@ def anonymize_realistic_name(name):
                         break
                 last_name = "".join(last_name_list)
         return f"{first_name} {last_name.capitalize()}"
-        
     return name
 
 def scramble_policy_number(policy_number):
-    """Scrambles the digits of a policy number while keeping letters and the last digit in place."""
     if not isinstance(policy_number, str) or len(policy_number) <= 1: return policy_number
     last_char = policy_number[-1]
     main_part = policy_number[:-1]
@@ -64,16 +54,35 @@ try:
     df = pd.read_excel(input_filename)
     print("Data read successfully.")
 
-    if 'Customer' in df.columns:
-        print("Anonymizing 'Customer' names...")
-        df['Customer'] = df['Customer'].apply(anonymize_realistic_name)
-    if 'Policy Number' in df.columns:
-        print("Scrambling 'Policy Number'...")
-        df['Policy Number'] = df['Policy Number'].apply(scramble_policy_number)
+    # --- Anonymize Customers Consistently ---
+    if 'Client ID' in df.columns and 'Customer' in df.columns:
+        print("Anonymizing 'Customer' names consistently by 'Client ID'...")
+        # Create a mapping from original name to new fake name for each unique client
+        unique_clients = df.drop_duplicates(subset=['Client ID'])
+        client_id_to_name_map = {}
+        for index, row in unique_clients.iterrows():
+            original_name = row['Customer']
+            client_id_to_name_map[row['Client ID']] = anonymize_realistic_name(original_name)
+        
+        # Apply the consistent fake name to all rows based on Client ID
+        df['Customer'] = df['Client ID'].map(client_id_to_name_map)
+        print("Customer names anonymized.")
 
+    # --- Scramble Policy Numbers Consistently ---
+    if 'Policy Number' in df.columns:
+        print("Scrambling 'Policy Number' consistently...")
+        # Create a mapping from original policy number to a scrambled one
+        unique_policies = df['Policy Number'].unique()
+        policy_number_map = {policy: scramble_policy_number(policy) for policy in unique_policies}
+        
+        # Apply the consistent scrambled number to all rows
+        df['Policy Number'] = df['Policy Number'].map(policy_number_map)
+        print("Policy numbers scrambled.")
+
+    # Save the anonymized data to the new CSV file
     df.to_csv(output_filename, index=False)
     print("\n--- SUCCESS! ---")
-    print(f"Anonymized CSV file created: '{output_filename}'")
+    print(f"Consistent anonymized CSV file created: '{output_filename}'")
 
 except FileNotFoundError:
     print(f"\n--- ERROR ---")

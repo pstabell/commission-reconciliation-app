@@ -398,7 +398,8 @@ def get_supabase_client():
         # Use production database credentials
         url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
         # Try service role key first (bypasses RLS), fall back to anon key
-        service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY")
+        # Also check for shorter env var names in case of Render issues
+        service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("PROD_SERVICE_KEY")
         anon_key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
         key = service_key or anon_key
         
@@ -433,16 +434,20 @@ def add_user_email_to_data(data_dict):
         data_dict["user_email"] = st.session_state["user_email"]
     return data_dict
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
 def load_policies_data():
     """Load policies data from Supabase with caching - filtered by current user."""
     try:
         supabase = get_supabase_client()
         # In production, filter by user email for multi-tenancy
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+            # Debug logging
+            print(f"DEBUG: Filtering for user_email = {st.session_state['user_email']}")
             response = supabase.table('policies').select("*").eq('user_email', st.session_state['user_email']).execute()
+            print(f"DEBUG: Found {len(response.data) if response.data else 0} records for this user")
         else:
             # Personal environment - show all data
+            print("DEBUG: Personal environment - loading all data")
             response = supabase.table('policies').select("*").execute()
         if response.data:
             df = pd.DataFrame(response.data)
@@ -480,6 +485,8 @@ def load_policies_data():
 def clear_policies_cache():
     """Clear the policies data cache."""
     load_policies_data.clear()
+    if 'policies_data' in st.session_state:
+        del st.session_state['policies_data']
 
 def format_date_value(date_value, format='%m/%d/%Y'):
     """Safely format a date value to MM/DD/YYYY string format.
@@ -5736,6 +5743,18 @@ def main():
         
         # Load fresh data for this page
         all_data = load_policies_data()
+        
+        # Debug section
+        with st.expander("🔧 Debug Info"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"Logged in as: {st.session_state.get('user_email', 'Not set')}")
+                st.write(f"Environment: {os.getenv('APP_ENVIRONMENT', 'Not set')}")
+                st.write(f"Records loaded: {len(all_data)}")
+            with col2:
+                if st.button("🔄 Clear Cache & Reload", key="dashboard_clear_cache"):
+                    clear_policies_cache()
+                    st.rerun()
         
         if all_data.empty:
             # Show welcome message until user explicitly hides it
