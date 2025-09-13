@@ -1,8 +1,17 @@
 import streamlit as st
+
+# Set page config first (required to be first Streamlit command)
 st.set_page_config(
+    page_title="Commission Tracker",
+    page_icon="💰",
     layout="wide",
     initial_sidebar_state="collapsed"  # Start collapsed on mobile
 )
+
+# Show a simple loading message immediately
+if 'imports_loaded' not in st.session_state:
+    st.info("🔄 Loading Commission Tracker... This may take up to 20 seconds on first startup.")
+    st.session_state.imports_loaded = True
 
 # Show loading screen during initial app load
 # Check if this is the first load (no session state initialized yet)
