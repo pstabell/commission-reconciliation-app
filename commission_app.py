@@ -5988,27 +5988,39 @@ def main():
                 st.subheader("Commission Analysis")
                 
                 if 'Commission_Paid' in all_data.columns and 'Policy_Type' in all_data.columns:
-                    commission_by_type = all_data.groupby('Policy_Type')['Commission_Paid'].sum().sort_values(ascending=False)
-                    st.write("**Commission by Policy Type:**")
-                    st.dataframe(commission_by_type.reset_index())
+                    try:
+                        commission_by_type = all_data.groupby('Policy_Type')['Commission_Paid'].sum().sort_values(ascending=False)
+                        st.write("**Commission by Policy Type:**")
+                        st.dataframe(commission_by_type.reset_index())
+                    except Exception as e:
+                        st.warning("Unable to generate commission by policy type report")
                     
                 if 'Transaction_Type' in all_data.columns and 'Commission_Paid' in all_data.columns:
-                    commission_by_transaction = all_data.groupby('Transaction_Type')['Commission_Paid'].sum().sort_values(ascending=False)
-                    st.write("**Commission by Transaction Type:**")
-                    st.dataframe(commission_by_transaction.reset_index())
+                    try:
+                        commission_by_transaction = all_data.groupby('Transaction_Type')['Commission_Paid'].sum().sort_values(ascending=False)
+                        st.write("**Commission by Transaction Type:**")
+                        st.dataframe(commission_by_transaction.reset_index())
+                    except Exception as e:
+                        st.warning("Unable to generate commission by transaction type report")
             
             with tab3:
                 st.subheader("Policy Reports")
                 
                 if 'Policy_Type' in all_data.columns:
-                    policy_counts = all_data['Policy_Type'].value_counts()
-                    st.write("**Policy Count by Type:**")
-                    st.dataframe(policy_counts.reset_index())
+                    try:
+                        policy_counts = all_data['Policy_Type'].value_counts()
+                        st.write("**Policy Count by Type:**")
+                        st.dataframe(policy_counts.reset_index())
+                    except Exception as e:
+                        st.warning("Unable to generate policy count report")
                 
                 if 'Transaction_Type' in all_data.columns:
-                    transaction_counts = all_data['Transaction_Type'].value_counts()
-                    st.write("**Transaction Count by Type:**")
-                    st.dataframe(transaction_counts.reset_index())
+                    try:
+                        transaction_counts = all_data['Transaction_Type'].value_counts()
+                        st.write("**Transaction Count by Type:**")
+                        st.dataframe(transaction_counts.reset_index())
+                    except Exception as e:
+                        st.warning("Unable to generate transaction count report")
             
             with tab4:
                 st.subheader("Custom Reports")
