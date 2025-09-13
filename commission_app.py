@@ -437,6 +437,18 @@ def add_user_email_to_data(data_dict):
 def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
+        # Enhanced debug logging for mobile issue
+        debug_info = {
+            "function": "load_policies_data",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "session_id": id(st.session_state),
+            "user_email": st.session_state.get('user_email', 'NOT SET'),
+            "password_correct": st.session_state.get('password_correct', 'NOT SET'),
+            "app_environment": os.getenv("APP_ENVIRONMENT", 'NOT SET'),
+            "user_agent": st.session_state.get('user_agent', 'NOT DETECTED')
+        }
+        print(f"DEBUG load_policies_data: {json.dumps(debug_info)}")
+        
         supabase = get_supabase_client()
         # Get user email from session state
         user_email = st.session_state.get('user_email')
@@ -445,13 +457,18 @@ def load_policies_data():
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and user_email:
             # Debug logging
             print(f"DEBUG: Filtering for user_email = {user_email}")
-            # Add more detailed logging
-            st.write(f"🔍 DEBUG: Querying for user: {user_email}")
+            # Add more detailed logging - REMOVE after debugging
             response = supabase.table('policies').select("*").eq('user_email', user_email).execute()
             record_count = len(response.data) if response.data else 0
             print(f"DEBUG: Found {record_count} records for this user")
+            
+            # If no records found, try case-insensitive search as fallback
             if record_count == 0:
-                st.warning(f"No records found for {user_email} in database")
+                print(f"DEBUG: No records found with exact match, trying case-insensitive search")
+                response_ilike = supabase.table('policies').select("*").ilike('user_email', user_email).execute()
+                if response_ilike.data:
+                    print(f"DEBUG: Found {len(response_ilike.data)} records with case-insensitive match")
+                    response = response_ilike
         else:
             # Personal environment - show all data
             print("DEBUG: Personal environment - loading all data")
@@ -5579,6 +5596,17 @@ def main():
     if not check_password():
         st.stop()
     
+    # Add mobile session debug tracking
+    if 'page_loads' not in st.session_state:
+        st.session_state.page_loads = 0
+    st.session_state.page_loads += 1
+    
+    # Track when session was created
+    if 'session_created' not in st.session_state:
+        st.session_state.session_created = datetime.datetime.now().isoformat()
+        
+    print(f"DEBUG main(): Session state after auth - user_email={st.session_state.get('user_email')}, page_loads={st.session_state.page_loads}")
+    
     # Loading screen is already cleared by the rerun after initialization
     
     # CSS styling disabled for mobile testing
@@ -5767,6 +5795,9 @@ def main():
                         if user_email != 'Not set':
                             direct_count = supabase.table('policies').select('Transaction ID', count='exact').eq('user_email', user_email).execute()
                             st.write(f"Direct DB count: {direct_count.count}")
+                            # Additional raw query check
+                            raw_response = supabase.table('policies').select("*").eq('user_email', user_email).limit(5).execute()
+                            st.write(f"Sample IDs: {[r.get('Transaction ID', 'N/A')[:10] for r in raw_response.data[:3]]}")
                     except Exception as e:
                         st.write(f"DB check error: {str(e)}")
                 with col2:
@@ -5776,6 +5807,31 @@ def main():
                         st.rerun()
                     st.write(f"Session ID: {id(st.session_state)}")
                     st.write(f"Data type: {type(all_data)}")
+                    # Check session state persistence
+                    if 'login_time' not in st.session_state:
+                        st.session_state.login_time = datetime.datetime.now().isoformat()
+                    st.write(f"Login time: {st.session_state.get('login_time', 'Not set')}")
+                    
+                    # Enhanced mobile detection
+                    try:
+                        # Try to get user agent from Streamlit's internal state
+                        from streamlit.web.server.websocket_headers import _get_websocket_headers
+                        headers = _get_websocket_headers()
+                        user_agent = headers.get('User-Agent', 'Unknown')
+                        is_mobile = any(device in user_agent for device in ['Mobile', 'Android', 'iPhone', 'iPad'])
+                        st.write(f"Mobile detected: {is_mobile}")
+                        st.write(f"Device: {user_agent[:50]}...")
+                    except:
+                        st.write("Mobile detection: Unable to detect")
+                    
+                    # Session state keys
+                    st.write(f"Session keys: {len(st.session_state)}")
+                    important_keys = ['user_email', 'password_correct', 'app_initialized', 'imports_loaded']
+                    st.write(f"Auth keys: {[k for k in important_keys if k in st.session_state]}")
+                    
+                    # Session tracking
+                    st.write(f"Page loads: {st.session_state.get('page_loads', 0)}")
+                    st.write(f"Session created: {st.session_state.get('session_created', 'Unknown')}")
         
         if all_data.empty:
             # Show welcome message until user explicitly hides it

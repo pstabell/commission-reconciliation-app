@@ -261,6 +261,9 @@ def show_login_form():
                                         if user.get('subscription_status') == 'active':
                                             st.session_state["password_correct"] = True
                                             st.session_state["user_email"] = email
+                                            # Debug logging for mobile issue
+                                            print(f"DEBUG auth_helpers: Login successful for {email}")
+                                            print(f"DEBUG auth_helpers: Session state keys after login: {list(st.session_state.keys())}")
                                             st.success("Login successful!")
                                             st.rerun()
                                         else:
@@ -289,6 +292,9 @@ def show_login_form():
                             if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
                                 st.session_state["password_correct"] = True
                                 st.session_state["user_email"] = email
+                                # Debug logging for mobile issue
+                                print(f"DEBUG auth_helpers: Fallback login successful for {email}")
+                                print(f"DEBUG auth_helpers: Session state after fallback: {dict(st.session_state)}")
                                 st.success("Login successful (demo mode)!")
                                 st.rerun()
                 else:
