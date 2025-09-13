@@ -14462,53 +14462,53 @@ SOLUTION NEEDED:
                                                                 # Add user email for multi-tenancy
                                                                 cleaned_data = add_user_email_to_data(cleaned_data)
                                                             
-                                                            # Debug: Show first row's data structure
-                                                            if idx == 0:
-                                                                st.write("Debug - First row data being sent:")
-                                                                st.json(cleaned_data)
-                                                            
-                                                            # Ensure required fields are present
-                                                            if 'Transaction_ID' not in cleaned_data or not cleaned_data['Transaction_ID']:
-                                                                raise ValueError("Transaction_ID is required")
-                                                            
-                                                            # Insert into database (skip if test mode)
-                                                            if not test_mode:
-                                                                result = supabase.table('policies').insert(cleaned_data).execute()
-                                                            success_count += 1
-                                                            
-                                                        except Exception as e:
-                                                            error_count += 1
-                                                            error_msg = str(e)
-                                                            # Extract more specific error info if available
-                                                            if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                                                                error_msg = f"{error_msg} - {e.response.text}"
-                                                            errors.append(f"Row {idx + 1} (Transaction ID: {row_dict.get('Transaction_ID', 'N/A')}): {error_msg}")
+                                                                # Debug: Show first row's data structure
+                                                                if idx == 0:
+                                                                    st.write("Debug - First row data being sent:")
+                                                                    st.json(cleaned_data)
+                                                                
+                                                                # Ensure required fields are present
+                                                                if 'Transaction_ID' not in cleaned_data or not cleaned_data['Transaction_ID']:
+                                                                    raise ValueError("Transaction_ID is required")
+                                                                
+                                                                # Insert into database (skip if test mode)
+                                                                if not test_mode:
+                                                                    result = supabase.table('policies').insert(cleaned_data).execute()
+                                                                success_count += 1
+                                                                
+                                                            except Exception as e:
+                                                                error_count += 1
+                                                                error_msg = str(e)
+                                                                # Extract more specific error info if available
+                                                                if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                                                                    error_msg = f"{error_msg} - {e.response.text}"
+                                                                errors.append(f"Row {idx + 1} (Transaction ID: {row_dict.get('Transaction_ID', 'N/A')}): {error_msg}")
                                                         
-                                                        # Update progress
-                                                        progress = (idx + 1) / len(import_df_mapped)
-                                                        progress_bar.progress(progress)
-                                                        status_text.text(f"Processing... {idx + 1}/{len(import_df_mapped)} records")
-                                                    
-                                                    # Clear progress indicators
-                                                    progress_bar.empty()
-                                                    status_text.empty()
-                                                    
-                                                    # Show results
-                                                    if success_count > 0:
-                                                        if test_mode:
-                                                            st.success(f"✅ Test mode: Successfully validated {success_count} records! Uncheck 'Test mode' to actually import.")
-                                                        else:
-                                                            st.success(f"✅ Successfully imported {success_count} records!")
-                                                            # Clear the dataframe cache to show new data
-                                                            clear_policies_cache()
-                                                    
-                                                    if error_count > 0:
-                                                        st.error(f"❌ Failed to import {error_count} records")
-                                                        with st.expander("Show errors"):
-                                                            for error in errors[:10]:  # Show first 10 errors
-                                                                st.write(f"- {error}")
-                                                            if len(errors) > 10:
-                                                                st.write(f"... and {len(errors) - 10} more errors")
+                                                            # Update progress
+                                                            progress = (idx + 1) / len(import_df_mapped)
+                                                            progress_bar.progress(progress)
+                                                            status_text.text(f"Processing... {idx + 1}/{len(import_df_mapped)} records")
+                                                        
+                                                        # Clear progress indicators
+                                                        progress_bar.empty()
+                                                        status_text.empty()
+                                                        
+                                                        # Show results
+                                                        if success_count > 0:
+                                                            if test_mode:
+                                                                st.success(f"✅ Test mode: Successfully validated {success_count} records! Uncheck 'Test mode' to actually import.")
+                                                            else:
+                                                                st.success(f"✅ Successfully imported {success_count} records!")
+                                                                # Clear the dataframe cache to show new data
+                                                                clear_policies_cache()
+                                                        
+                                                        if error_count > 0:
+                                                            st.error(f"❌ Failed to import {error_count} records")
+                                                            with st.expander("Show errors"):
+                                                                for error in errors[:10]:  # Show first 10 errors
+                                                                    st.write(f"- {error}")
+                                                                if len(errors) > 10:
+                                                                    st.write(f"... and {len(errors) - 10} more errors")
                                     
                                     except Exception as e:
                                         st.error(f"❌ Import error: {e}")
