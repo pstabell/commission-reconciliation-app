@@ -445,8 +445,13 @@ def load_policies_data():
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and user_email:
             # Debug logging
             print(f"DEBUG: Filtering for user_email = {user_email}")
+            # Add more detailed logging
+            st.write(f"🔍 DEBUG: Querying for user: {user_email}")
             response = supabase.table('policies').select("*").eq('user_email', user_email).execute()
-            print(f"DEBUG: Found {len(response.data) if response.data else 0} records for this user")
+            record_count = len(response.data) if response.data else 0
+            print(f"DEBUG: Found {record_count} records for this user")
+            if record_count == 0:
+                st.warning(f"No records found for {user_email} in database")
         else:
             # Personal environment - show all data
             print("DEBUG: Personal environment - loading all data")
@@ -5745,17 +5750,32 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        # Debug section
-        with st.expander("🔧 Debug Info"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"Logged in as: {st.session_state.get('user_email', 'Not set')}")
-                st.write(f"Environment: {os.getenv('APP_ENVIRONMENT', 'Not set')}")
-                st.write(f"Records loaded: {len(all_data)}")
-            with col2:
-                if st.button("🔄 Clear Cache & Reload", key="dashboard_clear_cache"):
-                    clear_policies_cache()
-                    st.rerun()
+        # Debug section - Always show on mobile for troubleshooting
+        show_debug = st.checkbox("Show Debug Info", value=True, key="show_debug_dashboard")
+        if show_debug:
+            with st.container():
+                st.info("Debug Information:")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"Logged in as: {st.session_state.get('user_email', 'Not set')}")
+                    st.write(f"Environment: {os.getenv('APP_ENVIRONMENT', 'Not set')}")
+                    st.write(f"Records loaded: {len(all_data)}")
+                    # Add direct database check
+                    try:
+                        supabase = get_supabase_client()
+                        user_email = st.session_state.get('user_email', 'Not set')
+                        if user_email != 'Not set':
+                            direct_count = supabase.table('policies').select('Transaction ID', count='exact').eq('user_email', user_email).execute()
+                            st.write(f"Direct DB count: {direct_count.count}")
+                    except Exception as e:
+                        st.write(f"DB check error: {str(e)}")
+                with col2:
+                    if st.button("🔄 Force Reload", key="dashboard_force_reload"):
+                        # Force a fresh data load
+                        clear_policies_cache()
+                        st.rerun()
+                    st.write(f"Session ID: {id(st.session_state)}")
+                    st.write(f"Data type: {type(all_data)}")
         
         if all_data.empty:
             # Show welcome message until user explicitly hides it
