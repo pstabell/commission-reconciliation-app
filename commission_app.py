@@ -14347,7 +14347,9 @@ SOLUTION NEEDED:
                             'Transaction_ID': ['Transaction_ID', 'TransactionID', 'Transaction_Id', 'transaction_id'],
                             'Policy_Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
                             'Transaction_Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
-                            'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date']
+                            'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
+                            'Agent Gross Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission'],
+                            'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission']
                         }
                         
                         # Apply column mappings
@@ -14469,6 +14471,15 @@ SOLUTION NEEDED:
                                                             
                                                                 # Clean data for database
                                                                 cleaned_data = clean_data_for_database(row_dict)
+                                                                
+                                                                # Fix column names with special characters
+                                                                # The database expects 'Agent Gross Comm %' not 'Agent_Comm_%'
+                                                                if 'Agent_Comm_%' in cleaned_data:
+                                                                    cleaned_data['Agent Gross Comm %'] = cleaned_data.pop('Agent_Comm_%')
+                                                                
+                                                                # Also check for Policy commission field
+                                                                if 'Policy_Comm_%' in cleaned_data:
+                                                                    cleaned_data['Policy Gross Comm %'] = cleaned_data.pop('Policy_Comm_%')
                                                                 
                                                                 # Add user email for multi-tenancy
                                                                 cleaned_data = add_user_email_to_data(cleaned_data)
