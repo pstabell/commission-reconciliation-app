@@ -14342,14 +14342,32 @@ SOLUTION NEEDED:
                         import_df.columns = import_df.columns.str.replace(' ', '_')
                         
                         # Also handle common variations
+                        # Note: Database expects these exact column names with spaces
                         column_mapping = {
-                            'Client_ID': ['Client_ID', 'ClientID', 'Client_Id', 'client_id'],
-                            'Transaction_ID': ['Transaction_ID', 'TransactionID', 'Transaction_Id', 'transaction_id'],
-                            'Policy_Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
-                            'Transaction_Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
-                            'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
-                            'Agent_Comm_%': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%', 'Agent Comm %'],
-                            'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission']
+                            'Client ID': ['Client_ID', 'ClientID', 'Client_Id', 'client_id'],
+                            'Transaction ID': ['Transaction_ID', 'TransactionID', 'Transaction_Id', 'transaction_id'],
+                            'Customer': ['Customer', 'customer'],
+                            'Carrier Name': ['Carrier_Name', 'CarrierName', 'Carrier_name', 'carrier_name'],
+                            'MGA Name': ['MGA_Name', 'MGAName', 'MGA_name', 'mga_name'],
+                            'Policy Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
+                            'Policy Number': ['Policy_Number', 'PolicyNumber', 'Policy_number', 'policy_number'],
+                            'Transaction Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
+                            'Policy Origination Date': ['Policy_Origination_Date', 'PolicyOriginationDate', 'Policy_origination_date'],
+                            'Effective Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
+                            'X-DATE': ['X-DATE', 'X_DATE', 'XDATE', 'x_date'],
+                            'Policy Checklist Complete': ['Policy_Checklist_Complete', 'PolicyChecklistComplete', 'Policy_checklist_complete'],
+                            'STMT DATE': ['STMT_DATE', 'STMTDate', 'Stmt_Date', 'stmt_date'],
+                            'Premium Sold': ['Premium_Sold', 'PremiumSold', 'Premium_sold', 'premium_sold'],
+                            'Agent Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%'],
+                            'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
+                            'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
+                            'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
+                            'FULL OR MONTHLY PMTS': ['FULL_OR_MONTHLY_PMTS', 'FullOrMonthlyPmts', 'Full_or_monthly_pmts'],
+                            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan'],
+                            'NOTES': ['NOTES', 'Notes', 'notes'],
+                            'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
+                            'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
+                            'Policy Taxes & Fees': ['Policy_Taxes_&_Fees', 'Policy_Taxes_and_Fees', 'PolicyTaxesFees', 'Policy_taxes_fees']
                         }
                         
                         # Apply column mappings
@@ -14402,15 +14420,15 @@ SOLUTION NEEDED:
                         # Show import interface if validation successful
                         if validation_success:
                             # Additional validation before import
-                            required_columns = ['Client_ID', 'Transaction_ID', 'Policy_Type']
+                            required_columns = ['Client ID', 'Transaction ID', 'Policy Type']
                             missing_required = [col for col in required_columns if col not in import_df.columns]
                             
                             if missing_required:
                                 st.error(f"❌ Missing required columns: {', '.join(missing_required)}")
                             else:
                                 # Check for duplicate Transaction_IDs in current database
-                                existing_ids = set(all_data['Transaction_ID'].tolist()) if 'Transaction_ID' in all_data.columns else set()
-                                import_ids = set(import_df['Transaction_ID'].tolist()) if 'Transaction_ID' in import_df.columns else set()
+                                existing_ids = set(all_data['Transaction ID'].tolist()) if 'Transaction ID' in all_data.columns else set()
+                                import_ids = set(import_df['Transaction ID'].tolist()) if 'Transaction ID' in import_df.columns else set()
                                 duplicates = existing_ids.intersection(import_ids)
                                 
                                 # Show duplicate handling options
@@ -14424,7 +14442,7 @@ SOLUTION NEEDED:
                                     )
                                     
                                     if import_option == "Skip duplicate records":
-                                        import_df = import_df[~import_df['Transaction_ID'].isin(duplicates)]
+                                        import_df = import_df[~import_df['Transaction ID'].isin(duplicates)]
                                         st.info(f"Will import {len(import_df)} new records (skipping duplicates)")
                                             
                                 if len(import_df) > 0 and (import_option != "Cancel import"):
@@ -14444,22 +14462,10 @@ SOLUTION NEEDED:
                                                     with st.spinner("Processing import..."):
                                                         st.write("✅ Button clicked - Starting import process...")
                                                         
-                                                        # First, show the column mapping
-                                                        st.write("Column Mapping Applied:")
-                                                        # Don't use get_mapped_column for CSV imports - just show what we already mapped
-                                                        col_mapping = {}
-                                                        mapped_count = 0
-                                                        for col in import_df.columns:
-                                                            # Check if this column was renamed during initial processing
-                                                            if col != import_df.columns[list(import_df.columns).index(col)]:
-                                                                st.write(f"- {col} (already mapped)")
-                                                                mapped_count += 1
-                                                        
-                                                        if mapped_count == 0:
-                                                            st.write("No additional column mapping needed")
-                                                        
-                                                        # Don't rename columns again - use import_df as is
+                                                        # Use import_df as is - columns were already mapped during initial processing
                                                         import_df_mapped = import_df
+                                                        
+                                                        st.write("✅ Starting import with properly mapped columns...")
                                                         
                                                         progress_bar = st.progress(0)
                                                         status_text = st.empty()
@@ -14477,19 +14483,8 @@ SOLUTION NEEDED:
                                                                 # Clean data for database
                                                                 cleaned_data = clean_data_for_database(row_dict)
                                                                 
-                                                                # Fix column names - remove UI display names and use database names
-                                                                # The UI name 'Agent Comm (NEW 50% RWL 25%)' should not go to database
-                                                                if 'Agent Comm (NEW 50% RWL 25%)' in cleaned_data:
-                                                                    # This is a UI display name, database expects 'Agent Comm %'
-                                                                    cleaned_data['Agent Comm %'] = cleaned_data.pop('Agent Comm (NEW 50% RWL 25%)')
-                                                                
-                                                                # Handle underscore version too
-                                                                if 'Agent_Comm_%' in cleaned_data:
-                                                                    cleaned_data['Agent Comm %'] = cleaned_data.pop('Agent_Comm_%')
-                                                                
-                                                                # Also check for Policy commission field
-                                                                if 'Policy_Comm_%' in cleaned_data:
-                                                                    cleaned_data['Policy Gross Comm %'] = cleaned_data.pop('Policy_Comm_%')
+                                                                # Note: Column names should already be properly mapped by this point
+                                                                # The clean_data_for_database function will remove any UI-only fields
                                                                 
                                                                 # Add user email for multi-tenancy
                                                                 cleaned_data = add_user_email_to_data(cleaned_data)
@@ -14504,8 +14499,8 @@ SOLUTION NEEDED:
                                                                     st.write(f"User email: {cleaned_data.get('user_email', 'NOT SET')}")
                                                                 
                                                                 # Ensure required fields are present
-                                                                if 'Transaction_ID' not in cleaned_data or not cleaned_data['Transaction_ID']:
-                                                                    raise ValueError("Transaction_ID is required")
+                                                                if 'Transaction ID' not in cleaned_data or not cleaned_data['Transaction ID']:
+                                                                    raise ValueError("Transaction ID is required")
                                                                 
                                                                 # Insert into database (skip if test mode)
                                                                 if not test_mode:
