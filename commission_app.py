@@ -7893,6 +7893,22 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
+        # Import data validation utilities
+        from data_validation_utils import show_empty_state, check_data_availability
+        
+        # Check if we have any data to work with
+        if all_data.empty:
+            # For Add New Policy, we can still function without existing data
+            # Just need to ensure carriers and MGAs are set up
+            if 'carriers_data' not in st.session_state or not st.session_state.carriers_data:
+                st.warning("⚠️ No carriers found. Please set up carriers first.")
+                st.info("Navigate to **Admin Panel > Contacts** to add carriers and commission rules.")
+                return
+            if 'mgas_data' not in st.session_state or not st.session_state.mgas_data:
+                st.info("💡 No MGAs found. You can still add policies with direct carrier appointments.")
+            # Create empty dataframe with expected columns to prevent errors
+            all_data = pd.DataFrame(columns=['Customer', 'Client ID', 'Policy Number', 'Transaction ID'])
+        
         # Display success message if a policy was just added
         if 'add_policy_success' in st.session_state:
             success_info = st.session_state['add_policy_success']
