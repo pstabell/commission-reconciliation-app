@@ -455,6 +455,12 @@ def load_policies_data():
         
         # In production, filter by user email for multi-tenancy
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and user_email:
+            # Special handling for Demo user case sensitivity
+            if user_email.lower() == 'demo@agentcommissiontracker.com':
+                # Always use the correct case for Demo
+                user_email = 'Demo@AgentCommissionTracker.com'
+                print(f"DEBUG: Corrected Demo email case to: {user_email}")
+            
             # Debug logging
             print(f"DEBUG: Filtering for user_email = {user_email}")
             # Add more detailed logging - REMOVE after debugging
