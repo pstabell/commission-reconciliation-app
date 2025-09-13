@@ -14488,6 +14488,10 @@ SOLUTION NEEDED:
                                                                 if idx == 0:
                                                                     st.write("Debug - First row data being sent:")
                                                                     st.json(cleaned_data)
+                                                                    
+                                                                    # Also show what test mode is set to
+                                                                    st.write(f"Test mode: {test_mode}")
+                                                                    st.write(f"User email: {cleaned_data.get('user_email', 'NOT SET')}")
                                                                 
                                                                 # Ensure required fields are present
                                                                 if 'Transaction_ID' not in cleaned_data or not cleaned_data['Transaction_ID']:
@@ -14501,9 +14505,23 @@ SOLUTION NEEDED:
                                                             except Exception as e:
                                                                 error_count += 1
                                                                 error_msg = str(e)
-                                                                # Extract more specific error info if available
-                                                                if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                                                                    error_msg = f"{error_msg} - {e.response.text}"
+                                                                
+                                                                # Extract more specific error info
+                                                                if hasattr(e, 'response'):
+                                                                    if hasattr(e.response, 'text'):
+                                                                        error_msg = f"{error_msg} - {e.response.text}"
+                                                                    if hasattr(e.response, 'json') and callable(e.response.json):
+                                                                        try:
+                                                                            error_json = e.response.json()
+                                                                            error_msg = f"{error_msg} - {json.dumps(error_json)}"
+                                                                        except:
+                                                                            pass
+                                                                
+                                                                # Show the actual error for first failure
+                                                                if error_count == 1:
+                                                                    st.error(f"First error details: {error_msg}")
+                                                                    st.json(cleaned_data)
+                                                                
                                                                 errors.append(f"Row {idx + 1} (Transaction ID: {row_dict.get('Transaction_ID', 'N/A')}): {error_msg}")
                                                         
                                                             # Update progress
