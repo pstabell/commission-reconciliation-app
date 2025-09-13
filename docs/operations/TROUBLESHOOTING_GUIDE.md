@@ -201,6 +201,42 @@ if 'key_name' not in st.session_state:
 
 ## Row Level Security (RLS) Issues
 
+### CSV Import Fails with "row violates row-level security policy"
+**Symptoms**:
+- Error: "new row violates row-level security policy for table 'policies'"
+- All rows fail to import with the same error
+- User email shows correctly in debug output
+
+**Cause**:
+Row Level Security (RLS) is enabled on the policies table and the authenticated user's email doesn't match the data being inserted.
+
+**Solution**:
+1. **Check RLS status** - Run this SQL in Supabase:
+```sql
+-- Check if RLS is enabled on policies table
+SELECT tablename, rowsecurity 
+FROM pg_tables 
+WHERE tablename = 'policies' AND schemaname = 'public';
+
+-- Check existing RLS policies
+SELECT * FROM pg_policies 
+WHERE tablename = 'policies' AND schemaname = 'public';
+```
+
+2. **For Demo Users** - Create a policy allowing demo access:
+```sql
+CREATE POLICY "demo_user_policy" ON policies
+FOR ALL
+TO authenticated
+USING (user_email = 'Demo@AgentCommissionTracker.com' OR user_email = auth.email())
+WITH CHECK (user_email = 'Demo@AgentCommissionTracker.com' OR user_email = auth.email());
+```
+
+3. **Alternative** - Temporarily disable RLS (use with caution):
+```sql
+ALTER TABLE policies DISABLE ROW LEVEL SECURITY;
+```
+
 ### Carriers, MGAs, and Commission Rules Not Visible
 **Symptoms**:
 - Dropdown lists for Carriers and MGAs appear empty
