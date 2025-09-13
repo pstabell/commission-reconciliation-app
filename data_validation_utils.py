@@ -99,10 +99,58 @@ def safe_column_access(df: pd.DataFrame, column: str, default_value=None):
     Returns:
         Series or default value
     """
+    if df is None or df.empty:
+        return pd.Series(dtype=object)
     if column in df.columns:
         return df[column]
     else:
         return pd.Series([default_value] * len(df), index=df.index)
+
+def safe_filter_contains(df: pd.DataFrame, column: str, search_term: str, case=False, na=False):
+    """
+    Safely filter dataframe rows containing search term in specified column.
+    
+    Args:
+        df: DataFrame to filter
+        column: Column name to search in
+        search_term: String to search for
+        case: Case sensitive search
+        na: Include NA values
+        
+    Returns:
+        Filtered DataFrame or empty DataFrame if error
+    """
+    if df is None or df.empty or column not in df.columns:
+        return pd.DataFrame()
+    
+    try:
+        return df[df[column].str.contains(search_term, case=case, na=na)]
+    except Exception:
+        return pd.DataFrame()
+
+def safe_groupby(df: pd.DataFrame, by_columns: List[str], agg_func: str = 'sum'):
+    """
+    Safely perform groupby operation, returning empty result if columns missing.
+    
+    Args:
+        df: DataFrame to group
+        by_columns: Columns to group by
+        agg_func: Aggregation function
+        
+    Returns:
+        Grouped DataFrame or empty DataFrame
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    
+    missing_cols = [col for col in by_columns if col not in df.columns]
+    if missing_cols:
+        return pd.DataFrame()
+    
+    try:
+        return df.groupby(by_columns).agg(agg_func)
+    except Exception:
+        return pd.DataFrame()
 
 def validate_commission_data(df: pd.DataFrame) -> Tuple[bool, str]:
     """

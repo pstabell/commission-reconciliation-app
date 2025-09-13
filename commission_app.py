@@ -64,6 +64,14 @@ from dotenv import load_dotenv
 import hashlib
 import re
 import plotly.express as px
+from data_validation_utils import (
+    check_data_availability, show_empty_state, safe_column_access,
+    safe_filter_contains, safe_groupby, validate_commission_data
+)
+from safe_data_operations import (
+    SafeDataFrame, create_empty_commission_dataframe, 
+    safe_calculate_metrics, safe_display_dataframe
+)
 
 # Set pandas display options to avoid scientific notation and show 2 decimal places
 pd.options.display.float_format = '{:.2f}'.format
@@ -459,9 +467,10 @@ def style_special_transactions(df):
 
 def calculate_dashboard_metrics(df):
     """Calculate dashboard metrics with reconciled vs unreconciled YTD 2025 focus."""
+    # Initialize default metrics
     metrics = {
         # Transaction metrics
-        'total_transactions': len(df),
+        'total_transactions': 0,
         'transactions_this_month': 0,
         'stmt_transactions': 0,
         
@@ -478,6 +487,13 @@ def calculate_dashboard_metrics(df):
         'premium_unreconciled_ytd': 0.0,
         'agent_comm_estimated_ytd': 0.0
     }
+    
+    # Return default metrics if no data
+    if df is None or df.empty:
+        return metrics
+    
+    # Update total transactions
+    metrics['total_transactions'] = len(df)
     
     if df.empty:
         return metrics
