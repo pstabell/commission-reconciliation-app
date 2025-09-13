@@ -4,6 +4,59 @@ st.set_page_config(
     initial_sidebar_state="collapsed"  # Start collapsed on mobile
 )
 
+# Show loading screen only if already authenticated
+loading_placeholder = st.empty()
+if "password_correct" in st.session_state and st.session_state.password_correct == True:
+    with loading_placeholder.container():
+        st.markdown("""
+        <style>
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: white;
+            z-index: 9999;
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            font-size: 24px;
+            color: #333;
+            font-weight: 500;
+            text-align: center;
+        }
+        .loading-subtext {
+            font-size: 16px;
+            color: #666;
+            margin-top: 10px;
+            text-align: center;
+        }
+        </style>
+        <div class="loading-container">
+            <div class="loader"></div>
+            <div class="loading-text">Commission Tracker</div>
+            <div class="loading-subtext">Loading your dashboard...</div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # Custom CSS to make scrollbars more visible and always present
 st.markdown("""
 <style>
@@ -5474,6 +5527,9 @@ def main():
     # Check password before showing any content
     if not check_password():
         st.stop()
+    
+    # Clear the loading screen once authentication is successful
+    loading_placeholder.empty()
     
     # CSS styling disabled for mobile testing
     # apply_css()
