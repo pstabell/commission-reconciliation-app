@@ -439,9 +439,10 @@ def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
         # Enhanced debug logging for mobile issue
+        import datetime as dt  # Import locally to avoid scope issues
         debug_info = {
             "function": "load_policies_data",
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": dt.datetime.now().isoformat(),
             "session_id": id(st.session_state),
             "user_email": st.session_state.get('user_email', 'NOT SET'),
             "password_correct": st.session_state.get('password_correct', 'NOT SET'),
@@ -5610,7 +5611,8 @@ def main():
     
     # Track when session was created
     if 'session_created' not in st.session_state:
-        st.session_state.session_created = datetime.datetime.now().isoformat()
+        import datetime as dt  # Import locally to avoid scope issues
+        st.session_state.session_created = dt.datetime.now().isoformat()
         
     print(f"DEBUG main(): Session state after auth - user_email={st.session_state.get('user_email')}, page_loads={st.session_state.page_loads}")
     
@@ -5816,7 +5818,8 @@ def main():
                     st.write(f"Data type: {type(all_data)}")
                     # Check session state persistence
                     if 'login_time' not in st.session_state:
-                        st.session_state.login_time = datetime.datetime.now().isoformat()
+                        import datetime as dt  # Import locally to avoid scope issues
+                        st.session_state.login_time = dt.datetime.now().isoformat()
                     st.write(f"Login time: {st.session_state.get('login_time', 'Not set')}")
                     
                     # Enhanced mobile detection
