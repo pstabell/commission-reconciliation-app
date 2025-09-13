@@ -439,18 +439,18 @@ def add_user_email_to_data(data_dict):
 def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
-        # Enhanced debug logging for mobile issue
-        import time
-        debug_info = {
-            "function": "load_policies_data",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "session_id": id(st.session_state),
-            "user_email": st.session_state.get('user_email', 'NOT SET'),
-            "password_correct": st.session_state.get('password_correct', 'NOT SET'),
-            "app_environment": os.getenv("APP_ENVIRONMENT", 'NOT SET'),
-            "user_agent": st.session_state.get('user_agent', 'NOT DETECTED')
-        }
-        print(f"DEBUG load_policies_data: {json.dumps(debug_info)}")
+        # Debug logging commented out - uncomment if needed for troubleshooting
+        # import time
+        # debug_info = {
+        #     "function": "load_policies_data",
+        #     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        #     "session_id": id(st.session_state),
+        #     "user_email": st.session_state.get('user_email', 'NOT SET'),
+        #     "password_correct": st.session_state.get('password_correct', 'NOT SET'),
+        #     "app_environment": os.getenv("APP_ENVIRONMENT", 'NOT SET'),
+        #     "user_agent": st.session_state.get('user_agent', 'NOT DETECTED')
+        # }
+        # print(f"DEBUG load_policies_data: {json.dumps(debug_info)}")
         
         supabase = get_supabase_client()
         # Get user email from session state
@@ -462,25 +462,24 @@ def load_policies_data():
             if user_email.lower() == 'demo@agentcommissiontracker.com':
                 # Always use the correct case for Demo
                 user_email = 'Demo@AgentCommissionTracker.com'
-                print(f"DEBUG: Corrected Demo email case to: {user_email}")
+                # print(f"DEBUG: Corrected Demo email case to: {user_email}")
             
-            # Debug logging
-            print(f"DEBUG: Filtering for user_email = {user_email}")
-            # Add more detailed logging - REMOVE after debugging
+            # Query for user's policies
             response = supabase.table('policies').select("*").eq('user_email', user_email).execute()
             record_count = len(response.data) if response.data else 0
-            print(f"DEBUG: Found {record_count} records for this user")
+            # print(f"DEBUG: Found {record_count} records for user {user_email}")
             
             # If no records found, try case-insensitive search as fallback
             if record_count == 0:
-                print(f"DEBUG: No records found with exact match, trying case-insensitive search")
+                # print(f"DEBUG: No records found with exact match, trying case-insensitive search")
                 response_ilike = supabase.table('policies').select("*").ilike('user_email', user_email).execute()
                 if response_ilike.data:
-                    print(f"DEBUG: Found {len(response_ilike.data)} records with case-insensitive match")
+                    # print(f"DEBUG: Found {len(response_ilike.data)} records with case-insensitive match")
+                    pass
                     response = response_ilike
         else:
             # Personal environment - show all data
-            print("DEBUG: Personal environment - loading all data")
+            # print("DEBUG: Personal environment - loading all data")
             response = supabase.table('policies').select("*").execute()
         if response.data:
             df = pd.DataFrame(response.data)
@@ -5615,7 +5614,7 @@ def main():
         import time
         st.session_state.session_created = time.strftime("%Y-%m-%d %H:%M:%S")
         
-    print(f"DEBUG main(): Session state after auth - user_email={st.session_state.get('user_email')}, page_loads={st.session_state.page_loads}")
+    # print(f"DEBUG main(): Session state after auth - user_email={st.session_state.get('user_email')}, page_loads={st.session_state.page_loads}")
     
     # Loading screen is already cleared by the rerun after initialization
     
@@ -5788,8 +5787,8 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        # Debug section - Always show on mobile for troubleshooting
-        show_debug = st.checkbox("Show Debug Info", value=True, key="show_debug_dashboard")
+        # Debug section - Optional for troubleshooting
+        show_debug = st.checkbox("Show Debug Info", value=False, key="show_debug_dashboard")
         if show_debug:
             with st.container():
                 st.info("Debug Information:")
@@ -5825,15 +5824,23 @@ def main():
                     
                     # Enhanced mobile detection
                     try:
-                        # Try to get user agent from Streamlit's internal state
-                        from streamlit.web.server.websocket_headers import _get_websocket_headers
-                        headers = _get_websocket_headers()
+                        # Use the new st.context.headers API
+                        headers = st.context.headers
                         user_agent = headers.get('User-Agent', 'Unknown')
                         is_mobile = any(device in user_agent for device in ['Mobile', 'Android', 'iPhone', 'iPad'])
                         st.write(f"Mobile detected: {is_mobile}")
                         st.write(f"Device: {user_agent[:50]}...")
-                    except:
-                        st.write("Mobile detection: Unable to detect")
+                    except Exception as e:
+                        # Fallback for older Streamlit versions
+                        try:
+                            from streamlit.web.server.websocket_headers import _get_websocket_headers
+                            headers = _get_websocket_headers()
+                            user_agent = headers.get('User-Agent', 'Unknown')
+                            is_mobile = any(device in user_agent for device in ['Mobile', 'Android', 'iPhone', 'iPad'])
+                            st.write(f"Mobile detected: {is_mobile}")
+                            st.write(f"Device: {user_agent[:50]}...")
+                        except:
+                            st.write("Mobile detection: Unable to detect")
                     
                     # Session state keys
                     st.write(f"Session keys: {len(st.session_state)}")
