@@ -398,11 +398,13 @@ def get_supabase_client():
     if app_mode == "PRODUCTION":
         # Use production database credentials
         url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
-        key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+        # Try service role key first (bypasses RLS), fall back to anon key
+        key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
     else:
         # Use personal database credentials (default)
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_ANON_KEY")
+        # Try service role key first (bypasses RLS), fall back to anon key
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
     
     if not url or not key:
         st.error("Missing Supabase credentials. Please check your .env file.")
