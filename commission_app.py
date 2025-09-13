@@ -14348,7 +14348,7 @@ SOLUTION NEEDED:
                             'Policy_Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
                             'Transaction_Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
                             'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
-                            'Agent Gross Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission'],
+                            'Agent Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%'],
                             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission']
                         }
                         
@@ -14473,9 +14473,9 @@ SOLUTION NEEDED:
                                                                 cleaned_data = clean_data_for_database(row_dict)
                                                                 
                                                                 # Fix column names with special characters
-                                                                # The database expects 'Agent Gross Comm %' not 'Agent_Comm_%'
+                                                                # The database expects 'Agent Comm %' not 'Agent_Comm_%'
                                                                 if 'Agent_Comm_%' in cleaned_data:
-                                                                    cleaned_data['Agent Gross Comm %'] = cleaned_data.pop('Agent_Comm_%')
+                                                                    cleaned_data['Agent Comm %'] = cleaned_data.pop('Agent_Comm_%')
                                                                 
                                                                 # Also check for Policy commission field
                                                                 if 'Policy_Comm_%' in cleaned_data:
