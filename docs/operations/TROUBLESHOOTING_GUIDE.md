@@ -329,4 +329,31 @@ LIMIT 5;
 
 ---
 
-*Last Updated: January 11, 2025*
+*Last Updated: January 13, 2025*
+
+---
+
+## CRITICAL SECURITY ISSUES
+
+### Cache Poisoning - Users Seeing Other Users' Data
+**Date Discovered**: January 13, 2025
+**Severity**: CRITICAL
+
+**Symptoms**:
+- User A logs in and sees their data
+- User B logs in and sees User A's data
+- Clearing cache temporarily fixes but problem returns
+- Data randomly appears/disappears between users
+
+**Root Cause**:
+Streamlit's `@st.cache_data` caches globally across ALL users, not per user.
+
+**Solution**:
+```python
+# REMOVE ALL CACHING from sensitive data functions
+def load_policies_data():
+    # NO @st.cache_data decorator!
+    # Always fetch fresh data
+```
+
+**See full details**: [CSV Import and RLS Issues Guide](../troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md)
