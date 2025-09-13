@@ -390,7 +390,6 @@ def calculate_as_earned_balance(transaction, all_data=None):
     # For non-STMT transactions, just return the earned amount
     return earned_amount
 
-@st.cache_resource
 def get_supabase_client():
     """Get cached Supabase client based on environment."""
     app_mode = os.getenv("APP_ENVIRONMENT")
@@ -399,12 +398,28 @@ def get_supabase_client():
         # Use production database credentials
         url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
         # Try service role key first (bypasses RLS), fall back to anon key
-        key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+        service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY")
+        anon_key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+        key = service_key or anon_key
+        
+        # Debug logging
+        if service_key:
+            print("Using PRODUCTION service role key (RLS bypassed)")
+        else:
+            print("Using PRODUCTION anon key (RLS enforced)")
     else:
         # Use personal database credentials (default)
         url = os.getenv("SUPABASE_URL")
         # Try service role key first (bypasses RLS), fall back to anon key
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        anon_key = os.getenv("SUPABASE_ANON_KEY")
+        key = service_key or anon_key
+        
+        # Debug logging
+        if service_key:
+            print("Using service role key (RLS bypassed)")
+        else:
+            print("Using anon key (RLS enforced)")
     
     if not url or not key:
         st.error("Missing Supabase credentials. Please check your .env file.")
@@ -14471,6 +14486,9 @@ SOLUTION NEEDED:
                                                         
                                                         st.write("✅ Starting import with properly mapped columns...")
                                                         
+                                                        # Get fresh Supabase client for import
+                                                        supabase = get_supabase_client()
+                                                        
                                                         progress_bar = st.progress(0)
                                                         status_text = st.empty()
                                                         
@@ -14501,6 +14519,15 @@ SOLUTION NEEDED:
                                                                     # Also show what test mode is set to
                                                                     st.write(f"Test mode: {test_mode}")
                                                                     st.write(f"User email: {cleaned_data.get('user_email', 'NOT SET')}")
+                                                                    
+                                                                    # Check which key is being used
+                                                                    app_mode = os.getenv("APP_ENVIRONMENT")
+                                                                    if app_mode == "PRODUCTION":
+                                                                        service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY")
+                                                                        st.write(f"Production mode - Service key {'FOUND' if service_key else 'NOT FOUND'}")
+                                                                    else:
+                                                                        service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                                                                        st.write(f"Personal mode - Service key {'FOUND' if service_key else 'NOT FOUND'}")
                                                                 
                                                                 # Ensure required fields are present
                                                                 if 'Transaction ID' not in cleaned_data or not cleaned_data['Transaction ID']:
