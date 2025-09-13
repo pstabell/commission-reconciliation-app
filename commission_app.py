@@ -14348,7 +14348,7 @@ SOLUTION NEEDED:
                             'Policy_Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
                             'Transaction_Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
                             'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
-                            'Agent Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%'],
+                            'Agent_Comm_%': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%', 'Agent Comm %'],
                             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission']
                         }
                         
@@ -14445,16 +14445,21 @@ SOLUTION NEEDED:
                                                         st.write("✅ Button clicked - Starting import process...")
                                                         
                                                         # First, show the column mapping
-                                                        st.write("Column Mapping:")
+                                                        st.write("Column Mapping Applied:")
+                                                        # Don't use get_mapped_column for CSV imports - just show what we already mapped
                                                         col_mapping = {}
+                                                        mapped_count = 0
                                                         for col in import_df.columns:
-                                                            mapped_col = get_mapped_column(col)
-                                                            col_mapping[col] = mapped_col
-                                                            if col != mapped_col:
-                                                                st.write(f"- {col} → {mapped_col}")
+                                                            # Check if this column was renamed during initial processing
+                                                            if col != import_df.columns[list(import_df.columns).index(col)]:
+                                                                st.write(f"- {col} (already mapped)")
+                                                                mapped_count += 1
                                                         
-                                                        # Apply column mapping to the dataframe
-                                                        import_df_mapped = import_df.rename(columns=col_mapping)
+                                                        if mapped_count == 0:
+                                                            st.write("No additional column mapping needed")
+                                                        
+                                                        # Don't rename columns again - use import_df as is
+                                                        import_df_mapped = import_df
                                                         
                                                         progress_bar = st.progress(0)
                                                         status_text = st.empty()
@@ -14472,8 +14477,13 @@ SOLUTION NEEDED:
                                                                 # Clean data for database
                                                                 cleaned_data = clean_data_for_database(row_dict)
                                                                 
-                                                                # Fix column names with special characters
-                                                                # The database expects 'Agent Comm %' not 'Agent_Comm_%'
+                                                                # Fix column names - remove UI display names and use database names
+                                                                # The UI name 'Agent Comm (NEW 50% RWL 25%)' should not go to database
+                                                                if 'Agent Comm (NEW 50% RWL 25%)' in cleaned_data:
+                                                                    # This is a UI display name, database expects 'Agent Comm %'
+                                                                    cleaned_data['Agent Comm %'] = cleaned_data.pop('Agent Comm (NEW 50% RWL 25%)')
+                                                                
+                                                                # Handle underscore version too
                                                                 if 'Agent_Comm_%' in cleaned_data:
                                                                     cleaned_data['Agent Comm %'] = cleaned_data.pop('Agent_Comm_%')
                                                                 
