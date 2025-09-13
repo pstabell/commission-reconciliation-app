@@ -14190,9 +14190,35 @@ SOLUTION NEEDED:
                     # Process based on file type
                     if file_type == 'csv':
                         import_df = pd.read_csv(uploaded_file)
+                        
+                        # Normalize column names - replace spaces with underscores
+                        import_df.columns = import_df.columns.str.replace(' ', '_')
+                        
+                        # Also handle common variations
+                        column_mapping = {
+                            'Client_ID': ['Client_ID', 'ClientID', 'Client_Id', 'client_id'],
+                            'Transaction_ID': ['Transaction_ID', 'TransactionID', 'Transaction_Id', 'transaction_id'],
+                            'Policy_Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
+                            'Transaction_Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
+                            'Effective_Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date']
+                        }
+                        
+                        # Apply column mappings
+                        for standard_name, variations in column_mapping.items():
+                            for variation in variations:
+                                if variation in import_df.columns and standard_name not in import_df.columns:
+                                    import_df.rename(columns={variation: standard_name}, inplace=True)
+                                    break
+                        
                         validation_success = True
                         validation_errors = []
                         st.success("✅ CSV file loaded successfully")
+                        
+                        # Show column mapping info
+                        with st.expander("📋 Column Mapping Info"):
+                            st.write("**Columns found in your CSV:**")
+                            st.write(", ".join(import_df.columns.tolist()))
+                            st.info("💡 Tip: Column names with spaces have been automatically converted to use underscores.")
                         
                     elif file_type in ['xlsx', 'xls']:
                         validation_success, import_df, validation_errors = validate_excel_import(uploaded_file)
