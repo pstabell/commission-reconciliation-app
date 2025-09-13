@@ -13846,14 +13846,12 @@ SOLUTION NEEDED:
             """)
             
             # Check if data exists and has required columns
-            if all_data.empty or 'Transaction ID' not in all_data.columns:
-                st.warning("No transaction data found. Please add some policies first or check your data import.")
-            else:
+            if not all_data.empty and 'Transaction ID' in all_data.columns:
                 # Exclude reconciliation transactions (STMT, VOID, ADJ)
                 regular_transactions = all_data[~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False)].copy()
                 
                 # Find transactions missing Policy Origination Date
-            missing_origination = regular_transactions[
+                missing_origination = regular_transactions[
                 (regular_transactions['Policy Origination Date'].isna()) | 
                 (regular_transactions['Policy Origination Date'] == '')
             ].copy()
@@ -14084,6 +14082,8 @@ SOLUTION NEEDED:
                                 file_name=f"origination_date_updates_{timestamp}.csv",
                                 mime="text/csv"
                             )
+            else:
+                st.warning("No transaction data found. Please add some policies first.")
         
         with tab2:
             st.subheader("Utility Functions")
