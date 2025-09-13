@@ -14412,8 +14412,23 @@ SOLUTION NEEDED:
                                                     st.write("**Sample data:**")
                                                     st.dataframe(import_df.head(3))
                                                 
+                                                # Add a test mode checkbox
+                                                test_mode = st.checkbox("Test mode (validate without importing)", value=True)
+                                                
                                                 # Import button
                                                 if st.button("🚀 Import Data to Database", type="primary", use_container_width=True):
+                                                    # First, show the column mapping
+                                                    st.write("Column Mapping:")
+                                                    col_mapping = {}
+                                                    for col in import_df.columns:
+                                                        mapped_col = get_mapped_column(col)
+                                                        col_mapping[col] = mapped_col
+                                                        if col != mapped_col:
+                                                            st.write(f"- {col} → {mapped_col}")
+                                                    
+                                                    # Apply column mapping to the dataframe
+                                                    import_df_mapped = import_df.rename(columns=col_mapping)
+                                                    
                                                     progress_bar = st.progress(0)
                                                     status_text = st.empty()
                                                     
@@ -14422,7 +14437,7 @@ SOLUTION NEEDED:
                                                     errors = []
                                                     
                                                     # Process each row
-                                                    for idx, row in import_df.iterrows():
+                                                    for idx, row in import_df_mapped.iterrows():
                                                         try:
                                                             # Convert row to dictionary
                                                             row_dict = row.to_dict()
@@ -14433,18 +14448,32 @@ SOLUTION NEEDED:
                                                             # Add user email for multi-tenancy
                                                             cleaned_data = add_user_email_to_data(cleaned_data)
                                                             
-                                                            # Insert into database
-                                                            result = supabase.table('policies').insert(cleaned_data).execute()
+                                                            # Debug: Show first row's data structure
+                                                            if idx == 0:
+                                                                st.write("Debug - First row data being sent:")
+                                                                st.json(cleaned_data)
+                                                            
+                                                            # Ensure required fields are present
+                                                            if 'Transaction_ID' not in cleaned_data or not cleaned_data['Transaction_ID']:
+                                                                raise ValueError("Transaction_ID is required")
+                                                            
+                                                            # Insert into database (skip if test mode)
+                                                            if not test_mode:
+                                                                result = supabase.table('policies').insert(cleaned_data).execute()
                                                             success_count += 1
                                                             
                                                         except Exception as e:
                                                             error_count += 1
-                                                            errors.append(f"Row {idx + 1}: {str(e)}")
+                                                            error_msg = str(e)
+                                                            # Extract more specific error info if available
+                                                            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                                                                error_msg = f"{error_msg} - {e.response.text}"
+                                                            errors.append(f"Row {idx + 1} (Transaction ID: {row_dict.get('Transaction_ID', 'N/A')}): {error_msg}")
                                                         
                                                         # Update progress
-                                                        progress = (idx + 1) / len(import_df)
+                                                        progress = (idx + 1) / len(import_df_mapped)
                                                         progress_bar.progress(progress)
-                                                        status_text.text(f"Processing... {idx + 1}/{len(import_df)} records")
+                                                        status_text.text(f"Processing... {idx + 1}/{len(import_df_mapped)} records")
                                                     
                                                     # Clear progress indicators
                                                     progress_bar.empty()
@@ -14452,9 +14481,12 @@ SOLUTION NEEDED:
                                                     
                                                     # Show results
                                                     if success_count > 0:
-                                                        st.success(f"✅ Successfully imported {success_count} records!")
-                                                        # Clear the dataframe cache to show new data
-                                                        clear_policies_cache()
+                                                        if test_mode:
+                                                            st.success(f"✅ Test mode: Successfully validated {success_count} records! Uncheck 'Test mode' to actually import.")
+                                                        else:
+                                                            st.success(f"✅ Successfully imported {success_count} records!")
+                                                            # Clear the dataframe cache to show new data
+                                                            clear_policies_cache()
                                                     
                                                     if error_count > 0:
                                                         st.error(f"❌ Failed to import {error_count} records")
