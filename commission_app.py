@@ -14314,9 +14314,22 @@ SOLUTION NEEDED:
             uploaded_file = st.file_uploader(
                 "Choose a CSV or Excel file", 
                 type=["csv", "xlsx", "xls"],
-                help="Upload a CSV or Excel file containing policy data"
+                help="Upload a CSV or Excel file containing policy data",
+                key="import_file_uploader"
             )
             
+            # Store processed data in session state to persist across reruns
+            if uploaded_file is not None:
+                # Create a unique key for this file
+                file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+                
+                # Check if we've already processed this file
+                if 'last_processed_file' not in st.session_state or st.session_state.last_processed_file != file_key:
+                    st.session_state.last_processed_file = file_key
+                    st.session_state.import_df = None
+                    st.session_state.validation_success = False
+                    st.session_state.validation_errors = []
+                    
             if uploaded_file is not None:
                 file_type = uploaded_file.name.split('.')[-1].lower()
                 
@@ -14384,59 +14397,48 @@ SOLUTION NEEDED:
                                 for error in validation_errors:
                                     st.warning(error)
                         
-                        # Import button with enhanced validation
+                        # Show import interface if validation successful
                         if validation_success:
-                            if st.button("🔄 Import Data to Database", type="primary"):
-                                with st.spinner("Validating and importing data..."):
-                                    try:
-                                        # Additional validation before import
-                                        required_columns = ['Client_ID', 'Transaction_ID', 'Policy_Type']
-                                        missing_required = [col for col in required_columns if col not in import_df.columns]
-                                        
-                                        if missing_required:
-                                            st.error(f"❌ Missing required columns: {', '.join(missing_required)}")
-                                        else:
-                                            # Check for duplicate Transaction_IDs in current database
-                                            existing_ids = set(all_data['Transaction_ID'].tolist()) if 'Transaction_ID' in all_data.columns else set()
-                                            import_ids = set(import_df['Transaction_ID'].tolist()) if 'Transaction_ID' in import_df.columns else set()
-                                            duplicates = existing_ids.intersection(import_ids)
+                            # Additional validation before import
+                            required_columns = ['Client_ID', 'Transaction_ID', 'Policy_Type']
+                            missing_required = [col for col in required_columns if col not in import_df.columns]
+                            
+                            if missing_required:
+                                st.error(f"❌ Missing required columns: {', '.join(missing_required)}")
+                            else:
+                                # Check for duplicate Transaction_IDs in current database
+                                existing_ids = set(all_data['Transaction_ID'].tolist()) if 'Transaction_ID' in all_data.columns else set()
+                                import_ids = set(import_df['Transaction_ID'].tolist()) if 'Transaction_ID' in import_df.columns else set()
+                                duplicates = existing_ids.intersection(import_ids)
+                                
+                                # Show duplicate handling options
+                                import_option = None
+                                if duplicates:
+                                    st.warning(f"⚠️ Found {len(duplicates)} Transaction_IDs that already exist in database")
+                                    import_option = st.radio(
+                                        "How would you like to handle duplicates?",
+                                        ["Skip duplicate records", "Update existing records", "Cancel import"],
+                                        key="duplicate_handling"
+                                    )
+                                    
+                                    if import_option == "Skip duplicate records":
+                                        import_df = import_df[~import_df['Transaction_ID'].isin(duplicates)]
+                                        st.info(f"Will import {len(import_df)} new records (skipping duplicates)")
                                             
-                                            # Initialize import_option
-                                            import_option = None
-                                            
-                                            if duplicates:
-                                                st.warning(f"⚠️ Found {len(duplicates)} Transaction_IDs that already exist in database")
-                                                
-                                                import_option = st.radio(
-                                                    "How would you like to handle duplicates?",
-                                                    ["Skip duplicate records", "Update existing records", "Cancel import"]
-                                                )
-                                                
-                                                if import_option == "Cancel import":
-                                                    st.info("Import cancelled")
-                                                elif import_option == "Skip duplicate records":
-                                                    import_df = import_df[~import_df['Transaction_ID'].isin(duplicates)]
-                                                    st.info(f"Will import {len(import_df)} new records (skipping duplicates)")
-                                                elif import_option == "Update existing records":
-                                                    st.warning("Update functionality not yet implemented")
-                                            
-                                            if len(import_df) > 0 and (import_option is None or import_option != "Cancel import"):
-                                                # Show what will be imported
-                                                with st.expander("📊 Import Summary", expanded=True):
-                                                    st.write(f"**Records to import:** {len(import_df)}")
-                                                    st.write(f"**File type:** {file_type.upper()}")
-                                                    st.write(f"**Columns found:** {len(import_df.columns)}")
-                                                    st.write("**Sample data:**")
-                                                    st.dataframe(import_df.head(3))
-                                                
-                                                # Add a test mode checkbox
-                                                test_mode = st.checkbox("Test mode (validate without importing)", value=True)
-                                                
-                                                # Add a unique key for the button
-                                                button_key = f"import_button_{len(import_df)}"
-                                                
-                                                # Import button
-                                                if st.button("🚀 Import Data to Database", type="primary", use_container_width=True, key=button_key):
+                                if len(import_df) > 0 and (import_option != "Cancel import"):
+                                    # Show what will be imported
+                                    with st.expander("📊 Import Summary", expanded=True):
+                                        st.write(f"**Records to import:** {len(import_df)}")
+                                        st.write(f"**File type:** {file_type.upper()}")
+                                        st.write(f"**Columns found:** {len(import_df.columns)}")
+                                        st.write("**Sample data:**")
+                                        st.dataframe(import_df.head(3))
+                                    
+                                    # Add a test mode checkbox outside the button
+                                    test_mode = st.checkbox("Test mode (validate without importing)", value=True, key="test_mode_checkbox")
+                                    
+                                    # Import button
+                                    if st.button("🚀 Import Data to Database", type="primary", use_container_width=True):
                                                     with st.spinner("Processing import..."):
                                                         st.write("✅ Button clicked - Starting import process...")
                                                         
@@ -14519,8 +14521,6 @@ SOLUTION NEEDED:
                                                                 if len(errors) > 10:
                                                                     st.write(f"... and {len(errors) - 10} more errors")
                                     
-                                    except Exception as e:
-                                        st.error(f"❌ Import error: {e}")
                         else:
                             st.error("❌ Cannot import data due to validation errors. Please fix the issues and try again.")
                 
