@@ -14328,6 +14328,9 @@ SOLUTION NEEDED:
                                             import_ids = set(import_df['Transaction_ID'].tolist()) if 'Transaction_ID' in import_df.columns else set()
                                             duplicates = existing_ids.intersection(import_ids)
                                             
+                                            # Initialize import_option
+                                            import_option = None
+                                            
                                             if duplicates:
                                                 st.warning(f"⚠️ Found {len(duplicates)} Transaction_IDs that already exist in database")
                                                 
@@ -14344,7 +14347,7 @@ SOLUTION NEEDED:
                                                 elif import_option == "Update existing records":
                                                     st.warning("Update functionality not yet implemented")
                                             
-                                            if len(import_df) > 0 and import_option != "Cancel import":
+                                            if len(import_df) > 0 and (import_option is None or import_option != "Cancel import"):
                                                 # This is where actual database import would happen
                                                 st.success(f"✅ Ready to import {len(import_df)} records")
                                                 st.info("🚧 Full database import implementation is in development. Preview and validation are complete.")
