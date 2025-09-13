@@ -13845,6 +13845,11 @@ SOLUTION NEEDED:
             - **Other transactions**: Trace back through policy history to find the original NEW transaction
             """)
             
+            # Check if data exists and has required columns
+            if all_data.empty or 'Transaction ID' not in all_data.columns:
+                st.warning("No transaction data found. Please add some policies first or check your data import.")
+                return
+            
             # Exclude reconciliation transactions (STMT, VOID, ADJ)
             regular_transactions = all_data[~all_data['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False)].copy()
             
