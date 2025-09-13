@@ -14404,17 +14404,65 @@ SOLUTION NEEDED:
                                                     st.warning("Update functionality not yet implemented")
                                             
                                             if len(import_df) > 0 and (import_option is None or import_option != "Cancel import"):
-                                                # This is where actual database import would happen
-                                                st.success(f"✅ Ready to import {len(import_df)} records")
-                                                st.info("🚧 Full database import implementation is in development. Preview and validation are complete.")
-                                                
-                                                # Show what would be imported
-                                                with st.expander("📊 Import Summary"):
+                                                # Show what will be imported
+                                                with st.expander("📊 Import Summary", expanded=True):
                                                     st.write(f"**Records to import:** {len(import_df)}")
                                                     st.write(f"**File type:** {file_type.upper()}")
                                                     st.write(f"**Columns found:** {len(import_df.columns)}")
                                                     st.write("**Sample data:**")
                                                     st.dataframe(import_df.head(3))
+                                                
+                                                # Import button
+                                                if st.button("🚀 Import Data to Database", type="primary", use_container_width=True):
+                                                    progress_bar = st.progress(0)
+                                                    status_text = st.empty()
+                                                    
+                                                    success_count = 0
+                                                    error_count = 0
+                                                    errors = []
+                                                    
+                                                    # Process each row
+                                                    for idx, row in import_df.iterrows():
+                                                        try:
+                                                            # Convert row to dictionary
+                                                            row_dict = row.to_dict()
+                                                            
+                                                            # Clean data for database
+                                                            cleaned_data = clean_data_for_database(row_dict)
+                                                            
+                                                            # Add user email for multi-tenancy
+                                                            cleaned_data = add_user_email_to_data(cleaned_data)
+                                                            
+                                                            # Insert into database
+                                                            result = supabase.table('policies').insert(cleaned_data).execute()
+                                                            success_count += 1
+                                                            
+                                                        except Exception as e:
+                                                            error_count += 1
+                                                            errors.append(f"Row {idx + 1}: {str(e)}")
+                                                        
+                                                        # Update progress
+                                                        progress = (idx + 1) / len(import_df)
+                                                        progress_bar.progress(progress)
+                                                        status_text.text(f"Processing... {idx + 1}/{len(import_df)} records")
+                                                    
+                                                    # Clear progress indicators
+                                                    progress_bar.empty()
+                                                    status_text.empty()
+                                                    
+                                                    # Show results
+                                                    if success_count > 0:
+                                                        st.success(f"✅ Successfully imported {success_count} records!")
+                                                        # Clear the dataframe cache to show new data
+                                                        clear_policies_cache()
+                                                    
+                                                    if error_count > 0:
+                                                        st.error(f"❌ Failed to import {error_count} records")
+                                                        with st.expander("Show errors"):
+                                                            for error in errors[:10]:  # Show first 10 errors
+                                                                st.write(f"- {error}")
+                                                            if len(errors) > 10:
+                                                                st.write(f"... and {len(errors) - 10} more errors")
                                     
                                     except Exception as e:
                                         st.error(f"❌ Import error: {e}")
