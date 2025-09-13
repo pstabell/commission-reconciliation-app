@@ -739,6 +739,7 @@ def clean_data_for_database(data):
     - Edit, Select, Action, Details (table checkboxes)
     - new_effective_date, new_expiration_date (renewal helpers)
     - expiration_date (maps to X-DATE in database)
+    - FULL OR MONTHLY PMTS (old column that no longer exists)
     """
     # Define fields that should be removed before database insertion
     ui_only_fields = {
@@ -757,7 +758,9 @@ def clean_data_for_database(data):
         'balance',  # Also a calculated field, not in database
         '_customer_match',  # Temporary field for matching logic
         '_match_type',  # Temporary field for matching logic
-        '_match_score'  # Temporary field for matching logic
+        '_match_score',  # Temporary field for matching logic
+        'FULL OR MONTHLY PMTS',  # Old column that no longer exists in database
+        'FULL_OR_MONTHLY_PMTS'  # Underscore version
     }
     
     # Create a copy of the data to avoid modifying the original
@@ -14362,7 +14365,6 @@ SOLUTION NEEDED:
                             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
                             'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
                             'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
-                            'FULL OR MONTHLY PMTS': ['FULL_OR_MONTHLY_PMTS', 'FullOrMonthlyPmts', 'Full_or_monthly_pmts'],
                             'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan'],
                             'NOTES': ['NOTES', 'Notes', 'notes'],
                             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
