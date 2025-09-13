@@ -5793,7 +5793,7 @@ def main():
                         supabase = get_supabase_client()
                         user_email = st.session_state.get('user_email', 'Not set')
                         if user_email != 'Not set':
-                            direct_count = supabase.table('policies').select('Transaction ID', count='exact').eq('user_email', user_email).execute()
+                            direct_count = supabase.table('policies').select('"Transaction ID"', count='exact').eq('user_email', user_email).execute()
                             st.write(f"Direct DB count: {direct_count.count}")
                             # Additional raw query check
                             raw_response = supabase.table('policies').select("*").eq('user_email', user_email).limit(5).execute()

@@ -253,6 +253,8 @@ def show_login_form():
                             result = supabase.table('users').select('*').ilike('email', email).execute()
                             if result.data and len(result.data) > 0:
                                 user = result.data[0]
+                                # Use the email from database to preserve case
+                                correct_email = user.get('email', email)
                                 
                                 # Check if user has set a password
                                 if user.get('password_set', False) and user.get('password_hash'):
@@ -260,9 +262,9 @@ def show_login_form():
                                     if password == user.get('password_hash'):
                                         if user.get('subscription_status') == 'active':
                                             st.session_state["password_correct"] = True
-                                            st.session_state["user_email"] = email
+                                            st.session_state["user_email"] = correct_email  # Use correct case from DB
                                             # Debug logging for mobile issue
-                                            print(f"DEBUG auth_helpers: Login successful for {email}")
+                                            print(f"DEBUG auth_helpers: Login successful for {email}, stored as {correct_email}")
                                             print(f"DEBUG auth_helpers: Session state keys after login: {list(st.session_state.keys())}")
                                             st.success("Login successful!")
                                             st.rerun()
@@ -290,10 +292,16 @@ def show_login_form():
                             st.caption(f"Technical details: {str(e)}")
                             # Fallback to demo password
                             if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
+                                # For demo, use the proper case
+                                if email.lower() == 'demo@agentcommissiontracker.com':
+                                    correct_email = 'Demo@AgentCommissionTracker.com'
+                                else:
+                                    correct_email = email
+                                
                                 st.session_state["password_correct"] = True
-                                st.session_state["user_email"] = email
+                                st.session_state["user_email"] = correct_email
                                 # Debug logging for mobile issue
-                                print(f"DEBUG auth_helpers: Fallback login successful for {email}")
+                                print(f"DEBUG auth_helpers: Fallback login successful for {email}, stored as {correct_email}")
                                 print(f"DEBUG auth_helpers: Session state after fallback: {dict(st.session_state)}")
                                 st.success("Login successful (demo mode)!")
                                 st.rerun()

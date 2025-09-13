@@ -38,7 +38,8 @@
       "Bash(for line in 5820 6002 6181 7757 8471 8644 10721 12717 13690 14420 15134 15270 15654 18248)",
       "Bash(do echo \"=== Line $line ===\")",
       "Bash(done)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(psql:*)"
     ],
     "deny": []
   }
