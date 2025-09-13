@@ -14423,38 +14423,44 @@ SOLUTION NEEDED:
                                                 # Add a test mode checkbox
                                                 test_mode = st.checkbox("Test mode (validate without importing)", value=True)
                                                 
+                                                # Add a unique key for the button
+                                                button_key = f"import_button_{len(import_df)}"
+                                                
                                                 # Import button
-                                                if st.button("🚀 Import Data to Database", type="primary", use_container_width=True):
-                                                    # First, show the column mapping
-                                                    st.write("Column Mapping:")
-                                                    col_mapping = {}
-                                                    for col in import_df.columns:
-                                                        mapped_col = get_mapped_column(col)
-                                                        col_mapping[col] = mapped_col
-                                                        if col != mapped_col:
-                                                            st.write(f"- {col} → {mapped_col}")
+                                                if st.button("🚀 Import Data to Database", type="primary", use_container_width=True, key=button_key):
+                                                    with st.spinner("Processing import..."):
+                                                        st.write("✅ Button clicked - Starting import process...")
+                                                        
+                                                        # First, show the column mapping
+                                                        st.write("Column Mapping:")
+                                                        col_mapping = {}
+                                                        for col in import_df.columns:
+                                                            mapped_col = get_mapped_column(col)
+                                                            col_mapping[col] = mapped_col
+                                                            if col != mapped_col:
+                                                                st.write(f"- {col} → {mapped_col}")
+                                                        
+                                                        # Apply column mapping to the dataframe
+                                                        import_df_mapped = import_df.rename(columns=col_mapping)
+                                                        
+                                                        progress_bar = st.progress(0)
+                                                        status_text = st.empty()
+                                                        
+                                                        success_count = 0
+                                                        error_count = 0
+                                                        errors = []
                                                     
-                                                    # Apply column mapping to the dataframe
-                                                    import_df_mapped = import_df.rename(columns=col_mapping)
-                                                    
-                                                    progress_bar = st.progress(0)
-                                                    status_text = st.empty()
-                                                    
-                                                    success_count = 0
-                                                    error_count = 0
-                                                    errors = []
-                                                    
-                                                    # Process each row
-                                                    for idx, row in import_df_mapped.iterrows():
-                                                        try:
-                                                            # Convert row to dictionary
-                                                            row_dict = row.to_dict()
+                                                        # Process each row
+                                                        for idx, row in import_df_mapped.iterrows():
+                                                            try:
+                                                                # Convert row to dictionary
+                                                                row_dict = row.to_dict()
                                                             
-                                                            # Clean data for database
-                                                            cleaned_data = clean_data_for_database(row_dict)
-                                                            
-                                                            # Add user email for multi-tenancy
-                                                            cleaned_data = add_user_email_to_data(cleaned_data)
+                                                                # Clean data for database
+                                                                cleaned_data = clean_data_for_database(row_dict)
+                                                                
+                                                                # Add user email for multi-tenancy
+                                                                cleaned_data = add_user_email_to_data(cleaned_data)
                                                             
                                                             # Debug: Show first row's data structure
                                                             if idx == 0:
