@@ -4,9 +4,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"  # Start collapsed on mobile
 )
 
-# Show loading screen only if already authenticated
-loading_placeholder = st.empty()
-if "password_correct" in st.session_state and st.session_state.password_correct == True:
+# Show loading screen during initial app load
+# Check if this is the first load (no session state initialized yet)
+if 'app_initialized' not in st.session_state:
+    loading_placeholder = st.empty()
     with loading_placeholder.container():
         st.markdown("""
         <style>
@@ -53,9 +54,17 @@ if "password_correct" in st.session_state and st.session_state.password_correct 
         <div class="loading-container">
             <div class="loader"></div>
             <div class="loading-text">Commission Tracker</div>
-            <div class="loading-subtext">Loading your dashboard...</div>
+            <div class="loading-subtext">Loading application...</div>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Mark app as initialized so loading screen won't show on reruns
+    st.session_state.app_initialized = True
+    # Force a rerun to clear the loading screen and show the app
+    st.rerun()
+else:
+    # Create empty placeholder for consistency
+    loading_placeholder = st.empty()
 
 # Custom CSS to make scrollbars more visible and always present
 st.markdown("""
@@ -5528,8 +5537,7 @@ def main():
     if not check_password():
         st.stop()
     
-    # Clear the loading screen once authentication is successful
-    loading_placeholder.empty()
+    # Loading screen is already cleared by the rerun after initialization
     
     # CSS styling disabled for mobile testing
     # apply_css()
