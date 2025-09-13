@@ -2175,6 +2175,51 @@ def find_potential_customer_matches(search_name, existing_customers):
     
     return result
 
+def safe_str_contains(df, column, pattern, na=False, negate=False, case=True):
+    """
+    Safely perform string contains operation on a dataframe column.
+    
+    Args:
+        df: DataFrame
+        column: Column name
+        pattern: Pattern to search for
+        na: Value to use for NA/missing values
+        negate: If True, return ~contains (NOT contains)
+        case: If True, case sensitive match
+    
+    Returns:
+        Boolean Series or all False if operation fails
+    """
+    if df.empty or column not in df.columns:
+        return pd.Series([False] * len(df), index=df.index)
+    
+    try:
+        result = df[column].str.contains(pattern, case=case, na=na)
+        return ~result if negate else result
+    except Exception:
+        return pd.Series([False] * len(df), index=df.index)
+
+def safe_str_lower_contains(df, column, pattern, na=False):
+    """
+    Safely perform case-insensitive string contains after converting to lowercase.
+    
+    Args:
+        df: DataFrame
+        column: Column name
+        pattern: Pattern to search for (will be converted to lowercase)
+        na: Value to use for NA/missing values
+    
+    Returns:
+        Boolean Series or all False if operation fails
+    """
+    if df.empty or column not in df.columns:
+        return pd.Series([False] * len(df), index=df.index)
+    
+    try:
+        return df[column].str.lower().str.contains(pattern.lower(), na=na)
+    except Exception:
+        return pd.Series([False] * len(df), index=df.index)
+
 def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     """
     Calculate outstanding balances for all transactions.
@@ -2188,9 +2233,13 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     if all_data.empty:
         return pd.DataFrame()
     
+    # Check if Transaction ID column exists
+    if 'Transaction ID' not in all_data.columns:
+        return pd.DataFrame()
+    
     # Get original transactions only (exclude -STMT-, -ADJ-, -VOID-)
     original_trans = all_data[
-        ~all_data['Transaction ID'].str.contains('-STMT-|-ADJ-|-VOID-', na=False)
+        safe_str_contains(all_data, 'Transaction ID', '-STMT-|-ADJ-|-VOID-', na=False, negate=True)
     ].copy()
     
     if original_trans.empty:
@@ -2229,7 +2278,7 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
             recon_entries = all_data_normalized[
                 (all_data_normalized['Policy Number'] == policy_num) &
                 (all_data_normalized['_normalized_date'] == effective_date_normalized) &
-                (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+                (safe_str_contains(all_data, 'Transaction ID', '-STMT-|-VOID-', na=False))
             ]
         else:
             # Fallback to string comparison if date parsing failed
@@ -2237,7 +2286,7 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
             recon_entries = all_data[
                 (all_data['Policy Number'] == policy_num) &
                 (all_data['Effective Date'] == effective_date) &
-                (all_data['Transaction ID'].str.contains('-STMT-|-VOID-', na=False))
+                (safe_str_contains(all_data, 'Transaction ID', '-STMT-|-VOID-', na=False))
             ]
         
         debit = 0
@@ -2960,7 +3009,7 @@ def show_import_results(statement_date, all_data):
                                 # Search in all_data for customers
                                 search_lower = search_query.lower()
                                 matching_customers = all_data[
-                                    all_data['Customer'].str.lower().str.contains(search_lower, na=False)
+                                    safe_str_lower_contains(all_data, 'Customer', search_lower, na=False)
                                 ]['Customer'].unique()
                                 
                                 if len(matching_customers) > 0:
@@ -3267,7 +3316,7 @@ def show_import_results(statement_date, all_data):
                                 # Search in all_data for customers
                                 search_lower = search_query.lower()
                                 matching_customers = all_data[
-                                    all_data['Customer'].str.lower().str.contains(search_lower, na=False)
+                                    safe_str_lower_contains(all_data, 'Customer', search_lower, na=False)
                                 ]['Customer'].unique()
                                 
                                 if len(matching_customers) > 0:
@@ -7953,7 +8002,7 @@ def main():
         if client_search:
             # Search for matching clients, filtering out those without Client IDs
             matching_clients = all_data[
-                (all_data['Customer'].str.contains(client_search, case=False, na=False)) & 
+                (safe_str_contains(all_data, 'Customer', client_search, na=False, case=False)) & 
                 (all_data['Client ID'].notna()) & 
                 (all_data['Client ID'] != '')
             ][['Client ID', 'Customer']].drop_duplicates()
