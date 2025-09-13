@@ -182,7 +182,8 @@ if 'rerun_count' not in st.session_state:
     st.session_state.rerun_history = []
 
 st.session_state.rerun_count += 1
-rerun_info = f"Rerun #{st.session_state.rerun_count} at {datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]}"
+import time
+rerun_info = f"Rerun #{st.session_state.rerun_count} at {time.strftime('%H:%M:%S')}"
 st.session_state.rerun_history.append(rerun_info)
 
 # Keep only last 10 reruns in history
@@ -439,10 +440,10 @@ def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
         # Enhanced debug logging for mobile issue
-        import datetime as dt  # Import locally to avoid scope issues
+        import time
         debug_info = {
             "function": "load_policies_data",
-            "timestamp": dt.datetime.now().isoformat(),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "session_id": id(st.session_state),
             "user_email": st.session_state.get('user_email', 'NOT SET'),
             "password_correct": st.session_state.get('password_correct', 'NOT SET'),
@@ -5611,8 +5612,8 @@ def main():
     
     # Track when session was created
     if 'session_created' not in st.session_state:
-        import datetime as dt  # Import locally to avoid scope issues
-        st.session_state.session_created = dt.datetime.now().isoformat()
+        import time
+        st.session_state.session_created = time.strftime("%Y-%m-%d %H:%M:%S")
         
     print(f"DEBUG main(): Session state after auth - user_email={st.session_state.get('user_email')}, page_loads={st.session_state.page_loads}")
     
@@ -5818,8 +5819,8 @@ def main():
                     st.write(f"Data type: {type(all_data)}")
                     # Check session state persistence
                     if 'login_time' not in st.session_state:
-                        import datetime as dt  # Import locally to avoid scope issues
-                        st.session_state.login_time = dt.datetime.now().isoformat()
+                        import time
+                        st.session_state.login_time = time.strftime("%Y-%m-%d %H:%M:%S")
                     st.write(f"Login time: {st.session_state.get('login_time', 'Not set')}")
                     
                     # Enhanced mobile detection
