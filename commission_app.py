@@ -434,13 +434,12 @@ def add_user_email_to_data(data_dict):
         data_dict["user_email"] = st.session_state["user_email"]
     return data_dict
 
-@st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
-def load_policies_data(_user_email=None):
-    """Load policies data from Supabase with caching - filtered by current user."""
+def load_policies_data():
+    """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
         supabase = get_supabase_client()
-        # Get user email from parameter or session state
-        user_email = _user_email or st.session_state.get('user_email')
+        # Get user email from session state
+        user_email = st.session_state.get('user_email')
         
         # In production, filter by user email for multi-tenancy
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and user_email:
@@ -486,15 +485,9 @@ def load_policies_data(_user_email=None):
         return pd.DataFrame()
 
 def clear_policies_cache():
-    """Clear the policies data cache."""
-    load_policies_data.clear()
+    """Clear the policies data cache - no longer needed since we removed caching."""
     if 'policies_data' in st.session_state:
         del st.session_state['policies_data']
-
-def get_user_policies():
-    """Get policies for the current user - wrapper to ensure proper caching per user."""
-    user_email = st.session_state.get('user_email', 'anonymous')
-    return load_policies_data(user_email)
 
 def format_date_value(date_value, format='%m/%d/%Y'):
     """Safely format a date value to MM/DD/YYYY string format.
@@ -4457,7 +4450,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                         # For these types, look up the original NEW transaction
                         try:
                             # Load all policies data
-                            all_data = get_user_policies()
+                            all_data = load_policies_data()
                             
                             # Function to trace back to original NEW transaction
                             def find_origination_date(policy_num, visited=None):
@@ -5685,7 +5678,7 @@ def main():
     
     # --- Load data with caching for better performance ---
     # Moved all_data loading to individual pages for proper cache refresh
-    # all_data = get_user_policies()
+    # all_data = load_policies_data()
     supabase = get_supabase_client()
     
     # Note: all_data empty check moved to individual pages
@@ -5750,7 +5743,7 @@ def main():
         st.title("📊 Commission Dashboard")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         # Debug section
         with st.expander("🔧 Debug Info"):
@@ -6077,7 +6070,7 @@ def main():
         st.title("📈 Reports")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
@@ -6274,7 +6267,7 @@ def main():
         st.title("📋 All Policy Transactions")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
@@ -6456,7 +6449,7 @@ def main():
         st.title("✏️ Edit Policy Transactions")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
@@ -8088,7 +8081,7 @@ def main():
                 st.rerun()
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         # Import data validation utilities
         from data_validation_utils import show_empty_state, check_data_availability
@@ -8768,7 +8761,7 @@ def main():
         st.title("🔍 Advanced Search & Filter")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
@@ -8976,7 +8969,7 @@ def main():
                 st.rerun()
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         # Create tabs for different reconciliation functions with state preservation
         # Use session state to remember the selected tab
@@ -10021,7 +10014,7 @@ def main():
             st.subheader("📜 Reconciliation History")
             
             # Reload data for this tab to ensure we have the latest
-            all_data = get_user_policies()
+            all_data = load_policies_data()
             
             # Display any success message from previous update
             if 'reconciliation_update_success' in st.session_state:
@@ -11024,7 +11017,7 @@ def main():
         st.title("⚙️ Admin Panel")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping", "Default Agent Rates"])
         
@@ -13030,7 +13023,7 @@ SOLUTION NEEDED:
                 st.metric("Active Carriers", len([c for c in st.session_state.get('carriers_data', []) if c.get('status') == 'Active']))
         
         # Load fresh data for this page (island architecture)
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         # Initialize session state for Contacts page
         if 'carriers_data' not in st.session_state:
@@ -14011,7 +14004,7 @@ SOLUTION NEEDED:
         st.title("🛠️ Tools")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         tab1, tab2, tab3 = st.tabs(["Data Tools", "Utility Functions", "Import/Export"])
         
@@ -14922,7 +14915,7 @@ SOLUTION NEEDED:
                 st.rerun()
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
@@ -16304,7 +16297,7 @@ TO "New Column Name";
         st.success("📊 Generate customizable reports for policy summaries with Balance Due calculations and export capabilities.")
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No policy data loaded. Please check database connection or import data.")
@@ -18863,7 +18856,7 @@ TO "New Column Name";
             """)
         
         # Load fresh data for this page
-        all_data = get_user_policies()
+        all_data = load_policies_data()
         
         if all_data.empty:
             st.warning("No data found in policies table. Please add some policy data first.")
