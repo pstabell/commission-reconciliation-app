@@ -5580,8 +5580,8 @@ def main():
         all_data = load_policies_data()
         
         if all_data.empty:
-            # Check if this is a new user (first login)
-            if st.session_state.get('is_new_user', True):
+            # Show welcome message until user explicitly hides it
+            if not st.session_state.get('hide_welcome_dashboard', False):
                 # Show welcome message for new users
                 st.balloons()
                 
@@ -5645,8 +5645,11 @@ def main():
                 with col2:
                     st.markdown("👉 **[Read the Help Guide](/)** - Click >> menu → Help")
                 
-                # Set flag to not show this again
-                st.session_state.is_new_user = False
+                # Add hide button
+                st.markdown("---")
+                if st.button("✅ Hide Welcome Page", help="You can always access this guide from the Help menu"):
+                    st.session_state.hide_welcome_dashboard = True
+                    st.rerun()
             else:
                 st.warning("No data found in policies table. Please add some policy data first.")
         else:
@@ -15469,6 +15472,13 @@ SOLUTION NEEDED:
             """)
             
             st.info("💡 **Tip**: Start by adding a few sample policies to explore all features!")
+            
+            # Add button to show welcome dashboard
+            if st.button("🎉 Show Welcome Dashboard", help="Display the interactive welcome guide on the Dashboard page"):
+                st.session_state.hide_welcome_dashboard = False
+                st.success("Welcome dashboard enabled! Navigate to Dashboard to see it.")
+                st.session_state.selected_page = "Dashboard"
+                st.rerun()
         
         with tab2:
             st.subheader("📖 Features Guide")
