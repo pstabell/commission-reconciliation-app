@@ -14524,7 +14524,12 @@ SOLUTION NEEDED:
                                                                     app_mode = os.getenv("APP_ENVIRONMENT")
                                                                     if app_mode == "PRODUCTION":
                                                                         service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY")
+                                                                        anon_key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY")
                                                                         st.write(f"Production mode - Service key {'FOUND' if service_key else 'NOT FOUND'}")
+                                                                        st.write(f"Production mode - Anon key {'FOUND' if anon_key else 'NOT FOUND'}")
+                                                                        # List all env vars starting with PRODUCTION (hiding values)
+                                                                        prod_vars = [k for k in os.environ.keys() if k.startswith('PRODUCTION')]
+                                                                        st.write(f"Available PRODUCTION env vars: {', '.join(prod_vars)}")
                                                                     else:
                                                                         service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
                                                                         st.write(f"Personal mode - Service key {'FOUND' if service_key else 'NOT FOUND'}")
