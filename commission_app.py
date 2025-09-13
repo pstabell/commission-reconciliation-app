@@ -1,4 +1,6 @@
 import streamlit as st
+import datetime
+import json
 
 # Set page config first (required to be first Streamlit command)
 st.set_page_config(
@@ -149,12 +151,11 @@ pd.options.display.float_format = '{:.2f}'.format
 
 # Load environment variables
 load_dotenv()
-import datetime
+# datetime and json already imported at top
 import time
 import io
 import streamlit_sortables
 import os
-import json
 import pdfplumber
 import shutil
 import uuid
