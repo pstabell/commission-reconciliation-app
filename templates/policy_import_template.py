@@ -35,7 +35,7 @@ columns = [
     'STMT Date',
     
     # Payment info
-    'Payment Plan',
+    'AS_EARNED_PMT_PLAN',
     'Agency Comm Received (STMT)',
     'Agent Paid Amount (STMT)',
     
@@ -43,7 +43,9 @@ columns = [
     'Prior Policy Number',
     'NOTES',
     'Broker Fee',
-    'Policy Taxes & Fees'
+    'Policy Taxes & Fees',
+    'Policy Term',
+    'Policy Checklist Complete'
 ]
 
 # Create example data to help users understand format
@@ -83,7 +85,7 @@ example_data = {
         datetime(2025, 3, 1)
     ],
     'STMT Date': [None, None, None, None, datetime(2024, 8, 15)],
-    'Payment Plan': ['12-PAY', 'FULL', '12-PAY', 'FULL', '12-PAY'],
+    'AS_EARNED_PMT_PLAN': ['12-PAY', 'FULL', '12-PAY', 'FULL', '12-PAY'],
     'Agency Comm Received (STMT)': [None, None, None, None, -120.00],
     'Agent Paid Amount (STMT)': [None, None, None, None, -60.00],
     'Prior Policy Number': [None, None, None, 'HOME-2024-001', None],
@@ -95,7 +97,9 @@ example_data = {
         'Cancelled - non-payment'
     ],
     'Broker Fee': [25.00, 0.00, 0.00, 0.00, 0.00],
-    'Policy Taxes & Fees': [150.00, 125.00, 15.00, 130.00, -50.00]
+    'Policy Taxes & Fees': [150.00, 125.00, 15.00, 130.00, -50.00],
+    'Policy Term': [1, 1, 1, 2, 1],
+    'Policy Checklist Complete': ['Yes', 'Yes', 'No', 'Yes', 'No']
 }
 
 # Create DataFrame
@@ -121,17 +125,19 @@ instructions = {
         'Policy Origination Date',
         'X-DATE',
         'STMT Date',
-        'Payment Plan',
+        'AS_EARNED_PMT_PLAN',
         'Agency Comm Received (STMT)',
         'Agent Paid Amount (STMT)',
         'Prior Policy Number',
         'NOTES',
         'Broker Fee',
-        'Policy Taxes & Fees'
+        'Policy Taxes & Fees',
+        'Policy Term',
+        'Policy Checklist Complete'
     ],
     'Required': [
         'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes',
-        'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'
+        'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'
     ],
     'Description': [
         'Unique identifier for the client (e.g., CL12345)',
@@ -157,7 +163,9 @@ instructions = {
         'Previous policy number (for renewals/rewrites)',
         'Any notes or comments',
         'Broker fees charged',
-        'Policy taxes and fees'
+        'Policy taxes and fees',
+        'Policy term number (1 for first term, 2 for renewal, etc.)',
+        'Yes/No - Are all required documents complete?'
     ],
     'Example': [
         'CL12345',
@@ -183,7 +191,9 @@ instructions = {
         'AUTO-2023-001',
         'New auto policy',
         '25.00',
-        '150.00'
+        '150.00',
+        '1',
+        'Yes'
     ]
 }
 

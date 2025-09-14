@@ -33,13 +33,15 @@ The Policy Import Template helps you prepare your data for bulk import into the 
 - **STMT Date** - Statement/reconciliation date (MM/DD/YYYY)
 
 ### Payment & Additional Info
-- **Payment Plan** - FULL, 12-PAY, 6-PAY, 4-PAY, 2-PAY, etc.
+- **AS_EARNED_PMT_PLAN** - FULL, 12-PAY, 6-PAY, 4-PAY, 2-PAY, etc.
 - **Agency Comm Received (STMT)** - Commission received from carrier (for reconciliation)
 - **Agent Paid Amount (STMT)** - Amount paid to agent (for reconciliation)
 - **Prior Policy Number** - Previous policy number (for renewals/rewrites)
 - **NOTES** - Any notes or comments
 - **Broker Fee** - Broker fees charged
 - **Policy Taxes & Fees** - Policy taxes and fees
+- **Policy Term** - Policy term number (1 for first term, 2 for second term/renewal, etc.)
+- **Policy Checklist Complete** - Yes/No indicating if all required documents are complete
 
 ## Transaction Type Examples
 - **NEW** - New business
