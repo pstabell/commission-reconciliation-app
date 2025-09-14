@@ -14284,33 +14284,33 @@ SOLUTION NEEDED:
                         
                         progress_bar.empty()
                         status_text.empty()
-                    
-                    # Show results
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("✅ Can Update", len(updates))
-                    with col2:
-                        st.metric("❌ Cannot Update", len(errors))
-                    
-                    # Store results in session state
-                    st.session_state['origination_updates'] = updates
-                    st.session_state['origination_errors'] = errors
-                    
-                    # Show preview of updates
-                    if updates:
-                        st.success(f"Found {len(updates)} transactions that can be updated")
                         
-                        # Convert dates to strings for display
-                        updates_df = pd.DataFrame(updates)
-                        
-                        st.dataframe(updates_df.head(10), use_container_width=True)
-                        if len(updates) > 10:
-                            st.caption(f"Showing first 10 of {len(updates)} updates")
+                        # Show results
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("✅ Can Update", len(updates))
+                        with col2:
+                            st.metric("❌ Cannot Update", len(errors))
                     
-                    if errors:
-                        with st.expander(f"⚠️ {len(errors)} transactions cannot be updated"):
-                            errors_df = pd.DataFrame(errors)
-                            st.dataframe(errors_df, use_container_width=True)
+                        # Store results in session state
+                        st.session_state['origination_updates'] = updates
+                        st.session_state['origination_errors'] = errors
+                        
+                        # Show preview of updates
+                        if updates:
+                            st.success(f"Found {len(updates)} transactions that can be updated")
+                            
+                            # Convert dates to strings for display
+                            updates_df = pd.DataFrame(updates)
+                            
+                            st.dataframe(updates_df.head(10), use_container_width=True)
+                            if len(updates) > 10:
+                                st.caption(f"Showing first 10 of {len(updates)} updates")
+                        
+                        if errors:
+                            with st.expander(f"⚠️ {len(errors)} transactions cannot be updated"):
+                                errors_df = pd.DataFrame(errors)
+                                st.dataframe(errors_df, use_container_width=True)
                 
                 # Update button (only shows after analysis)
                 if 'origination_updates' in st.session_state and st.session_state['origination_updates']:
