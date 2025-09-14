@@ -1,5 +1,5 @@
 import streamlit as st
-import datetime
+import datetime  # Import the full datetime module
 from datetime import datetime as dt
 import json
 
@@ -16044,10 +16044,9 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             # Calculate trial days remaining
                             created_at = user.get('created_at', '')
                             if created_at:
-                                from datetime import datetime, timedelta
-                                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                                trial_end = created_date + timedelta(days=14)
-                                days_left = (trial_end - datetime.now(trial_end.tzinfo)).days
+                                created_date = dt.fromisoformat(created_at.replace('Z', '+00:00'))
+                                trial_end = created_date + datetime.timedelta(days=14)
+                                days_left = (trial_end - dt.now(trial_end.tzinfo)).days
                                 st.info(f"🎁 Free trial active - {days_left} days remaining")
                         elif subscription_status == 'cancelled':
                             st.warning("⚠️ Your subscription has been cancelled")
