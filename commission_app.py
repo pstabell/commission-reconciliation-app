@@ -1,6 +1,6 @@
 import streamlit as st
 import datetime
-from datetime import date, timedelta, datetime as dt
+from datetime import datetime as dt
 import json
 
 # Set page config first (required to be first Streamlit command)
@@ -9184,7 +9184,7 @@ def main():
                 
                 statement_date = st.date_input(
                     "",  # Empty label since we have the custom header above
-                    value=date.today(),
+                    value=datetime.date.today(),
                     help="The date on the commission statement",
                                         key="statement_date_input"
                 )
@@ -9192,7 +9192,7 @@ def main():
             with col2:
                 reconciliation_date = st.date_input(
                     "Date Reconciled",
-                    value=date.today(),
+                    value=datetime.date.today(),
                     disabled=True,
                     help="Today's date (when reconciliation is performed)",
                     format="MM/DD/YYYY"
@@ -10186,9 +10186,9 @@ def main():
                         
                         # Use session state to preserve date selections
                         default_start = st.session_state.get('recon_history_start_date', 
-                                                            date.today() - timedelta(days=30))
+                                                            datetime.date.today() - datetime.timedelta(days=30))
                         default_end = st.session_state.get('recon_history_end_date', 
-                                                          date.today())
+                                                          datetime.date.today())
                         
                         with col1:
                             start_date = st.date_input(
@@ -10653,10 +10653,10 @@ def main():
                                                     eff_date_obj = pd.to_datetime(eff_date_value).date()
                                                     formatted_eff_date = pd.to_datetime(eff_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    eff_date_obj = date.today()
+                                                    eff_date_obj = datetime.date.today()
                                                     formatted_eff_date = str(eff_date_value)
                                             else:
-                                                eff_date_obj = date.today()
+                                                eff_date_obj = datetime.date.today()
                                                 formatted_eff_date = ''
                                             
                                             new_effective_date = st.date_input(
@@ -10672,10 +10672,10 @@ def main():
                                                     pol_orig_date_obj = pd.to_datetime(pol_orig_date_value).date()
                                                     formatted_pol_orig_date = pd.to_datetime(pol_orig_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    pol_orig_date_obj = date.today()
+                                                    pol_orig_date_obj = datetime.date.today()
                                                     formatted_pol_orig_date = str(pol_orig_date_value)
                                             else:
-                                                pol_orig_date_obj = date.today()
+                                                pol_orig_date_obj = datetime.date.today()
                                                 formatted_pol_orig_date = ''
                                             
                                             new_policy_origination_date = st.date_input(
@@ -10691,10 +10691,10 @@ def main():
                                                     x_date_obj = pd.to_datetime(x_date_value).date()
                                                     formatted_x_date = pd.to_datetime(x_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    x_date_obj = date.today()
+                                                    x_date_obj = datetime.date.today()
                                                     formatted_x_date = str(x_date_value)
                                             else:
-                                                x_date_obj = date.today()
+                                                x_date_obj = datetime.date.today()
                                                 formatted_x_date = ''
                                             
                                             new_x_date = st.date_input(
