@@ -12,11 +12,12 @@ WHERE user_email = 'Demo@AgentCommissionTracker.com'
 GROUP BY user_email;
 
 -- Check if there's any related renewal history
-SELECT 
-    'Demo renewal history to be deleted' as description,
-    COUNT(*) as count
-FROM renewal_history
-WHERE details::text LIKE '%Demo@AgentCommissionTracker.com%';
+-- Note: renewal_history table doesn't have a details column in the current schema
+-- This check is commented out for now
+-- SELECT 
+--     'Demo renewal history to be deleted' as description,
+--     COUNT(*) as count
+-- FROM renewal_history;
 
 -- SAFETY CHECK: Show all unique user emails to ensure we're not affecting others
 SELECT DISTINCT user_email, COUNT(*) as record_count
@@ -33,8 +34,8 @@ DELETE FROM policies
 WHERE user_email = 'Demo@AgentCommissionTracker.com';
 
 -- DELETE Demo's renewal history if any
-DELETE FROM renewal_history
-WHERE details::text LIKE '%Demo@AgentCommissionTracker.com%';
+-- Note: Current schema doesn't have user_email in renewal_history
+-- Skip this step
 
 -- Verify deletion was successful
 SELECT 

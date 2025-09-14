@@ -1966,10 +1966,45 @@ def validate_excel_import(uploaded_file):
             validation_errors.append("Excel file is empty")
             return False, None, validation_errors
         
-        # Check for required columns (based on column mapping)
+        # Apply column mappings (same as CSV import)
+        column_mapping = {
+            'Client ID': ['Client_ID', 'ClientID', 'Client_Id', 'client_id'],
+            'Transaction ID': ['Transaction_ID', 'TransactionID', 'Transaction_Id', 'transaction_id'],
+            'Customer': ['Customer', 'customer'],
+            'Carrier Name': ['Carrier_Name', 'CarrierName', 'Carrier_name', 'carrier_name'],
+            'MGA Name': ['MGA_Name', 'MGAName', 'MGA_name', 'mga_name'],
+            'Policy Type': ['Policy_Type', 'PolicyType', 'Policy_type', 'policy_type'],
+            'Policy Number': ['Policy_Number', 'PolicyNumber', 'Policy_number', 'policy_number'],
+            'Transaction Type': ['Transaction_Type', 'TransactionType', 'Transaction_type', 'transaction_type'],
+            'Policy Origination Date': ['Policy_Origination_Date', 'PolicyOriginationDate', 'Policy_origination_date'],
+            'Effective Date': ['Effective_Date', 'EffectiveDate', 'Effective_date', 'effective_date'],
+            'X-DATE': ['X-DATE', 'X_DATE', 'XDATE', 'x_date'],
+            'Policy Checklist Complete': ['Policy_Checklist_Complete', 'PolicyChecklistComplete', 'Policy_checklist_complete'],
+            'STMT DATE': ['STMT_DATE', 'STMTDate', 'Stmt_Date', 'stmt_date'],
+            'Premium Sold': ['Premium_Sold', 'PremiumSold', 'Premium_sold', 'premium_sold'],
+            'Agent Comm %': ['Agent_Comm_%', 'Agent_Comm', 'Agent_Commission_%', 'Agent_Commission', 'Agent_Gross_Comm_%'],
+            'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
+            'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
+            'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
+            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan'],
+            'NOTES': ['NOTES', 'Notes', 'notes'],
+            'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
+            'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
+            'Policy Taxes & Fees': ['Policy_Taxes_&_Fees', 'Policy_Taxes_and_Fees', 'PolicyTaxesFees', 'Policy_taxes_fees'],
+            'Policy Term': ['Policy_Term', 'PolicyTerm', 'Policy_term', 'policy_term']
+        }
+        
+        # Apply column mappings
+        for standard_name, variations in column_mapping.items():
+            for variation in variations:
+                if variation in df.columns and standard_name not in df.columns:
+                    df.rename(columns={variation: standard_name}, inplace=True)
+                    break
+        
+        # Check for required columns (now using standard names with spaces)
         required_columns = [
-            'Client_ID', 'Transaction_ID', 'Policy_Type', 
-            'Transaction_Type', 'Effective_Date'
+            'Client ID', 'Transaction ID', 'Policy Type', 
+            'Transaction Type', 'Effective Date'
         ]
         
         missing_columns = []
@@ -1981,20 +2016,20 @@ def validate_excel_import(uploaded_file):
             validation_errors.append(f"Missing required columns: {', '.join(missing_columns)}")
         
         # Validate data types and formats
-        if 'Effective_Date' in df.columns:
+        if 'Effective Date' in df.columns:
             try:
-                pd.to_datetime(df['Effective_Date'])
+                pd.to_datetime(df['Effective Date'])
             except:
-                validation_errors.append("Invalid date format in Effective_Date column")
+                validation_errors.append("Invalid date format in Effective Date column")
         
         # Check for duplicate Transaction_IDs
-        if 'Transaction_ID' in df.columns:
-            duplicates = df['Transaction_ID'].duplicated().sum()
+        if 'Transaction ID' in df.columns:
+            duplicates = df['Transaction ID'].duplicated().sum()
             if duplicates > 0:
-                validation_errors.append(f"Found {duplicates} duplicate Transaction_IDs")
+                validation_errors.append(f"Found {duplicates} duplicate Transaction IDs")
         
-        # Validate numeric columns
-        numeric_columns = ['Commission_Paid', 'Agency_Commission_Received', 'Balance_Due']
+        # Validate numeric columns (update column names to match standard names)
+        numeric_columns = ['Agent Paid Amount (STMT)', 'Agency Comm Received (STMT)', 'Premium Sold']
         for col in numeric_columns:
             if col in df.columns:
                 try:
@@ -14551,7 +14586,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             'NOTES': ['NOTES', 'Notes', 'notes'],
                             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
                             'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
-                            'Policy Taxes & Fees': ['Policy_Taxes_&_Fees', 'Policy_Taxes_and_Fees', 'PolicyTaxesFees', 'Policy_taxes_fees']
+                            'Policy Taxes & Fees': ['Policy_Taxes_&_Fees', 'Policy_Taxes_and_Fees', 'PolicyTaxesFees', 'Policy_taxes_fees'],
+                            'Policy Term': ['Policy_Term', 'PolicyTerm', 'Policy_term', 'policy_term']
                         }
                         
                         # Apply column mappings
