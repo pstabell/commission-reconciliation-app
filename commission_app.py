@@ -10506,7 +10506,7 @@ def main():
                             # Add Is Void Entry column
                             display_recon['Is Void Entry'] = display_recon.apply(
                                 lambda row: 'Yes' if str(row.get('Reconciliation Status', '')).upper() == 'VOID' or 
-                                          (row.get('Batch ID', '').startswith('VOID-') if 'Batch ID' in row else False) or
+                                          (str(row.get('Batch ID', '')).startswith('VOID-') if row.get('Batch ID') else False) or
                                           ('-VOID-' in str(row.get('Transaction ID', '')))
                                           else 'No', 
                                 axis=1
