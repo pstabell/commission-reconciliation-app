@@ -1,6 +1,6 @@
 import streamlit as st
 import datetime
-from datetime import date
+from datetime import date, timedelta, datetime as dt
 import json
 
 # Set page config first (required to be first Streamlit command)
@@ -9339,7 +9339,7 @@ def main():
                                             'STMT DATE': statement_date.strftime('%Y-%m-%d'),
                                             'reconciliation_status': 'reconciled',
                                             'reconciliation_id': batch_id,
-                                            'reconciled_at': datetime.datetime.now().isoformat(),
+                                            'reconciled_at': dt.now().isoformat(),
                                             'is_reconciliation_entry': True
                                         }
                                         
@@ -9737,7 +9737,7 @@ def main():
                                 if st.session_state.column_mapping:
                                     st.session_state.saved_column_mappings[mapping_name] = {
                                         'mapping': st.session_state.column_mapping.copy(),
-                                        'created': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                        'created': dt.now().strftime("%Y-%m-%d %H:%M"),
                                         'field_count': len(st.session_state.column_mapping)
                                     }
                                     # Save to file for persistence
@@ -10186,9 +10186,9 @@ def main():
                         
                         # Use session state to preserve date selections
                         default_start = st.session_state.get('recon_history_start_date', 
-                                                            datetime.date.today() - datetime.timedelta(days=30))
+                                                            date.today() - timedelta(days=30))
                         default_end = st.session_state.get('recon_history_end_date', 
-                                                          datetime.date.today())
+                                                          date.today())
                         
                         with col1:
                             start_date = st.date_input(
@@ -10653,10 +10653,10 @@ def main():
                                                     eff_date_obj = pd.to_datetime(eff_date_value).date()
                                                     formatted_eff_date = pd.to_datetime(eff_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    eff_date_obj = datetime.date.today()
+                                                    eff_date_obj = date.today()
                                                     formatted_eff_date = str(eff_date_value)
                                             else:
-                                                eff_date_obj = datetime.date.today()
+                                                eff_date_obj = date.today()
                                                 formatted_eff_date = ''
                                             
                                             new_effective_date = st.date_input(
@@ -10672,10 +10672,10 @@ def main():
                                                     pol_orig_date_obj = pd.to_datetime(pol_orig_date_value).date()
                                                     formatted_pol_orig_date = pd.to_datetime(pol_orig_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    pol_orig_date_obj = datetime.date.today()
+                                                    pol_orig_date_obj = date.today()
                                                     formatted_pol_orig_date = str(pol_orig_date_value)
                                             else:
-                                                pol_orig_date_obj = datetime.date.today()
+                                                pol_orig_date_obj = date.today()
                                                 formatted_pol_orig_date = ''
                                             
                                             new_policy_origination_date = st.date_input(
@@ -10691,10 +10691,10 @@ def main():
                                                     x_date_obj = pd.to_datetime(x_date_value).date()
                                                     formatted_x_date = pd.to_datetime(x_date_value).strftime('%m/%d/%Y')
                                                 except:
-                                                    x_date_obj = datetime.date.today()
+                                                    x_date_obj = date.today()
                                                     formatted_x_date = str(x_date_value)
                                             else:
-                                                x_date_obj = datetime.date.today()
+                                                x_date_obj = date.today()
                                                 formatted_x_date = ''
                                             
                                             new_x_date = st.date_input(
@@ -10880,7 +10880,7 @@ def main():
                             else:
                                 # Generate adjustment ID
                                 adj_id = generate_reconciliation_transaction_id("ADJ")
-                                adj_date = datetime.datetime.now()
+                                adj_date = dt.now()
                                 
                                 # Get original transaction details
                                 orig_row = original_trans.iloc[0]
@@ -11098,7 +11098,7 @@ def main():
                                                             'STMT DATE': statement_date.strftime('%m/%d/%Y'),  # Use statement date in MM/DD/YYYY format
                                                             'reconciliation_status': 'void',
                                                             'reconciliation_id': f"VOID-{selected_batch}",
-                                                            'reconciled_at': datetime.datetime.now().isoformat(),  # Current timestamp for when void occurred
+                                                            'reconciled_at': dt.now().isoformat(),  # Current timestamp for when void occurred
                                                             'is_reconciliation_entry': True,
                                                             'NOTES': f"VOID: {void_reason}"
                                                         }
@@ -19591,7 +19591,7 @@ TO "New Column Name";
                 
                 if not unique_id_found:
                     # If we couldn't generate a unique ID after 10 attempts, use a timestamp-based ID
-                    renewal_data['Transaction ID'] = f"RWL{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    renewal_data['Transaction ID'] = f"RWL{dt.now().strftime('%Y%m%d%H%M%S')}"
                 
                 # Pre-populate Prior Policy Number with the current policy number
                 renewal_data['Prior Policy Number'] = renewal_data.get('Policy Number', '')
@@ -19678,7 +19678,7 @@ TO "New Column Name";
                                     st.error(f"Transaction ID {trans_id} already exists in database! Found {len(check_existing.data)} matching records.")
                                     st.error("The uniqueness check failed. Trying with timestamp-based ID...")
                                     # Generate a timestamp-based ID instead
-                                    new_renewal['Transaction ID'] = f"RWL{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}"
+                                    new_renewal['Transaction ID'] = f"RWL{dt.now().strftime('%Y%m%d%H%M%S%f')[:-3]}"
                                     st.info(f"Using new Transaction ID: {new_renewal['Transaction ID']}")
                                 else:
                                     st.success(f"Transaction ID {trans_id} is unique and ready to insert.")
@@ -19692,7 +19692,7 @@ TO "New Column Name";
                             # Log the renewal
                             try:
                                 renewal_history_data = {
-                                    "renewal_timestamp": datetime.datetime.now().isoformat(),
+                                    "renewal_timestamp": dt.now().isoformat(),
                                     "renewed_by": "User",
                                     "original_transaction_id": st.session_state.renewal_to_edit.get('Transaction ID', ''),
                                     "new_transaction_id": new_renewal.get('Transaction ID', ''),
