@@ -727,7 +727,11 @@ def calculate_dashboard_metrics(df):
             # Unreconciled = 2025 originals that haven't been paid yet
             if 'Premium Sold' in df_originals_2025_unpaid.columns:
                 metrics['premium_unreconciled_ytd'] = df_originals_2025_unpaid['Premium Sold'].sum()
-            if 'Agent Estimated Comm $' in df_originals_2025_unpaid.columns:
+            # Use Total Agent Comm to include broker fees
+            if 'Total Agent Comm' in df_originals_2025_unpaid.columns:
+                metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Total Agent Comm'].sum()
+            elif 'Agent Estimated Comm $' in df_originals_2025_unpaid.columns:
+                # Fallback to Agent Estimated Comm $ if Total Agent Comm doesn't exist
                 metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Agent Estimated Comm $'].sum()
         except Exception as e:
             # If date parsing fails, fall back to zero
