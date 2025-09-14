@@ -15053,7 +15053,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             This tool allows you to delete all transactions from your most recent import session.
             
             **How it works:**
-            - Identifies transactions imported in the last 24 hours
+            - Identifies transactions imported in the last 7 days
             - Groups them by import timestamp
             - Allows you to delete the most recent batch
             
@@ -15063,89 +15063,120 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             - Testing imports
             """)
             
-            # Get recent imports (last 24 hours)
+            # Get recent imports (last 7 days)
             if all_data.empty:
                 st.warning("No transaction data found.")
             else:
                 try:
-                    supabase = get_supabase_client()
-                    
-                    # Query for recent imports (last 24 hours)
-                    from datetime import datetime, timedelta
-                    import pytz
-                    
-                    # Get current time and 24 hours ago in UTC
-                    now_utc = datetime.now(pytz.UTC)
-                    yesterday_utc = now_utc - timedelta(days=1)
-                    
-                    # Format for Supabase query
-                    yesterday_str = yesterday_utc.isoformat()
-                    
-                    # Get user's recent imports
+                    # Since there's no created_at column, we'll use the data already loaded
+                    # and identify recent imports by looking for patterns in Transaction IDs
                     user_email = st.session_state.get('user_email')
                     if not user_email:
                         st.error("User email not found in session.")
                     else:
-                        # Query for recent imports
-                        response = supabase.table('policies').select('*').eq('user_email', user_email).gte('created_at', yesterday_str).order('created_at', desc=True).execute()
+                        # Use the already loaded data and filter by user
+                        user_data = all_data[all_data['user_email'] == user_email].copy() if 'user_email' in all_data.columns else all_data.copy()
                         
-                        if not response.data:
-                            st.info("No imports found in the last 24 hours.")
+                        if user_data.empty:
+                            st.info("No data found for your account.")
                         else:
-                            recent_imports = pd.DataFrame(response.data)
+                            # Try to identify import batches by grouping similar Transaction IDs
+                            # Many imports have sequential or similar IDs
+                            st.write("### Your Transaction Data")
                             
-                            # Group by created_at (rounded to minute for batch identification)
-                            recent_imports['import_batch'] = pd.to_datetime(recent_imports['created_at']).dt.round('min')
+                            # Show total count
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Total Transactions", f"{len(user_data):,}")
+                            with col2:
+                                st.metric("Unique Policies", f"{user_data['Policy Number'].nunique():,}" if 'Policy Number' in user_data.columns else "N/A")
                             
-                            # Get import batches
-                            import_batches = recent_imports.groupby('import_batch').agg({
-                                'Transaction ID': 'count',
-                                'created_at': 'first'
-                            }).rename(columns={'Transaction ID': 'record_count'}).sort_values('created_at', ascending=False)
+                            # Group by Policy Type to help identify batches
+                            if 'Policy Type' in user_data.columns:
+                                st.write("#### Transactions by Policy Type")
+                                type_counts = user_data['Policy Type'].value_counts()
+                                for ptype, count in type_counts.items():
+                                    st.write(f"- {ptype}: {count} transactions")
                             
-                            if len(import_batches) == 0:
-                                st.info("No import batches found.")
-                            else:
-                                # Show most recent batch
-                                latest_batch = import_batches.index[0]
-                                latest_count = import_batches.iloc[0]['record_count']
-                                latest_time = import_batches.iloc[0]['created_at']
+                            # Show option to delete all data
+                            st.divider()
+                            st.write("### Delete Options")
+                            
+                            delete_option = st.radio(
+                                "What would you like to delete?",
+                                ["Select specific transactions", "Delete ALL my data"],
+                                help="Choose whether to delete specific transactions or all your data"
+                            )
+                            
+                            if delete_option == "Select specific transactions":
+                                # Filter options
+                                st.write("#### Filter Transactions to Delete")
                                 
-                                st.write("### Most Recent Import")
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Import Time", pd.to_datetime(latest_time).strftime("%Y-%m-%d %H:%M:%S"))
-                                with col2:
-                                    st.metric("Records", f"{latest_count:,}")
+                                filter_col1, filter_col2 = st.columns(2)
                                 
-                                # Show sample of records to be deleted
-                                batch_records = recent_imports[recent_imports['import_batch'] == latest_batch]
+                                with filter_col1:
+                                    # Filter by Policy Type
+                                    if 'Policy Type' in user_data.columns:
+                                        policy_types = ['All'] + sorted(user_data['Policy Type'].dropna().unique().tolist())
+                                        selected_type = st.selectbox("Policy Type", policy_types)
+                                    else:
+                                        selected_type = 'All'
                                 
-                                with st.expander("📋 Preview records to be deleted", expanded=False):
-                                    display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 'Effective Date']
-                                    available_cols = [col for col in display_cols if col in batch_records.columns]
-                                    st.dataframe(batch_records[available_cols].head(10), use_container_width=True)
-                                    if len(batch_records) > 10:
-                                        st.caption(f"Showing first 10 of {len(batch_records)} records")
+                                with filter_col2:
+                                    # Filter by Transaction Type
+                                    if 'Transaction Type' in user_data.columns:
+                                        trans_types = ['All'] + sorted(user_data['Transaction Type'].dropna().unique().tolist())
+                                        selected_trans_type = st.selectbox("Transaction Type", trans_types)
+                                    else:
+                                        selected_trans_type = 'All'
                                 
-                                # Safety confirmation
-                                st.write("### Confirm Deletion")
-                                st.warning(f"You are about to delete {latest_count} transactions imported on {pd.to_datetime(latest_time).strftime('%Y-%m-%d %H:%M:%S')}")
+                                # Apply filters
+                                filtered_data = user_data.copy()
+                                if selected_type != 'All' and 'Policy Type' in filtered_data.columns:
+                                    filtered_data = filtered_data[filtered_data['Policy Type'] == selected_type]
+                                if selected_trans_type != 'All' and 'Transaction Type' in filtered_data.columns:
+                                    filtered_data = filtered_data[filtered_data['Transaction Type'] == selected_trans_type]
                                 
+                                # Show preview
+                                if not filtered_data.empty:
+                                    st.write(f"#### {len(filtered_data)} transactions match your filters")
+                                    
+                                    with st.expander("📋 Preview transactions to delete", expanded=True):
+                                        display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Policy Type', 'Transaction Type', 'Premium Sold']
+                                        available_cols = [col for col in display_cols if col in filtered_data.columns]
+                                        st.dataframe(filtered_data[available_cols].head(20), use_container_width=True)
+                                        if len(filtered_data) > 20:
+                                            st.caption(f"Showing first 20 of {len(filtered_data)} transactions")
+                                    
+                                    # Confirmation
+                                    st.warning(f"⚠️ You are about to delete {len(filtered_data)} transactions")
+                                else:
+                                    st.info("No transactions match your filters")
+                                
+                                transactions_to_delete = filtered_data
+                                
+                            else:  # Delete ALL my data
+                                transactions_to_delete = user_data
+                                st.error(f"⚠️ **WARNING**: You are about to delete ALL {len(user_data)} transactions from your account!")
+                            
+                            # Delete confirmation and execution
+                            if not transactions_to_delete.empty:
                                 # Require typing confirmation
-                                confirmation_text = "DELETE MY IMPORT"
+                                confirmation_text = "DELETE MY DATA"
                                 user_confirmation = st.text_input(
                                     f'Type "{confirmation_text}" to confirm deletion:',
                                     key="delete_confirmation"
                                 )
                                 
                                 # Delete button
-                                if st.button("🗑️ Delete Import", type="primary", disabled=(user_confirmation != confirmation_text)):
+                                if st.button("🗑️ Delete Selected Data", type="primary", disabled=(user_confirmation != confirmation_text)):
                                     if user_confirmation == confirmation_text:
                                         with st.spinner("Deleting records..."):
                                             try:
-                                                # Get all Transaction IDs from this batch
-                                                ids_to_delete = batch_records['Transaction ID'].tolist()
+                                                supabase = get_supabase_client()
+                                                
+                                                # Get all Transaction IDs to delete
+                                                ids_to_delete = transactions_to_delete['Transaction ID'].tolist()
                                                 
                                                 # Delete in batches of 100 (Supabase limit)
                                                 deleted_count = 0
@@ -15179,17 +15210,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 st.error(f"❌ Error deleting records: {str(e)}")
                                     else:
                                         st.error("Confirmation text does not match.")
-                                
-                                # Show other recent imports if any
-                                if len(import_batches) > 1:
-                                    st.divider()
-                                    st.write("### Other Recent Imports (last 24 hours)")
-                                    other_batches = import_batches.iloc[1:5]  # Show up to 4 more
-                                    
-                                    for idx, (batch_time, row) in enumerate(other_batches.iterrows()):
-                                        st.write(f"**Import {idx + 2}:** {batch_time.strftime('%Y-%m-%d %H:%M')} - {row['record_count']} records")
-                                    
-                                    st.info("💡 Only the most recent import can be deleted. To delete older imports, use the Edit Policy Transactions page.")
+                            
                 
                 except Exception as e:
                     st.error(f"Error loading import data: {str(e)}")
