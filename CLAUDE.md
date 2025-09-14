@@ -1,3 +1,21 @@
+## CRITICAL DEVELOPMENT INSTRUCTIONS FOR CLAUDE
+
+### 1. Troubleshooting Protocol
+- **After 3 failed attempts** to solve any issue, ALWAYS search and read ALL .md files in the docs folder
+- Use commands like: `grep -r "error_keyword" docs/` or `find docs -name "*.md" -exec grep -l "issue_pattern" {} \;`
+- Previous issues and their solutions are documented - don't reinvent the wheel!
+
+### 2. Documentation Requirements
+- **When user confirms an issue is resolved**, IMMEDIATELY create or update the relevant .md file
+- Location: `/docs/troubleshooting/` for bugs, `/docs/changelogs/` for fixes
+- Include: Error message, root cause, solution, prevention tips
+- Use format: `YYYY-MM-DD-brief-description.md`
+
+### 3. Known Recurring Issues
+- **UnboundLocalError with datetime**: Check `/docs/changelogs/2025-01-09-webhook-datetime-fix.md`
+- **Mobile data visibility**: Check `/docs/troubleshooting/MOBILE_FIX_SUMMARY_2025.md`
+- **CSV Import / RLS**: Check `/docs/troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md`
+
 ## Policy Term Transaction Rules
 
 - Transactions can only exist in ONE policy term to avoid duplication
