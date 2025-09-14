@@ -578,11 +578,11 @@ def style_special_transactions(df):
         if 'Transaction ID' in row:
             trans_id = str(row['Transaction ID'])
             if '-STMT-' in trans_id:
-                # Light blue background for STMT transactions
-                return ['background-color: #e6f3ff'] * len(row)
+                # Darker blue that works in both light and dark mode
+                return ['background-color: #4a90e2; color: white; font-weight: 500'] * len(row)
             elif '-VOID-' in trans_id:
-                # Light red background for VOID transactions
-                return ['background-color: #ffe6e6'] * len(row)
+                # Darker red that works in both light and dark mode
+                return ['background-color: #e85855; color: white; font-weight: 500'] * len(row)
         return [''] * len(row)
     
     # Check if DataFrame has Transaction ID column
@@ -18260,9 +18260,11 @@ TO "New Column Name";
                             if 'Transaction ID' in row.index:
                                 trans_id = str(row['Transaction ID'])
                                 if '-STMT-' in trans_id:
-                                    return ['background-color: #e6f3ff'] * len(row)
+                                    # Use darker blue that works in both light and dark mode
+                                    return ['background-color: #4a90e2; color: white; font-weight: 500'] * len(row)
                                 elif '-VOID-' in trans_id:
-                                    return ['background-color: #ffe6e6'] * len(row)
+                                    # Use darker red that works in both light and dark mode  
+                                    return ['background-color: #e85855; color: white; font-weight: 500'] * len(row)
                             
                             return [''] * len(row)
                         
