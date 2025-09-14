@@ -14363,7 +14363,7 @@ SOLUTION NEEDED:
                             st.balloons()
                             
                             # Generate report
-                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            timestamp = time.strftime("%Y%m%d_%H%M%S")
                             report_data = []
                             for update in updates:
                                 report_data.append({
@@ -14410,7 +14410,7 @@ SOLUTION NEEDED:
                     st.download_button(
                         label="📥 Export All Data to CSV",
                         data=csv_data,
-                        file_name=f"all_policies_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        file_name=f"all_policies_{time.strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
                         help="Export all policy data as CSV file"
                     )
@@ -14928,7 +14928,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 
                                 # Generate update report
                                 if success_count > 0:
-                                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    timestamp = time.strftime("%Y%m%d_%H%M%S")
                                     
                                     # Create detailed update report
                                     report_rows = []
