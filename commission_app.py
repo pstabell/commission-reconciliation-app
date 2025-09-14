@@ -14931,8 +14931,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 # Generate update report
                                 if success_count > 0:
                                     # Use a simple counter instead of timestamp
-                            import random
-                            timestamp = f"{random.randint(1000, 9999)}"
+                                    import random
+                                    timestamp = f"{random.randint(1000, 9999)}"
                                     
                                     # Create detailed update report
                                     report_rows = []
