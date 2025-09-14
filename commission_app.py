@@ -830,7 +830,8 @@ def clean_data_for_database(data):
         'Commissionable Premium',  # Calculated field
         'Broker Fee Agent Comm',  # Calculated field
         'Total Agent Comm',  # Calculated field
-        'Payment Plan'  # Should be mapped to AS_EARNED_PMT_PLAN
+        'Payment Plan',  # Should be mapped to AS_EARNED_PMT_PLAN
+        'AS EARNED PMT PLAN'  # With spaces - should be mapped to AS_EARNED_PMT_PLAN
     }
     
     # Create a copy of the data to avoid modifying the original
@@ -2000,7 +2001,7 @@ def validate_excel_import(uploaded_file):
             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
             'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
             'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
-            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
+            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AS EARNED PMT PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
             'NOTES': ['NOTES', 'Notes', 'notes'],
             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
             'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
@@ -14596,7 +14597,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
                             'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
                             'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
-                            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
+                            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AS EARNED PMT PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
                             'NOTES': ['NOTES', 'Notes', 'notes'],
                             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
                             'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
