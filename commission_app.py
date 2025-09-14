@@ -14437,6 +14437,54 @@ SOLUTION NEEDED:
             
             # Import section
             st.write("### Import Data")
+            
+            # Download template section
+            st.write("#### 📄 Download Import Template")
+            col1, col2 = st.columns(2)
+            with col1:
+                # CSV template download
+                csv_template_path = "templates/Policy_Import_Template.csv"
+                if os.path.exists(csv_template_path):
+                    with open(csv_template_path, 'rb') as f:
+                        csv_data = f.read()
+                    st.download_button(
+                        label="📥 Download CSV Template",
+                        data=csv_data,
+                        file_name="Policy_Import_Template.csv",
+                        mime="text/csv",
+                        help="Download a CSV template with example data and all required columns"
+                    )
+                else:
+                    # Create template on the fly if file doesn't exist
+                    template_data = """Client ID,Transaction ID,Policy Type,Customer,Policy Number,Transaction Type,Effective Date,Premium Sold,Policy Gross Comm %,Agency Estimated Comm/Revenue (CRM),Agent Comm %,Total Agent Comm,Carrier Name,MGA,Policy Origination Date,X-DATE,STMT Date,Payment Plan,Agency Comm Received (STMT),Agent Paid Amount (STMT),Prior Policy Number,NOTES,Broker Fee,Policy Taxes & Fees
+CL12345,NEW001,AUTO,John Smith,AUTO-2024-001,NEW,01/01/2024,2400.00,15,360.00,50,180.00,Progressive,Direct,01/01/2024,01/01/2025,,12-PAY,,,,New auto policy,25.00,150.00
+CL12346,NEW002,HOME,Jane Doe,HOME-2024-001,NEW,02/15/2024,1800.00,12,216.00,50,108.00,State Farm,ABC MGA,02/15/2024,02/15/2025,,FULL,,,,New homeowner policy,0.00,125.00
+CL12347,END001,AUTO,John Smith,AUTO-2024-001,END,06/01/2024,200.00,15,30.00,50,15.00,Progressive,Direct,01/01/2024,01/01/2025,,12-PAY,,,,Added coverage,0.00,15.00
+CL12348,RWL001,HOME,Jane Doe,HOME-2025-001,RWL,02/15/2025,1900.00,12,228.00,25,57.00,State Farm,ABC MGA,02/15/2024,02/15/2026,,FULL,,,HOME-2024-001,Renewal,0.00,130.00
+CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,50,-60.00,Progressive,Direct,03/01/2024,03/01/2025,08/15/2024,12-PAY,-120.00,-60.00,,Cancelled - non-payment,0.00,-50.00"""
+                    st.download_button(
+                        label="📥 Download CSV Template",
+                        data=template_data,
+                        file_name="Policy_Import_Template.csv",
+                        mime="text/csv",
+                        help="Download a CSV template with example data and all required columns"
+                    )
+            
+            with col2:
+                st.info("""
+                **Template includes:**
+                - All 24 columns properly named
+                - 5 example transactions (NEW, RWL, END, CAN)
+                - Proper date formatting (MM/DD/YYYY)
+                - Commission calculations
+                - Payment plan examples
+                
+                **Required columns:**
+                - Client ID, Transaction ID, Policy Type
+                """)
+            
+            st.divider()
+            
             st.warning("""
             ⚠️ **IMPORTANT**: This tool is for ADDING NEW transactions to the database.
             - This will CREATE new records in the database
