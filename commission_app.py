@@ -816,7 +816,21 @@ def clean_data_for_database(data):
         '_match_type',  # Temporary field for matching logic
         '_match_score',  # Temporary field for matching logic
         'FULL OR MONTHLY PMTS',  # Old column that no longer exists in database
-        'FULL_OR_MONTHLY_PMTS'  # Underscore version
+        'FULL_OR_MONTHLY_PMTS',  # Underscore version
+        'reconciliation_status',  # Internal field
+        'reconciliation_id',  # Internal field
+        'reconciled_at',  # Internal field
+        'is_reconciliation_entry',  # Internal field
+        'carrier_id',  # Internal ID field
+        'mga_id',  # Internal ID field
+        'commission_rule_id',  # Internal ID field
+        'commission_rate_override',  # Internal field
+        'Agency Estimated Comm/Revenue (CRM)',  # Calculated field
+        'Agent Estimated Comm $',  # Calculated field
+        'Commissionable Premium',  # Calculated field
+        'Broker Fee Agent Comm',  # Calculated field
+        'Total Agent Comm',  # Calculated field
+        'Payment Plan'  # Should be mapped to AS_EARNED_PMT_PLAN
     }
     
     # Create a copy of the data to avoid modifying the original
@@ -1986,7 +2000,7 @@ def validate_excel_import(uploaded_file):
             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
             'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
             'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
-            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan'],
+            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
             'NOTES': ['NOTES', 'Notes', 'notes'],
             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
             'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
@@ -14582,7 +14596,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             'Policy Gross Comm %': ['Policy_Comm_%', 'Policy_Comm', 'Policy_Commission_%', 'Policy_Commission', 'Policy_Gross_Comm_%'],
                             'Agent Paid Amount (STMT)': ['Agent_Paid_Amount_(STMT)', 'AgentPaidAmount', 'Agent_paid_amount', 'agent_paid_amount'],
                             'Agency Comm Received (STMT)': ['Agency_Comm_Received_(STMT)', 'AgencyCommReceived', 'Agency_comm_received'],
-                            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan'],
+                            'AS_EARNED_PMT_PLAN': ['AS_EARNED_PMT_PLAN', 'AsEarnedPmtPlan', 'As_earned_pmt_plan', 'Payment Plan', 'Payment_Plan', 'PaymentPlan'],
                             'NOTES': ['NOTES', 'Notes', 'notes'],
                             'Prior Policy Number': ['Prior_Policy_Number', 'PriorPolicyNumber', 'Prior_policy_number'],
                             'Broker Fee': ['Broker_Fee', 'BrokerFee', 'Broker_fee', 'broker_fee'],
