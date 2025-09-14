@@ -159,6 +159,7 @@ import os
 import pdfplumber
 import shutil
 import uuid
+import pytz
 from pathlib import Path
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -14100,7 +14101,7 @@ SOLUTION NEEDED:
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3 = st.tabs(["Data Tools", "Utility Functions", "Import/Export"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Data Tools", "Utility Functions", "Import/Export", "🗑️ Delete Last Import"])
         
         with tab1:
             st.subheader("Data Tools")
@@ -14991,6 +14992,159 @@ SOLUTION NEEDED:
                         st.write(f"File size: {update_file.size} bytes")
                         st.write(f"Error type: {type(e).__name__}")
                         st.write(f"Error details: {str(e)}")
+        
+        with tab4:
+            st.subheader("🗑️ Delete Last Import")
+            
+            st.error("⚠️ **WARNING**: This feature permanently deletes data from your account!")
+            st.info("""
+            This tool allows you to delete all transactions from your most recent import session.
+            
+            **How it works:**
+            - Identifies transactions imported in the last 24 hours
+            - Groups them by import timestamp
+            - Allows you to delete the most recent batch
+            
+            **Use cases:**
+            - Uploaded wrong file
+            - Need to re-import with corrections
+            - Testing imports
+            """)
+            
+            # Get recent imports (last 24 hours)
+            if all_data.empty:
+                st.warning("No transaction data found.")
+            else:
+                try:
+                    supabase = get_supabase_client()
+                    
+                    # Query for recent imports (last 24 hours)
+                    from datetime import datetime, timedelta
+                    import pytz
+                    
+                    # Get current time and 24 hours ago in UTC
+                    now_utc = datetime.now(pytz.UTC)
+                    yesterday_utc = now_utc - timedelta(days=1)
+                    
+                    # Format for Supabase query
+                    yesterday_str = yesterday_utc.isoformat()
+                    
+                    # Get user's recent imports
+                    user_email = st.session_state.get('user_email')
+                    if not user_email:
+                        st.error("User email not found in session.")
+                    else:
+                        # Query for recent imports
+                        response = supabase.table('policies').select('*').eq('user_email', user_email).gte('created_at', yesterday_str).order('created_at', desc=True).execute()
+                        
+                        if not response.data:
+                            st.info("No imports found in the last 24 hours.")
+                        else:
+                            recent_imports = pd.DataFrame(response.data)
+                            
+                            # Group by created_at (rounded to minute for batch identification)
+                            recent_imports['import_batch'] = pd.to_datetime(recent_imports['created_at']).dt.round('min')
+                            
+                            # Get import batches
+                            import_batches = recent_imports.groupby('import_batch').agg({
+                                'Transaction ID': 'count',
+                                'created_at': 'first'
+                            }).rename(columns={'Transaction ID': 'record_count'}).sort_values('created_at', ascending=False)
+                            
+                            if len(import_batches) == 0:
+                                st.info("No import batches found.")
+                            else:
+                                # Show most recent batch
+                                latest_batch = import_batches.index[0]
+                                latest_count = import_batches.iloc[0]['record_count']
+                                latest_time = import_batches.iloc[0]['created_at']
+                                
+                                st.write("### Most Recent Import")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Import Time", pd.to_datetime(latest_time).strftime("%Y-%m-%d %H:%M:%S"))
+                                with col2:
+                                    st.metric("Records", f"{latest_count:,}")
+                                
+                                # Show sample of records to be deleted
+                                batch_records = recent_imports[recent_imports['import_batch'] == latest_batch]
+                                
+                                with st.expander("📋 Preview records to be deleted", expanded=False):
+                                    display_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Transaction Type', 'Effective Date']
+                                    available_cols = [col for col in display_cols if col in batch_records.columns]
+                                    st.dataframe(batch_records[available_cols].head(10), use_container_width=True)
+                                    if len(batch_records) > 10:
+                                        st.caption(f"Showing first 10 of {len(batch_records)} records")
+                                
+                                # Safety confirmation
+                                st.write("### Confirm Deletion")
+                                st.warning(f"You are about to delete {latest_count} transactions imported on {pd.to_datetime(latest_time).strftime('%Y-%m-%d %H:%M:%S')}")
+                                
+                                # Require typing confirmation
+                                confirmation_text = "DELETE MY IMPORT"
+                                user_confirmation = st.text_input(
+                                    f'Type "{confirmation_text}" to confirm deletion:',
+                                    key="delete_confirmation"
+                                )
+                                
+                                # Delete button
+                                if st.button("🗑️ Delete Import", type="primary", disabled=(user_confirmation != confirmation_text)):
+                                    if user_confirmation == confirmation_text:
+                                        with st.spinner("Deleting records..."):
+                                            try:
+                                                # Get all Transaction IDs from this batch
+                                                ids_to_delete = batch_records['Transaction ID'].tolist()
+                                                
+                                                # Delete in batches of 100 (Supabase limit)
+                                                deleted_count = 0
+                                                batch_size = 100
+                                                
+                                                progress_bar = st.progress(0)
+                                                
+                                                for i in range(0, len(ids_to_delete), batch_size):
+                                                    batch_ids = ids_to_delete[i:i + batch_size]
+                                                    
+                                                    # Delete batch
+                                                    delete_response = supabase.table('policies').delete().in_('"Transaction ID"', batch_ids).execute()
+                                                    
+                                                    deleted_count += len(batch_ids)
+                                                    progress = deleted_count / len(ids_to_delete)
+                                                    progress_bar.progress(progress)
+                                                
+                                                progress_bar.empty()
+                                                
+                                                # Clear cache
+                                                clear_policies_cache()
+                                                
+                                                st.success(f"✅ Successfully deleted {deleted_count} records!")
+                                                st.balloons()
+                                                
+                                                # Refresh the page
+                                                time.sleep(2)
+                                                st.rerun()
+                                                
+                                            except Exception as e:
+                                                st.error(f"❌ Error deleting records: {str(e)}")
+                                    else:
+                                        st.error("Confirmation text does not match.")
+                                
+                                # Show other recent imports if any
+                                if len(import_batches) > 1:
+                                    st.divider()
+                                    st.write("### Other Recent Imports (last 24 hours)")
+                                    other_batches = import_batches.iloc[1:5]  # Show up to 4 more
+                                    
+                                    for idx, (batch_time, row) in enumerate(other_batches.iterrows()):
+                                        st.write(f"**Import {idx + 2}:** {batch_time.strftime('%Y-%m-%d %H:%M')} - {row['record_count']} records")
+                                    
+                                    st.info("💡 Only the most recent import can be deleted. To delete older imports, use the Edit Policy Transactions page.")
+                
+                except Exception as e:
+                    st.error(f"Error loading import data: {str(e)}")
+                    st.write("Debug info:")
+                    st.write(f"Error type: {type(e).__name__}")
+                    import traceback
+                    st.code(traceback.format_exc())
     
         display_app_footer()
     
