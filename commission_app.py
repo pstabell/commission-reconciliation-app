@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+from datetime import date
 import json
 
 # Set page config first (required to be first Streamlit command)
@@ -9183,7 +9184,7 @@ def main():
                 
                 statement_date = st.date_input(
                     "",  # Empty label since we have the custom header above
-                    value=datetime.date.today(),
+                    value=date.today(),
                     help="The date on the commission statement",
                                         key="statement_date_input"
                 )
@@ -9191,7 +9192,7 @@ def main():
             with col2:
                 reconciliation_date = st.date_input(
                     "Date Reconciled",
-                    value=datetime.date.today(),
+                    value=date.today(),
                     disabled=True,
                     help="Today's date (when reconciliation is performed)",
                     format="MM/DD/YYYY"
