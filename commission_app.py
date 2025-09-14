@@ -14185,105 +14185,105 @@ SOLUTION NEEDED:
                         errors = []
                         
                         progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    # Process each missing transaction
-                    for counter, (idx, row) in enumerate(missing_origination.iterrows()):
-                        progress = (counter + 1) / len(missing_origination)
-                        progress_bar.progress(progress)
+                        status_text = st.empty()
                         
-                        transaction_id = row.get('Transaction ID')
-                        transaction_type = row.get('Transaction Type')
-                        policy_number = row.get('Policy Number')
-                        effective_date = row.get('Effective Date')
-                        customer = row.get('Customer', 'Unknown')
-                        
-                        status_text.text(f"Processing {counter+1}/{len(missing_origination)}: {transaction_id}")
-                        
-                        auto_populated_date = None
-                        reason = ""
-                        
-                        # Apply the same logic as the form
-                        if transaction_type == 'NEW':
-                            if effective_date and pd.notna(effective_date):
-                                auto_populated_date = effective_date
-                                reason = "NEW transaction - using Effective Date"
-                        
-                        elif transaction_type == 'BoR':
-                            if effective_date and pd.notna(effective_date):
-                                auto_populated_date = effective_date
-                                reason = "BoR transaction - using Effective Date"
-                        
-                        elif transaction_type in ['RWL', 'END', 'PCH', 'CAN', 'XCL', 'REWRITE', 'NBS', 'STL'] and policy_number:
-                            # Use the same recursive function from the form
-                            def find_origination_date_tool(policy_num, visited=None):
-                                if visited is None:
-                                    visited = set()
-                                
-                                if policy_num in visited:
-                                    return None, None  # Circular reference protection
-                                visited.add(policy_num)
-                                
-                                # Find transactions for this policy number
-                                policy_transactions = all_data[all_data['Policy Number'] == policy_num].copy()
-                                
-                                if not policy_transactions.empty:
-                                    # Sort by transaction date/effective date to get earliest
-                                    if 'Effective Date' in policy_transactions.columns:
-                                        policy_transactions = policy_transactions.sort_values('Effective Date')
-                                    
-                                    # Check for NEW transaction
-                                    new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
-                                    if len(new_transactions) > 1:
-                                        # Multiple NEW transactions warning
-                                        return None, "Multiple NEW transactions found"
-                                    elif len(new_transactions) == 1:
-                                        # Found the NEW transaction
-                                        orig_date = new_transactions.iloc[0].get('Policy Origination Date')
-                                        if orig_date and pd.notna(orig_date):
-                                            return orig_date, "Found from NEW transaction"
-                                        # If NEW transaction has no origination date, use its effective date
-                                        eff_date = new_transactions.iloc[0].get('Effective Date')
-                                        if eff_date and pd.notna(eff_date):
-                                            return eff_date, "Found from NEW transaction's Effective Date"
-                                    
-                                    # No NEW transaction, check for Prior Policy Number
-                                    for _, trans in policy_transactions.iterrows():
-                                        prior_policy = trans.get('Prior Policy Number')
-                                        if prior_policy and pd.notna(prior_policy) and str(prior_policy).strip():
-                                            # Recursively follow the chain
-                                            result_date, result_msg = find_origination_date_tool(prior_policy, visited)
-                                            if result_date:
-                                                return result_date, f"{result_msg} (via Prior Policy: {prior_policy})"
-                                
-                                return None, None
+                        # Process each missing transaction
+                        for counter, (idx, row) in enumerate(missing_origination.iterrows()):
+                            progress = (counter + 1) / len(missing_origination)
+                            progress_bar.progress(progress)
                             
-                            found_date, message = find_origination_date_tool(policy_number)
-                            if found_date:
-                                auto_populated_date = found_date
-                                reason = f"{transaction_type} - {message}"
+                            transaction_id = row.get('Transaction ID')
+                            transaction_type = row.get('Transaction Type')
+                            policy_number = row.get('Policy Number')
+                            effective_date = row.get('Effective Date')
+                            customer = row.get('Customer', 'Unknown')
                         
-                        # Store results
-                        if auto_populated_date:
-                            updates.append({
-                                'Transaction ID': transaction_id,
-                                'Customer': customer,
-                                'Policy Number': policy_number,
-                                'Type': transaction_type,
-                                'New Origination Date': auto_populated_date,
-                                'Reason': reason
-                            })
-                        else:
-                            errors.append({
-                                'Transaction ID': transaction_id,
-                                'Customer': customer,
-                                'Policy Number': policy_number,
-                                'Type': transaction_type,
-                                'Reason': 'No origination date found'
-                            })
-                    
-                    progress_bar.empty()
-                    status_text.empty()
+                            status_text.text(f"Processing {counter+1}/{len(missing_origination)}: {transaction_id}")
+                            
+                            auto_populated_date = None
+                            reason = ""
+                            
+                            # Apply the same logic as the form
+                            if transaction_type == 'NEW':
+                                if effective_date and pd.notna(effective_date):
+                                    auto_populated_date = effective_date
+                                    reason = "NEW transaction - using Effective Date"
+                            
+                            elif transaction_type == 'BoR':
+                                if effective_date and pd.notna(effective_date):
+                                    auto_populated_date = effective_date
+                                    reason = "BoR transaction - using Effective Date"
+                            
+                            elif transaction_type in ['RWL', 'END', 'PCH', 'CAN', 'XCL', 'REWRITE', 'NBS', 'STL'] and policy_number:
+                                # Use the same recursive function from the form
+                                def find_origination_date_tool(policy_num, visited=None):
+                                    if visited is None:
+                                        visited = set()
+                                    
+                                    if policy_num in visited:
+                                        return None, None  # Circular reference protection
+                                    visited.add(policy_num)
+                                    
+                                    # Find transactions for this policy number
+                                    policy_transactions = all_data[all_data['Policy Number'] == policy_num].copy()
+                                    
+                                    if not policy_transactions.empty:
+                                        # Sort by transaction date/effective date to get earliest
+                                        if 'Effective Date' in policy_transactions.columns:
+                                            policy_transactions = policy_transactions.sort_values('Effective Date')
+                                        
+                                        # Check for NEW transaction
+                                        new_transactions = policy_transactions[policy_transactions['Transaction Type'] == 'NEW']
+                                        if len(new_transactions) > 1:
+                                            # Multiple NEW transactions warning
+                                            return None, "Multiple NEW transactions found"
+                                        elif len(new_transactions) == 1:
+                                            # Found the NEW transaction
+                                            orig_date = new_transactions.iloc[0].get('Policy Origination Date')
+                                            if orig_date and pd.notna(orig_date):
+                                                return orig_date, "Found from NEW transaction"
+                                            # If NEW transaction has no origination date, use its effective date
+                                            eff_date = new_transactions.iloc[0].get('Effective Date')
+                                            if eff_date and pd.notna(eff_date):
+                                                return eff_date, "Found from NEW transaction's Effective Date"
+                                        
+                                        # No NEW transaction, check for Prior Policy Number
+                                        for _, trans in policy_transactions.iterrows():
+                                            prior_policy = trans.get('Prior Policy Number')
+                                            if prior_policy and pd.notna(prior_policy) and str(prior_policy).strip():
+                                                # Recursively follow the chain
+                                                result_date, result_msg = find_origination_date_tool(prior_policy, visited)
+                                                if result_date:
+                                                    return result_date, f"{result_msg} (via Prior Policy: {prior_policy})"
+                                    
+                                    return None, None
+                                
+                                found_date, message = find_origination_date_tool(policy_number)
+                                if found_date:
+                                    auto_populated_date = found_date
+                                    reason = f"{transaction_type} - {message}"
+                            
+                            # Store results
+                            if auto_populated_date:
+                                updates.append({
+                                    'Transaction ID': transaction_id,
+                                    'Customer': customer,
+                                    'Policy Number': policy_number,
+                                    'Type': transaction_type,
+                                    'New Origination Date': auto_populated_date,
+                                    'Reason': reason
+                                })
+                            else:
+                                errors.append({
+                                    'Transaction ID': transaction_id,
+                                    'Customer': customer,
+                                    'Policy Number': policy_number,
+                                    'Type': transaction_type,
+                                    'Reason': 'No origination date found'
+                                })
+                        
+                        progress_bar.empty()
+                        status_text.empty()
                     
                     # Show results
                     col1, col2 = st.columns(2)
