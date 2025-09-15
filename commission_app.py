@@ -607,13 +607,10 @@ def calculate_dashboard_metrics(df):
         'active_policies': 0,
         'cancelled_policies': 0,
         
-        # YTD 2025 Financial metrics - Reconciled (Paid)
-        'premium_reconciled_ytd': 0.0,
-        'agent_comm_paid_ytd': 0.0,
-        
-        # YTD 2025 Financial metrics - Unreconciled (Estimated)
-        'premium_unreconciled_ytd': 0.0,
-        'agent_comm_estimated_ytd': 0.0
+        # Financial totals (all time, not just YTD)
+        'premium_sold_total': 0.0,
+        'agent_comm_paid_total': 0.0,
+        'agent_comm_due_total': 0.0
     }
     
     # Return default metrics if no data
@@ -655,7 +652,43 @@ def calculate_dashboard_metrics(df):
             metrics['active_policies'] = len(latest_trans[~latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
             metrics['cancelled_policies'] = len(latest_trans[latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
     
-    # YTD 2025 Financial metrics
+    # Financial totals (all time, not restricted to any year)
+    # Calculate total premium sold from all original transactions
+    original_mask = pd.Series(True, index=df.index)
+    if 'Transaction ID' in df.columns:
+        # Exclude reconciliation entries
+        original_mask = ~df['Transaction ID'].str.contains('-STMT-|-VOID-|-ADJ-', na=False, regex=True)
+    
+    df_originals = df[original_mask]
+    if 'Premium Sold' in df_originals.columns:
+        metrics['premium_sold_total'] = df_originals['Premium Sold'].sum()
+    
+    # Calculate total agent commission paid (from all -STMT- entries)
+    stmt_mask = pd.Series(False, index=df.index)
+    if 'Transaction ID' in df.columns:
+        stmt_mask = df['Transaction ID'].str.contains('-STMT-', na=False)
+    
+    df_stmt = df[stmt_mask]
+    if 'Agent Paid Amount (STMT)' in df_stmt.columns:
+        metrics['agent_comm_paid_total'] = df_stmt['Agent Paid Amount (STMT)'].sum()
+    
+    # Calculate total commission due using balance approach
+    try:
+        # Get all transactions with their balances
+        trans_with_balance = calculate_transaction_balances(df)
+        
+        # Sum all positive balances (what's still owed)
+        if 'Policy Balance Due' in trans_with_balance.columns:
+            unpaid_balances = trans_with_balance[trans_with_balance['Policy Balance Due'] > 0]
+            metrics['agent_comm_due_total'] = unpaid_balances['Policy Balance Due'].sum()
+    except Exception as e:
+        # Fallback calculation if balance function fails
+        if 'Total Agent Comm' in df_originals.columns:
+            total_earned = df_originals['Total Agent Comm'].sum()
+            total_paid = metrics['agent_comm_paid_total']
+            metrics['agent_comm_due_total'] = max(0, total_earned - total_paid)
+    
+    # Keep the existing date-based calculations below for other uses
     if 'Effective Date' in df.columns:
         try:
             df['Effective Date'] = pd.to_datetime(df['Effective Date'], errors='coerce')
@@ -6001,24 +6034,17 @@ def main():
             
             st.divider()
             
-            # Financial Summary - YTD 2025
-            st.subheader("💰 FINANCIAL SUMMARY - YTD 2025")
+            # Financial Summary - TOTALS
+            st.subheader("💰 FINANCIAL SUMMARY - TOTALS")
             
-            # Reconciled (Paid) Metrics
-            st.markdown("**Reconciled (Paid)**")
-            col1, col2 = st.columns(2)
+            # Display all three metrics in one row
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Premium Sold", f"${metrics['premium_reconciled_ytd']:,.2f}")
+                st.metric("Premium Sold", f"${metrics['premium_sold_total']:,.2f}")
             with col2:
-                st.metric("Agent Commission Paid", f"${metrics['agent_comm_paid_ytd']:,.2f}")
-            
-            # Unreconciled (Estimated) Metrics
-            st.markdown("**Unreconciled (Estimated)**")
-            col3, col4 = st.columns(2)
+                st.metric("Agent Commission Paid", f"${metrics['agent_comm_paid_total']:,.2f}")
             with col3:
-                st.metric("Premium Estimated", f"${metrics['premium_unreconciled_ytd']:,.2f}")
-            with col4:
-                st.metric("Agent Commission Estimated", f"${metrics['agent_comm_estimated_ytd']:,.2f}")
+                st.metric("Agent Commission Due", f"${metrics['agent_comm_due_total']:,.2f}")
             
             st.divider()
             
