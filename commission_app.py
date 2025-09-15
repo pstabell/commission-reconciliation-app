@@ -678,15 +678,32 @@ def calculate_dashboard_metrics(df):
         trans_with_balance = calculate_transaction_balances(df)
         
         # Sum all positive balances (what's still owed)
-        if 'Policy Balance Due' in trans_with_balance.columns:
-            unpaid_balances = trans_with_balance[trans_with_balance['Policy Balance Due'] > 0]
-            metrics['agent_comm_due_total'] = unpaid_balances['Policy Balance Due'].sum()
+        if '_balance' in trans_with_balance.columns:
+            unpaid_balances = trans_with_balance[trans_with_balance['_balance'] > 0]
+            metrics['agent_comm_due_total'] = unpaid_balances['_balance'].sum()
+        else:
+            # If _balance column doesn't exist, use fallback
+            raise Exception("_balance column not found")
     except Exception as e:
         # Fallback calculation if balance function fails
+        # Simple calculation: Total earned - Total paid
+        total_earned = 0
+        total_paid = 0
+        
+        # Calculate total earned from original transactions
         if 'Total Agent Comm' in df_originals.columns:
             total_earned = df_originals['Total Agent Comm'].sum()
-            total_paid = metrics['agent_comm_paid_total']
-            metrics['agent_comm_due_total'] = max(0, total_earned - total_paid)
+        elif 'Agent Estimated Comm $' in df_originals.columns:
+            # Fallback if Total Agent Comm doesn't exist
+            total_earned = df_originals['Agent Estimated Comm $'].sum()
+            if 'Broker Fee Agent Comm' in df_originals.columns:
+                total_earned += df_originals['Broker Fee Agent Comm'].sum()
+        
+        # Total paid is already calculated
+        total_paid = metrics['agent_comm_paid_total']
+        
+        # Commission due is earned minus paid
+        metrics['agent_comm_due_total'] = max(0, total_earned - total_paid)
     
     # Keep the existing date-based calculations below for other uses
     if 'Effective Date' in df.columns:
