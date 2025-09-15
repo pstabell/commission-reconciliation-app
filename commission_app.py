@@ -724,30 +724,15 @@ def calculate_dashboard_metrics(df):
             if 'Agent Paid Amount (STMT)' in df_stmt_2025_by_stmt_date.columns:
                 metrics['agent_comm_paid_ytd'] = df_stmt_2025_by_stmt_date['Agent Paid Amount (STMT)'].sum()
             
-            # Calculate unreconciled amounts using BALANCE approach
-            # Use the calculate_transaction_balances function to get actual balances
-            try:
-                # Get all 2025 transactions with their balances
-                trans_with_balance = calculate_transaction_balances(df[df['Effective Date'].dt.year == 2025])
-                
-                # Filter to only positive balances (what's still owed)
-                unpaid_balances = trans_with_balance[trans_with_balance['Policy Balance Due'] > 0]
-                
-                # Sum the premium and commission amounts for transactions with positive balances
-                if not unpaid_balances.empty:
-                    metrics['premium_unreconciled_ytd'] = unpaid_balances['Premium Sold'].sum()
-                    metrics['agent_comm_estimated_ytd'] = unpaid_balances['Policy Balance Due'].sum()
-                
-            except Exception as balance_error:
-                # Fallback to old method if balance calculation fails
-                if 'Premium Sold' in df_originals_2025_unpaid.columns:
-                    metrics['premium_unreconciled_ytd'] = df_originals_2025_unpaid['Premium Sold'].sum()
-                # Use Total Agent Comm to include broker fees
-                if 'Total Agent Comm' in df_originals_2025_unpaid.columns:
-                    metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Total Agent Comm'].sum()
-                elif 'Agent Estimated Comm $' in df_originals_2025_unpaid.columns:
-                    # Fallback to Agent Estimated Comm $ if Total Agent Comm doesn't exist
-                    metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Agent Estimated Comm $'].sum()
+            # Unreconciled = 2025 originals that haven't been paid yet
+            if 'Premium Sold' in df_originals_2025_unpaid.columns:
+                metrics['premium_unreconciled_ytd'] = df_originals_2025_unpaid['Premium Sold'].sum()
+            # Use Total Agent Comm to include broker fees
+            if 'Total Agent Comm' in df_originals_2025_unpaid.columns:
+                metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Total Agent Comm'].sum()
+            elif 'Agent Estimated Comm $' in df_originals_2025_unpaid.columns:
+                # Fallback to Agent Estimated Comm $ if Total Agent Comm doesn't exist
+                metrics['agent_comm_estimated_ytd'] = df_originals_2025_unpaid['Agent Estimated Comm $'].sum()
         except Exception as e:
             # If date parsing fails, fall back to zero
             pass
