@@ -18651,6 +18651,15 @@ TO "New Column Name";
                             return [''] * len(row)
                         
                         # Apply combined styling for special transactions and subtotals
+                        # Load user preferences for color theme
+                        color_theme = "light"  # Default
+                        try:
+                            with open("config_files/user_preferences.json", "r") as f:
+                                prefs = json.load(f)
+                                color_theme = prefs.get("color_theme", {}).get("transaction_colors", "light")
+                        except:
+                            pass  # Use default if file doesn't exist
+                        
                         def combined_styling(row):
                             # First check if it's a subtotal row (either '=' or solid blocks for orphan rows)
                             if 'Group' in row and (row['Group'] == '=' or '█' in str(row['Group'])):
@@ -18674,11 +18683,19 @@ TO "New Column Name";
                             if 'Transaction ID' in row.index:
                                 trans_id = str(row['Transaction ID'])
                                 if '-STMT-' in trans_id:
-                                    # Use darker blue that works in both light and dark mode
-                                    return ['background-color: #4a90e2; color: white; font-weight: 500'] * len(row)
+                                    if color_theme == "light":
+                                        # Light powder blue for light mode
+                                        return ['background-color: #e6f3ff'] * len(row)
+                                    else:
+                                        # Darker blue for dark mode
+                                        return ['background-color: #4a90e2; color: white; font-weight: 500'] * len(row)
                                 elif '-VOID-' in trans_id:
-                                    # Use darker red that works in both light and dark mode  
-                                    return ['background-color: #e85855; color: white; font-weight: 500'] * len(row)
+                                    if color_theme == "light":
+                                        # Light red for light mode
+                                        return ['background-color: #ffe6e6'] * len(row)
+                                    else:
+                                        # Darker red for dark mode  
+                                        return ['background-color: #e85855; color: white; font-weight: 500'] * len(row)
                             
                             return [''] * len(row)
                         
