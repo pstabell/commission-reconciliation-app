@@ -13407,6 +13407,12 @@ SOLUTION NEEDED:
                     user_email = get_normalized_user_email()
                     print(f"DEBUG: Loading MGAs for user: {user_email}")
                     response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
+                    
+                    # Debug for demo user
+                    if user_email.lower().startswith('demo'):
+                        st.info(f"🔍 MGA Query Debug:\n- Looking for MGAs with email: {user_email}\n- Found {len(response.data)} MGAs")
+                        if len(response.data) == 0:
+                            st.warning("No MGAs found. Checking database...")
                 else:
                     response = supabase.table('mgas').select("*").execute()
                 st.session_state.mgas_data = response.data if response.data else []
@@ -14271,6 +14277,14 @@ SOLUTION NEEDED:
                 reverse=True
             )[:6]  # Show top 6
             
+            # Debug for demo user
+            if 'user_email' in st.session_state and st.session_state['user_email'].lower().startswith('demo'):
+                st.info(f"🔍 Display Debug: {len(recent_carriers)} recent carriers to display")
+                if len(recent_carriers) == 0 and len(st.session_state.carriers_data) > 0:
+                    st.warning("Carriers exist but none are being displayed. Checking status values...")
+                    sample_statuses = [c.get('status', 'NONE') for c in st.session_state.carriers_data[:5]]
+                    st.code(f"Sample status values: {sample_statuses}")
+            
             if recent_carriers:
                 cols = st.columns(3)
                 for idx, carrier in enumerate(recent_carriers):
@@ -14349,8 +14363,8 @@ SOLUTION NEEDED:
                 - Override when needed with reason tracking
                 
                 **Need Help?**
-                - Check the "ℹ️ How Commission Rules Work" section above
-                - SQL scripts available at: `/sql_scripts/populate_initial_carriers_mgas.sql`
+                - Use the Quick Add buttons above to add your first carrier and MGA
+                - Or use the CSV Import feature in the Admin Panel to bulk import carriers
                 """)
         
     
