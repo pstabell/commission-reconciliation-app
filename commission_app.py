@@ -11525,7 +11525,6 @@ def main():
                         json.dump(user_prefs, f, indent=4)
                     
                     st.success("✅ Color theme updated successfully!")
-                    time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error saving preferences: {e}")
