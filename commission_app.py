@@ -13337,6 +13337,10 @@ SOLUTION NEEDED:
         # Load fresh data for this page (island architecture)
         all_data = load_policies_data()
         
+        # Debug info for demo user
+        if 'user_email' in st.session_state and st.session_state['user_email'].lower().startswith('demo'):
+            st.info(f"🔍 Debug Mode - User: {st.session_state['user_email']} | Environment: {os.getenv('APP_ENVIRONMENT', 'Not Set')}")
+        
         # Initialize session state for Contacts page
         if 'carriers_data' not in st.session_state:
             st.session_state.carriers_data = []
@@ -13377,11 +13381,9 @@ SOLUTION NEEDED:
                 print(f"DEBUG: Total carriers loaded: {total_carriers}")
                 print(f"DEBUG: Active carriers: {active_carriers}")
                 
-                # Show debug info in the UI for demo user
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    if user_email.lower().startswith('demo'):
-                        st.sidebar.info(f"Debug: Looking for carriers with email: {user_email}")
-                        st.sidebar.info(f"Debug: Found {total_carriers} carriers")
+                # Always show debug for demo user
+                if 'user_email' in st.session_state and st.session_state['user_email'].lower().startswith('demo'):
+                    st.warning(f"🔍 Carrier Query Debug:\n- Looking for email: {user_email if 'user_email' in locals() else 'NOT SET'}\n- Found {total_carriers} carriers\n- Active carriers: {active_carriers}")
                 if total_carriers > 0 and active_carriers == 0:
                     # Check what status values we have
                     status_values = [c.get('status', 'None') for c in st.session_state.carriers_data[:5]]
