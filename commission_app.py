@@ -1805,7 +1805,11 @@ def load_carriers_for_dropdown():
     """Load all active carriers for dropdown selection."""
     try:
         supabase = get_supabase_client()
-        response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').order('carrier_name').execute()
+        # Filter by user_email for complete isolation
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+            response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_email', st.session_state['user_email']).order('carrier_name').execute()
+        else:
+            response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').order('carrier_name').execute()
         return response.data if response.data else []
     except Exception as e:
         st.error(f"Error loading carriers: {e}")
@@ -1824,7 +1828,11 @@ def load_mgas_for_carrier(carrier_id):
         
         # Method 1: Get MGAs from carrier_mga_relationships table
         try:
-            response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
+            # Filter by user in production
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', st.session_state['user_email']).execute()
+            else:
+                response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
                 for rel in response.data:
                     if rel.get('mga_id'):
@@ -1850,7 +1858,11 @@ def load_mgas_for_carrier(carrier_id):
         
         # Get MGA details for all collected mga_ids
         if mga_ids:
-            mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
+            # Filter by user in production
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', st.session_state['user_email']).execute()
+            else:
+                mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
             if mga_response.data:
                 mgas = [{'mga_id': m['mga_id'], 'mga_name': m['mga_name']} for m in mga_response.data]
                 mgas.sort(key=lambda x: x['mga_name'])
@@ -13323,7 +13335,11 @@ SOLUTION NEEDED:
             
             # Try to load carriers
             try:
-                response = supabase.table('carriers').select("*").execute()
+                # Filter by user in production
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    response = supabase.table('carriers').select("*").eq('user_email', st.session_state['user_email']).execute()
+                else:
+                    response = supabase.table('carriers').select("*").execute()
                 st.session_state.carriers_data = response.data if response.data else []
             except Exception as e:
                 if "relation" in str(e) and "does not exist" in str(e):
@@ -13339,7 +13355,11 @@ SOLUTION NEEDED:
             
             # Try to load MGAs
             try:
-                response = supabase.table('mgas').select("*").execute()
+                # Filter by user in production
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    response = supabase.table('mgas').select("*").eq('user_email', st.session_state['user_email']).execute()
+                else:
+                    response = supabase.table('mgas').select("*").execute()
                 st.session_state.mgas_data = response.data if response.data else []
             except Exception:
                 pass
@@ -13434,6 +13454,10 @@ SOLUTION NEEDED:
                                     "notes": notes if notes else None
                                 }
                                 
+                                # Add user_email for user isolation
+                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                                    new_carrier["user_email"] = st.session_state['user_email']
+                                
                                 response = supabase.table('carriers').insert(new_carrier).execute()
                                 
                                 # Set success message and navigate to the new carrier
@@ -13494,6 +13518,10 @@ SOLUTION NEEDED:
                                     "status": "Active",
                                     "notes": notes if notes else None
                                 }
+                                
+                                # Add user_email for user isolation
+                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                                    new_mga["user_email"] = st.session_state['user_email']
                                 
                                 response = supabase.table('mgas').insert(new_mga).execute()
                                 
