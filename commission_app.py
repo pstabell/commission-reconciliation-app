@@ -16441,6 +16441,16 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             
             st.divider()
             
+            # Color Theme Preferences
+            st.write("**🎨 Transaction Color Themes**")
+            st.write("- **Customize Display**: Choose between light (powder blue) or dark (high contrast) colors for STMT/VOID transactions")
+            st.write("- **Location**: Admin Panel → System Tools tab → Display Preferences")
+            st.write("- **Light Theme**: Powder blue (#e6f3ff) for STMT, light red for VOID - best for light mode browsers")
+            st.write("- **Dark Theme**: Dark blue (#4a90e2) for STMT, dark red for VOID - best for dark mode browsers")
+            st.write("- **Applies To**: Dashboard, All Policy Transactions, Search Results, PRL Reports, and Reconciliation")
+            
+            st.divider()
+            
             # Pending Renewals
             st.write("**📅 Pending Policy Renewals**")
             st.write("- **Time Range Filters**: View all renewals or filter by Past Due, This Week, 30/60/90 days")
