@@ -7803,7 +7803,6 @@ def main():
                                         for key in keys_to_clear:
                                             del st.session_state[key]
                                         st.success("✅ MGA lists refreshed!")
-                                        time.sleep(0.5)
                                         st.rerun()
                             
                             # Store final values for form submission
@@ -8075,7 +8074,6 @@ def main():
                                             del st.session_state['last_search_edit_policies_editor']
                                         
                                         st.success(f"Successfully deleted {deleted_count} records! (Archived for recovery)")
-                                        time.sleep(1)  # Brief pause to show success message
                                         st.rerun()
                                         
                                     except Exception as e:
@@ -8287,7 +8285,6 @@ def main():
                 clear_policies_cache()
                 
                 st.success("✅ Form cleared! All fields have been reset.")
-                time.sleep(0.5)
                 st.rerun()
         
         # Load fresh data for this page
