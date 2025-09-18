@@ -14310,6 +14310,10 @@ SOLUTION NEEDED:
             # Show MGAs section
             st.markdown("### Recent MGAs")
             
+            # Debug for demo user
+            if 'user_email' in st.session_state and st.session_state['user_email'].lower().startswith('demo'):
+                st.info(f"🔍 MGA Display Debug: {len(st.session_state.mgas_data)} total MGAs in session state")
+            
             recent_mgas = sorted(
                 st.session_state.mgas_data,
                 key=lambda x: x.get('updated_at', ''),
