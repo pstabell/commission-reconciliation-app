@@ -434,9 +434,21 @@ def get_supabase_client():
 
 def add_user_email_to_data(data_dict):
     """Add current user's email to data dictionary for multi-tenancy."""
-    if "user_email" in st.session_state:
-        data_dict["user_email"] = st.session_state["user_email"]
+    user_email = get_normalized_user_email()
+    if user_email:
+        data_dict["user_email"] = user_email
     return data_dict
+
+def get_normalized_user_email():
+    """Get the current user's email with proper case handling for demo user."""
+    if "user_email" not in st.session_state:
+        return None
+    
+    user_email = st.session_state['user_email']
+    # Special handling for Demo user case sensitivity
+    if user_email.lower() == 'demo@agentcommissiontracker.com':
+        return 'Demo@AgentCommissionTracker.com'
+    return user_email
 
 def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
@@ -1712,7 +1724,8 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
         
         # Filter by user in production
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-            query = query.eq('user_email', st.session_state['user_email'])
+            user_email = get_normalized_user_email()
+            query = query.eq('user_email', user_email)
         
         # Filter by carrier
         query = query.eq('carrier_id', carrier_id)
@@ -1807,7 +1820,8 @@ def load_carriers_for_dropdown():
         supabase = get_supabase_client()
         # Filter by user_email for complete isolation
         if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-            response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_email', st.session_state['user_email']).order('carrier_name').execute()
+            user_email = get_normalized_user_email()
+            response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_email', user_email).order('carrier_name').execute()
         else:
             response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').order('carrier_name').execute()
         return response.data if response.data else []
@@ -1830,7 +1844,8 @@ def load_mgas_for_carrier(carrier_id):
         try:
             # Filter by user in production
             if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', st.session_state['user_email']).execute()
+                user_email = get_normalized_user_email()
+                response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
             else:
                 response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
@@ -1845,7 +1860,8 @@ def load_mgas_for_carrier(carrier_id):
         try:
             # Filter by user in production
             if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', st.session_state['user_email']).execute()
+                user_email = get_normalized_user_email()
+                response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
             else:
                 response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
@@ -1860,7 +1876,11 @@ def load_mgas_for_carrier(carrier_id):
         if mga_ids:
             # Filter by user in production
             if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', st.session_state['user_email']).execute()
+                user_email = st.session_state['user_email']
+                # Special handling for Demo user case sensitivity
+                if user_email.lower() == 'demo@agentcommissiontracker.com':
+                    user_email = 'Demo@AgentCommissionTracker.com'
+                mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', user_email).execute()
             else:
                 mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
             if mga_response.data:
@@ -11546,7 +11566,8 @@ def main():
                 # Fetch deleted policies from Supabase
                 # Filter by user in production
                 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', st.session_state['user_email']).order('deleted_at', desc=True).limit(100).execute()
+                    user_email = get_normalized_user_email()
+                    deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', user_email).order('deleted_at', desc=True).limit(100).execute()
                 else:
                     deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
                 
@@ -13337,10 +13358,34 @@ SOLUTION NEEDED:
             try:
                 # Filter by user in production
                 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    response = supabase.table('carriers').select("*").eq('user_email', st.session_state['user_email']).execute()
+                    user_email = get_normalized_user_email()
+                    # Debug logging
+                    print(f"DEBUG: Raw session email: {st.session_state.get('user_email', 'NOT SET')}")
+                    print(f"DEBUG: Normalized email: {user_email}")
+                    print(f"DEBUG: Loading carriers for user: {user_email}")
+                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                    print(f"DEBUG: Query returned {len(response.data)} carriers")
                 else:
+                    print("DEBUG: Loading all carriers (non-production mode)")
                     response = supabase.table('carriers').select("*").execute()
+                
                 st.session_state.carriers_data = response.data if response.data else []
+                
+                # Debug: Show carrier statistics
+                total_carriers = len(st.session_state.carriers_data)
+                active_carriers = len([c for c in st.session_state.carriers_data if c.get('status') == 'Active'])
+                print(f"DEBUG: Total carriers loaded: {total_carriers}")
+                print(f"DEBUG: Active carriers: {active_carriers}")
+                
+                # Show debug info in the UI for demo user
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    if user_email.lower().startswith('demo'):
+                        st.sidebar.info(f"Debug: Looking for carriers with email: {user_email}")
+                        st.sidebar.info(f"Debug: Found {total_carriers} carriers")
+                if total_carriers > 0 and active_carriers == 0:
+                    # Check what status values we have
+                    status_values = [c.get('status', 'None') for c in st.session_state.carriers_data[:5]]
+                    print(f"DEBUG: Sample status values: {status_values}")
             except Exception as e:
                 if "relation" in str(e) and "does not exist" in str(e):
                     st.warning("⚠️ Commission structure tables not found. Please run the SQL script to create them.")
@@ -13357,17 +13402,21 @@ SOLUTION NEEDED:
             try:
                 # Filter by user in production
                 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    response = supabase.table('mgas').select("*").eq('user_email', st.session_state['user_email']).execute()
+                    user_email = get_normalized_user_email()
+                    print(f"DEBUG: Loading MGAs for user: {user_email}")
+                    response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
                 else:
                     response = supabase.table('mgas').select("*").execute()
                 st.session_state.mgas_data = response.data if response.data else []
+                print(f"DEBUG: Total MGAs loaded: {len(st.session_state.mgas_data)}")
             except Exception:
                 pass
             
             # Try to load commission rules - filter by user in production
             try:
                 if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    response = supabase.table('commission_rules').select("*").eq('user_email', st.session_state['user_email']).execute()
+                    user_email = get_normalized_user_email()
+                    response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
                 else:
                     response = supabase.table('commission_rules').select("*").execute()
                 st.session_state.commission_rules = response.data if response.data else []
