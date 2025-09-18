@@ -1,0 +1,6 @@
+{
+    "color_theme": {
+        "transaction_colors": "light",
+        "description": "Choose between 'light' (powder blue) or 'dark' (dark blue) colors for STMT transactions"
+    }
+}
