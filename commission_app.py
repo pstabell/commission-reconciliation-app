@@ -11229,7 +11229,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping", "Default Agent Rates", "Display Preferences"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping", "Default Agent Rates"])
         
         with tab1:
             st.subheader("Database Information")
@@ -11456,6 +11456,79 @@ def main():
                     del st.session_state[key]
                 st.success("Session state cleared!")
                 st.rerun()
+            
+            st.divider()
+            
+            # Display Preferences section
+            st.subheader("Display Preferences")
+            st.info("Customize how transactions are displayed in the application")
+            
+            # Load current preferences
+            prefs_file = "config_files/user_preferences.json"
+            try:
+                with open(prefs_file, 'r') as f:
+                    user_prefs = json.load(f)
+            except Exception:
+                # If file doesn't exist or has errors, use defaults
+                user_prefs = {
+                    "color_theme": {
+                        "transaction_colors": "light",
+                        "description": "Choose between 'light' (powder blue) or 'dark' (dark blue) colors for STMT transactions"
+                    }
+                }
+            
+            st.markdown("#### Transaction Color Theme")
+            st.write("Choose how STMT (statement) and VOID transactions are highlighted:")
+            
+            # Current theme display
+            current_theme = user_prefs.get("color_theme", {}).get("transaction_colors", "light")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Light Theme (Powder Blue)**")
+                st.markdown("""
+                <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                    STMT Transaction
+                </div>
+                <div style="background-color: #ffe6e6; padding: 10px; border-radius: 5px;">
+                    VOID Transaction
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col2:
+                st.markdown("**Dark Theme (Dark Blue)**")
+                st.markdown("""
+                <div style="background-color: #4a90e2; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 500;">
+                    STMT Transaction
+                </div>
+                <div style="background-color: #e85855; color: white; padding: 10px; border-radius: 5px; font-weight: 500;">
+                    VOID Transaction
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Theme selection
+            color_theme = st.radio(
+                "Select Color Theme",
+                options=["light", "dark"],
+                index=0 if current_theme == "light" else 1,
+                help="Light theme uses softer colors suitable for light mode. Dark theme uses higher contrast colors.",
+                horizontal=True
+            )
+            
+            if st.button("Save Color Theme Preference", type="primary"):
+                try:
+                    # Update preferences
+                    user_prefs["color_theme"]["transaction_colors"] = color_theme
+                    
+                    # Save to file
+                    with open(prefs_file, 'w') as f:
+                        json.dump(user_prefs, f, indent=4)
+                    
+                    st.success("✅ Color theme updated successfully!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving preferences: {e}")
         
         with tab5:
             st.subheader("🗑️ Deletion History - Last 100 Deleted Policy Transactions")
@@ -13217,95 +13290,6 @@ SOLUTION NEEDED:
             # Show last update info
             if 'last_updated' in default_rates:
                 st.caption(f"Last updated: {default_rates['last_updated']}")
-        
-        with tab12:
-            st.subheader("Display Preferences")
-            st.info("Customize how transactions are displayed in the application")
-            
-            # Load current preferences
-            prefs_file = "config_files/user_preferences.json"
-            try:
-                with open(prefs_file, 'r') as f:
-                    user_prefs = json.load(f)
-            except Exception:
-                # If file doesn't exist or has errors, use defaults
-                user_prefs = {
-                    "color_theme": {
-                        "transaction_colors": "light",
-                        "description": "Choose between 'light' (powder blue) or 'dark' (dark blue) colors for STMT transactions"
-                    }
-                }
-            
-            st.markdown("### Transaction Color Theme")
-            st.write("Choose how STMT (statement) and VOID transactions are highlighted in data tables:")
-            
-            # Current theme display
-            current_theme = user_prefs.get("color_theme", {}).get("transaction_colors", "light")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Light Theme (Powder Blue)**")
-                st.markdown("""
-                <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                    STMT Transaction (Light Blue)
-                </div>
-                <div style="background-color: #ffe6e6; padding: 10px; border-radius: 5px;">
-                    VOID Transaction (Light Red)
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with col2:
-                st.markdown("**Dark Theme (Dark Blue)**")
-                st.markdown("""
-                <div style="background-color: #4a90e2; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 500;">
-                    STMT Transaction (Dark Blue)
-                </div>
-                <div style="background-color: #e85855; color: white; padding: 10px; border-radius: 5px; font-weight: 500;">
-                    VOID Transaction (Dark Red)
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.divider()
-            
-            # Theme selection form
-            with st.form("update_color_theme"):
-                color_theme = st.radio(
-                    "Select Color Theme",
-                    options=["light", "dark"],
-                    index=0 if current_theme == "light" else 1,
-                    help="Light theme uses softer colors suitable for light mode browsers. Dark theme uses higher contrast colors suitable for dark mode browsers."
-                )
-                
-                if st.form_submit_button("Save Preferences", type="primary"):
-                    try:
-                        # Update preferences
-                        user_prefs["color_theme"]["transaction_colors"] = color_theme
-                        
-                        # Save to file
-                        with open(prefs_file, 'w') as f:
-                            json.dump(user_prefs, f, indent=4)
-                        
-                        st.success("✅ Display preferences updated successfully!")
-                        st.info("The new color theme will be applied to all transaction displays.")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving preferences: {e}")
-            
-            st.divider()
-            
-            # Information about where colors are applied
-            st.markdown("### Where Colors Are Applied")
-            st.markdown("""
-            Transaction colors are displayed in the following areas:
-            - **Dashboard** - Recent Activity section
-            - **All Policy Transactions** - Main transaction table
-            - **Search & Filter Results** - Filtered transaction displays
-            - **Policy Revenue Ledger Reports** - Report previews
-            - **Reconciliation** - Matched and unreconciled transaction tables
-            
-            Note: The color theme you choose works best when it matches your browser's light/dark mode setting.
-            """)
     
         display_app_footer()
     

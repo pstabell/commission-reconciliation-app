@@ -1,26 +1,41 @@
--- Check if Demo user's data still exists
+-- Check what demo data actually looks like
+
+-- First, see if demo@example.com has ANY data
+SELECT COUNT(*) as total_demo_records
+FROM policies
+WHERE user_email = 'Demo@AgentCommissionTracker.com';
+
+-- Look at sample Transaction IDs for demo user
 SELECT 
-    COUNT(*) as total_records,
-    user_email,
-    MIN(created_at) as oldest_record,
-    MAX(created_at) as newest_record
+    "Transaction ID",
+    "Transaction Type",
+    "STMT DATE",
+    reconciliation_id
 FROM policies
 WHERE user_email = 'Demo@AgentCommissionTracker.com'
-GROUP BY user_email;
+LIMIT 20;
 
--- Check for any case sensitivity issues
-SELECT DISTINCT user_email, COUNT(*) as count
-FROM policies
-WHERE LOWER(user_email) LIKE '%demo%'
-GROUP BY user_email;
-
--- Check all user emails to see data distribution
+-- Check if there are any records that look like reconciliation entries
 SELECT 
-    user_email,
-    COUNT(*) as record_count
+    "Transaction ID",
+    "Transaction Type",
+    reconciliation_id,
+    "Agency Comm Received (STMT)"
 FROM policies
-GROUP BY user_email
-ORDER BY COUNT(*) DESC;
+WHERE 
+    user_email = 'Demo@AgentCommissionTracker.com'
+    AND "Agency Comm Received (STMT)" IS NOT NULL
+LIMIT 10;
 
--- Check if there are any records at all
-SELECT COUNT(*) as total_records_in_table FROM policies;
+-- See all unique Transaction ID patterns
+SELECT DISTINCT 
+    CASE 
+        WHEN "Transaction ID" LIKE '%-STMT-%' THEN 'STMT Pattern'
+        WHEN "Transaction ID" LIKE '%-PMT-%' THEN 'PMT Pattern'
+        WHEN "Transaction ID" IS NULL THEN 'NULL'
+        ELSE 'Other Pattern'
+    END as pattern_type,
+    COUNT(*) as count
+FROM policies
+WHERE user_email = 'Demo@AgentCommissionTracker.com'
+GROUP BY pattern_type;
