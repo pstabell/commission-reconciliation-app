@@ -15564,10 +15564,6 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 with col2:
                     if st.button("📥 Export to Excel", type="primary"):
                         # Create Excel file with multiple sheets
-                        import io
-                        from datetime import datetime
-                        import pandas as pd
-                        
                         output = io.BytesIO()
                         
                         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -15631,6 +15627,9 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 
                 # Download template
                 st.write("#### 1️⃣ Download Import Template")
+                
+                import pandas as pd
+                import io
                 
                 template_data = {
                     'Carriers': pd.DataFrame({
@@ -15794,7 +15793,6 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             # Handle contact_info
                                             if pd.notna(row.get('contact_info')):
                                                 try:
-                                                    import json
                                                     mga_data['contact_info'] = json.loads(row['contact_info'])
                                                 except:
                                                     mga_data['contact_info'] = {}
