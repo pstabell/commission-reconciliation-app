@@ -14382,7 +14382,7 @@ SOLUTION NEEDED:
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4 = st.tabs(["Data Tools", "Utility Functions", "Import/Export", "🗑️ Delete Last Import"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Data Tools", "Utility Functions", "Policies Import/Export", "🗑️ Delete Last Import", "Contacts Import/Export"])
         
         with tab1:
             st.subheader("Data Tools")
@@ -15500,6 +15500,395 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     st.write(f"Error type: {type(e).__name__}")
                     import traceback
                     st.code(traceback.format_exc())
+        
+        with tab5:
+            st.subheader("Contacts Import/Export")
+            
+            # Export section
+            st.write("### Export Contacts Data")
+            
+            # Get contacts data
+            supabase = get_supabase_client()
+            
+            try:
+                # Load carriers, MGAs, and commission rules
+                carriers_data = []
+                mgas_data = []
+                commission_rules_data = []
+                
+                # Filter by user in production mode
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                    user_email = get_normalized_user_email()
+                    
+                    # Get carriers
+                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                    carriers_data = response.data if response.data else []
+                    
+                    # Get MGAs
+                    response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
+                    mgas_data = response.data if response.data else []
+                    
+                    # Get commission rules
+                    response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
+                    commission_rules_data = response.data if response.data else []
+                else:
+                    # Private mode - get all data
+                    response = supabase.table('carriers').select("*").execute()
+                    carriers_data = response.data if response.data else []
+                    
+                    response = supabase.table('mgas').select("*").execute()
+                    mgas_data = response.data if response.data else []
+                    
+                    response = supabase.table('commission_rules').select("*").execute()
+                    commission_rules_data = response.data if response.data else []
+                
+                # Show summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Carriers", len(carriers_data))
+                with col2:
+                    st.metric("Total MGAs", len(mgas_data))
+                with col3:
+                    st.metric("Total Commission Rules", len([r for r in commission_rules_data if r.get('is_active', True)]))
+                
+                # Export options
+                st.write("#### Choose what to export:")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    export_carriers = st.checkbox("Export Carriers", value=True)
+                    export_mgas = st.checkbox("Export MGAs", value=True)
+                    export_rules = st.checkbox("Export Commission Rules", value=True)
+                
+                with col2:
+                    if st.button("📥 Export to Excel", type="primary"):
+                        # Create Excel file with multiple sheets
+                        import io
+                        from datetime import datetime
+                        import pandas as pd
+                        
+                        output = io.BytesIO()
+                        
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            # Export carriers
+                            if export_carriers and carriers_data:
+                                carriers_df = pd.DataFrame(carriers_data)
+                                # Remove user_email column for export
+                                if 'user_email' in carriers_df.columns:
+                                    carriers_df = carriers_df.drop(columns=['user_email'])
+                                carriers_df.to_excel(writer, sheet_name='Carriers', index=False)
+                            
+                            # Export MGAs
+                            if export_mgas and mgas_data:
+                                mgas_df = pd.DataFrame(mgas_data)
+                                # Remove user_email column for export
+                                if 'user_email' in mgas_df.columns:
+                                    mgas_df = mgas_df.drop(columns=['user_email'])
+                                mgas_df.to_excel(writer, sheet_name='MGAs', index=False)
+                            
+                            # Export commission rules
+                            if export_rules and commission_rules_data:
+                                # Add carrier and MGA names to rules
+                                rules_enhanced = []
+                                for rule in commission_rules_data:
+                                    rule_copy = rule.copy()
+                                    
+                                    # Find carrier name
+                                    carrier = next((c for c in carriers_data if c['carrier_id'] == rule.get('carrier_id')), None)
+                                    rule_copy['carrier_name'] = carrier['carrier_name'] if carrier else ''
+                                    
+                                    # Find MGA name
+                                    mga = next((m for m in mgas_data if m['mga_id'] == rule.get('mga_id')), None)
+                                    rule_copy['mga_name'] = mga['mga_name'] if mga else 'Direct'
+                                    
+                                    rules_enhanced.append(rule_copy)
+                                
+                                rules_df = pd.DataFrame(rules_enhanced)
+                                # Remove user_email column for export
+                                if 'user_email' in rules_df.columns:
+                                    rules_df = rules_df.drop(columns=['user_email'])
+                                # Reorder columns
+                                cols = ['carrier_name', 'mga_name', 'policy_type', 'transaction_type', 'commission_rate', 'is_active']
+                                cols.extend([c for c in rules_df.columns if c not in cols])
+                                rules_df = rules_df[cols]
+                                rules_df.to_excel(writer, sheet_name='Commission Rules', index=False)
+                        
+                        output.seek(0)
+                        
+                        st.download_button(
+                            label="📥 Download Excel File",
+                            data=output,
+                            file_name=f"contacts_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        st.success("✅ Export ready for download!")
+                
+                st.divider()
+                
+                # Import section
+                st.write("### Import Contacts Data")
+                
+                # Download template
+                st.write("#### 1️⃣ Download Import Template")
+                
+                template_data = {
+                    'Carriers': pd.DataFrame({
+                        'carrier_name': ['Example Insurance Co', 'Sample Carrier Inc'],
+                        'status': ['Active', 'Active'],
+                        'notes': ['Primary carrier', 'Secondary carrier']
+                    }),
+                    'MGAs': pd.DataFrame({
+                        'mga_name': ['Example MGA', 'Sample Agency'],
+                        'status': ['Active', 'Active'],
+                        'contact_info': ['{"contact_name": "John Doe", "phone": "555-1234", "email": "john@example.com"}', '{}'],
+                        'notes': ['Primary MGA', '']
+                    }),
+                    'Commission Rules': pd.DataFrame({
+                        'carrier_name': ['Example Insurance Co', 'Example Insurance Co', 'Sample Carrier Inc'],
+                        'mga_name': ['Direct', 'Example MGA', 'Sample Agency'],
+                        'policy_type': ['Auto', 'Home', 'Auto'],
+                        'transaction_type': ['NEW', 'NEW', 'RENEWAL'],
+                        'commission_rate': [15.0, 12.0, 10.0],
+                        'is_active': [True, True, True]
+                    })
+                }
+                
+                template_output = io.BytesIO()
+                with pd.ExcelWriter(template_output, engine='xlsxwriter') as writer:
+                    for sheet_name, df in template_data.items():
+                        df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+                template_output.seek(0)
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.info("""
+                    📋 **Template Instructions:**
+                    - **Carriers sheet**: carrier_name (required), status (Active/Inactive), notes
+                    - **MGAs sheet**: mga_name (required), status, contact_info (JSON format), notes
+                    - **Commission Rules sheet**: carrier_name, mga_name (use 'Direct' for no MGA), policy_type, transaction_type, commission_rate
+                    """)
+                
+                with col2:
+                    st.download_button(
+                        label="📥 Download Template",
+                        data=template_output,
+                        file_name="contacts_import_template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                
+                # Upload file
+                st.write("#### 2️⃣ Upload Your File")
+                
+                uploaded_file = st.file_uploader(
+                    "Choose an Excel file with Carriers, MGAs, and Commission Rules",
+                    type=['xlsx', 'xls'],
+                    key="contacts_upload"
+                )
+                
+                if uploaded_file is not None:
+                    try:
+                        # Read all sheets
+                        all_sheets = pd.read_excel(uploaded_file, sheet_name=None)
+                        
+                        st.write("#### 3️⃣ Preview Import Data")
+                        
+                        # Preview each sheet
+                        import_summary = {}
+                        
+                        if 'Carriers' in all_sheets:
+                            carriers_df = all_sheets['Carriers']
+                            import_summary['carriers'] = len(carriers_df)
+                            with st.expander(f"Carriers Preview ({len(carriers_df)} rows)"):
+                                st.dataframe(carriers_df.head(10))
+                        
+                        if 'MGAs' in all_sheets:
+                            mgas_df = all_sheets['MGAs']
+                            import_summary['mgas'] = len(mgas_df)
+                            with st.expander(f"MGAs Preview ({len(mgas_df)} rows)"):
+                                st.dataframe(mgas_df.head(10))
+                        
+                        if 'Commission Rules' in all_sheets:
+                            rules_df = all_sheets['Commission Rules']
+                            import_summary['rules'] = len(rules_df)
+                            with st.expander(f"Commission Rules Preview ({len(rules_df)} rows)"):
+                                st.dataframe(rules_df.head(10))
+                        
+                        # Import options
+                        st.write("#### 4️⃣ Import Options")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            import_mode = st.radio(
+                                "Import Mode",
+                                ["Add to existing", "Replace all"],
+                                help="Add: Keep existing data and add new. Replace: Delete all existing data first."
+                            )
+                        
+                        with col2:
+                            st.warning("⚠️ **Important:**")
+                            if import_mode == "Replace all":
+                                st.error("This will DELETE all existing contacts data!")
+                            else:
+                                st.info("Duplicate names will be skipped.")
+                        
+                        # Import button
+                        if st.button("🚀 Import Data", type="primary"):
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            try:
+                                user_email = None
+                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                                    user_email = get_normalized_user_email()
+                                
+                                # Replace mode - delete existing data
+                                if import_mode == "Replace all" and user_email:
+                                    status_text.text("Deleting existing data...")
+                                    supabase.table('commission_rules').delete().eq('user_email', user_email).execute()
+                                    supabase.table('mgas').delete().eq('user_email', user_email).execute()
+                                    supabase.table('carriers').delete().eq('user_email', user_email).execute()
+                                    progress_bar.progress(10)
+                                
+                                # Import carriers
+                                if 'Carriers' in all_sheets:
+                                    status_text.text("Importing carriers...")
+                                    carriers_df = all_sheets['Carriers']
+                                    carriers_imported = 0
+                                    
+                                    for idx, row in carriers_df.iterrows():
+                                        if pd.notna(row.get('carrier_name')):
+                                            carrier_data = {
+                                                'carrier_id': str(uuid.uuid4()),
+                                                'carrier_name': str(row['carrier_name']),
+                                                'status': row.get('status', 'Active'),
+                                                'notes': row.get('notes', '') if pd.notna(row.get('notes')) else ''
+                                            }
+                                            if user_email:
+                                                carrier_data['user_email'] = user_email
+                                            
+                                            try:
+                                                supabase.table('carriers').insert(carrier_data).execute()
+                                                carriers_imported += 1
+                                            except:
+                                                pass  # Skip duplicates
+                                        
+                                        progress_bar.progress(10 + (20 * (idx + 1) / len(carriers_df)))
+                                
+                                # Import MGAs
+                                if 'MGAs' in all_sheets:
+                                    status_text.text("Importing MGAs...")
+                                    mgas_df = all_sheets['MGAs']
+                                    mgas_imported = 0
+                                    
+                                    for idx, row in mgas_df.iterrows():
+                                        if pd.notna(row.get('mga_name')):
+                                            mga_data = {
+                                                'mga_id': str(uuid.uuid4()),
+                                                'mga_name': str(row['mga_name']),
+                                                'status': row.get('status', 'Active'),
+                                                'notes': row.get('notes', '') if pd.notna(row.get('notes')) else ''
+                                            }
+                                            
+                                            # Handle contact_info
+                                            if pd.notna(row.get('contact_info')):
+                                                try:
+                                                    import json
+                                                    mga_data['contact_info'] = json.loads(row['contact_info'])
+                                                except:
+                                                    mga_data['contact_info'] = {}
+                                            else:
+                                                mga_data['contact_info'] = {}
+                                            
+                                            if user_email:
+                                                mga_data['user_email'] = user_email
+                                            
+                                            try:
+                                                supabase.table('mgas').insert(mga_data).execute()
+                                                mgas_imported += 1
+                                            except:
+                                                pass  # Skip duplicates
+                                        
+                                        progress_bar.progress(30 + (20 * (idx + 1) / len(mgas_df)))
+                                
+                                # Reload carriers and MGAs for commission rules
+                                if user_email:
+                                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                                    carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
+                                    
+                                    response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
+                                    mgas_lookup = {m['mga_name']: m['mga_id'] for m in response.data}
+                                else:
+                                    response = supabase.table('carriers').select("*").execute()
+                                    carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
+                                    
+                                    response = supabase.table('mgas').select("*").execute()
+                                    mgas_lookup = {m['mga_name']: m['mga_id'] for m in response.data}
+                                
+                                # Import commission rules
+                                if 'Commission Rules' in all_sheets:
+                                    status_text.text("Importing commission rules...")
+                                    rules_df = all_sheets['Commission Rules']
+                                    rules_imported = 0
+                                    
+                                    for idx, row in rules_df.iterrows():
+                                        carrier_name = str(row.get('carrier_name', ''))
+                                        mga_name = str(row.get('mga_name', ''))
+                                        
+                                        if carrier_name in carriers_lookup:
+                                            rule_data = {
+                                                'rule_id': str(uuid.uuid4()),
+                                                'carrier_id': carriers_lookup[carrier_name],
+                                                'policy_type': row.get('policy_type', ''),
+                                                'transaction_type': row.get('transaction_type', ''),
+                                                'commission_rate': float(row.get('commission_rate', 0)),
+                                                'is_active': bool(row.get('is_active', True))
+                                            }
+                                            
+                                            # Handle MGA
+                                            if mga_name and mga_name.lower() != 'direct' and mga_name in mgas_lookup:
+                                                rule_data['mga_id'] = mgas_lookup[mga_name]
+                                            
+                                            if user_email:
+                                                rule_data['user_email'] = user_email
+                                            
+                                            try:
+                                                supabase.table('commission_rules').insert(rule_data).execute()
+                                                rules_imported += 1
+                                            except:
+                                                pass  # Skip duplicates
+                                        
+                                        progress_bar.progress(50 + (50 * (idx + 1) / len(rules_df)))
+                                
+                                progress_bar.progress(100)
+                                status_text.empty()
+                                
+                                # Show results
+                                st.success("✅ Import completed!")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Carriers Imported", carriers_imported if 'carriers_imported' in locals() else 0)
+                                with col2:
+                                    st.metric("MGAs Imported", mgas_imported if 'mgas_imported' in locals() else 0)
+                                with col3:
+                                    st.metric("Rules Imported", rules_imported if 'rules_imported' in locals() else 0)
+                                
+                                st.info("💡 Tip: Go to the Contacts page to view your imported data.")
+                                
+                            except Exception as e:
+                                st.error(f"Error during import: {str(e)}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                    
+                    except Exception as e:
+                        st.error(f"Error reading file: {str(e)}")
+                        st.info("Please make sure your file has sheets named: Carriers, MGAs, Commission Rules")
+            
+            except Exception as e:
+                st.error(f"Error loading contacts data: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
     
         display_app_footer()
     
