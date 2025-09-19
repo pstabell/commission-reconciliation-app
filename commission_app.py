@@ -15602,14 +15602,19 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     mga = next((m for m in mgas_data if m['mga_id'] == rule.get('mga_id')), None)
                                     rule_copy['mga_name'] = mga['mga_name'] if mga else 'Direct'
                                     
+                                    # Map database fields to user-friendly names
+                                    if 'new_rate' in rule:
+                                        rule_copy['commission_rate'] = rule.get('new_rate', 0)
+                                    
                                     rules_enhanced.append(rule_copy)
                                 
                                 rules_df = pd.DataFrame(rules_enhanced)
                                 # Remove user_email column for export
                                 if 'user_email' in rules_df.columns:
                                     rules_df = rules_df.drop(columns=['user_email'])
-                                # Reorder columns
-                                cols = ['carrier_name', 'mga_name', 'policy_type', 'transaction_type', 'commission_rate', 'is_active']
+                                # Reorder columns - only include columns that exist
+                                desired_cols = ['carrier_name', 'mga_name', 'policy_type', 'transaction_type', 'commission_rate', 'is_active']
+                                cols = [c for c in desired_cols if c in rules_df.columns]
                                 cols.extend([c for c in rules_df.columns if c not in cols])
                                 rules_df = rules_df[cols]
                                 rules_df.to_excel(writer, sheet_name='Commission Rules', index=False)
@@ -15840,10 +15845,15 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 'rule_id': str(uuid.uuid4()),
                                                 'carrier_id': carriers_lookup[carrier_name],
                                                 'policy_type': row.get('policy_type', ''),
-                                                'transaction_type': row.get('transaction_type', ''),
-                                                'commission_rate': float(row.get('commission_rate', 0)),
+                                                'new_rate': float(row.get('commission_rate', row.get('new_rate', 0))),
                                                 'is_active': bool(row.get('is_active', True))
                                             }
+                                            
+                                            # Add optional fields if present
+                                            if 'transaction_type' in row:
+                                                rule_data['transaction_type'] = row.get('transaction_type', '')
+                                            if 'renewal_rate' in row:
+                                                rule_data['renewal_rate'] = float(row.get('renewal_rate', 0))
                                             
                                             # Handle MGA
                                             if mga_name and mga_name.lower() != 'direct' and mga_name in mgas_lookup:
