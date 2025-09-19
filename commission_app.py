@@ -17510,6 +17510,7 @@ TO "New Column Name";
                         target_col = mapped_col if mapped_col and mapped_col in working_data.columns else (field_name if field_name in working_data.columns else None)
                         if target_col:
                             # Convert to numeric first, then sum
+                            import pandas as pd  # Ensure pandas is available in this scope
                             working_data[target_col] = pd.to_numeric(working_data[target_col], errors='coerce').fillna(0)
                             agg_dict[target_col] = 'sum'
                     
