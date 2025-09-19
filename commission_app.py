@@ -15567,22 +15567,6 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 
                 with col2:
                     if st.button("📥 Export to Excel", type="primary"):
-                        # Debug: Check for Johnson and Johnson
-                        jj_mga = next((m for m in mgas_data if m['mga_name'] == 'Johnson and Johnson'), None)
-                        if jj_mga:
-                            st.info(f"Found Johnson and Johnson MGA with ID: {jj_mga['mga_id']}")
-                            # Check rules with this MGA
-                            jj_rules = [r for r in commission_rules_data if r.get('mga_id') == jj_mga['mga_id']]
-                            st.info(f"Found {len(jj_rules)} rules with Johnson and Johnson MGA")
-                            if jj_rules:
-                                # Show carriers
-                                jj_carriers = set()
-                                for rule in jj_rules:
-                                    carrier = next((c for c in carriers_data if c['carrier_id'] == rule.get('carrier_id')), None)
-                                    if carrier:
-                                        jj_carriers.add(carrier['carrier_name'])
-                                st.info(f"J&J Carriers: {', '.join(sorted(jj_carriers))}")
-                        
                         # Create Excel file with multiple sheets
                         output = io.BytesIO()
                         
@@ -15608,21 +15592,37 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 # Add carrier and MGA names to rules
                                 rules_enhanced = []
                                 for rule in commission_rules_data:
+                                    # Only include active rules by default
+                                    if not rule.get('is_active', True):
+                                        continue
+                                        
                                     rule_copy = rule.copy()
                                     
                                     # Find carrier name
                                     carrier = next((c for c in carriers_data if c['carrier_id'] == rule.get('carrier_id')), None)
                                     rule_copy['carrier_name'] = carrier['carrier_name'] if carrier else ''
                                     
-                                    # Find MGA name
-                                    mga = next((m for m in mgas_data if m['mga_id'] == rule.get('mga_id')), None)
-                                    rule_copy['mga_name'] = mga['mga_name'] if mga else 'Direct'
+                                    # Skip rules without a valid carrier
+                                    if not rule_copy['carrier_name']:
+                                        continue
+                                    
+                                    # Find MGA name - IMPORTANT: Keep the actual MGA name if it exists
+                                    if rule.get('mga_id'):
+                                        mga = next((m for m in mgas_data if m['mga_id'] == rule.get('mga_id')), None)
+                                        rule_copy['mga_name'] = mga['mga_name'] if mga else 'Direct'
+                                    else:
+                                        rule_copy['mga_name'] = 'Direct'
                                     
                                     # Map database fields to user-friendly names
                                     if 'new_rate' in rule:
                                         rule_copy['commission_rate'] = rule.get('new_rate', 0)
                                     
                                     rules_enhanced.append(rule_copy)
+                                
+                                # Debug: Check what we're about to export for J&J
+                                jj_export_count = len([r for r in rules_enhanced if r.get('mga_name') == 'Johnson and Johnson'])
+                                if jj_export_count > 0:
+                                    st.info(f"Exporting {jj_export_count} Johnson and Johnson rules")
                                 
                                 rules_df = pd.DataFrame(rules_enhanced)
                                 # Remove user_email column for export
