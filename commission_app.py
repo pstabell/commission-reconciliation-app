@@ -15836,30 +15836,44 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 if user_email:
                                     response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
                                     carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
+                                    # Also create a normalized lookup for better matching
+                                    carriers_lookup_normalized = {c['carrier_name'].strip(): c['carrier_id'] for c in response.data}
                                     
                                     response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
                                     mgas_lookup = {m['mga_name']: m['mga_id'] for m in response.data}
+                                    mgas_lookup_normalized = {m['mga_name'].strip(): m['mga_id'] for m in response.data}
                                 else:
                                     response = supabase.table('carriers').select("*").execute()
                                     carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
+                                    carriers_lookup_normalized = {c['carrier_name'].strip(): c['carrier_id'] for c in response.data}
                                     
                                     response = supabase.table('mgas').select("*").execute()
                                     mgas_lookup = {m['mga_name']: m['mga_id'] for m in response.data}
+                                    mgas_lookup_normalized = {m['mga_name'].strip(): m['mga_id'] for m in response.data}
                                 
                                 # Import commission rules
                                 if 'Commission Rules' in all_sheets:
                                     status_text.text("Importing commission rules...")
                                     rules_df = all_sheets['Commission Rules']
                                     rules_imported = 0
+                                    rules_skipped = 0
+                                    missing_carriers = set()
                                     
                                     for idx, row in rules_df.iterrows():
-                                        carrier_name = str(row.get('carrier_name', ''))
-                                        mga_name = str(row.get('mga_name', ''))
+                                        carrier_name = str(row.get('carrier_name', '')).strip()
+                                        mga_name = str(row.get('mga_name', '')).strip()
                                         
+                                        # Try exact match first, then normalized match
+                                        carrier_id = None
                                         if carrier_name in carriers_lookup:
+                                            carrier_id = carriers_lookup[carrier_name]
+                                        elif carrier_name in carriers_lookup_normalized:
+                                            carrier_id = carriers_lookup_normalized[carrier_name]
+                                        
+                                        if carrier_id:
                                             rule_data = {
                                                 'rule_id': str(uuid.uuid4()),
-                                                'carrier_id': carriers_lookup[carrier_name],
+                                                'carrier_id': carrier_id,
                                                 'policy_type': row.get('policy_type', ''),
                                                 'new_rate': float(row.get('commission_rate', row.get('new_rate', 0))),
                                                 'is_active': bool(row.get('is_active', True))
@@ -15871,9 +15885,12 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             if 'renewal_rate' in row:
                                                 rule_data['renewal_rate'] = float(row.get('renewal_rate', 0))
                                             
-                                            # Handle MGA
-                                            if mga_name and mga_name.lower() != 'direct' and mga_name in mgas_lookup:
-                                                rule_data['mga_id'] = mgas_lookup[mga_name]
+                                            # Handle MGA - try exact match first, then normalized
+                                            if mga_name and mga_name.lower() != 'direct':
+                                                if mga_name in mgas_lookup:
+                                                    rule_data['mga_id'] = mgas_lookup[mga_name]
+                                                elif mga_name in mgas_lookup_normalized:
+                                                    rule_data['mga_id'] = mgas_lookup_normalized[mga_name]
                                             
                                             if user_email:
                                                 rule_data['user_email'] = user_email
@@ -15881,8 +15898,13 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             try:
                                                 supabase.table('commission_rules').insert(rule_data).execute()
                                                 rules_imported += 1
-                                            except:
-                                                pass  # Skip duplicates
+                                            except Exception as e:
+                                                rules_skipped += 1
+                                        else:
+                                            # Carrier not found in lookup
+                                            rules_skipped += 1
+                                            if carrier_name:
+                                                missing_carriers.add(carrier_name)
                                         
                                         progress_bar.progress(0.5 + (0.5 * (idx + 1) / len(rules_df)))
                                 
@@ -15898,6 +15920,15 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     st.metric("MGAs Imported", mgas_imported if 'mgas_imported' in locals() else 0)
                                 with col3:
                                     st.metric("Rules Imported", rules_imported if 'rules_imported' in locals() else 0)
+                                
+                                # Show debug info if rules were skipped
+                                if 'rules_skipped' in locals() and rules_skipped > 0:
+                                    st.warning(f"⚠️ {rules_skipped} commission rules were skipped during import")
+                                    if 'missing_carriers' in locals() and missing_carriers:
+                                        with st.expander("Show missing carriers"):
+                                            st.write("These carriers from the Excel file were not found in the imported carriers:")
+                                            for carrier in sorted(missing_carriers):
+                                                st.write(f"- {carrier}")
                                 
                                 st.info("💡 Tip: Go to the Contacts page to view your imported data.")
                                 
