@@ -9172,6 +9172,10 @@ def main():
     
     # --- Reconciliation ---
     elif page == "Reconciliation":
+        # Import required modules for this page
+        import pandas as pd
+        import io
+        
         display_app_header()
         inject_scroll_to_top()
         col_title, col_refresh = st.columns([6, 1])
@@ -11252,6 +11256,10 @@ def main():
     
     # --- Admin Panel ---
     elif page == "Admin Panel":
+        # Import required modules for this page
+        import pandas as pd
+        import io
+        
         display_app_header()
         st.title("⚙️ Admin Panel")
         
@@ -15967,6 +15975,10 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
     
     # --- Policy Revenue Ledger ---
     elif page == "Policy Revenue Ledger":
+        # Import required modules for this page
+        import pandas as pd
+        import io
+        
         display_app_header()
         st.subheader("Policy Revenue Ledger")
         
@@ -19915,6 +19927,10 @@ TO "New Column Name";
     
     # --- Pending Policy Renewals ---
     elif page == "Pending Policy Renewals":
+        # Import required modules for this page
+        import pandas as pd
+        import io
+        
         display_app_header()
         # Add refresh button in the header
         col1, col2 = st.columns([4, 1])
