@@ -1,134 +1,129 @@
-# Sales Commission App Documentation
+# Commission Tracker Documentation Index
 
-Welcome to the organized documentation for the Sales Commission App. This structure consolidates 60+ scattered files into a clean, logical organization.
+Welcome to the Commission Tracker documentation! This index helps you quickly find the information you need.
 
 ## 📁 Documentation Structure
 
-### 📚 Core Documentation (`/core`)
-Essential project documentation:
-- **[APP_ARCHITECTURE.md](core/APP_ARCHITECTURE.md)** - Complete technical architecture
-- **[PROJECT_HISTORY.md](core/PROJECT_HISTORY.md)** - Development chronicle from inception
-- **[NEXT_STEPS.md](core/NEXT_STEPS.md)** - Current status and roadmap
+### Core Documentation
+- [Project Architecture](core/APP_ARCHITECTURE.md) - System design and structure
+- [Project History](core/PROJECT_HISTORY.md) - Development timeline
+- [Change Log](core/CHANGELOG.md) - Version history and updates
+- [Project Structure](core/PROJECT_STRUCTURE.md) - File and folder organization
 
-### 🔧 Feature Documentation (`/features`)
-Comprehensive feature-specific documentation:
-- **[CLIENT_ID_GENERATION.md](features/CLIENT_ID_GENERATION.md)** - Client ID generation and management
-- **[FORMULA_SYSTEM.md](features/FORMULA_SYSTEM.md)** - Complete formula implementation (Phases 0-2)
-- **[RECONCILIATION_SYSTEM.md](features/RECONCILIATION_SYSTEM.md)** - Double-entry reconciliation system
-- **[SECURITY_SYSTEM.md](features/SECURITY_SYSTEM.md)** - Security architecture and implementation
-- **[Policy Revenue Ledger Reports.md](features/Policy%20Revenue%20Ledger%20Reports.md)** - Ledger functionality
+### 🔧 Development & Operations
+- [CLAUDE.md](/CLAUDE.md) - **CRITICAL: Development instructions for AI assistants**
+- [Development Standards](operations/DEVELOPMENT_STANDARDS.md) - Code quality guidelines
+- [Database Migrations](operations/DATABASE_MIGRATIONS.md) - Schema change procedures
+- [Troubleshooting Guide](operations/TROUBLESHOOTING_GUIDE.md) - Common issues and solutions
+- [Known Issues](operations/KNOWN_ISSUES_AND_FIXES.md) - Current bugs and workarounds
 
-### 📋 Operational Guides (`/operations`)
-Day-to-day operational documentation:
-- **[KNOWN_ISSUES_AND_FIXES.md](operations/KNOWN_ISSUES_AND_FIXES.md)** - Consolidated issue tracking
-- **[TROUBLESHOOTING_GUIDE.md](operations/TROUBLESHOOTING_GUIDE.md)** - User troubleshooting
-- **[SETUP_AND_MIGRATION.md](operations/SETUP_AND_MIGRATION.md)** - Setup and migration guides
+### 🛡️ Security
+- [User Isolation Model](security/USER_ISOLATION_SECURITY_MODEL.md) - Multi-tenant security
+- [RLS Troubleshooting](operations/RLS_TROUBLESHOOTING.md) - Row Level Security issues
+- [Security Guidelines](development/SECURITY_GUIDELINES.md) - Best practices
 
-### 🎨 Design Standards (`/design`)
-UI/UX and design documentation:
-- **[UI_DESIGN_STANDARDS.md](design/UI_DESIGN_STANDARDS.md)** - Comprehensive UI/UX standards
-- **[PAGE_DESIGNS/](design/PAGE_DESIGNS/)** - Individual page design specifications
+### 📋 Features
+- [Contacts Import/Export](features/CONTACTS_COMMISSION_STRUCTURE.md) - Manage carriers/MGAs
+- [Policy Term Rules](features/MASTER_POLICY_TERM_RULES.md) - Transaction assignment logic
+- [Reconciliation System](features/RECONCILIATION_SYSTEM.md) - Statement matching
+- [Commission Rules](features/COMMISSION_RULES_MANAGEMENT.md) - Rate configuration
+- [Color Theme Preferences](features/COLOR_THEME_PREFERENCES.md) - UI customization
+- [Empty Data Handling](features/EMPTY_DATA_HANDLING_SUMMARY.md) - New user experience
+- [Formula System](features/FORMULA_SYSTEM.md) - Commission calculations
+- [Policy Revenue Ledger](features/Policy Revenue Ledger Reports.md) - Financial reporting
 
-### 📖 Guides (`/guides`)
-Technical guides and how-to documentation:
-- **[COLUMN_ORDERING_GUIDE.md](guides/COLUMN_ORDERING_GUIDE.md)** - How to reorder columns in different pages
+### 🐛 Troubleshooting (Recent Issues)
+- [Mobile Data Visibility](troubleshooting/MOBILE_FIX_SUMMARY_2025.md) - Sidebar issues
+- [CSV Import/RLS Issues](troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md) - Import failures
+- [Missing Carriers/MGAs](troubleshooting/MISSING_CARRIERS_MGAS_2025.md) - Data visibility
+- [Contacts Data Issues](troubleshooting/contacts-data-visibility-issues.md) - Demo account
 
-### 🗄️ Archive (`/archive`)
-Historical documentation preserved for reference:
-- **[phase0_implementation/](archive/phase0_implementation/)** - Phase 0 implementation files
-- **[daily_summaries/](archive/daily_summaries/)** - Daily development summaries
-- **[old_versions/](archive/old_versions/)** - Superseded documentation
+### 📅 Recent Changes (2025)
+- [2025-01-19: Contacts Import/Export Fix](changelogs/2025-01-19-contacts-import-export-fix.md)
+- [2025-01-18: Color Theme Preferences](changelogs/2025-01-18-color-theme-preferences.md)
+- [2025-01-18: Demo User MGA Fix](changelogs/2025-01-18-demo-user-mga-visibility-fix.md)
+- [2025-01-14: Reconciliation DateTime Fix](changelogs/2025-01-14-reconciliation-datetime-fix.md)
+- [2025-01-09: Webhook DateTime Fix](changelogs/2025-01-09-webhook-datetime-fix.md)
+- [2025-01-07: Carrd AI Bot Integration](changelogs/2025-01-07-carrd-ai-bot-integration.md)
+- [2025-01-07: Free Trial Password Flow](changelogs/2025-01-07-free-trial-password-flow.md)
 
-## 🎯 Quick Links by Topic
+### 📚 Help Content
+- [Getting Started](../help_content/01_getting_started.md)
+- [Features Guide](../help_content/02_features_guide.md)  
+- [Tips and Tricks](../help_content/03_tips_and_tricks.md)
+- [Troubleshooting](../help_content/04_troubleshooting.md)
+- [Formulas](../help_content/05_formulas.md)
+- [FAQ](../help_content/06_faq.md)
+- [Data Protection](../help_content/07_data_protection.md)
+- [Roadmap](../help_content/08_roadmap.md)
+
+### 🏢 Production/SaaS
+- [Multi-Tenancy Implementation](production/MULTI_TENANCY_IMPLEMENTATION.md)
+- [SaaS Master Plan](production/SAAS_MASTER_PLAN_STATUS.md)
+
+### 📐 Design
+- [UI Design Standards](design/UI_DESIGN_STANDARDS.md)
+- [Add Policy Form Redesign](design/ADD_POLICY_FORM_REDESIGN.md)
+- [Page Designs](design/PAGE_DESIGNS/) - Individual page specifications
+
+### 📜 Legal
+- [Privacy Policy](legal/privacy_policy.md)
+- [Terms of Service](legal/terms_of_service.md)
+
+## 🚀 Quick Links
 
 ### For Developers
-1. Start with [APP_ARCHITECTURE.md](core/APP_ARCHITECTURE.md)
-2. Review [FORMULA_SYSTEM.md](features/FORMULA_SYSTEM.md) for calculation logic
-3. Check [KNOWN_ISSUES_AND_FIXES.md](operations/KNOWN_ISSUES_AND_FIXES.md) for gotchas
+1. **START HERE**: [CLAUDE.md](/CLAUDE.md) for critical development instructions
+2. Review [Development Standards](operations/DEVELOPMENT_STANDARDS.md)
+3. Check [Known Issues](operations/KNOWN_ISSUES_AND_FIXES.md) before starting
+4. Understand [User Isolation Model](security/USER_ISOLATION_SECURITY_MODEL.md)
 
-### For Users
-1. See [TROUBLESHOOTING_GUIDE.md](operations/TROUBLESHOOTING_GUIDE.md)
-2. Review feature guides in `/features`
-3. Check help documentation in `/help_content` (separate user docs)
+### For Troubleshooting
+1. Check [Recent Changelogs](changelogs/) for similar issues
+2. Review [Troubleshooting Guide](operations/TROUBLESHOOTING_GUIDE.md)
+3. Search specific issue in [troubleshooting/](troubleshooting/) folder
+4. Check [CLAUDE.md](/CLAUDE.md) for known recurring issues
 
 ### For New Features
-1. Review [NEXT_STEPS.md](core/NEXT_STEPS.md) for roadmap
-2. Follow patterns in existing feature docs
-3. Use [UI_DESIGN_STANDARDS.md](design/UI_DESIGN_STANDARDS.md) for consistency
+1. Review existing [Features Documentation](features/)
+2. Follow [Development Standards](operations/DEVELOPMENT_STANDARDS.md)
+3. Document in appropriate changelog when complete
+4. Update this README if adding major features
 
-## 📊 Documentation Stats
+## 🔍 Search Tips
 
-### Before Consolidation
-- 60+ scattered .md files
-- Significant overlap and redundancy
-- Difficult to find information
-- Inconsistent organization
+Use grep to search across all documentation:
+```bash
+# Search for a specific term
+grep -r "search_term" docs/
 
-### After Consolidation
-- **15 core documentation files**
-- **75% reduction** in file count
-- **Clear categorical organization**
-- **No duplicate information**
-- **All history preserved** in archive
+# Search for files containing a pattern
+find docs -name "*.md" -exec grep -l "pattern" {} \;
 
-## 🔍 Finding Information
+# Search in specific folders
+grep -r "RLS" docs/troubleshooting/
+```
 
-### By Feature
-- Formula calculations → [FORMULA_SYSTEM.md](features/FORMULA_SYSTEM.md)
-- Reconciliation → [RECONCILIATION_SYSTEM.md](features/RECONCILIATION_SYSTEM.md)
-- Security → [SECURITY_SYSTEM.md](features/SECURITY_SYSTEM.md)
+## 📝 Documentation Standards
 
-### By Issue Type
-- Technical issues → [KNOWN_ISSUES_AND_FIXES.md](operations/KNOWN_ISSUES_AND_FIXES.md)
-- User problems → [TROUBLESHOOTING_GUIDE.md](operations/TROUBLESHOOTING_GUIDE.md)
-- Setup issues → [SETUP_AND_MIGRATION.md](operations/SETUP_AND_MIGRATION.md)
-- Column ordering → [COLUMN_ORDERING_GUIDE.md](guides/COLUMN_ORDERING_GUIDE.md)
+1. **Changelogs**: Use format `YYYY-MM-DD-brief-description.md`
+2. **Troubleshooting**: Include error message, root cause, solution, prevention
+3. **Features**: Include overview, technical details, usage examples
+4. **Always update** documentation when resolving issues or adding features
+5. **Archive old files** instead of deleting to preserve history
 
-### By Time Period
-- Project history → [PROJECT_HISTORY.md](core/PROJECT_HISTORY.md)
-- Recent changes → [NEXT_STEPS.md](core/NEXT_STEPS.md)
-- Historical files → `/archive`
+## 🗂️ Archive Organization
 
-## 📝 Contributing
+Historical documentation is preserved in:
+- `/archive/daily_summaries/` - Daily development logs
+- `/archive/old_versions/` - Superseded documentation
+- `/archive/phase0_implementation/` - Historical implementation details
 
-When adding new documentation:
-1. **Choose the right category** (core, features, operations, design)
-2. **Check for existing content** to avoid duplication
-3. **Follow established patterns** in similar documents
-4. **Update this README** if adding new major documents
+Temporary scripts are archived in:
+- `/archive/temp_scripts/` - One-time use scripts
+- `/archive/debug_scripts/` - Debugging and analysis scripts
+- `/sql_scripts/archive/` - Organized by category (demo_fixes, rls_fixes, etc.)
 
 ---
 
-## 📅 Recent Updates
-
-### August 23, 2025
-- Added batch dropdown to Edit Policy Transactions page for viewing imported transactions
-- Enhanced imported transaction IDs to include statement date (e.g., ABC123D-IMPORT-20240831)
-- Implemented Rate field mapping to Agent Comm % during reconciliation import
-- Added two-tier search: Transaction ID first, NOTES field as fallback
-- See [RECONCILIATION_SYSTEM.md](features/RECONCILIATION_SYSTEM.md) for details
-
-### July 8, 2025 (Evening)
-- Major form enhancements for Add New Policy and Edit Transaction
-- Added success confirmations and automatic form clearing
-- Reorganized all form sections for better workflow
-- Added Calculate buttons for pre-save validation
-- Standardized date format to MM/DD/YYYY
-- Combined Internal Fields into collapsible sections
-
-### July 8, 2025 (Morning)
-- Added comprehensive Formula Documentation to Admin Panel
-- Reorganized Edit Transaction form fields
-- Standardized all number formatting to 2 decimal places
-- Improved Policy Type management UI
-- See [JULY_8_2025_UPDATES_SUMMARY.md](archive/daily_summaries/JULY_8_2025_UPDATES_SUMMARY.md)
-
-### July 7, 2025
-- Consolidated 60+ documentation files into organized structure
-- Completed formula system implementation
-- Fixed reconciliation transaction protection
-
----
-
-*Last consolidated: July 7, 2025*  
-*Last updated: July 8, 2025*
+Last updated: 2025-01-19 (Complete reorganization and cleanup)
