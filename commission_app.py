@@ -15591,20 +15591,20 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             if export_rules and commission_rules_data:
                                 # Add carrier and MGA names to rules
                                 rules_enhanced = []
+                                skipped_inactive = 0
+                                skipped_no_carrier = 0
+                                
                                 for rule in commission_rules_data:
-                                    # Only include active rules by default
-                                    if not rule.get('is_active', True):
-                                        continue
-                                        
                                     rule_copy = rule.copy()
                                     
                                     # Find carrier name
                                     carrier = next((c for c in carriers_data if c['carrier_id'] == rule.get('carrier_id')), None)
                                     rule_copy['carrier_name'] = carrier['carrier_name'] if carrier else ''
                                     
-                                    # Skip rules without a valid carrier
+                                    # Include ALL rules, even without carrier names for debugging
                                     if not rule_copy['carrier_name']:
-                                        continue
+                                        skipped_no_carrier += 1
+                                        rule_copy['carrier_name'] = f"[Missing Carrier ID: {rule.get('carrier_id')}]"
                                     
                                     # Find MGA name - IMPORTANT: Keep the actual MGA name if it exists
                                     if rule.get('mga_id'):
@@ -15619,10 +15619,16 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     
                                     rules_enhanced.append(rule_copy)
                                 
-                                # Debug: Check what we're about to export for J&J
+                                # Debug: Show export statistics
+                                st.info(f"📊 Export Statistics:")
+                                st.info(f"Total rules in database: {len(commission_rules_data)}")
+                                st.info(f"Rules to export: {len(rules_enhanced)}")
+                                if skipped_no_carrier > 0:
+                                    st.warning(f"⚠️ {skipped_no_carrier} rules have missing carriers")
+                                
                                 jj_export_count = len([r for r in rules_enhanced if r.get('mga_name') == 'Johnson and Johnson'])
                                 if jj_export_count > 0:
-                                    st.info(f"Exporting {jj_export_count} Johnson and Johnson rules")
+                                    st.info(f"Johnson and Johnson rules: {jj_export_count}")
                                 
                                 rules_df = pd.DataFrame(rules_enhanced)
                                 # Remove user_email column for export
