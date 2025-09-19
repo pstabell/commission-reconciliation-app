@@ -15880,7 +15880,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             rule_data = {
                                                 'rule_id': str(uuid.uuid4()),
                                                 'carrier_id': carrier_id,
-                                                'policy_type': row.get('policy_type', ''),
+                                                'policy_type': row.get('policy_type', 'All') if pd.notna(row.get('policy_type')) and row.get('policy_type') else 'All',
                                                 'new_rate': float(row.get('commission_rate', row.get('new_rate', 0))),
                                                 'is_active': bool(row.get('is_active', True))
                                             }
@@ -15906,6 +15906,17 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 rules_imported += 1
                                             except Exception as e:
                                                 rules_skipped += 1
+                                                if 'missing_carriers' not in locals():
+                                                    missing_carriers = set()
+                                                # Log the actual error
+                                                error_msg = str(e)
+                                                if 'duplicate key' in error_msg:
+                                                    # This is a real duplicate, not a missing carrier
+                                                    pass
+                                                else:
+                                                    # Log the error for debugging
+                                                    if carrier_name:
+                                                        missing_carriers.add(f"{carrier_name}: {error_msg[:100]}")
                                         else:
                                             # Carrier not found in lookup
                                             rules_skipped += 1
@@ -15929,12 +15940,12 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 
                                 # Show debug info if rules were skipped
                                 if 'rules_skipped' in locals() and rules_skipped > 0:
-                                    st.warning(f"⚠️ {rules_skipped} commission rules were skipped during import")
+                                    st.error(f"❌ {rules_skipped} commission rules FAILED to import!")
                                     if 'missing_carriers' in locals() and missing_carriers:
-                                        with st.expander("Show missing carriers"):
-                                            st.write("These carriers from the Excel file were not found in the imported carriers:")
-                                            for carrier in sorted(missing_carriers):
-                                                st.write(f"- {carrier}")
+                                        with st.expander("Show import errors"):
+                                            st.write("Import failures:")
+                                            for error in sorted(missing_carriers):
+                                                st.write(f"- {error}")
                                 
                                 st.info("💡 Tip: Go to the Contacts page to view your imported data.")
                                 
