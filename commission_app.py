@@ -17295,6 +17295,9 @@ TO "New Column Name";
     
     # --- Policy Revenue Ledger Reports ---
     elif page == "Policy Revenue Ledger Reports":
+        # Import pandas for this section to ensure it's available
+        import pandas as pd
+        
         display_app_header()
         st.subheader("Policy Revenue Ledger Reports")
         
