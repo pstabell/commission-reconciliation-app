@@ -15754,7 +15754,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     supabase.table('commission_rules').delete().eq('user_email', user_email).execute()
                                     supabase.table('mgas').delete().eq('user_email', user_email).execute()
                                     supabase.table('carriers').delete().eq('user_email', user_email).execute()
-                                    progress_bar.progress(10)
+                                    progress_bar.progress(0.1)
                                 
                                 # Import carriers
                                 if 'Carriers' in all_sheets:
@@ -15779,7 +15779,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             except:
                                                 pass  # Skip duplicates
                                         
-                                        progress_bar.progress(10 + (20 * (idx + 1) / len(carriers_df)))
+                                        progress_bar.progress(0.1 + (0.2 * (idx + 1) / len(carriers_df)))
                                 
                                 # Import MGAs
                                 if 'MGAs' in all_sheets:
@@ -15814,7 +15814,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             except:
                                                 pass  # Skip duplicates
                                         
-                                        progress_bar.progress(30 + (20 * (idx + 1) / len(mgas_df)))
+                                        progress_bar.progress(0.3 + (0.2 * (idx + 1) / len(mgas_df)))
                                 
                                 # Reload carriers and MGAs for commission rules
                                 if user_email:
@@ -15868,9 +15868,9 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             except:
                                                 pass  # Skip duplicates
                                         
-                                        progress_bar.progress(50 + (50 * (idx + 1) / len(rules_df)))
+                                        progress_bar.progress(0.5 + (0.5 * (idx + 1) / len(rules_df)))
                                 
-                                progress_bar.progress(100)
+                                progress_bar.progress(1.0)
                                 status_text.empty()
                                 
                                 # Show results
