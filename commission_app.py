@@ -15504,6 +15504,10 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
         with tab5:
             st.subheader("Contacts Import/Export")
             
+            # Import required modules for this tab
+            import pandas as pd
+            import io
+            
             # Export section
             st.write("### Export Contacts Data")
             
@@ -15627,9 +15631,6 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 
                 # Download template
                 st.write("#### 1️⃣ Download Import Template")
-                
-                import pandas as pd
-                import io
                 
                 template_data = {
                     'Carriers': pd.DataFrame({
