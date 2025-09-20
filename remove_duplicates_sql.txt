@@ -1,0 +1,76 @@
+-- DUPLICATE REMOVAL SCRIPT FOR COMMISSION TRACKER
+-- This will remove the 112 duplicate transactions created by the Edit Policy bug
+-- and restore your count from 537 back to 425
+
+-- STEP 1: First check what we're going to delete
+WITH duplicates AS (
+    SELECT 
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY "Customer", "Policy Number", "Transaction Type", "Premium Sold", "Effective Date"
+            ORDER BY updated_at ASC  -- Keep the oldest
+        ) as rn
+    FROM policies
+)
+SELECT COUNT(*) as will_delete
+FROM duplicates
+WHERE rn > 1;
+
+-- STEP 2: Preview which records will be deleted (showing first 20)
+WITH duplicates AS (
+    SELECT 
+        "Transaction ID",
+        "Customer",
+        "Policy Number",
+        "Transaction Type",
+        updated_at,
+        ROW_NUMBER() OVER (
+            PARTITION BY "Customer", "Policy Number", "Transaction Type", "Premium Sold", "Effective Date"
+            ORDER BY updated_at ASC
+        ) as rn
+    FROM policies
+)
+SELECT 
+    "Transaction ID",
+    "Customer",
+    "Policy Number",
+    "Transaction Type",
+    updated_at,
+    'WILL BE DELETED' as status
+FROM duplicates
+WHERE rn > 1
+ORDER BY "Customer", "Policy Number"
+LIMIT 20;
+
+-- STEP 3: DELETE the duplicates (keeping the oldest of each group)
+-- IMPORTANT: This is the actual DELETE - review steps 1 & 2 first!
+WITH duplicates AS (
+    SELECT 
+        _id,
+        ROW_NUMBER() OVER (
+            PARTITION BY "Customer", "Policy Number", "Transaction Type", "Premium Sold", "Effective Date"
+            ORDER BY updated_at ASC
+        ) as rn
+    FROM policies
+)
+DELETE FROM policies
+WHERE _id IN (
+    SELECT _id 
+    FROM duplicates 
+    WHERE rn > 1
+);
+
+-- STEP 4: Verify the final count (should be ~425)
+SELECT COUNT(*) as final_count FROM policies;
+
+-- STEP 5: Check that no more duplicates remain
+SELECT 
+    "Customer",
+    "Policy Number", 
+    "Transaction Type",
+    COUNT(*) as count
+FROM policies
+GROUP BY "Customer", "Policy Number", "Transaction Type"
+HAVING COUNT(*) > 1
+ORDER BY count DESC
+LIMIT 5;

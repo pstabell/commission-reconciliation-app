@@ -6324,6 +6324,9 @@ def main():
     
     # --- Reports ---
     elif page == "Reports":
+        # Import pandas for Reports functionality
+        import pandas as pd
+        
         display_app_header()
         st.title("📈 Reports")
         
@@ -7638,7 +7641,11 @@ def main():
                                 # Store original transaction IDs to track which rows are updates vs inserts
                                 original_transaction_ids = set()
                                 if transaction_id_col:
-                                    original_transaction_ids = set(edit_results[transaction_id_col].dropna().astype(str))
+                                    # IMPORTANT: Use the UNFILTERED data to check for existing transactions
+                                    # This prevents creating duplicates when editing filtered views
+                                    all_transactions = load_policies_data()
+                                    if not all_transactions.empty and transaction_id_col in all_transactions.columns:
+                                        original_transaction_ids = set(all_transactions[transaction_id_col].dropna().astype(str))
                                 
                                 # Process each record in the edited data
                                 for idx, row in edited_data.iterrows():
@@ -7706,7 +7713,20 @@ def main():
                                                     update_dict[col] = value if pd.notna(value) else None
                                                 
                                         try:
-                                            supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                            # Add user_id filtering for secure updates
+                                            update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
+                                            
+                                            # Add user filtering for security
+                                            user_id = get_user_id()
+                                            if user_id:
+                                                update_query = update_query.eq('user_id', user_id)
+                                            else:
+                                                # Fallback to email if user_id not available
+                                                user_email = get_normalized_user_email()
+                                                if user_email:
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            
+                                            update_query.execute()
                                             updated_count += 1
                                         except Exception as update_error:
                                             st.error(f"Error updating record: {update_error}")
