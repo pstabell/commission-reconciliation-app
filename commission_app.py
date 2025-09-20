@@ -7613,6 +7613,8 @@ def main():
                             save_button = st.button("💾 Save All Changes", type="primary", use_container_width=True)
                         
                         if save_button:
+                            # Ensure pandas is available for save operations
+                            import pandas as pd
                             try:
                                 updated_count = 0
                                 inserted_count = 0
