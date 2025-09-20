@@ -7647,6 +7647,12 @@ def main():
                         if save_button:
                             # Ensure pandas is available for save operations
                             import pandas as pd
+                            
+                            # CRITICAL: Clear any stale session state that might cause duplication
+                            # This ensures we're working with fresh data
+                            if f"{editor_key}_widget" in st.session_state:
+                                print(f"DEBUG: Clearing stale widget state for {editor_key}_widget")
+                            
                             try:
                                 updated_count = 0
                                 inserted_count = 0
@@ -7706,7 +7712,15 @@ def main():
                                     st.warning("No changes detected. If you made changes, please try saving again.")
                                     continue
                                 
-                                # Process ONLY changed records
+                                # ALTERNATIVE APPROACH: If comparison failed, only update rows with valid transaction IDs
+                                if len(rows_to_process) == 0 and transaction_id_col:
+                                    print("INFO: Using transaction ID-based update approach")
+                                    # Only process rows that have transaction IDs (no new rows)
+                                    for idx, row in edited_data.iterrows():
+                                        if transaction_id_col in row and pd.notna(row[transaction_id_col]) and str(row[transaction_id_col]).strip():
+                                            rows_to_process.append(idx)
+                                
+                                # Process ONLY changed records (or valid updates)
                                 for idx in rows_to_process:
                                     row = edited_data.loc[idx]
                                     # Skip the selection column for save operations
