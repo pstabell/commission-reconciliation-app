@@ -7662,8 +7662,39 @@ def main():
                                         # Debug: Show what we're tracking
                                         print(f"DEBUG: Tracking {len(original_transaction_ids)} original transaction IDs")
                                 
-                                # Process each record in the edited data
-                                for idx, row in edited_data.iterrows():
+                                # CRITICAL FIX: Only process rows that were actually changed
+                                # Compare with original data to find actual changes
+                                rows_to_process = []
+                                
+                                if 'edit_results' in locals() and not edit_results.empty:
+                                    # Compare edited_data with edit_results to find changes
+                                    for idx in edited_data.index:
+                                        if idx < len(edit_results):
+                                            # Check if any column (except Select) has changed
+                                            row_changed = False
+                                            for col in edited_data.columns:
+                                                if col != 'Select' and col in edit_results.columns:
+                                                    edited_val = edited_data.loc[idx, col]
+                                                    original_val = edit_results.loc[idx, col]
+                                                    # Handle NaN comparison
+                                                    if pd.isna(edited_val) and pd.isna(original_val):
+                                                        continue
+                                                    if edited_val != original_val:
+                                                        row_changed = True
+                                                        print(f"DEBUG: Row {idx} changed - {col}: '{original_val}' -> '{edited_val}'")
+                                                        break
+                                            
+                                            if row_changed:
+                                                rows_to_process.append(idx)
+                                        else:
+                                            # This is a new row added to the end
+                                            rows_to_process.append(idx)
+                                
+                                print(f"DEBUG: Processing {len(rows_to_process)} changed rows out of {len(edited_data)} total rows")
+                                
+                                # Process ONLY changed records
+                                for idx in rows_to_process:
+                                    row = edited_data.loc[idx]
                                     # Skip the selection column for save operations
                                     if 'Select' in row:
                                         row = row.drop('Select')
@@ -7707,6 +7738,22 @@ def main():
                                                     insert_dict[col] = value if pd.notna(value) else None
                                                 
                                         try:
+                                            # SAFETY CHECK: Verify this transaction ID truly doesn't exist
+                                            if transaction_id_col and transaction_id:
+                                                check_exists = supabase.table('policies').select('_id').eq(transaction_id_col, transaction_id)
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    check_exists = check_exists.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    if user_email:
+                                                        check_exists = check_exists.eq('user_email', user_email)
+                                                
+                                                exists_result = check_exists.execute()
+                                                if exists_result.data and len(exists_result.data) > 0:
+                                                    print(f"WARNING: Skipping duplicate insert - Transaction ID {transaction_id} already exists")
+                                                    continue
+                                            
                                             # Clean data before insertion
                                             cleaned_insert = clean_data_for_database(insert_dict)
                                             # Add user email for multi-tenancy
