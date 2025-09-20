@@ -7082,35 +7082,18 @@ def main():
                         
                         recon_count = total_count - len(edit_results_editable)
                         
-                        # Show counts and override option
+                        # Show counts
                         if recon_count > 0:
-                            col1, col2, col3 = st.columns([3, 3, 2])
+                            col1, col2 = st.columns(2)
                             with col1:
                                 st.success(f"Found {len(edit_results_editable)} editable transactions")
                             with col2:
-                                st.info(f"🔒 {recon_count} reconciliation entries (STMT/VOID/ADJ)")
-                            with col3:
-                                # Override button to include STMT transactions
-                                override_key = f"override_stmt_lock_{edit_search_term}"
-                                if st.button("🔓 Override Lock", key=override_key, type="secondary", 
-                                           help="Allow editing of STMT/VOID/ADJ transactions"):
-                                    st.session_state[f'override_stmt_{editor_key}'] = True
-                                    st.rerun()
+                                st.info(f"🔒 {recon_count} reconciliation entries (STMT/VOID/ADJ) - hidden from search results")
                         else:
                             st.success(f"Found {len(edit_results_editable)} transactions for editing")
                         
-                        # Check if override is active
-                        if st.session_state.get(f'override_stmt_{editor_key}', False):
-                            st.warning("⚠️ OVERRIDE ACTIVE: You can now edit STMT/VOID/ADJ transactions. Use with caution!")
-                            # Use all results instead of filtered
-                            edit_results = edit_results.copy()
-                            # Show button to disable override
-                            if st.button("🔒 Re-enable Lock", type="secondary"):
-                                st.session_state[f'override_stmt_{editor_key}'] = False
-                                st.rerun()
-                        else:
-                            # Update edit_results to only contain editable transactions
-                            edit_results = edit_results_editable
+                        # Update edit_results to only contain editable transactions
+                        edit_results = edit_results_editable
                         
                         # Check if we have any editable transactions left
                         if edit_results.empty:
@@ -7719,15 +7702,11 @@ def main():
                                     # Get the transaction ID for this row
                                     transaction_id = row.get(transaction_id_col) if transaction_id_col else None
                                     
-                                    # Check if we should skip STMT/VOID/ADJ transactions
-                                    is_recon_transaction = transaction_id and is_reconciliation_transaction(transaction_id)
-                                    override_active = st.session_state.get(f'override_stmt_{editor_key}', False)
-                                    
-                                    if is_recon_transaction and not override_active:
-                                        print(f"SKIPPING reconciliation transaction: {transaction_id}")
+                                    # STMT transactions should not appear here as they're filtered out in the search
+                                    # But double-check just in case
+                                    if transaction_id and is_reconciliation_transaction(transaction_id):
+                                        print(f"WARNING: STMT transaction {transaction_id} found in search results - this shouldn't happen")
                                         continue
-                                    elif is_recon_transaction and override_active:
-                                        print(f"OVERRIDE: Allowing edit of reconciliation transaction: {transaction_id}")
                                             
                                     # SIMPLIFIED: If it has a transaction ID, it's an UPDATE. Period.
                                     # This prevents the massive duplication issue
@@ -8267,10 +8246,40 @@ def main():
                 st.info("Use the search box above to find policies to edit, or edit all policies below:")
             
             # Option to edit all data (with pagination for performance)
-            show_all = st.checkbox("Show all policies for editing (use with caution)")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                show_all = st.checkbox("Show all policies for editing (use with caution)")
+            with col2:
+                # Unlock checkbox to show STMT transactions
+                unlock_stmt = st.checkbox("🔓 Unlock STMT", 
+                                        help="Show and allow editing of STMT/VOID/ADJ transactions",
+                                        key="unlock_stmt_edit_all")
             
             if show_all:
                 st.warning("Editing all policies at once can be slow with large datasets")
+                
+                # Filter out STMT transactions unless unlocked
+                if not unlock_stmt:
+                    # Find transaction ID column
+                    transaction_id_col = None
+                    for col in all_data.columns:
+                        if 'transaction' in col.lower() and 'id' in col.lower():
+                            transaction_id_col = col
+                            break
+                    
+                    if transaction_id_col:
+                        # Filter out reconciliation transactions
+                        all_data_filtered = all_data[
+                            ~all_data[transaction_id_col].apply(is_reconciliation_transaction)
+                        ].copy()
+                        
+                        hidden_count = len(all_data) - len(all_data_filtered)
+                        if hidden_count > 0:
+                            st.info(f"🔒 {hidden_count} STMT/VOID/ADJ transactions hidden. Check 'Unlock STMT' to show them.")
+                        
+                        all_data = all_data_filtered
+                else:
+                    st.warning("⚠️ STMT UNLOCKED: You can now edit reconciliation transactions. Use with caution!")
                 
                 # Sort by Customer A-Z first
                 if 'Customer' in all_data.columns:
@@ -8351,6 +8360,11 @@ def main():
                             
                             # Get the transaction ID for processing
                             transaction_id = row.get(transaction_id_col) if transaction_id_col else None
+                            
+                            # Check if this is a STMT transaction and if we should skip it
+                            if transaction_id and is_reconciliation_transaction(transaction_id) and not unlock_stmt:
+                                print(f"Skipping STMT transaction {transaction_id} - unlock not active")
+                                continue
                             
                             if transaction_id:
                                 
