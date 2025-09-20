@@ -508,7 +508,6 @@ def load_policies_data():
                 response_ilike = supabase.table('policies').select("*").ilike('user_email', user_email).execute()
                 if response_ilike.data:
                     # print(f"DEBUG: Found {len(response_ilike.data)} records with case-insensitive match")
-                    pass
                     response = response_ilike
         else:
             # Personal environment - show all data
@@ -516,6 +515,16 @@ def load_policies_data():
             response = supabase.table('policies').select("*").execute()
         if response.data:
             df = pd.DataFrame(response.data)
+            
+            # CRITICAL: Remove any duplicate Transaction IDs that might have been loaded
+            # This can happen with case-insensitive searches or data issues
+            if 'Transaction ID' in df.columns:
+                initial_count = len(df)
+                df = df.drop_duplicates(subset=['Transaction ID'])
+                final_count = len(df)
+                if initial_count != final_count:
+                    print(f"WARNING: Removed {initial_count - final_count} duplicate Transaction IDs from loaded data")
+            
             # Ensure numeric columns are properly typed
             numeric_cols = [
                 'Agent Estimated Comm $',
@@ -7664,9 +7673,13 @@ def main():
                                     # This prevents creating duplicates when editing filtered views
                                     all_transactions = load_policies_data()
                                     if not all_transactions.empty and transaction_id_col in all_transactions.columns:
+                                        # Remove any duplicate transaction IDs from the loaded data first
+                                        all_transactions = all_transactions.drop_duplicates(subset=[transaction_id_col])
                                         original_transaction_ids = set(all_transactions[transaction_id_col].dropna().astype(str))
                                         # Debug: Show what we're tracking
                                         print(f"DEBUG: Tracking {len(original_transaction_ids)} original transaction IDs")
+                                        print(f"DEBUG: Environment: {os.getenv('APP_ENVIRONMENT', 'Not Set')}")
+                                        print(f"DEBUG: Total records loaded: {len(all_transactions)}")
                                 
                                 # CRITICAL FIX: Only process rows that were actually changed
                                 # Compare with original data to find actual changes
