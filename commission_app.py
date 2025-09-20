@@ -8303,6 +8303,10 @@ def main():
                 total_pages = max(1, (total_records + records_per_page - 1) // records_per_page)
                 
                 with col2:
+                    # Add warning if there might be unsaved changes
+                    if 'edit_all_policies_editor' in st.session_state:
+                        st.warning("⚠️ Save changes before changing pages!")
+                    
                     current_page = st.number_input(
                         "Page:",
                         min_value=1,
@@ -8332,6 +8336,21 @@ def main():
                     if 'client' in col.lower() and 'id' in col.lower():
                         client_id_col = col
                 
+                # Add prominent warning about unsaved changes
+                # Check if data has been modified by comparing with original
+                has_changes = False
+                if 'edit_all_policies_editor' in st.session_state:
+                    try:
+                        # The session state contains the edited data
+                        edited_session_data = st.session_state.get('edit_all_policies_editor')
+                        if edited_session_data is not None:
+                            has_changes = True  # Assume changes if editor is active
+                    except:
+                        has_changes = False
+                
+                if has_changes:
+                    st.warning("⚠️ **UNSAVED CHANGES** - Click 'Save Changes' below before navigating to another page or your changes will be lost!")
+                
                 # Try minimal column config to see if it helps with sorting
                 edited_all_data = st.data_editor(
                     edit_all_data,
@@ -8342,7 +8361,15 @@ def main():
                         disabled=['_id'] if '_id' in edit_all_data.columns else []  # Only disable _id column
                     )
                 
-                if st.button("💾 Save Changes", key="save_all_edits"):
+                # Another warning near the save button
+                col1, col2 = st.columns([2, 3])
+                with col1:
+                    save_button = st.button("💾 Save Changes", key="save_all_edits", type="primary")
+                with col2:
+                    if has_changes:
+                        st.error("⚠️ Remember to save before changing pages!")
+                
+                if save_button:
                     try:
                         updated_count = 0
                         inserted_count = 0
