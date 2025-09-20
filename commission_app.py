@@ -7681,76 +7681,50 @@ def main():
                                         print(f"DEBUG: Environment: {os.getenv('APP_ENVIRONMENT', 'Not Set')}")
                                         print(f"DEBUG: Total records loaded: {len(all_transactions)}")
                                 
-                                # CRITICAL FIX: Only process rows that were actually changed
-                                # Compare with original data to find actual changes
-                                rows_to_process = []
+                                # SIMPLIFIED FIX: Use Transaction ID as source of truth
+                                # Don't rely on complex session state comparisons that fail
+                                print(f"DEBUG: Save triggered for {len(edited_data)} rows")
+                                print(f"DEBUG: Original transaction IDs tracked: {len(original_transaction_ids)}")
                                 
-                                # Get the original data from session state
-                                original_data = st.session_state.get(editor_key)
-                                if original_data is not None and not original_data.empty and len(original_data) == len(edited_data):
-                                    # Compare edited_data with original_data to find changes
-                                    for idx in edited_data.index:
-                                        if idx < len(original_data):
-                                            # Check if any column (except Select) has changed
-                                            row_changed = False
-                                            for col in edited_data.columns:
-                                                if col != 'Select' and col in original_data.columns:
-                                                    edited_val = edited_data.loc[idx, col]
-                                                    original_val = original_data.loc[idx, col]
-                                                    # Handle NaN comparison
-                                                    if pd.isna(edited_val) and pd.isna(original_val):
-                                                        continue
-                                                    if edited_val != original_val:
-                                                        row_changed = True
-                                                        print(f"DEBUG: Row {idx} changed - {col}: '{original_val}' -> '{edited_val}'")
-                                                        break
-                                            
-                                            if row_changed:
-                                                rows_to_process.append(idx)
-                                        else:
-                                            # This is a new row added to the end
-                                            rows_to_process.append(idx)
-                                else:
-                                    # FALLBACK: If we can't compare properly, don't process anything
-                                    print("ERROR: Unable to compare with original data. Aborting save to prevent duplicates.")
-                                    st.error("Unable to detect changes. Please refresh the page and try again.")
-                                    rows_to_process = []
+                                # For bulk edits, we'll process all rows but ONLY do updates
+                                # This prevents the massive duplication issue
+                                bulk_edit_mode = len(edited_data) > 10  # Assume bulk edit if more than 10 rows
+                                if bulk_edit_mode:
+                                    print("INFO: Bulk edit mode - will only UPDATE existing records")
+                                    st.info("Bulk edit mode: Updating existing records only")
                                 
-                                print(f"DEBUG: Processing {len(rows_to_process)} changed rows out of {len(edited_data)} total rows")
-                                
-                                # SAFETY: If no changes detected but we have data, something's wrong - process nothing
-                                if len(rows_to_process) == 0 and len(edited_data) > 0:
-                                    print("WARNING: No changes detected. This might indicate a comparison issue.")
-                                    # Don't process any rows to avoid mass duplication
-                                    st.warning("No changes detected. If you made changes, please try saving again.")
-                                else:
-                                    # ALTERNATIVE APPROACH: If comparison failed, only update rows with valid transaction IDs
-                                    if len(rows_to_process) == 0 and transaction_id_col:
-                                        print("INFO: Using transaction ID-based update approach")
-                                        # Only process rows that have transaction IDs (no new rows)
-                                        for idx, row in edited_data.iterrows():
-                                            if transaction_id_col in row and pd.notna(row[transaction_id_col]) and str(row[transaction_id_col]).strip():
-                                                rows_to_process.append(idx)
-                                    
-                                    # Process ONLY changed records (or valid updates)
-                                    for idx in rows_to_process:
-                                        row = edited_data.loc[idx]
+                                # Process each row based on Transaction ID presence
+                                for idx, row in edited_data.iterrows():
                                     # Skip the selection column for save operations
                                     if 'Select' in row:
                                         row = row.drop('Select')
                                     
                                     # Get the transaction ID for this row
                                     transaction_id = row.get(transaction_id_col) if transaction_id_col else None
+                                    
+                                    # CRITICAL: Skip STMT/VOID/ADJ transactions - they should never be edited
+                                    if transaction_id and is_reconciliation_transaction(transaction_id):
+                                        print(f"SKIPPING reconciliation transaction: {transaction_id}")
+                                        continue
                                             
-                                    # Check if this is a new row by seeing if the transaction ID exists in original data
+                                    # SIMPLIFIED: If it has a transaction ID, it's an UPDATE. Period.
+                                    # This prevents the massive duplication issue
                                     is_new_row = False
                                     if transaction_id_col:
-                                        # If there's no transaction ID or it's not in the original set, it's new
-                                        if pd.isna(transaction_id) or str(transaction_id).strip() == '' or str(transaction_id) not in original_transaction_ids:
+                                        if pd.isna(transaction_id) or str(transaction_id).strip() == '':
+                                            # Only truly new if no transaction ID at all
                                             is_new_row = True
-                                    else:
-                                        # Fallback to index-based check if no transaction ID column
-                                        is_new_row = idx >= len(edit_results)
+                                        elif str(transaction_id) in original_transaction_ids:
+                                            # Exists in database - UPDATE ONLY
+                                            is_new_row = False
+                                        else:
+                                            # Has ID but not in our list? In bulk mode, assume UPDATE
+                                            if bulk_edit_mode:
+                                                print(f"BULK MODE: Treating {transaction_id} as UPDATE to prevent duplicates")
+                                                is_new_row = False
+                                            else:
+                                                # Single edit mode - verify with database
+                                                is_new_row = True
                                             
                                     if is_new_row:
                                         # For new rows, generate unique IDs if they're missing
