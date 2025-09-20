@@ -8251,7 +8251,7 @@ def main():
                 show_all = st.checkbox("Show all policies for editing (use with caution)")
             with col2:
                 # Unlock checkbox to show STMT transactions
-                unlock_stmt = st.checkbox("🔓 Unlock STMT", 
+                unlock_stmt = st.checkbox("🔓 Unlock Reconciled Transactions", 
                                         help="Show and allow editing of STMT/VOID/ADJ transactions",
                                         key="unlock_stmt_edit_all")
             
