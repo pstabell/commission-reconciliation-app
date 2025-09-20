@@ -6690,6 +6690,9 @@ def main():
         display_app_header()
         st.title("✏️ Edit Policy Transactions")
         
+        # Import pandas for this page section to ensure it's available
+        import pandas as pd
+        
         # Load fresh data for this page
         all_data = load_policies_data()
         
