@@ -440,15 +440,13 @@ def add_user_email_to_data(data_dict):
     return data_dict
 
 def get_normalized_user_email():
-    """Get the current user's email with proper case handling for demo user."""
+    """Get the current user's email - ALWAYS lowercase for consistency."""
     if "user_email" not in st.session_state:
         return None
     
     user_email = st.session_state['user_email']
-    # Special handling for Demo user case sensitivity
-    if user_email.lower() == 'demo@agentcommissiontracker.com':
-        return 'Demo@AgentCommissionTracker.com'
-    return user_email
+    # ALWAYS return lowercase to prevent case sensitivity issues
+    return user_email.lower() if user_email else None
 
 def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
