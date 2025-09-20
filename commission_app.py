@@ -7329,7 +7329,8 @@ def main():
                         # Auto-save functionality setup
                         auto_save_key = f"auto_save_{editor_key}"
                         if auto_save_key not in st.session_state:
-                            st.session_state[auto_save_key] = True
+                            # TEMPORARILY DISABLE AUTO-SAVE until duplicate bug is fixed
+                            st.session_state[auto_save_key] = False
                         
                         # Auto-save toggle at the top
                         col1, col2, col3 = st.columns([4, 1, 1])
@@ -7429,9 +7430,21 @@ def main():
                                         if col_name != 'Select' and transaction_id_col:
                                             transaction_id = edited_data.loc[idx, transaction_id_col]
                                             if pd.notna(transaction_id) and str(transaction_id).strip():
-                                                # Update single cell
+                                                # Update single cell with user filtering
                                                 update_dict = {col_name: new_value if pd.notna(new_value) else None}
-                                                supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                                update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
+                                                
+                                                # Add user filtering for security
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    # Fallback to email if user_id not available
+                                                    user_email = get_normalized_user_email()
+                                                    if user_email:
+                                                        update_query = update_query.eq('user_email', user_email)
+                                                
+                                                update_query.execute()
                                                 saved_count += 1
                                     
                                     if saved_count > 0:
@@ -7646,6 +7659,8 @@ def main():
                                     all_transactions = load_policies_data()
                                     if not all_transactions.empty and transaction_id_col in all_transactions.columns:
                                         original_transaction_ids = set(all_transactions[transaction_id_col].dropna().astype(str))
+                                        # Debug: Show what we're tracking
+                                        print(f"DEBUG: Tracking {len(original_transaction_ids)} original transaction IDs")
                                 
                                 # Process each record in the edited data
                                 for idx, row in edited_data.iterrows():
