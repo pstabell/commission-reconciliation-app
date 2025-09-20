@@ -263,8 +263,10 @@ def show_login_form():
                                         if user.get('subscription_status') == 'active':
                                             st.session_state["password_correct"] = True
                                             st.session_state["user_email"] = correct_email  # Use correct case from DB
+                                            st.session_state["user_id"] = user.get('id')  # Store user_id for proper filtering!
                                             # Debug logging for mobile issue
                                             print(f"DEBUG auth_helpers: Login successful for {email}, stored as {correct_email}")
+                                            print(f"DEBUG auth_helpers: User ID: {user.get('id')}")
                                             print(f"DEBUG auth_helpers: Session state keys after login: {list(st.session_state.keys())}")
                                             st.success("Login successful!")
                                             st.rerun()
@@ -292,14 +294,18 @@ def show_login_form():
                             st.caption(f"Technical details: {str(e)}")
                             # Fallback to demo password
                             if password == os.getenv("PRODUCTION_PASSWORD", "SaaSDemo2025!"):
-                                # For demo, use the proper case
-                                if email.lower() == 'demo@agentcommissiontracker.com':
-                                    correct_email = 'Demo@AgentCommissionTracker.com'
-                                else:
-                                    correct_email = email
+                                # Always use lowercase for consistency
+                                correct_email = email.lower()
                                 
                                 st.session_state["password_correct"] = True
                                 st.session_state["user_email"] = correct_email
+                                # Try to get user_id for fallback login
+                                try:
+                                    user_result = supabase.table('users').select('id').eq('email', correct_email).execute()
+                                    if user_result.data:
+                                        st.session_state["user_id"] = user_result.data[0]['id']
+                                except:
+                                    pass
                                 # Debug logging for mobile issue
                                 print(f"DEBUG auth_helpers: Fallback login successful for {email}, stored as {correct_email}")
                                 print(f"DEBUG auth_helpers: Session state after fallback: {dict(st.session_state)}")
@@ -673,6 +679,9 @@ def show_password_setup_form(setup_token: str):
                                     # Set session state to log them in automatically
                                     st.session_state["password_correct"] = True
                                     st.session_state["user_email"] = email
+                                    # Get user_id from the update result
+                                    if update_result.data and update_result.data[0].get('id'):
+                                        st.session_state["user_id"] = update_result.data[0]['id']
                                     
                                     st.success("✅ Password set successfully! Logging you in...")
                                     st.balloons()

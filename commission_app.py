@@ -433,10 +433,16 @@ def get_supabase_client():
     return create_client(url, key)
 
 def add_user_email_to_data(data_dict):
-    """Add current user's email to data dictionary for multi-tenancy."""
+    """Add current user's email AND user_id to data dictionary for multi-tenancy."""
     user_email = get_normalized_user_email()
     if user_email:
         data_dict["user_email"] = user_email
+    
+    # Also add user_id if available
+    user_id = st.session_state.get('user_id')
+    if user_id:
+        data_dict["user_id"] = user_id
+    
     return data_dict
 
 def get_normalized_user_email():
@@ -448,30 +454,51 @@ def get_normalized_user_email():
     # ALWAYS return lowercase to prevent case sensitivity issues
     return user_email.lower() if user_email else None
 
+def get_user_id():
+    """Get the current user's ID from session state."""
+    return st.session_state.get('user_id')
+
+def ensure_user_id():
+    """Ensure user_id is set in session state by looking it up from email."""
+    if 'user_id' not in st.session_state and 'user_email' in st.session_state:
+        try:
+            supabase = get_supabase_client()
+            user_email = get_normalized_user_email()
+            
+            if user_email:
+                # Look up user_id from users table
+                response = supabase.table('users').select('id').eq('email', user_email).execute()
+                
+                if response.data and len(response.data) > 0:
+                    st.session_state['user_id'] = response.data[0]['id']
+                else:
+                    # User doesn't exist - this shouldn't happen in production
+                    # but for safety, create the user
+                    user_response = supabase.table('users').insert({'email': user_email}).execute()
+                    if user_response.data:
+                        st.session_state['user_id'] = user_response.data[0]['id']
+        except Exception as e:
+            print(f"Error ensuring user_id: {e}")
+            # Don't crash the app if user_id lookup fails
+
 def load_policies_data():
     """Load policies data from Supabase - filtered by current user. NO CACHING to prevent data leaks."""
     try:
-        # Debug logging commented out - uncomment if needed for troubleshooting
-        # import time
-        # debug_info = {
-        #     "function": "load_policies_data",
-        #     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        #     "session_id": id(st.session_state),
-        #     "user_email": st.session_state.get('user_email', 'NOT SET'),
-        #     "password_correct": st.session_state.get('password_correct', 'NOT SET'),
-        #     "app_environment": os.getenv("APP_ENVIRONMENT", 'NOT SET'),
-        #     "user_agent": st.session_state.get('user_agent', 'NOT DETECTED')
-        # }
-        # print(f"DEBUG load_policies_data: {json.dumps(debug_info)}")
+        # Ensure user_id is set
+        ensure_user_id()
         
         supabase = get_supabase_client()
-        # Get user email from session state
-        user_email = st.session_state.get('user_email')
+        user_id = get_user_id()
+        user_email = get_normalized_user_email()
         
-        # In production, filter by user email for multi-tenancy
-        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and user_email:
-            # Query for user's policies
-            response = supabase.table('policies').select("*").eq('user_email', user_email).execute()
+        # In production, filter by user_id if available, otherwise fall back to email
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+            if user_id:
+                # PREFERRED: Filter by user_id (no case sensitivity issues!)
+                response = supabase.table('policies').select("*").eq('user_id', user_id).execute()
+            elif user_email:
+                # FALLBACK: Filter by email (for backward compatibility)
+                response = supabase.table('policies').select("*").eq('user_email', user_email).execute()
             record_count = len(response.data) if response.data else 0
             # print(f"DEBUG: Found {record_count} records for user {user_email}")
             
