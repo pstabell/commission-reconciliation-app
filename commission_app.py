@@ -1869,9 +1869,6 @@ def load_mgas_for_carrier(carrier_id):
             # Filter by user in production
             if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
                 user_email = st.session_state['user_email']
-                # Special handling for Demo user case sensitivity
-                if user_email.lower() == 'demo@agentcommissiontracker.com':
-                    user_email = 'Demo@AgentCommissionTracker.com'
                 mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', user_email).execute()
             else:
                 mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
