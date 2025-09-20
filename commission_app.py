@@ -7666,16 +7666,18 @@ def main():
                                 # Compare with original data to find actual changes
                                 rows_to_process = []
                                 
-                                if 'edit_results' in locals() and not edit_results.empty:
-                                    # Compare edited_data with edit_results to find changes
+                                # Get the original data from session state
+                                original_data = st.session_state.get(editor_key)
+                                if original_data is not None and not original_data.empty and len(original_data) == len(edited_data):
+                                    # Compare edited_data with original_data to find changes
                                     for idx in edited_data.index:
-                                        if idx < len(edit_results):
+                                        if idx < len(original_data):
                                             # Check if any column (except Select) has changed
                                             row_changed = False
                                             for col in edited_data.columns:
-                                                if col != 'Select' and col in edit_results.columns:
+                                                if col != 'Select' and col in original_data.columns:
                                                     edited_val = edited_data.loc[idx, col]
-                                                    original_val = edit_results.loc[idx, col]
+                                                    original_val = original_data.loc[idx, col]
                                                     # Handle NaN comparison
                                                     if pd.isna(edited_val) and pd.isna(original_val):
                                                         continue
@@ -7689,8 +7691,20 @@ def main():
                                         else:
                                             # This is a new row added to the end
                                             rows_to_process.append(idx)
+                                else:
+                                    # FALLBACK: If we can't compare properly, don't process anything
+                                    print("ERROR: Unable to compare with original data. Aborting save to prevent duplicates.")
+                                    st.error("Unable to detect changes. Please refresh the page and try again.")
+                                    rows_to_process = []
                                 
                                 print(f"DEBUG: Processing {len(rows_to_process)} changed rows out of {len(edited_data)} total rows")
+                                
+                                # SAFETY: If no changes detected but we have data, something's wrong - process nothing
+                                if len(rows_to_process) == 0 and len(edited_data) > 0:
+                                    print("WARNING: No changes detected. This might indicate a comparison issue.")
+                                    # Don't process any rows to avoid mass duplication
+                                    st.warning("No changes detected. If you made changes, please try saving again.")
+                                    continue
                                 
                                 # Process ONLY changed records
                                 for idx in rows_to_process:
