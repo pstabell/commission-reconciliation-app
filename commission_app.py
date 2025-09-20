@@ -7082,18 +7082,35 @@ def main():
                         
                         recon_count = total_count - len(edit_results_editable)
                         
-                        # Show counts
+                        # Show counts and override option
                         if recon_count > 0:
-                            col1, col2 = st.columns(2)
+                            col1, col2, col3 = st.columns([3, 3, 2])
                             with col1:
                                 st.success(f"Found {len(edit_results_editable)} editable transactions")
                             with col2:
-                                st.info(f"🔒 {recon_count} reconciliation entries (view in Reconciliation page)")
+                                st.info(f"🔒 {recon_count} reconciliation entries (STMT/VOID/ADJ)")
+                            with col3:
+                                # Override button to include STMT transactions
+                                override_key = f"override_stmt_lock_{edit_search_term}"
+                                if st.button("🔓 Override Lock", key=override_key, type="secondary", 
+                                           help="Allow editing of STMT/VOID/ADJ transactions"):
+                                    st.session_state[f'override_stmt_{editor_key}'] = True
+                                    st.rerun()
                         else:
                             st.success(f"Found {len(edit_results_editable)} transactions for editing")
                         
-                        # Update edit_results to only contain editable transactions
-                        edit_results = edit_results_editable
+                        # Check if override is active
+                        if st.session_state.get(f'override_stmt_{editor_key}', False):
+                            st.warning("⚠️ OVERRIDE ACTIVE: You can now edit STMT/VOID/ADJ transactions. Use with caution!")
+                            # Use all results instead of filtered
+                            edit_results = edit_results.copy()
+                            # Show button to disable override
+                            if st.button("🔒 Re-enable Lock", type="secondary"):
+                                st.session_state[f'override_stmt_{editor_key}'] = False
+                                st.rerun()
+                        else:
+                            # Update edit_results to only contain editable transactions
+                            edit_results = edit_results_editable
                         
                         # Check if we have any editable transactions left
                         if edit_results.empty:
@@ -7702,10 +7719,15 @@ def main():
                                     # Get the transaction ID for this row
                                     transaction_id = row.get(transaction_id_col) if transaction_id_col else None
                                     
-                                    # CRITICAL: Skip STMT/VOID/ADJ transactions - they should never be edited
-                                    if transaction_id and is_reconciliation_transaction(transaction_id):
+                                    # Check if we should skip STMT/VOID/ADJ transactions
+                                    is_recon_transaction = transaction_id and is_reconciliation_transaction(transaction_id)
+                                    override_active = st.session_state.get(f'override_stmt_{editor_key}', False)
+                                    
+                                    if is_recon_transaction and not override_active:
                                         print(f"SKIPPING reconciliation transaction: {transaction_id}")
                                         continue
+                                    elif is_recon_transaction and override_active:
+                                        print(f"OVERRIDE: Allowing edit of reconciliation transaction: {transaction_id}")
                                             
                                     # SIMPLIFIED: If it has a transaction ID, it's an UPDATE. Period.
                                     # This prevents the massive duplication issue
