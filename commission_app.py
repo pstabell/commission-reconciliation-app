@@ -7723,19 +7723,18 @@ def main():
                                     print("WARNING: No changes detected. This might indicate a comparison issue.")
                                     # Don't process any rows to avoid mass duplication
                                     st.warning("No changes detected. If you made changes, please try saving again.")
-                                    continue
-                                
-                                # ALTERNATIVE APPROACH: If comparison failed, only update rows with valid transaction IDs
-                                if len(rows_to_process) == 0 and transaction_id_col:
-                                    print("INFO: Using transaction ID-based update approach")
-                                    # Only process rows that have transaction IDs (no new rows)
-                                    for idx, row in edited_data.iterrows():
-                                        if transaction_id_col in row and pd.notna(row[transaction_id_col]) and str(row[transaction_id_col]).strip():
-                                            rows_to_process.append(idx)
-                                
-                                # Process ONLY changed records (or valid updates)
-                                for idx in rows_to_process:
-                                    row = edited_data.loc[idx]
+                                else:
+                                    # ALTERNATIVE APPROACH: If comparison failed, only update rows with valid transaction IDs
+                                    if len(rows_to_process) == 0 and transaction_id_col:
+                                        print("INFO: Using transaction ID-based update approach")
+                                        # Only process rows that have transaction IDs (no new rows)
+                                        for idx, row in edited_data.iterrows():
+                                            if transaction_id_col in row and pd.notna(row[transaction_id_col]) and str(row[transaction_id_col]).strip():
+                                                rows_to_process.append(idx)
+                                    
+                                    # Process ONLY changed records (or valid updates)
+                                    for idx in rows_to_process:
+                                        row = edited_data.loc[idx]
                                     # Skip the selection column for save operations
                                     if 'Select' in row:
                                         row = row.drop('Select')
@@ -7793,14 +7792,13 @@ def main():
                                                 exists_result = check_exists.execute()
                                                 if exists_result.data and len(exists_result.data) > 0:
                                                     print(f"WARNING: Skipping duplicate insert - Transaction ID {transaction_id} already exists")
-                                                    continue
-                                            
-                                            # Clean data before insertion
-                                            cleaned_insert = clean_data_for_database(insert_dict)
-                                            # Add user email for multi-tenancy
-                                            cleaned_insert = add_user_email_to_data(cleaned_insert)
-                                            supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
-                                            inserted_count += 1
+                                                else:
+                                                    # Clean data before insertion
+                                                    cleaned_insert = clean_data_for_database(insert_dict)
+                                                    # Add user email for multi-tenancy
+                                                    cleaned_insert = add_user_email_to_data(cleaned_insert)
+                                                    supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
+                                                    inserted_count += 1
                                         except Exception as insert_error:
                                             st.error(f"Error inserting new record: {insert_error}")
                                     elif transaction_id:  # Only update if we have a transaction ID
