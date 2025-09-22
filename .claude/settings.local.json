@@ -39,7 +39,8 @@
       "Bash(do echo \"=== Line $line ===\")",
       "Bash(done)",
       "Bash(cd:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(rsync:*)"
     ],
     "deny": []
   }

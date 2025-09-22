@@ -39,6 +39,7 @@ Welcome to the Commission Tracker documentation! This index helps you quickly fi
 - [Contacts Data Issues](troubleshooting/contacts-data-visibility-issues.md) - Demo account
 
 ### 📅 Recent Changes (2025)
+- [2025-01-22: Complete User Isolation & Security Overhaul v5.0.0](changelogs/2025-01-22-complete-user-isolation-security-overhaul.md) - **MAJOR UPDATE**
 - [2025-01-19: Contacts Import/Export Fix](changelogs/2025-01-19-contacts-import-export-fix.md)
 - [2025-01-18: Color Theme Preferences](changelogs/2025-01-18-color-theme-preferences.md)
 - [2025-01-18: Demo User MGA Fix](changelogs/2025-01-18-demo-user-mga-visibility-fix.md)

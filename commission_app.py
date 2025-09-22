@@ -165,10 +165,17 @@ from pathlib import Path
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
-from column_mapping_config import (
-    column_mapper, get_mapped_column, get_ui_field_name, 
-    is_calculated_field, safe_column_reference
+from user_column_mapping_db import (
+    user_column_mapper as column_mapper, get_mapped_column, 
+    get_reverse_mapping, save_column_mapping,
+    get_ui_field_name, is_calculated_field, safe_column_reference
 )
+from user_preferences_db import user_preferences, get_color_theme, set_color_theme
+from user_agent_rates_db import user_agent_rates, get_default_rates
+from user_policy_types_db import user_policy_types, get_policy_types_list
+from user_transaction_types_db import user_transaction_types, get_active_transaction_types
+from user_mappings_db import user_mappings
+from user_prl_templates_db import user_prl_templates
 # from utils.styling_minimal import apply_css  # Temporarily disabled for mobile testing
 import stripe
 
@@ -454,6 +461,124 @@ def get_normalized_user_email():
     # ALWAYS return lowercase to prevent case sensitivity issues
     return user_email.lower() if user_email else None
 
+def log_audit_trail(operation_type, table_name, affected_records, details=None):
+    """Log critical operations for audit trail."""
+    try:
+        user_email = get_normalized_user_email()
+        user_id = get_user_id()
+        
+        audit_entry = {
+            "user_email": user_email,
+            "user_id": user_id,
+            "operation_type": operation_type,
+            "table_name": table_name,
+            "affected_records": affected_records,
+            "details": details or {},
+            "timestamp": datetime.datetime.now().isoformat(),
+            "session_id": st.session_state.get('session_id', 'unknown')
+        }
+        
+        # Log to console in production
+        print(f"AUDIT LOG: {json.dumps(audit_entry)}")
+        
+        # Optionally store in database audit table
+        # supabase = get_supabase_client()
+        # supabase.table('audit_logs').insert(audit_entry).execute()
+        
+    except Exception as e:
+        print(f"Error logging audit trail: {e}")
+
+def get_user_session_key(key):
+    """Get a user-specific session state key to prevent cross-user contamination."""
+    user_email = get_normalized_user_email()
+    if not user_email:
+        user_email = 'default'
+    return f"{user_email}_{key}"
+
+def cleanup_user_session_state():
+    """Remove all user-specific data from session state on logout."""
+    user_email = get_normalized_user_email()
+    if not user_email:
+        return
+    
+    # List of keys that should be user-specific
+    user_specific_patterns = [
+        'matched_transactions', 'unmatched_transactions', 'transactions_to_create',
+        'prl_export_data', 'edit_', 'manual_matches', 'import_data', 'column_mapping',
+        'statement_file_total', 'processed_unmatched_indices', 'processed_unmatched_ids',
+        'import_view_preference', 'unmatched_state', 'current_unmatched_index',
+        'selected_customer_override_', 'customer_just_selected_', 'create_new_',
+        'trans_type_', 'reconciliation_batch'
+    ]
+    
+    # Remove all keys that match user-specific patterns
+    keys_to_remove = []
+    for key in st.session_state.keys():
+        if key.startswith(user_email + "_"):
+            keys_to_remove.append(key)
+        # Also check for any pattern matches (for backward compatibility)
+        for pattern in user_specific_patterns:
+            if pattern in key and not key.startswith(user_email + "_"):
+                keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        del st.session_state[key]
+
+def verify_record_ownership(table_name, record_id, id_column="id"):
+    """Verify that a record belongs to the current user before allowing operations."""
+    try:
+        user_email = get_normalized_user_email()
+        if not user_email:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Query the record to check ownership
+        result = supabase.table(table_name).select("user_email").eq(id_column, record_id).execute()
+        
+        if result.data and len(result.data) > 0:
+            record_email = result.data[0].get('user_email', '').lower()
+            return record_email == user_email
+        
+        return False
+    except Exception as e:
+        print(f"Error verifying ownership: {e}")
+        return False
+
+def verify_bulk_ownership(table_name, record_ids, id_column="id"):
+    """Verify that multiple records belong to the current user."""
+    try:
+        user_email = get_normalized_user_email()
+        if not user_email:
+            return False, []
+            
+        supabase = get_supabase_client()
+        
+        # Query all records to check ownership
+        result = supabase.table(table_name).select(id_column, "user_email").in_(id_column, record_ids).execute()
+        
+        if not result.data:
+            return False, []
+        
+        # Check which records belong to the user
+        user_records = []
+        other_records = []
+        
+        for record in result.data:
+            record_email = record.get('user_email', '').lower()
+            if record_email == user_email:
+                user_records.append(record[id_column])
+            else:
+                other_records.append(record[id_column])
+        
+        # Return True only if ALL records belong to the user
+        all_owned = len(other_records) == 0 and len(user_records) == len(record_ids)
+        return all_owned, user_records
+        
+    except Exception as e:
+        print(f"Error verifying bulk ownership: {e}")
+        return False, []
+
 def get_user_id():
     """Get the current user's ID from session state."""
     return st.session_state.get('user_id')
@@ -617,13 +742,8 @@ def style_special_transactions(df):
         Styled DataFrame with colored rows for STMT and VOID transactions
     """
     # Load user preferences for color theme
-    color_theme = "light"  # Default
-    try:
-        with open("config_files/user_preferences.json", "r") as f:
-            prefs = json.load(f)
-            color_theme = prefs.get("color_theme", {}).get("transaction_colors", "light")
-    except:
-        pass  # Use default if file doesn't exist
+    from user_preferences_db import get_color_theme
+    color_theme = get_color_theme()  # Gets user-specific theme or default
     
     def highlight_transaction_type(row):
         if 'Transaction ID' in row:
@@ -966,124 +1086,97 @@ def clean_data_for_database(data):
     return cleaned_data
 
 def load_policy_types():
-    """Load policy types from configuration file."""
-    policy_types_file = "config_files/policy_types_updated.json"
-    default_types = [
-        {"name": "Auto", "active": True, "default": False},
-        {"name": "Home", "active": True, "default": False},
-        {"name": "Life", "active": True, "default": False},
-        {"name": "Health", "active": True, "default": False},
-        {"name": "Commercial", "active": True, "default": True},
-        {"name": "Umbrella", "active": True, "default": False},
-        {"name": "Flood", "active": True, "default": False},
-        {"name": "Other", "active": True, "default": False}
-    ]
+    """Load policy types from user-specific database storage."""
+    config = user_policy_types.get_user_policy_types()
+    policy_types = []
+    default_type = config.get('default', 'HO3')
     
-    try:
-        with open(policy_types_file, 'r') as f:
-            config = json.load(f)
-            # Convert from new format to old format for compatibility
-            policy_types = []
-            for pt in config.get('policy_types', []):
-                policy_types.append({
-                    "name": pt.get('name', pt.get('code', '')),
-                    "active": pt.get('active', True),
-                    "default": pt.get('name') == config.get('default', 'HOME')
-                })
-            return policy_types, True  # Always allow custom for now
-    except:
-        # If file doesn't exist or is corrupted, return defaults
-        return default_types, True
+    # Convert from database format to legacy format for compatibility
+    for pt in config.get('policy_types', []):
+        policy_types.append({
+            "name": pt.get('name', pt.get('code', '')),
+            "active": pt.get('active', True),
+            "default": pt.get('code') == default_type
+        })
+    
+    return policy_types, True  # Always allow custom
 
 def load_policy_types_config():
     """Load the full policy types configuration as a dictionary."""
-    policy_types_file = "config_files/policy_types_updated.json"
-    default_config = {
-        "policy_types": [
-            {"name": "Auto", "active": True, "default": False},
-            {"name": "Home", "active": True, "default": False},
-            {"name": "Life", "active": True, "default": False},
-            {"name": "Health", "active": True, "default": False},
-            {"name": "Commercial", "active": True, "default": True},
-            {"name": "Umbrella", "active": True, "default": False},
-            {"name": "Flood", "active": True, "default": False},
-            {"name": "Other", "active": True, "default": False}
-        ],
-        "allow_custom": True
-    }
+    config = user_policy_types.get_user_policy_types()
+    default_type = config.get('default', 'HO3')
     
-    try:
-        with open(policy_types_file, 'r') as f:
-            config = json.load(f)
-            # Convert from new format to old format for compatibility
-            converted_config = {
-                "policy_types": [],
-                "allow_custom": True,
-                "last_updated": config.get('last_updated', '')
-            }
-            for pt in config.get('policy_types', []):
-                converted_config['policy_types'].append({
-                    "name": pt.get('name', pt.get('code', '')),
-                    "active": pt.get('active', True),
-                    "default": pt.get('name') == config.get('default', 'HOME')
-                })
-            return converted_config
-    except:
-        # If file doesn't exist or is corrupted, return defaults
-        return default_config
-
-def save_policy_types(policy_types, allow_custom=True):
-    """Save policy types to configuration file."""
-    policy_types_file = "config_files/policy_types_updated.json"
-    config = {
-        "policy_types": policy_types,
-        "allow_custom": allow_custom,
+    # Convert from database format to legacy format for compatibility
+    converted_config = {
+        "policy_types": [],
+        "allow_custom": True,
         "last_updated": datetime.datetime.now().strftime("%Y-%m-%d")
     }
     
-    try:
-        os.makedirs("config_files", exist_ok=True)
-        with open(policy_types_file, 'w') as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"Error saving policy types: {e}")
-        return False
+    for pt in config.get('policy_types', []):
+        converted_config['policy_types'].append({
+            "name": pt.get('name', pt.get('code', '')),
+            "active": pt.get('active', True),
+            "default": pt.get('code') == default_type
+        })
+    
+    return converted_config
+
+def save_policy_types(policy_types, allow_custom=True):
+    """Save policy types to user-specific database storage."""
+    # Convert legacy format to database format
+    db_policy_types = []
+    default_type = None
+    
+    for pt in policy_types:
+        code = pt.get('name', '')  # In legacy format, 'name' is actually the code
+        db_pt = {
+            'code': code,
+            'name': code,  # Use same for both code and name
+            'active': pt.get('active', True),
+            'category': 'Other'  # Default category
+        }
+        db_policy_types.append(db_pt)
+        
+        if pt.get('default', False):
+            default_type = code
+    
+    # Save to database
+    return user_policy_types.save_user_policy_types(
+        db_policy_types, 
+        default_type or 'HO3',
+        None  # Use default categories
+    )
 
 def get_active_policy_types():
     """Get list of active policy type names for dropdowns."""
-    policy_types, allow_custom = load_policy_types()
-    active_types = [pt['name'] for pt in policy_types if pt.get('active', True)]
-    return active_types, allow_custom
+    active_types = user_policy_types.get_policy_types_list()
+    return active_types, True  # Always allow custom
 
 def get_default_policy_type():
     """Get the default policy type."""
-    policy_types, _ = load_policy_types()
-    for pt in policy_types:
-        if pt.get('default', False):
-            return pt['name']
-    return policy_types[0]['name'] if policy_types else "Other"
+    config = user_policy_types.get_user_policy_types()
+    return config.get('default', 'HO3')
 
 def add_policy_type(new_type_name):
-    """Add a new policy type to the configuration."""
-    policy_types, allow_custom = load_policy_types()
+    """Add a new policy type to the user's configuration."""
+    # Use the database method directly
+    success = user_policy_types.add_policy_type(
+        code=new_type_name,
+        name=new_type_name,
+        category='Other',
+        active=True
+    )
     
-    # Check if type already exists
-    existing_names = [pt['name'].lower() for pt in policy_types]
-    if new_type_name.lower() in existing_names:
-        return False, "Policy type already exists"
-    
-    # Add new type
-    policy_types.append({
-        "name": new_type_name,
-        "active": True,
-        "default": False
-    })
-    
-    # Save updated list
-    if save_policy_types(policy_types, allow_custom):
+    if success:
         return True, "Policy type added successfully"
-    return False, "Error saving policy type"
+    else:
+        return False, "Policy type already exists or error saving"
+
+def get_transaction_type_codes():
+    """Get list of active transaction type codes for dropdowns."""
+    active_types = user_transaction_types.get_active_types()
+    return list(active_types.keys())
 
 def apply_formula_display(df, show_formulas=True):
     """
@@ -1585,25 +1678,36 @@ def inject_scroll_to_top():
 
 # Column mapping persistence functions
 def load_saved_column_mappings():
-    """Load saved column mappings from JSON file."""
+    """Load saved column mappings from session state with user prefix."""
+    user_email = st.session_state.get('user_email', 'default').lower()
+    mapping_key = f"{user_email}_column_mappings"
+    
+    # Check session state first
+    if mapping_key in st.session_state:
+        return st.session_state[mapping_key]
+    
+    # For backward compatibility, try loading from old JSON file once
     mappings_file = os.path.join('config_files', 'saved_mappings.json')
     try:
         if os.path.exists(mappings_file):
             with open(mappings_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        st.error(f"Error loading saved mappings: {str(e)}")
+                mappings = json.load(f)
+                # Save to session state for future use
+                st.session_state[mapping_key] = mappings
+                return mappings
+    except Exception:
+        pass
+    
     return {}
 
 def save_column_mappings_to_file(mappings):
-    """Save column mappings to JSON file."""
-    mappings_file = os.path.join('config_files', 'saved_mappings.json')
+    """Save column mappings to session state with user prefix."""
+    user_email = st.session_state.get('user_email', 'default').lower()
+    mapping_key = f"{user_email}_column_mappings"
+    
     try:
-        # Ensure the config_files directory exists
-        os.makedirs('config_files', exist_ok=True)
-        
-        with open(mappings_file, 'w') as f:
-            json.dump(mappings, f, indent=2)
+        # Save to session state
+        st.session_state[mapping_key] = mappings
         return True
     except Exception as e:
         st.error(f"Error saving mappings: {str(e)}")
@@ -1751,9 +1855,15 @@ def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transactio
         """)
         
         # Filter by user in production
-        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-            user_email = get_normalized_user_email()
-            query = query.eq('user_email', user_email)
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+            ensure_user_id()
+            user_id = get_user_id()
+            if user_id:
+                query = query.eq('user_id', user_id)
+            else:
+                # Fallback to email
+                user_email = get_normalized_user_email()
+                query = query.eq('user_email', user_email)
         
         # Filter by carrier
         query = query.eq('carrier_id', carrier_id)
@@ -1846,10 +1956,16 @@ def load_carriers_for_dropdown():
     """Load all active carriers for dropdown selection."""
     try:
         supabase = get_supabase_client()
-        # Filter by user_email for complete isolation
-        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-            user_email = get_normalized_user_email()
-            response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_email', user_email).order('carrier_name').execute()
+        # Filter by user_id for complete isolation
+        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+            ensure_user_id()
+            user_id = get_user_id()
+            if user_id:
+                response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_id', user_id).order('carrier_name').execute()
+            else:
+                # Fallback if no user_id
+                user_email = get_normalized_user_email()
+                response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').eq('user_email', user_email).order('carrier_name').execute()
         else:
             response = supabase.table('carriers').select('carrier_id, carrier_name').eq('status', 'Active').order('carrier_name').execute()
         return response.data if response.data else []
@@ -1871,9 +1987,15 @@ def load_mgas_for_carrier(carrier_id):
         # Method 1: Get MGAs from carrier_mga_relationships table
         try:
             # Filter by user in production
-            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                user_email = get_normalized_user_email()
-                response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                ensure_user_id()
+                user_id = get_user_id()
+                if user_id:
+                    response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_id', user_id).execute()
+                else:
+                    # Fallback to email
+                    user_email = get_normalized_user_email()
+                    response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
             else:
                 response = supabase.table('carrier_mga_relationships').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
@@ -1887,9 +2009,15 @@ def load_mgas_for_carrier(carrier_id):
         # Method 2: Get MGAs that have commission rules with this carrier
         try:
             # Filter by user in production
-            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                user_email = get_normalized_user_email()
-                response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                ensure_user_id()
+                user_id = get_user_id()
+                if user_id:
+                    response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_id', user_id).execute()
+                else:
+                    # Fallback to email
+                    user_email = get_normalized_user_email()
+                    response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).eq('user_email', user_email).execute()
             else:
                 response = supabase.table('commission_rules').select("mga_id").eq('carrier_id', carrier_id).execute()
             if response.data:
@@ -1903,9 +2031,15 @@ def load_mgas_for_carrier(carrier_id):
         # Get MGA details for all collected mga_ids
         if mga_ids:
             # Filter by user in production
-            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                user_email = st.session_state['user_email']
-                mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', user_email).execute()
+            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                ensure_user_id()
+                user_id = get_user_id()
+                if user_id:
+                    mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_id', user_id).execute()
+                else:
+                    # Fallback to email
+                    user_email = st.session_state.get('user_email')
+                    mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').eq('user_email', user_email).execute()
             else:
                 mga_response = supabase.table('mgas').select('mga_id, mga_name, status').in_('mga_id', list(mga_ids)).eq('status', 'Active').execute()
             if mga_response.data:
@@ -2864,50 +2998,60 @@ def show_import_results(statement_date, all_data):
     st.divider()
     st.markdown("### 📊 Import Preview")
     
+    # Get user-specific keys
+    matched_key = get_user_session_key('matched_transactions')
+    unmatched_key = get_user_session_key('unmatched_transactions')
+    to_create_key = get_user_session_key('transactions_to_create')
+    view_pref_key = get_user_session_key('import_view_preference')
+    manual_key = get_user_session_key('manual_matches')
+    column_mapping_key = get_user_session_key('column_mapping')
+    statement_total_key = get_user_session_key('statement_file_total')
+    
     # Initialize or get the current view preference
-    if 'import_view_preference' not in st.session_state:
+    if view_pref_key not in st.session_state:
         # Default to unmatched if there are any
-        if len(st.session_state.unmatched_transactions) > 0:
-            st.session_state.import_view_preference = 'unmatched'
+        if len(st.session_state[unmatched_key]) > 0:
+            st.session_state[view_pref_key] = 'unmatched'
         else:
-            st.session_state.import_view_preference = 'matched'
+            st.session_state[view_pref_key] = 'matched'
     
     # Create button-based navigation that preserves state
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button(f"✅ Matched ({len(st.session_state.matched_transactions)})", 
-                    type="secondary" if st.session_state.import_view_preference != 'matched' else "primary",
+        if st.button(f"✅ Matched ({len(st.session_state[matched_key])})", 
+                    type="secondary" if st.session_state[view_pref_key] != 'matched' else "primary",
                     use_container_width=True):
-            st.session_state.import_view_preference = 'matched'
+            st.session_state[view_pref_key] = 'matched'
             st.rerun()
     
     with col2:
-        if st.button(f"❌ Unmatched ({len(st.session_state.unmatched_transactions)})", 
-                    type="secondary" if st.session_state.import_view_preference != 'unmatched' else "primary",
+        if st.button(f"❌ Unmatched ({len(st.session_state[unmatched_key])})", 
+                    type="secondary" if st.session_state[view_pref_key] != 'unmatched' else "primary",
                     use_container_width=True):
-            st.session_state.import_view_preference = 'unmatched'
+            st.session_state[view_pref_key] = 'unmatched'
             st.rerun()
     
     with col3:
-        if st.button(f"➕ Can Create ({len(st.session_state.transactions_to_create)})", 
-                    type="secondary" if st.session_state.import_view_preference != 'create' else "primary",
+        if st.button(f"➕ Can Create ({len(st.session_state[to_create_key])})", 
+                    type="secondary" if st.session_state[view_pref_key] != 'create' else "primary",
                     use_container_width=True):
-            st.session_state.import_view_preference = 'create'
+            st.session_state[view_pref_key] = 'create'
             st.rerun()
     
     # Get the current selection
-    tab_selection = st.session_state.import_view_preference
+    tab_selection = st.session_state[view_pref_key]
     
     # Clear the focus flag if set
-    if 'focus_unmatched_tab' in st.session_state:
-        del st.session_state['focus_unmatched_tab']
+    focus_key = get_user_session_key('focus_unmatched_tab')
+    if focus_key in st.session_state:
+        del st.session_state[focus_key]
     
     # Show content based on selection
     if tab_selection == 'matched':
-        if st.session_state.matched_transactions:
+        if st.session_state[matched_key]:
             matched_df = []
-            for item in st.session_state.matched_transactions:
+            for item in st.session_state[matched_key]:
                 # Show matched customer name if different from statement
                 display_customer = item['customer']
                 if 'matched_customer' in item and item['matched_customer'] != item['customer']:
@@ -2986,7 +3130,7 @@ def show_import_results(statement_date, all_data):
                     for idx, (_, row) in enumerate(edited_df.iterrows()):
                         if row['Unmatch']:
                             # Get the original item from matched_transactions
-                            original_item = st.session_state.matched_transactions[idx]
+                            original_item = st.session_state[matched_key][idx]
                             # Remove the 'match' info to make it unmatched again
                             unmatched_item = {
                                 'customer': original_item.get('customer'),
@@ -2999,16 +3143,16 @@ def show_import_results(statement_date, all_data):
                             }
                             items_to_unmatch.append(unmatched_item)
                         else:
-                            remaining_matched.append(st.session_state.matched_transactions[idx])
+                            remaining_matched.append(st.session_state[matched_key][idx])
                     
                     # Update the lists
-                    st.session_state.matched_transactions = remaining_matched
-                    st.session_state.unmatched_transactions.extend(items_to_unmatch)
+                    st.session_state[matched_key] = remaining_matched
+                    st.session_state[unmatched_key].extend(items_to_unmatch)
                     
                     st.success(f"✅ Unmatched {len(items_to_unmatch)} transaction(s)")
                     st.rerun()
             
-            total_matched = sum(item.get('amount', 0) for item in st.session_state.matched_transactions)
+            total_matched = sum(item.get('amount', 0) for item in st.session_state[matched_key])
             st.metric("Total Matched Amount", f"${total_matched:,.2f}")
         else:
             st.info("No matched transactions")
@@ -3020,8 +3164,8 @@ def show_import_results(statement_date, all_data):
         if 'processed_unmatched_indices' in st.session_state:
             del st.session_state.processed_unmatched_indices
             
-        if st.session_state.unmatched_transactions:
-            total_unmatched = len(st.session_state.unmatched_transactions)
+        if st.session_state[unmatched_key]:
+            total_unmatched = len(st.session_state[unmatched_key])
             remaining_unmatched = total_unmatched  # All items in the list are unprocessed now
             
             if remaining_unmatched > 0:
@@ -3057,7 +3201,7 @@ def show_import_results(statement_date, all_data):
                 current_idx = st.session_state.current_unmatched_index
                 
                 # Check if we have any items left
-                if current_idx >= len(st.session_state.unmatched_transactions):
+                if current_idx >= len(st.session_state[unmatched_key]):
                     st.info("No more items to process in this view. Switch to 'Show all at once' to see all items.")
                     # Reset index for next time
                     st.session_state.current_unmatched_index = 0
@@ -3081,7 +3225,7 @@ def show_import_results(statement_date, all_data):
                                 st.rerun()
                     
                     # Show only the current item
-                    item = st.session_state.unmatched_transactions[current_idx]
+                    item = st.session_state[unmatched_key][current_idx]
                     idx = current_idx
                     # Create a unique identifier for this item
                     item_id = f"{item.get('customer', 'Unknown')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{idx}"
@@ -3129,8 +3273,8 @@ def show_import_results(statement_date, all_data):
                             
                                 # Only show mapped Rate field if we didn't find a direct Rate column
                                 # or if the mapped column is different from 'Rate'
-                                if 'Rate' in st.session_state.column_mapping:
-                                    rate_col = st.session_state.column_mapping['Rate']
+                                if 'Rate' in st.session_state[column_mapping_key]:
+                                    rate_col = st.session_state[column_mapping_key]['Rate']
                                     if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
                                         try:
                                             rate_val = float(stmt_data[rate_col])
@@ -3218,15 +3362,15 @@ def show_import_results(statement_date, all_data):
                                                 matched_item['matched_customer'] = selected_customer
                                                 
                                                 # Add to matched list
-                                                st.session_state.matched_transactions.append(matched_item)
+                                                st.session_state[matched_key].append(matched_item)
                                                 
                                                 # IMMEDIATELY remove from unmatched list to prevent duplicates
                                                 # Find and remove this specific item from unmatched_transactions
                                                 new_unmatched = []
-                                                for i, unmatched_item in enumerate(st.session_state.unmatched_transactions):
+                                                for i, unmatched_item in enumerate(st.session_state[unmatched_key]):
                                                     if i != idx:  # Keep all items except the one we just matched
                                                         new_unmatched.append(unmatched_item)
-                                                st.session_state.unmatched_transactions = new_unmatched
+                                                st.session_state[unmatched_key] = new_unmatched
                                                 
                                                 # Clear any manual match entry for this index
                                                 if idx in st.session_state.manual_matches:
@@ -3389,8 +3533,8 @@ def show_import_results(statement_date, all_data):
                                     client_name = display_customer
                             
                                 # Show transaction type selector
-                                transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
-                                default_type = "NEW"
+                                transaction_types = get_transaction_type_codes()
+                                default_type = "NEW" if "NEW" in transaction_types else transaction_types[0] if transaction_types else "NEW"
                             
                                 # Try to guess from statement if available with mapping applied
                                 if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
@@ -3398,13 +3542,8 @@ def show_import_results(statement_date, all_data):
                                 
                                     # Load and apply transaction type mappings
                                     trans_type_mappings = {}
-                                    trans_mapping_file = "config_files/transaction_type_mappings.json"
-                                    try:
-                                        if os.path.exists(trans_mapping_file):
-                                            with open(trans_mapping_file, 'r') as f:
-                                                trans_type_mappings = json.load(f)
-                                    except:
-                                        trans_type_mappings = {}
+                                    # Load transaction type mappings from database
+                                    trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
                                 
                                     # Apply mapping if available
                                     mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
@@ -3464,7 +3603,7 @@ def show_import_results(statement_date, all_data):
                             # Move to create list with selected transaction type
                             item_to_create = match_info['statement_item'].copy()
                             item_to_create['selected_transaction_type'] = match_info.get('transaction_type', 'NEW')
-                            st.session_state.transactions_to_create.append(item_to_create)
+                            st.session_state[to_create_key].append(item_to_create)
                         elif 'match_existing' in match_info and match_info['match_existing']:
                             # Handle match to existing customer without specific transaction
                             matched_item = match_info['statement_item'].copy()
@@ -3504,26 +3643,26 @@ def show_import_results(statement_date, all_data):
                                 matched_item['confidence'] = 100
                                 matched_item['match_type'] = 'Manual - Forced Match'
                                 matched_item['matched_customer'] = customer_name
-                                st.session_state.matched_transactions.append(matched_item)
+                                st.session_state[matched_key].append(matched_item)
                             else:
                                 # If no transactions found, still honor the manual match
                                 matched_item['match'] = {'Customer': customer_name}
                                 matched_item['confidence'] = 100
                                 matched_item['match_type'] = 'Manual - Customer Only'
                                 matched_item['matched_customer'] = customer_name
-                                st.session_state.matched_transactions.append(matched_item)
+                                st.session_state[matched_key].append(matched_item)
                         else:
                             # Original logic for transaction-specific matches
                             matched_item = match_info['statement_item'].copy()
                             matched_item['match'] = match_info['matched_transaction']
                             matched_item['confidence'] = 100
                             matched_item['match_type'] = 'Manual'
-                            st.session_state.matched_transactions.append(matched_item)
+                            st.session_state[matched_key].append(matched_item)
                     
                     # Remove from unmatched
                     indices_to_remove = list(st.session_state.manual_matches.keys())
-                    st.session_state.unmatched_transactions = [
-                        item for i, item in enumerate(st.session_state.unmatched_transactions) 
+                    st.session_state[unmatched_key] = [
+                        item for i, item in enumerate(st.session_state[unmatched_key]) 
                         if i not in indices_to_remove
                     ]
                     
@@ -3534,7 +3673,7 @@ def show_import_results(statement_date, all_data):
             
             else:  # Show all at once mode
                 # Show all unmatched items
-                for idx, item in enumerate(st.session_state.unmatched_transactions):
+                for idx, item in enumerate(st.session_state[unmatched_key]):
                     
                     # Show in "all at once" mode
                     with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=False):
@@ -3583,8 +3722,8 @@ def show_import_results(statement_date, all_data):
                                 
                                 # Only show mapped Rate field if we didn't find a direct Rate column
                                 # or if the mapped column is different from 'Rate'
-                                if 'Rate' in st.session_state.column_mapping:
-                                    rate_col = st.session_state.column_mapping['Rate']
+                                if 'Rate' in st.session_state[column_mapping_key]:
+                                    rate_col = st.session_state[column_mapping_key]['Rate']
                                     if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
                                         try:
                                             rate_val = float(stmt_data[rate_col])
@@ -3731,15 +3870,15 @@ def show_import_results(statement_date, all_data):
                                                 matched_item['matched_customer'] = selected_customer
                                                 
                                                 # Add to matched list
-                                                st.session_state.matched_transactions.append(matched_item)
+                                                st.session_state[matched_key].append(matched_item)
                                                 
                                                 # IMMEDIATELY remove from unmatched list to prevent duplicates
                                                 # Find and remove this specific item from unmatched_transactions
                                                 new_unmatched = []
-                                                for i, unmatched_item in enumerate(st.session_state.unmatched_transactions):
+                                                for i, unmatched_item in enumerate(st.session_state[unmatched_key]):
                                                     if i != idx:  # Keep all items except the one we just matched
                                                         new_unmatched.append(unmatched_item)
-                                                st.session_state.unmatched_transactions = new_unmatched
+                                                st.session_state[unmatched_key] = new_unmatched
                                                 
                                                 # Clear any manual match entry for this index
                                                 if idx in st.session_state.manual_matches:
@@ -3776,22 +3915,15 @@ def show_import_results(statement_date, all_data):
                             st.caption("✓ Transaction will be created on import")
                             
                             # Show transaction type selector
-                            transaction_types = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "PCH", "STL", "BoR"]
+                            transaction_types = get_transaction_type_codes()
                             default_type = "NEW"
                             
                             # Try to guess from statement if available
                             if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
                                 stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
                                 
-                                # Load and apply transaction type mappings
-                                trans_type_mappings = {}
-                                trans_mapping_file = "config_files/transaction_type_mappings.json"
-                                try:
-                                    if os.path.exists(trans_mapping_file):
-                                        with open(trans_mapping_file, 'r') as f:
-                                            trans_type_mappings = json.load(f)
-                                except:
-                                    trans_type_mappings = {}
+                                # Load and apply transaction type mappings from database
+                                trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
                                 
                                 # Apply mapping if available
                                 mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
@@ -3834,21 +3966,21 @@ def show_import_results(statement_date, all_data):
                                 del st.session_state.manual_matches[idx]
                 
             # Only show completion message if truly all processed
-            if len(st.session_state.unmatched_transactions) == 0:
+            if len(st.session_state[unmatched_key]) == 0:
                 st.success("🎉 All unmatched transactions have been processed! Check the Matched tab or proceed with import.")
         else:
             st.success("All transactions were matched!")
     
     elif tab_selection == 'create':
-        if st.session_state.transactions_to_create:
+        if st.session_state[to_create_key]:
             st.info("These transactions don't exist in the database but can be created")
             
             create_df = []
-            for item in st.session_state.transactions_to_create:
+            for item in st.session_state[to_create_key]:
                 # Use selected transaction type if available, otherwise try to get from statement
                 trans_type = item.get('selected_transaction_type', 'NEW')
-                if trans_type == 'NEW' and 'statement_data' in item and st.session_state.column_mapping.get('Transaction Type'):
-                    stmt_type = item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW')
+                if trans_type == 'NEW' and 'statement_data' in item and st.session_state[column_mapping_key].get('Transaction Type'):
+                    stmt_type = item['statement_data'].get(st.session_state[column_mapping_key].get('Transaction Type', ''), 'NEW')
                     if stmt_type:
                         trans_type = stmt_type
                 
@@ -3895,9 +4027,9 @@ def show_import_results(statement_date, all_data):
     create_selected = st.session_state.get('create_selected', True)
     
     # Calculate totals
-    total_matched = sum(item['amount'] for item in st.session_state.matched_transactions)
-    total_unmatched = sum(item['amount'] for item in st.session_state.unmatched_transactions)
-    total_to_create = sum(item['amount'] for item in st.session_state.transactions_to_create) if create_selected else 0
+    total_matched = sum(item['amount'] for item in st.session_state[matched_key])
+    total_unmatched = sum(item['amount'] for item in st.session_state[unmatched_key])
+    total_to_create = sum(item['amount'] for item in st.session_state[to_create_key]) if create_selected else 0
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -3910,20 +4042,20 @@ def show_import_results(statement_date, all_data):
         st.metric("Total", f"${total_matched + total_to_create:,.2f}")
     
     # Show statement total for verification if available
-    if 'statement_file_total' in st.session_state and st.session_state.statement_file_total > 0:
+    if statement_total_key in st.session_state and st.session_state[statement_total_key] > 0:
         st.divider()
         st.markdown("### ✅ Verification Check")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Statement Total", f"${st.session_state.statement_file_total:,.2f}", 
+            st.metric("Statement Total", f"${st.session_state[statement_total_key]:,.2f}", 
                      help="Total from your commission statement file")
         with col2:
             reconcile_total = total_matched + total_to_create
             st.metric("Ready to Reconcile", f"${reconcile_total:,.2f}",
                      help="Sum of matched + to be created transactions")
         with col3:
-            difference = st.session_state.statement_file_total - reconcile_total
+            difference = st.session_state[statement_total_key] - reconcile_total
             if abs(difference) < 0.01:  # Less than a penny
                 st.metric("Difference", "$0.00", delta_color="off")
                 st.success("✓ Perfectly balanced!")
@@ -3938,9 +4070,9 @@ def show_import_results(statement_date, all_data):
                     st.warning("🔍 **Possible duplicate entries detected!** Check the unmatched tab for duplicate transactions with the same customer and amount.")
     
     # Import button - allow if we have matched transactions OR transactions to create OR pending manual matches
-    has_matched = len(st.session_state.matched_transactions) > 0
-    has_to_create = create_selected and len(st.session_state.transactions_to_create) > 0
-    has_manual_matches = 'manual_matches' in st.session_state and len(st.session_state.manual_matches) > 0
+    has_matched = len(st.session_state[matched_key]) > 0
+    has_to_create = create_selected and len(st.session_state[to_create_key]) > 0
+    has_manual_matches = 'manual_matches' in st.session_state and len(st.session_state[manual_key]) > 0
     can_import = has_matched or has_to_create or has_manual_matches
     
     # Show a hint if there are pending manual matches
@@ -3959,7 +4091,7 @@ def show_import_results(statement_date, all_data):
                 batch_id = f"IMPORT-{statement_date.strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
                 
                 # Step 0: Process any pending manual matches first
-                if 'manual_matches' in st.session_state and st.session_state.manual_matches:
+                if 'manual_matches' in st.session_state and st.session_state[manual_key]:
                     for idx, match_info in st.session_state.manual_matches.items():
                         if 'create_new' in match_info and match_info['create_new']:
                             # Add to create list with client info
@@ -3968,11 +4100,11 @@ def show_import_results(statement_date, all_data):
                             item_to_create['client_action'] = match_info.get('client_action', 'new')
                             item_to_create['client_id'] = match_info.get('client_id')
                             item_to_create['client_name'] = match_info.get('client_name')
-                            st.session_state.transactions_to_create.append(item_to_create)
+                            st.session_state[to_create_key].append(item_to_create)
                 
                 # Step 1: Create missing transactions if selected
-                if create_selected and st.session_state.transactions_to_create:
-                    for idx, item in enumerate(st.session_state.transactions_to_create):
+                if create_selected and st.session_state[to_create_key]:
+                    for idx, item in enumerate(st.session_state[to_create_key]):
                         # Check if this transaction should be created (default to True if no edit)
                         should_create = True
                         if 'create_selector' in st.session_state:
@@ -3983,7 +4115,7 @@ def show_import_results(statement_date, all_data):
                                 'Policy': t['policy_number'],
                                 'Eff Date': t['effective_date'],
                                 'Amount': t['amount']
-                            } for t in st.session_state.transactions_to_create])
+                            } for t in st.session_state[to_create_key]])
                             should_create = create_df.loc[idx, 'Create'] if idx < len(create_df) else True
                         
                         if should_create:
@@ -4028,17 +4160,10 @@ def show_import_results(statement_date, all_data):
                                         final_customer_name = potential_matches[0][0]
                             
                             # Get transaction type with mapping applied
-                            raw_trans_type = item.get('selected_transaction_type', item['statement_data'].get(st.session_state.column_mapping.get('Transaction Type', ''), 'NEW'))
+                            raw_trans_type = item.get('selected_transaction_type', item['statement_data'].get(st.session_state[column_mapping_key].get('Transaction Type', ''), 'NEW'))
                             
-                            # Apply transaction type mapping
-                            trans_type_mappings = {}
-                            trans_mapping_file = "config_files/transaction_type_mappings.json"
-                            try:
-                                if os.path.exists(trans_mapping_file):
-                                    with open(trans_mapping_file, 'r') as f:
-                                        trans_type_mappings = json.load(f)
-                            except:
-                                trans_type_mappings = {}
+                            # Apply transaction type mapping using user_mappings module
+                            trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
                             
                             # Apply mapping if available
                             final_trans_type = trans_type_mappings.get(str(raw_trans_type).strip(), raw_trans_type)
@@ -4082,7 +4207,7 @@ def show_import_results(statement_date, all_data):
                                 'Broker Fee Agent Comm'
                             ]
                             
-                            for sys_field, stmt_field in st.session_state.column_mapping.items():
+                            for sys_field, stmt_field in st.session_state[column_mapping_key].items():
                                 # Skip excluded fields unless explicitly mapped
                                 if sys_field in fields_to_exclude:
                                     continue
@@ -4093,16 +4218,11 @@ def show_import_results(statement_date, all_data):
                                     # Apply policy type mapping if it's the Policy Type field
                                     if sys_field == 'Policy Type' and value:
                                         # Load policy type mappings
-                                        mapping_file = "config_files/policy_type_mappings.json"
-                                        try:
-                                            if os.path.exists(mapping_file):
-                                                with open(mapping_file, 'r') as f:
-                                                    type_mappings = json.load(f)
-                                                # Check if this statement value has a mapping
-                                                if str(value) in type_mappings:
-                                                    value = type_mappings[str(value)]
-                                        except:
-                                            pass  # If mapping fails, use original value
+                                        # Use user-specific policy type mappings
+                                        type_mappings = user_mappings.get_user_policy_type_mappings()
+                                        # Check if this statement value has a mapping
+                                        if str(value) in type_mappings:
+                                            value = type_mappings[str(value)]
                                     
                                     new_trans[sys_field] = value
                             
@@ -4115,7 +4235,7 @@ def show_import_results(statement_date, all_data):
                             
                             # Add to matched transactions for reconciliation
                             # Use the new transaction data as the match
-                            st.session_state.matched_transactions.append({
+                            st.session_state[matched_key].append({
                                 'match': new_trans,
                                 'amount': item['amount'],
                                 'customer': final_customer_name,  # Use the matched customer name
@@ -4123,7 +4243,7 @@ def show_import_results(statement_date, all_data):
                             })
                 
                 # Step 2: Create reconciliation entries for all matched transactions
-                for item in st.session_state.matched_transactions:
+                for item in st.session_state[matched_key]:
                     recon_id = generate_reconciliation_transaction_id("STMT", statement_date)
                     
                     # Create reconciliation entry - copy all fields from matched transaction
@@ -4167,8 +4287,8 @@ def show_import_results(statement_date, all_data):
                     })
                     
                     # Transfer Rate field to Agent Comm % if mapped
-                    if 'Rate' in st.session_state.column_mapping and 'statement_data' in item:
-                        rate_col = st.session_state.column_mapping['Rate']
+                    if 'Rate' in st.session_state[column_mapping_key] and 'statement_data' in item:
+                        rate_col = st.session_state[column_mapping_key]['Rate']
                         if rate_col in item['statement_data']:
                             rate_value = item['statement_data'][rate_col]
                             if pd.notna(rate_value):
@@ -4180,6 +4300,8 @@ def show_import_results(statement_date, all_data):
                     
                     # Clean data before queueing for insertion
                     cleaned_recon = clean_data_for_database(recon_entry)
+                    # Add user authentication for RLS
+                    cleaned_recon = add_user_email_to_data(cleaned_recon)
                     
                     # Queue reconciliation entry
                     all_operations.append(('insert', 'policies', cleaned_recon))
@@ -4203,21 +4325,38 @@ def show_import_results(statement_date, all_data):
                     
                     # If we got here, all operations succeeded
                     st.success(f"✅ All {successful_operations} operations completed successfully!")
+                    
+                    # Log the bulk import operation
+                    log_audit_trail(
+                        operation_type="BULK_INSERT",
+                        table_name="policies",
+                        affected_records=successful_operations,
+                        details={
+                            "batch_id": batch_id if 'batch_id' in locals() else "unknown",
+                            "source": "statement_import",
+                            "operations": len(all_operations)
+                        }
+                    )
                 
                 # Clear session state only after successful completion
-                st.session_state.import_data = None
-                st.session_state.matched_transactions = []
-                st.session_state.unmatched_transactions = []
-                st.session_state.transactions_to_create = []
-                st.session_state.column_mapping = {}
-                if 'statement_file_total' in st.session_state:
-                    del st.session_state.statement_file_total
-                if 'processed_unmatched_indices' in st.session_state:
-                    del st.session_state.processed_unmatched_indices
-                if 'processed_unmatched_ids' in st.session_state:
-                    del st.session_state.processed_unmatched_ids
-                if 'import_view_preference' in st.session_state:
-                    del st.session_state.import_view_preference
+                # Get all user-specific keys for clearing
+                import_data_key = get_user_session_key('import_data')
+                proc_indices_key = get_user_session_key('processed_unmatched_indices')
+                proc_ids_key = get_user_session_key('processed_unmatched_ids')
+                
+                st.session_state[import_data_key] = None
+                st.session_state[matched_key] = []
+                st.session_state[unmatched_key] = []
+                st.session_state[to_create_key] = []
+                st.session_state[column_mapping_key] = {}
+                if statement_total_key in st.session_state:
+                    del st.session_state[statement_total_key]
+                if proc_indices_key in st.session_state:
+                    del st.session_state[proc_indices_key]
+                if proc_ids_key in st.session_state:
+                    del st.session_state[proc_ids_key]
+                if view_pref_key in st.session_state:
+                    del st.session_state[view_pref_key]
                 
                 st.success(f"""
                 ✅ Import completed successfully!
@@ -4546,7 +4685,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         with col3:
             if 'Transaction Type' in modal_data.keys():
                 # Transaction type dropdown
-                transaction_types = ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"]
+                transaction_types = get_transaction_type_codes()
                 current_trans_type = modal_data.get('Transaction Type', 'RWL' if is_renewal else 'NEW')
                 
                 # For renewals, lock to RWL
@@ -5437,7 +5576,8 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
         
         with col1:
             # Check if we're in duplicate mode
-            is_duplicate = st.session_state.get('duplicate_mode', False)
+            duplicate_mode_key = get_user_session_key('duplicate_mode')
+            is_duplicate = st.session_state.get(duplicate_mode_key, False)
             if is_duplicate:
                 save_button_text = "Create Duplicate"
             elif is_renewal:
@@ -5519,7 +5659,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                 del st.session_state.generated_client_id
             
             # Return appropriate action based on mode
-            if st.session_state.get('duplicate_mode', False):
+            if st.session_state.get(duplicate_mode_key, False):
                 return {"action": "duplicate", "data": final_data}
             else:
                 return {"action": "save", "data": final_data}
@@ -5882,6 +6022,9 @@ def main():
     
     # Logout button with custom styling
     if st.sidebar.button("🚪 LOGOUT", type="primary", use_container_width=True, key="sidebar_logout_main"):
+        # Clean up user-specific session state first
+        cleanup_user_session_state()
+        # Then clean up authentication state
         for key in ['password_correct', 'user_email']:
             if key in st.session_state:
                 del st.session_state[key]
@@ -6238,7 +6381,16 @@ def main():
                                     transaction_id = row.get('Transaction ID', row.get('Transaction_ID'))
                                     if transaction_id:
                                         try:
-                                            supabase.table('policies').update(update_dict).eq('Transaction ID', transaction_id).execute()
+                                            update_query = supabase.table('policies').update(update_dict).eq('Transaction ID', transaction_id)
+                                            # Add user filtering for security
+                                            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            update_query.execute()
                                         except Exception as update_error:
                                             st.error(f"Error updating record {transaction_id}: {update_error}")
                                 
@@ -6720,6 +6872,23 @@ def main():
         
         # Import pandas for this page section to ensure it's available
         import pandas as pd
+        
+        # Get user-specific keys for edit variables
+        show_edit_modal_key = get_user_session_key('show_edit_modal')
+        edit_modal_data_key = get_user_session_key('edit_modal_data')
+        duplicate_mode_key = get_user_session_key('duplicate_mode')
+        edit_selected_carrier_id_key = get_user_session_key('edit_selected_carrier_id')
+        edit_selected_carrier_name_key = get_user_session_key('edit_selected_carrier_name')
+        edit_carrier_name_manual_key = get_user_session_key('edit_carrier_name_manual')
+        edit_selected_mga_id_key = get_user_session_key('edit_selected_mga_id')
+        edit_selected_mga_name_key = get_user_session_key('edit_selected_mga_name')
+        edit_mga_name_manual_key = get_user_session_key('edit_mga_name_manual')
+        edit_final_carrier_name_key = get_user_session_key('edit_final_carrier_name')
+        edit_final_mga_name_key = get_user_session_key('edit_final_mga_name')
+        edit_commission_new_rate_key = get_user_session_key('edit_commission_new_rate')
+        edit_commission_renewal_rate_key = get_user_session_key('edit_commission_renewal_rate')
+        edit_commission_rule_id_key = get_user_session_key('edit_commission_rule_id')
+        edit_has_commission_rule_key = get_user_session_key('edit_has_commission_rule')
         
         # Load fresh data for this page
         all_data = load_policies_data()
@@ -7612,9 +7781,9 @@ def main():
                                                 duplicate_data[transaction_id_col] = generate_transaction_id()
                                             
                                             # Store as duplicate mode
-                                            st.session_state['show_edit_modal'] = True
-                                            st.session_state['edit_modal_data'] = duplicate_data
-                                            st.session_state['duplicate_mode'] = True
+                                            st.session_state[show_edit_modal_key] = True
+                                            st.session_state[edit_modal_data_key] = duplicate_data
+                                            st.session_state[duplicate_mode_key] = True
                                             st.rerun()
                                 elif selected_count == 0:
                                     st.button("📋 Duplicate Selected Transaction", type="secondary", use_container_width=True, disabled=True, help="Select one transaction to duplicate")
@@ -7628,10 +7797,10 @@ def main():
                             if 'Select' in edited_data.columns:
                                 if selected_count == 1:
                                     if st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True):
-                                        st.session_state['show_edit_modal'] = True
+                                        st.session_state[show_edit_modal_key] = True
                                         # Use the already calculated index
                                         if selected_idx is not None:
-                                            st.session_state['edit_modal_data'] = edited_data.loc[selected_idx].to_dict()
+                                            st.session_state[edit_modal_data_key] = edited_data.loc[selected_idx].to_dict()
                                 elif selected_count == 0:
                                     st.button("✏️ Edit Selected Transaction", type="primary", use_container_width=True, disabled=True, help="Select one transaction to edit")
                                 else:
@@ -7839,12 +8008,12 @@ def main():
                                 st.rerun()
                         
                         # Modal Form Implementation for Edit/Duplicate
-                        if st.session_state.get('show_edit_modal', False):
+                        if st.session_state.get(show_edit_modal_key, False):
                             # Create a modal-like overlay
                             st.markdown("---")
                             
                             # Check if we're in duplicate mode
-                            is_duplicate_mode = st.session_state.get('duplicate_mode', False)
+                            is_duplicate_mode = st.session_state.get(duplicate_mode_key, False)
                             
                             if is_duplicate_mode:
                                 st.markdown("### 📋 Duplicate Transaction")
@@ -7852,7 +8021,7 @@ def main():
                             else:
                                 st.markdown("### 📝 Edit Transaction")
                                 
-                            modal_data = st.session_state.get('edit_modal_data', {})
+                            modal_data = st.session_state.get(edit_modal_data_key, {})
                                 
                             # Add an anchor point to prevent scroll jumping
                             st.empty()  # This helps maintain scroll position
@@ -7894,13 +8063,13 @@ def main():
                                     selected_carrier_id = None
                                     if selected_carrier_name:
                                         selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
-                                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
-                                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                                        st.session_state[edit_selected_carrier_id_key] = selected_carrier_id
+                                        st.session_state[edit_selected_carrier_name_key] = selected_carrier_name
                                     
                                     # Fallback text input for manual entry
                                     if not selected_carrier_name:
                                         carrier_name_manual = st.text_input("Or enter carrier name manually", value=current_carrier, placeholder="Type carrier name", key="edit_carrier_manual_outside")
-                                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
+                                        st.session_state[edit_carrier_name_manual_key] = carrier_name_manual
                                 
                                 with col2:
                                     # MGA dropdown (filtered by carrier) - Updates immediately!
@@ -7932,16 +8101,16 @@ def main():
                                     if selected_mga_name != "Direct Appointment" and selected_carrier_id:
                                         mgas_list = load_mgas_for_carrier(selected_carrier_id) 
                                         selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
-                                        st.session_state['edit_selected_mga_id'] = selected_mga_id
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                        st.session_state[edit_selected_mga_id_key] = selected_mga_id
+                                        st.session_state[edit_selected_mga_name_key] = selected_mga_name
                                     else:
-                                        st.session_state['edit_selected_mga_id'] = None
-                                        st.session_state['edit_selected_mga_name'] = selected_mga_name
+                                        st.session_state[edit_selected_mga_id_key] = None
+                                        st.session_state[edit_selected_mga_name_key] = selected_mga_name
                                 
                                 # Fallback text input for manual entry
                                 if not selected_carrier_name:
                                     mga_name_manual = st.text_input("Or enter MGA name manually", value=current_mga, placeholder="Type MGA name or leave blank", key="edit_mga_manual_outside")
-                                    st.session_state['edit_mga_name_manual'] = mga_name_manual
+                                    st.session_state[edit_mga_name_manual_key] = mga_name_manual
                                 
                                 with col3:
                                     st.write("")  # Add spacing to align with selectboxes
@@ -7959,12 +8128,12 @@ def main():
                                 final_carrier_name = selected_carrier_name
                                 final_mga_name = selected_mga_name if selected_mga_name != "Direct Appointment" else ""
                             else:
-                                final_carrier_name = st.session_state.get('edit_carrier_name_manual', '')
-                                final_mga_name = st.session_state.get('edit_mga_name_manual', '')
+                                final_carrier_name = st.session_state.get(edit_carrier_name_manual_key, '')
+                                final_mga_name = st.session_state.get(edit_mga_name_manual_key, '')
                             
                             # Store in session state for form to access
-                            st.session_state['edit_final_carrier_name'] = final_carrier_name
-                            st.session_state['edit_final_mga_name'] = final_mga_name
+                            st.session_state[edit_final_carrier_name_key] = final_carrier_name
+                            st.session_state[edit_final_mga_name_key] = final_mga_name
                             
                             # Display selection status and commission info
                             if selected_carrier_name and selected_carrier_id:
@@ -8004,16 +8173,16 @@ def main():
                                     st.info("💡 The correct rate will be applied based on your Transaction Type selection in the form below")
                                     
                                     # Store both rates in session state
-                                    st.session_state['edit_commission_new_rate'] = new_rate
-                                    st.session_state['edit_commission_renewal_rate'] = renewal_rate
-                                    st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
-                                    st.session_state['edit_has_commission_rule'] = True
+                                    st.session_state[edit_commission_new_rate_key] = new_rate
+                                    st.session_state[edit_commission_renewal_rate_key] = renewal_rate
+                                    st.session_state[edit_commission_rule_id_key] = commission_rule.get('rule_id')
+                                    st.session_state[edit_has_commission_rule_key] = True
                                 else:
                                     st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
-                                    st.session_state['edit_commission_new_rate'] = None
-                                    st.session_state['edit_commission_renewal_rate'] = None
-                                    st.session_state['edit_commission_rule_id'] = None
-                                    st.session_state['edit_has_commission_rule'] = False
+                                    st.session_state[edit_commission_new_rate_key] = None
+                                    st.session_state[edit_commission_renewal_rate_key] = None
+                                    st.session_state[edit_commission_rule_id_key] = None
+                                    st.session_state[edit_has_commission_rule_key] = False
                             
                             st.markdown("---")
                             
@@ -8070,9 +8239,18 @@ def main():
                                                 del save_data['_id']
                                             
                                             # For Supabase Python client, we need to specify select parameter in update
-                                            response = supabase.table('policies').update(save_data).eq(
+                                            update_query = supabase.table('policies').update(save_data).eq(
                                                 get_mapped_column("Transaction ID"), transaction_id
-                                            ).execute()
+                                            )
+                                            # Add user filtering for security
+                                            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            response = update_query.execute()
                                             success_message = "✅ Transaction updated successfully!"
                                         else:
                                             # New record - INSERT
@@ -8092,12 +8270,12 @@ def main():
                                             clear_policies_cache()
                                             
                                             # Clear modal state
-                                            st.session_state['show_edit_modal'] = False
-                                            st.session_state['edit_modal_data'] = None
+                                            st.session_state[show_edit_modal_key] = False
+                                            st.session_state[edit_modal_data_key] = None
                                             
                                             # Clear duplicate mode flag
-                                            if 'duplicate_mode' in st.session_state:
-                                                del st.session_state['duplicate_mode']
+                                            if duplicate_mode_key in st.session_state:
+                                                del st.session_state[duplicate_mode_key]
                                             
                                             # Force clear the session state for the editor
                                             if 'edit_policies_editor' in st.session_state:
@@ -8115,11 +8293,11 @@ def main():
                                 
                                 elif result["action"] == "close" or result["action"] == "cancel":
                                     # Clear modal state
-                                    st.session_state['show_edit_modal'] = False
-                                    st.session_state['edit_modal_data'] = None
+                                    st.session_state[show_edit_modal_key] = False
+                                    st.session_state[edit_modal_data_key] = None
                                     # Clear duplicate mode flag
-                                    if 'duplicate_mode' in st.session_state:
-                                        del st.session_state['duplicate_mode']
+                                    if duplicate_mode_key in st.session_state:
+                                        del st.session_state[duplicate_mode_key]
                                     st.rerun()
                             
                             # The old form implementation has been removed and replaced with the reusable function
@@ -8169,7 +8347,21 @@ def main():
                             with col1:
                                 if st.button("🗑️ Confirm Delete", type="secondary"):
                                     try:
+                                        # First verify ownership of ALL records before deleting any
+                                        all_owned, user_records = verify_bulk_ownership('policies', transaction_ids_to_delete, transaction_id_col)
+                                        
+                                        if not all_owned:
+                                            st.error("❌ Security Error: You can only delete your own records!")
+                                            unauthorized_count = len(transaction_ids_to_delete) - len(user_records)
+                                            if unauthorized_count > 0:
+                                                st.warning(f"⚠️ {unauthorized_count} record(s) do not belong to you and cannot be deleted.")
+                                            if user_records:
+                                                st.info(f"ℹ️ You own {len(user_records)} of the selected records.")
+                                            return
+                                        
                                         deleted_count = 0
+                                        failed_deletes = []
+                                        
                                         # Use the pre-collected transaction IDs
                                         for tid in transaction_ids_to_delete:
                                             # Get the full row data for archiving
@@ -8206,10 +8398,33 @@ def main():
                                                     supabase.table('deleted_policies').insert(archive_record).execute()
                                                     
                                                     # Then delete from main policies table
-                                                    supabase.table('policies').delete().eq(transaction_id_col, tid).execute()
+                                                    delete_query = supabase.table('policies').delete().eq(transaction_id_col, tid)
+                                                    # Add user filtering for security
+                                                    if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                        user_id = get_user_id()
+                                                        if user_id:
+                                                            delete_query = delete_query.eq('user_id', user_id)
+                                                        else:
+                                                            user_email = get_normalized_user_email()
+                                                            delete_query = delete_query.eq('user_email', user_email)
+                                                    delete_query.execute()
                                                     deleted_count += 1
                                                 except Exception as archive_error:
                                                     st.error(f"Error archiving record {tid}: {archive_error}")
+                                                    failed_deletes.append(tid)
+                                        
+                                        # Log the deletion operation
+                                        if deleted_count > 0:
+                                            log_audit_trail(
+                                                operation_type="DELETE",
+                                                table_name="policies",
+                                                affected_records=deleted_count,
+                                                details={
+                                                    "transaction_ids": transaction_ids_to_delete,
+                                                    "failed_deletes": failed_deletes,
+                                                    "source": "edit_policies_page"
+                                                }
+                                            )
                                         
                                         # Clear cache and session state before rerun
                                         clear_policies_cache()
@@ -8222,7 +8437,10 @@ def main():
                                         if 'last_search_edit_policies_editor' in st.session_state:
                                             del st.session_state['last_search_edit_policies_editor']
                                         
-                                        st.success(f"Successfully deleted {deleted_count} records! (Archived for recovery)")
+                                        if failed_deletes:
+                                            st.warning(f"Successfully deleted {deleted_count} records, but {len(failed_deletes)} failed. (Archived for recovery)")
+                                        else:
+                                            st.success(f"Successfully deleted {deleted_count} records! (Archived for recovery)")
                                         st.rerun()
                                         
                                     except Exception as e:
@@ -8417,7 +8635,16 @@ def main():
                                             update_dict[col] = row[col] if pd.notna(row[col]) else None
                                     
                                     try:
-                                        supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id).execute()
+                                        update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
+                                        # Add user filtering for security
+                                        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                            user_id = get_user_id()
+                                            if user_id:
+                                                update_query = update_query.eq('user_id', user_id)
+                                            else:
+                                                user_email = get_normalized_user_email()
+                                                update_query = update_query.eq('user_email', user_email)
+                                        update_query.execute()
                                         updated_count += 1
                                     except Exception as update_error:
                                         st.error(f"Error updating record: {update_error}")
@@ -8786,7 +9013,7 @@ def main():
             # Row 2: Transaction Type and Policy Term
             col1, col2 = st.columns(2)
             with col1:
-                transaction_type = st.selectbox("Transaction Type", ["NEW", "RWL", "END", "PCH", "CAN", "XCL", "NBS", "STL", "BoR", "REWRITE"])
+                transaction_type = st.selectbox("Transaction Type", get_transaction_type_codes())
             with col2:
                 policy_term = st.selectbox(
                     "Policy Term",
@@ -8983,17 +9210,9 @@ def main():
                         help="Rate from commission rule" if applied_rule else "Manual entry rate"
                     )
                 
-                # Load default agent commission rates from config
-                rates_file = "config_files/default_agent_commission_rates.json"
-                try:
-                    with open(rates_file, 'r') as f:
-                        default_rates = json.load(f)
-                    new_business_rate = default_rates.get('new_business_rate', 50.0)
-                    renewal_rate = default_rates.get('renewal_rate', 25.0)
-                except Exception:
-                    # Fallback to defaults if file doesn't exist
-                    new_business_rate = 50.0
-                    renewal_rate = 25.0
+                # Load default agent commission rates from user-specific settings
+                from user_agent_rates_db import get_default_rates
+                new_business_rate, renewal_rate = get_default_rates()
                 
                 # Determine agent commission rate based on transaction type and prior policy
                 if transaction_type == "NEW":
@@ -9627,11 +9846,20 @@ def main():
                                         supabase.table('policies').insert(add_user_email_to_data(cleaned_recon)).execute()
                                         
                                         # Update original transaction
-                                        supabase.table('policies').update({
+                                        update_query = supabase.table('policies').update({
                                             'reconciliation_status': 'reconciled',
                                             'reconciliation_id': batch_id,
                                             'reconciled_at': datetime.datetime.now().isoformat()
-                                        }).eq('_id', item['_id']).execute()
+                                        }).eq('_id', item['_id'])
+                                        # Add user filtering for security
+                                        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                            user_id = get_user_id()
+                                            if user_id:
+                                                update_query = update_query.eq('user_id', user_id)
+                                            else:
+                                                user_email = get_normalized_user_email()
+                                                update_query = update_query.eq('user_email', user_email)
+                                        update_query.execute()
                                         
                                         success_count += 1
                                     
@@ -9941,17 +10169,23 @@ def main():
             else:  # Upload CSV/Excel File
                 st.subheader("📤 Upload Statement File")
                 
-                # Initialize session state for import
-                if 'import_data' not in st.session_state:
-                    st.session_state.import_data = None
-                if 'column_mapping' not in st.session_state:
-                    st.session_state.column_mapping = {}
-                if 'matched_transactions' not in st.session_state:
-                    st.session_state.matched_transactions = []
-                if 'unmatched_transactions' not in st.session_state:
-                    st.session_state.unmatched_transactions = []
-                if 'transactions_to_create' not in st.session_state:
-                    st.session_state.transactions_to_create = []
+                # Initialize session state for import with user isolation
+                import_data_key = get_user_session_key('import_data')
+                column_mapping_key = get_user_session_key('column_mapping')
+                matched_key = get_user_session_key('matched_transactions')
+                unmatched_key = get_user_session_key('unmatched_transactions')
+                to_create_key = get_user_session_key('transactions_to_create')
+                
+                if import_data_key not in st.session_state:
+                    st.session_state[import_data_key] = None
+                if column_mapping_key not in st.session_state:
+                    st.session_state[column_mapping_key] = {}
+                if matched_key not in st.session_state:
+                    st.session_state[matched_key] = []
+                if unmatched_key not in st.session_state:
+                    st.session_state[unmatched_key] = []
+                if to_create_key not in st.session_state:
+                    st.session_state[to_create_key] = []
                 
                 # Step 1: File Upload
                 uploaded_file = st.file_uploader(
@@ -9968,7 +10202,7 @@ def main():
                         else:
                             df = pd.read_excel(uploaded_file)
                         
-                        st.session_state.import_data = df
+                        st.session_state[import_data_key] = df
                         
                         # Count actual transactions (excluding totals rows)
                         transaction_count = len(df)
@@ -10180,15 +10414,8 @@ def main():
                                     if 'Policy Type' in st.session_state.column_mapping:
                                         policy_type_col = st.session_state.column_mapping['Policy Type']
                                         
-                                        # Load policy type mappings
-                                        mapping_file = "config_files/policy_type_mappings.json"
-                                        type_mappings = {}
-                                        try:
-                                            if os.path.exists(mapping_file):
-                                                with open(mapping_file, 'r') as f:
-                                                    type_mappings = json.load(f)
-                                        except:
-                                            pass
+                                        # Load policy type mappings from database
+                                        type_mappings = user_mappings.get_user_policy_type_mappings()
                                         
                                         # Get unique policy types from statement (excluding null/empty)
                                         statement_types = df[policy_type_col].dropna().unique()
@@ -10200,15 +10427,9 @@ def main():
                                             if stmt_type not in type_mappings:
                                                 # Also check if this type already exists in our policy types
                                                 # Load policy types configuration
-                                                policy_types_file = "config_files/policy_types_updated.json"
-                                                existing_types = []
-                                                try:
-                                                    if os.path.exists(policy_types_file):
-                                                        with open(policy_types_file, 'r') as f:
-                                                            policy_types_config = json.load(f)
-                                                            existing_types = policy_types_config.get('policy_types', [])
-                                                except:
-                                                    pass
+                                                # Get policy types from database
+                                                policy_types_config = user_policy_types.get_user_policy_types()
+                                                existing_types = policy_types_config.get('policy_types', [])
                                                 
                                                 # If not in mappings and not in existing types, it's unmapped
                                                 if stmt_type not in existing_types:
@@ -10239,13 +10460,8 @@ def main():
                                     
                                     # Load transaction type mappings
                                     trans_type_mappings = {}
-                                    trans_mapping_file = "config_files/transaction_type_mappings.json"
-                                    try:
-                                        if os.path.exists(trans_mapping_file):
-                                            with open(trans_mapping_file, 'r') as f:
-                                                trans_type_mappings = json.load(f)
-                                    except:
-                                        trans_type_mappings = {}
+                                    # Load transaction type mappings from database
+                                    trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
                                     
                                     # Get unique transaction types from the statement
                                     unmapped_trans_types = []
@@ -10309,16 +10525,17 @@ def main():
                                         except:
                                             statement_total_amount = 0
                                     
-                                    st.session_state.statement_file_total = statement_total_amount
+                                    statement_total_key = get_user_session_key('statement_file_total')
+                                    st.session_state[statement_total_key] = statement_total_amount
                                     
                                     matched, unmatched, to_create = match_statement_transactions(
                                         df, 
-                                        st.session_state.column_mapping,
+                                        st.session_state[column_mapping_key],
                                         all_data,
                                         statement_date
                                     )
                                     
-                                    st.session_state.matched_transactions = matched
+                                    st.session_state[matched_key] = matched
                                     
                                     # Remove any duplicates from unmatched list before storing
                                     # Create a unique key for each unmatched item
@@ -10334,16 +10551,19 @@ def main():
                                     if len(unique_unmatched) < len(unmatched):
                                         st.warning(f"⚠️ Removed {len(unmatched) - len(unique_unmatched)} duplicate unmatched items")
                                     
-                                    st.session_state.unmatched_transactions = unique_unmatched
-                                    st.session_state.transactions_to_create = to_create
+                                    st.session_state[unmatched_key] = unique_unmatched
+                                    st.session_state[to_create_key] = to_create
                                     # Clear any previous processed indices when loading new data
-                                    if 'processed_unmatched_indices' in st.session_state:
-                                        del st.session_state.processed_unmatched_indices
-                                    if 'processed_unmatched_ids' in st.session_state:
-                                        del st.session_state.processed_unmatched_ids
+                                    proc_indices_key = get_user_session_key('processed_unmatched_indices')
+                                    proc_ids_key = get_user_session_key('processed_unmatched_ids')
+                                    if proc_indices_key in st.session_state:
+                                        del st.session_state[proc_indices_key]
+                                    if proc_ids_key in st.session_state:
+                                        del st.session_state[proc_ids_key]
                                     # Reset view preference to unmatched if there are any
+                                    view_pref_key = get_user_session_key('import_view_preference')
                                     if len(unmatched) > 0:
-                                        st.session_state.import_view_preference = 'unmatched'
+                                        st.session_state[view_pref_key] = 'unmatched'
                                     
                                     # Show summary
                                     st.success("✅ Matching complete!")
@@ -10357,7 +10577,7 @@ def main():
                                         st.metric("Can Create", len(to_create))
                             
                             # Show match results
-                            if st.session_state.matched_transactions or st.session_state.unmatched_transactions or st.session_state.transactions_to_create:
+                            if st.session_state[matched_key] or st.session_state[unmatched_key] or st.session_state[to_create_key]:
                                 show_import_results(statement_date, all_data)
                         
                         else:
@@ -10717,6 +10937,15 @@ def main():
                                         
                                         # Delete from database
                                         try:
+                                            # First verify ownership of ALL records before deleting any
+                                            all_owned, user_records = verify_bulk_ownership('policies', transactions_to_delete, 'Transaction ID')
+                                            
+                                            if not all_owned:
+                                                st.error("❌ Security Error: You can only delete your own records!")
+                                                unauthorized_count = len(transactions_to_delete) - len(user_records)
+                                                st.warning(f"⚠️ {unauthorized_count} record(s) in these batches do not belong to you.")
+                                                return
+                                            
                                             supabase = get_supabase_client()
                                             
                                             # Delete in chunks if many transactions
@@ -10725,8 +10954,21 @@ def main():
                                             
                                             for i in range(0, len(transactions_to_delete), chunk_size):
                                                 chunk = transactions_to_delete[i:i + chunk_size]
-                                                response = supabase.table('policies').delete().in_('Transaction ID', chunk).execute()
+                                                response = supabase.table('policies').delete().in_('Transaction ID', chunk).eq('user_id', st.session_state.get('user_id')).execute()
                                                 deleted_count += len(chunk)
+                                            
+                                            # Log the bulk deletion operation
+                                            log_audit_trail(
+                                                operation_type="BULK_DELETE",
+                                                table_name="policies",
+                                                affected_records=deleted_count,
+                                                details={
+                                                    "active_batch": active_batch,
+                                                    "void_batch": void_batch,
+                                                    "transaction_count": len(transactions_to_delete),
+                                                    "source": "reconciliation_history"
+                                                }
+                                            )
                                             
                                             st.success(f"✅ Successfully deleted {deleted_count} transactions from both batches!")
                                             st.balloons()
@@ -11019,7 +11261,16 @@ def main():
                                                     'Policy Term': new_policy_term
                                                 }
                                                 
-                                                response = supabase.table('policies').update(update_data).eq('Transaction ID', selected_row['Transaction ID']).execute()
+                                                update_query = supabase.table('policies').update(update_data).eq('Transaction ID', selected_row['Transaction ID'])
+                                                # Add user filtering for security
+                                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                    user_id = get_user_id()
+                                                    if user_id:
+                                                        update_query = update_query.eq('user_id', user_id)
+                                                    else:
+                                                        user_email = get_normalized_user_email()
+                                                        update_query = update_query.eq('user_email', user_email)
+                                                response = update_query.execute()
                                                 
                                                 if response.data:
                                                     # Store success message in session state
@@ -11395,11 +11646,20 @@ def main():
                                                     ]
                                                     
                                                     for idx, orig in original_trans.iterrows():
-                                                        supabase.table('policies').update({
+                                                        update_query = supabase.table('policies').update({
                                                             'reconciliation_status': 'unreconciled',
                                                             'reconciliation_id': None,
                                                             'reconciled_at': None
-                                                        }).eq('_id', orig['_id']).execute()
+                                                        }).eq('_id', orig['_id'])
+                                                        # Add user filtering for security
+                                                        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                            user_id = get_user_id()
+                                                            if user_id:
+                                                                update_query = update_query.eq('user_id', user_id)
+                                                            else:
+                                                                user_email = get_normalized_user_email()
+                                                                update_query = update_query.eq('user_email', user_email)
+                                                        update_query.execute()
                                                     
                                                     # Log the void in reconciliations table
                                                     void_log = {
@@ -11410,6 +11670,8 @@ def main():
                                                         'transaction_count': void_count,
                                                         'notes': f"VOIDED Batch {selected_batch}: {void_reason}"
                                                     }
+                                                    # Add user_id and user_email for data isolation
+                                                    void_log = add_user_email_to_data(void_log)
                                                     supabase.table('reconciliations').insert(void_log).execute()
                                                     
                                                     st.success(f"✅ Successfully voided batch {selected_batch}")
@@ -11471,13 +11733,12 @@ def main():
                 st.info("No data available")
         
         with tab2:
-            st.subheader("Column Mapping Configuration")
-            st.info("Map database columns to user-friendly display names. Changes are saved to column_mapping.json")
+            st.subheader("Your Column Mapping Configuration")
+            st.info("🔒 Map database columns to user-friendly display names. Changes affect only YOUR account.")
             
             if not all_data.empty:
                 # Load existing mappings
-                from column_mapping_config import column_mapper
-                current_mapping = column_mapper._load_mapping()
+                current_mapping = column_mapper.get_user_mapping()
                 
                 # Create editable mapping interface
                 st.write("**Edit Column Display Names:**")
@@ -11591,24 +11852,16 @@ def main():
                 with col1:
                     if st.button("💾 Save Column Mappings", type="primary"):
                         try:
-                            # Validate and save
-                            result = column_mapper.save_mapping(
-                                st.session_state.column_mapping_edits,
-                                list(all_data.columns)
-                            )
-                            
-                            if result['success']:
-                                st.success("✅ Column mappings saved successfully!")
-                                if result.get('warnings'):
-                                    for warning in result['warnings']:
-                                        st.warning(warning)
-                                # Clear the mapping cache to ensure new mappings are loaded
-                                column_mapper.clear_cache()
+                            # Save user-specific mappings
+                            if column_mapper.save_user_mapping(st.session_state.column_mapping_edits):
+                                st.success("✅ Column mappings saved successfully for your account!")
+                                # Clear cache to force reload
+                                if 'data_editor_key' in st.session_state:
+                                    st.session_state.data_editor_key = f"editor_{datetime.datetime.now().timestamp()}"
+                                st.rerun()
                                 st.balloons()
                             else:
-                                st.error("Failed to save mappings:")
-                                for error in result.get('errors', []):
-                                    st.error(f"• {error}")
+                                st.error("Failed to save mappings. Please try again.")
                         except Exception as e:
                             st.error(f"Error saving mappings: {str(e)}")
                 
@@ -11677,28 +11930,17 @@ def main():
             st.divider()
             
             # Display Preferences section
-            st.subheader("Display Preferences")
-            st.info("Customize how transactions are displayed in the application")
+            st.subheader("Your Display Preferences")
+            st.info("🔒 Customize how transactions are displayed. Changes affect only YOUR account.")
             
             # Load current preferences
-            prefs_file = "config_files/user_preferences.json"
-            try:
-                with open(prefs_file, 'r') as f:
-                    user_prefs = json.load(f)
-            except Exception:
-                # If file doesn't exist or has errors, use defaults
-                user_prefs = {
-                    "color_theme": {
-                        "transaction_colors": "light",
-                        "description": "Choose between 'light' (powder blue) or 'dark' (dark blue) colors for STMT transactions"
-                    }
-                }
+            from user_preferences_db import user_preferences
+            current_theme = user_preferences.get_color_theme()
             
             st.markdown("#### Transaction Color Theme")
             st.write("Choose how STMT (statement) and VOID transactions are highlighted:")
             
-            # Current theme display
-            current_theme = user_prefs.get("color_theme", {}).get("transaction_colors", "light")
+            # Current theme display is already loaded above
             
             col1, col2 = st.columns(2)
             with col1:
@@ -11733,18 +11975,11 @@ def main():
             )
             
             if st.button("Save Color Theme Preference", type="primary"):
-                try:
-                    # Update preferences
-                    user_prefs["color_theme"]["transaction_colors"] = color_theme
-                    
-                    # Save to file
-                    with open(prefs_file, 'w') as f:
-                        json.dump(user_prefs, f, indent=4)
-                    
-                    st.success("✅ Color theme updated successfully!")
+                if user_preferences.set_color_theme(color_theme):
+                    st.success("✅ Color theme updated successfully for your account!")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Error saving preferences: {e}")
+                else:
+                    st.error("Failed to save color theme preference. Please try again.")
         
         with tab5:
             st.subheader("🗑️ Deletion History - Last 100 Deleted Policy Transactions")
@@ -11753,9 +11988,15 @@ def main():
             try:
                 # Fetch deleted policies from Supabase
                 # Filter by user in production
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    user_email = get_normalized_user_email()
-                    deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', user_email).order('deleted_at', desc=True).limit(100).execute()
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
+                    if user_id:
+                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_id', user_id).order('deleted_at', desc=True).limit(100).execute()
+                    else:
+                        # Fallback to email
+                        user_email = get_normalized_user_email()
+                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', user_email).order('deleted_at', desc=True).limit(100).execute()
                 else:
                     deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
                 
@@ -11839,11 +12080,28 @@ def main():
                                         # Restore to policies table
                                         supabase.table('policies').insert(add_user_email_to_data(restore_data)).execute()
                                         
-                                        # Remove from deleted_policies table
+                                        # Remove from deleted_policies table with user filtering
                                         deletion_id = row['deletion_id']
-                                        supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id).execute()
+                                        delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
+                                        # Add user filtering for security
+                                        user_email = get_normalized_user_email()
+                                        if user_email:
+                                            delete_query = delete_query.eq('user_email', user_email)
+                                        delete_query.execute()
                                         
                                         restored_count += 1
+                                    
+                                    # Log the restore operation
+                                    if restored_count > 0:
+                                        log_audit_trail(
+                                            operation_type="RESTORE",
+                                            table_name="policies",
+                                            affected_records=restored_count,
+                                            details={
+                                                "source": "deleted_records_recovery",
+                                                "restored_from": "deleted_policies"
+                                            }
+                                        )
                                     
                                     # Clear cache and show success
                                     clear_policies_cache()
@@ -11864,9 +12122,29 @@ def main():
                                 st.warning(f"⚠️ This will permanently delete {len(selected_to_delete)} records from history!")
                                 if st.button("Confirm Permanent Deletion", key="confirm_perm_delete"):
                                     try:
+                                        deleted_count = 0
+                                        deletion_ids = []
                                         for idx, row in selected_to_delete.iterrows():
                                             deletion_id = row['deletion_id']
-                                            supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id).execute()
+                                            deletion_ids.append(deletion_id)
+                                            # Delete with user filtering
+                                            delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
+                                            user_email = get_normalized_user_email()
+                                            if user_email:
+                                                delete_query = delete_query.eq('user_email', user_email)
+                                            delete_query.execute()
+                                            deleted_count += 1
+                                        
+                                        # Log the permanent deletion
+                                        log_audit_trail(
+                                            operation_type="PERMANENT_DELETE",
+                                            table_name="deleted_policies",
+                                            affected_records=deleted_count,
+                                            details={
+                                                "deletion_ids": deletion_ids,
+                                                "source": "deleted_records_recovery"
+                                            }
+                                        )
                                         
                                         st.success(f"Permanently deleted {len(selected_to_delete)} records from history.")
                                         st.rerun()
@@ -12290,7 +12568,7 @@ Where Used:
                     test_premium = st.number_input("Test Premium Amount", value=1000.0, format="%.2f", key="test_premium")
                     test_comm_rate = st.number_input("Commission Rate (%)", value=10.0, format="%.2f", key="test_comm_rate")
                     test_trans_type = st.selectbox("Transaction Type", 
-                        ["NEW", "RWL", "END", "PCH", "CAN", "NBS", "STL", "BoR", "REWRITE", "XCL"],
+                        get_transaction_type_codes(),
                         key="test_trans_type"
                     )
                     
@@ -12520,16 +12798,9 @@ SOLUTION NEEDED:
             
             # Try to load policy types from configuration file
             try:
-                # Load from the updated config file if it exists
-                config_path = "config_files/policy_types_updated.json"
-                if os.path.exists(config_path):
-                    with open(config_path, 'r') as f:
-                        config_data = json.load(f)
-                        policy_types_data = config_data.get("policy_types", [])
-                else:
-                    # Fall back to existing method
-                    policy_types, allow_custom = load_policy_types()
-                    policy_types_data = [{"code": pt["name"], "name": pt["name"], "active": pt.get("active", True)} for pt in policy_types]
+                # Load policy types from database
+                config_data = user_policy_types.get_user_policy_types()
+                policy_types_data = config_data.get("policy_types", [])
                 
                 # Create a modern, compact display
                 with st.container():
@@ -12605,14 +12876,19 @@ SOLUTION NEEDED:
                                 # Add to the list
                                 policy_types_data.append(new_policy_type)
                                 
-                                # Update the configuration file
+                                # Update the configuration in database
                                 try:
-                                    config_data['policy_types'] = policy_types_data
-                                    os.makedirs("config_files", exist_ok=True)
-                                    with open(config_path, 'w') as f:
-                                        json.dump(config_data, f, indent=2)
-                                    st.success(f"✅ Added policy type: {new_code} - {new_name}")
-                                    st.rerun()
+                                    # Save to database using user_policy_types module
+                                    success = user_policy_types.save_user_policy_types(
+                                        policy_types_data,
+                                        config_data.get('default', 'HO3'),
+                                        config_data.get('categories')
+                                    )
+                                    if success:
+                                        st.success(f"✅ Added policy type: {new_code} - {new_name}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to save policy type")
                                 except Exception as e:
                                     st.error(f"Error saving configuration: {e}")
                     
@@ -12718,32 +12994,50 @@ SOLUTION NEEDED:
                                 # Perform merge operations in the database
                                 if merge_operations:
                                     supabase = get_supabase_client()
+                                    total_merged = 0
+                                    merge_details = []
+                                    
                                     for merge_op in merge_operations:
                                         if merge_op['from'] != merge_op['to']:
                                             # Update all transactions with the merge_from type to use merge_to
-                                            update_response = supabase.table('policies').update({'Policy Type': merge_op['to']}).eq('"Policy Type"', merge_op['from']).execute()
+                                            update_response = supabase.table('policies').update({'Policy Type': merge_op['to']}).eq('"Policy Type"', merge_op['from']).eq('user_id', st.session_state.get('user_id')).execute()
                                             if update_response.data:
-                                                st.success(f"✅ Merged '{merge_op['from']}' into '{merge_op['to']}'")
+                                                affected_count = len(update_response.data)
+                                                total_merged += affected_count
+                                                merge_details.append({
+                                                    'from': merge_op['from'],
+                                                    'to': merge_op['to'],
+                                                    'affected_records': affected_count
+                                                })
+                                                st.success(f"✅ Merged '{merge_op['from']}' into '{merge_op['to']}' ({affected_count} records)")
                                             
                                             # Also update the policy type mappings if the merged type was mapped
-                                            mapping_file = "config_files/policy_type_mappings.json"
-                                            if os.path.exists(mapping_file):
-                                                try:
-                                                    with open(mapping_file, 'r') as f:
-                                                        mappings = json.load(f)
-                                                    
-                                                    # Update any mappings that pointed to the merged type
-                                                    updated_mappings = False
-                                                    for key, value in mappings.items():
-                                                        if value == merge_op['from']:
-                                                            mappings[key] = merge_op['to']
-                                                            updated_mappings = True
-                                                    
-                                                    if updated_mappings:
-                                                        with open(mapping_file, 'w') as f:
-                                                            json.dump(mappings, f, indent=2)
-                                                except:
-                                                    pass
+                                            try:
+                                                mappings = user_mappings.get_user_policy_type_mappings()
+                                                
+                                                # Update any mappings that pointed to the merged type
+                                                updated_mappings = False
+                                                for key, value in mappings.items():
+                                                    if value == merge_op['from']:
+                                                        mappings[key] = merge_op['to']
+                                                        updated_mappings = True
+                                                
+                                                if updated_mappings:
+                                                    user_mappings.save_user_policy_type_mappings(mappings)
+                                            except:
+                                                pass
+                                    
+                                    # Log merge operations after all are complete
+                                    if total_merged > 0:
+                                        log_audit_trail(
+                                            operation_type="MERGE",
+                                            table_name="policies",
+                                            affected_records=total_merged,
+                                            details={
+                                                "merge_operations": merge_details,
+                                                "source": "policy_type_management"
+                                            }
+                                        )
                                 
                                 # Filter out deleted items and merged items
                                 updated_policy_types = []
@@ -12758,18 +13052,22 @@ SOLUTION NEEDED:
                                             "category": row.get('category', 'Other')
                                         })
                                 
-                                # Update configuration
-                                config_data['policy_types'] = updated_policy_types
-                                os.makedirs("config_files", exist_ok=True)
-                                with open(config_path, 'w') as f:
-                                    json.dump(config_data, f, indent=2)
+                                # Update configuration in database
+                                success = user_policy_types.save_user_policy_types(
+                                    updated_policy_types,
+                                    config_data.get('default', 'HO3'),
+                                    config_data.get('categories')
+                                )
                                 
-                                st.success("✅ Policy types updated successfully!")
-                                
-                                # Clear the cache to reflect changes
-                                clear_policies_cache()
-                                
-                                st.rerun()
+                                if success:
+                                    st.success("✅ Policy types updated successfully!")
+                                    
+                                    # Clear the cache to reflect changes
+                                    clear_policies_cache()
+                                    
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to update policy types")
                             except Exception as e:
                                 st.error(f"Error saving changes: {e}")
                     
@@ -12803,36 +13101,16 @@ SOLUTION NEEDED:
             st.info("Map policy types from reconciliation statements to your standardized policy types")
             
             # Load or initialize mappings
-            mapping_file = "config_files/policy_type_mappings.json"
+            # Load policy type mappings from database
             try:
-                if os.path.exists(mapping_file):
-                    with open(mapping_file, 'r') as f:
-                        mappings = json.load(f)
-                else:
-                    mappings = {}
+                mappings = user_mappings.get_user_policy_type_mappings()
             except Exception as e:
                 st.error(f"Error loading mappings: {e}")
                 mappings = {}
             
             # Get list of active policy types for dropdown
-            active_types = []
-            try:
-                config_path = "config_files/policy_types_updated.json"
-                if os.path.exists(config_path):
-                    with open(config_path, 'r') as f:
-                        config_data = json.load(f)
-                        policy_types_data = config_data.get("policy_types", [])
-                        active_types = [pt['name'] for pt in policy_types_data if pt.get('active', True)]
-                else:
-                    # Fallback to load_policy_types
-                    policy_types, _ = load_policy_types()
-                    active_types = [pt['name'] for pt in policy_types if pt.get('active', True)]
-                
-                # Sort for better display
-                active_types.sort()
-            except:
-                st.error("Could not load policy types")
-                active_types = []
+            active_types = user_policy_types.get_policy_types_list()
+            active_types.sort()  # Sort for better display
             
             # Display current mappings
             st.markdown("### Current Mappings")
@@ -12873,13 +13151,13 @@ SOLUTION NEEDED:
                         if not row["Delete"]:
                             new_mappings[row["Statement Value"]] = row["Maps To"]
                     
-                    # Save to file
+                    # Save to database
                     try:
-                        os.makedirs("config_files", exist_ok=True)
-                        with open(mapping_file, 'w') as f:
-                            json.dump(new_mappings, f, indent=2)
-                        st.success("✅ Mappings saved successfully!")
-                        st.rerun()
+                        if user_mappings.save_user_policy_type_mappings(new_mappings):
+                            st.success("✅ Mappings saved successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to save mappings")
                     except Exception as e:
                         st.error(f"Error saving mappings: {e}")
             else:
@@ -12912,16 +13190,13 @@ SOLUTION NEEDED:
                         if new_statement_value in mappings:
                             st.error(f"Mapping for '{new_statement_value}' already exists!")
                         else:
-                            # Add new mapping
-                            mappings[new_statement_value] = new_maps_to
-                            
-                            # Save to file
+                            # Add new mapping using database method
                             try:
-                                os.makedirs("config_files", exist_ok=True)
-                                with open(mapping_file, 'w') as f:
-                                    json.dump(mappings, f, indent=2)
-                                st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
-                                st.rerun()
+                                if user_mappings.add_policy_mapping(new_statement_value, new_maps_to):
+                                    st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
+                                    st.rerun()
+                                else:
+                                    st.error("Error saving mapping")
                             except Exception as e:
                                 st.error(f"Error saving mapping: {e}")
                     else:
@@ -12974,72 +13249,29 @@ SOLUTION NEEDED:
             # Get unique transaction types from database with counts
             try:
                 # Query to get all unique transaction types and their counts
-                trans_type_data = supabase.table('policies').select('"Transaction Type"').execute()
+                trans_type_data = supabase.table('policies').select('"Transaction Type", "Transaction ID"').execute()
                 
                 if trans_type_data.data:
-                    trans_types_list = [row.get('Transaction Type') for row in trans_type_data.data if row.get('Transaction Type')]
-                    trans_type_counts = pd.Series(trans_types_list).value_counts().to_dict()
+                    # Filter out reconciliation transactions (-STMT-, -VOID-, -ADJ-)
+                    # to match the dashboard's calculation
+                    filtered_data = []
+                    for row in trans_type_data.data:
+                        trans_id = row.get('Transaction ID', '')
+                        trans_type = row.get('Transaction Type')
+                        # Exclude reconciliation entries
+                        if trans_id and not any(suffix in str(trans_id) for suffix in ['-STMT-', '-VOID-', '-ADJ-']):
+                            if trans_type:
+                                filtered_data.append(trans_type)
+                    
+                    trans_type_counts = pd.Series(filtered_data).value_counts().to_dict() if filtered_data else {}
                 else:
                     trans_type_counts = {}
             except Exception as e:
                 st.error(f"Error loading transaction types: {e}")
                 trans_type_counts = {}
             
-            # Load transaction type definitions
-            trans_types_file = "config_files/transaction_types.json"
-            try:
-                if os.path.exists(trans_types_file):
-                    with open(trans_types_file, 'r') as f:
-                        loaded_data = json.load(f)
-                        # Check if it's the old format with transaction_types key
-                        if isinstance(loaded_data, dict) and 'transaction_types' in loaded_data:
-                            # Convert from old format
-                            trans_type_definitions = {}
-                            for item in loaded_data.get('transaction_types', []):
-                                if isinstance(item, dict):
-                                    code = item.get('code', item.get('type', ''))
-                                    if code:
-                                        trans_type_definitions[code] = {
-                                            "description": item.get('name', item.get('description', '')),
-                                            "active": item.get('active', True)
-                                        }
-                        elif isinstance(loaded_data, dict):
-                            # Already in the correct format
-                            trans_type_definitions = loaded_data
-                        else:
-                            # Convert list format to dict if needed
-                            trans_type_definitions = {}
-                            if isinstance(loaded_data, list):
-                                for item in loaded_data:
-                                    if isinstance(item, dict):
-                                        code = item.get('code', item.get('type', ''))
-                                        if code:
-                                            trans_type_definitions[code] = {
-                                                "description": item.get('name', item.get('description', '')),
-                                                "active": item.get('active', True)
-                                            }
-                else:
-                    # Default transaction type definitions
-                    trans_type_definitions = {
-                        "NEW": {"description": "New business policy", "active": True},
-                        "RWL": {"description": "Renewal of existing policy", "active": True},
-                        "END": {"description": "Endorsement (policy modification)", "active": True},
-                        "CAN": {"description": "Cancellation of policy", "active": True},
-                        "PMT": {"description": "Payment-driven commission (as-earned)", "active": True},
-                        "XCL": {"description": "Exclusion/cancellation variant", "active": True},
-                        "PCH": {"description": "Policy change", "active": True},
-                        "STL": {"description": "Statement line item", "active": True},
-                        "BoR": {"description": "Book of Record", "active": True},
-                        "REWRITE": {"description": "Policy rewrite", "active": True},
-                        "NBS": {"description": "New business special", "active": True}
-                    }
-                    # Save default definitions
-                    os.makedirs("config_files", exist_ok=True)
-                    with open(trans_types_file, 'w') as f:
-                        json.dump(trans_type_definitions, f, indent=2)
-            except Exception as e:
-                st.error(f"Error loading transaction type definitions: {e}")
-                trans_type_definitions = {}
+            # Load transaction type definitions from user-specific database
+            trans_type_definitions = user_transaction_types.get_user_transaction_types()
             
             # Ensure trans_type_definitions is always a dictionary
             if not isinstance(trans_type_definitions, dict):
@@ -13159,7 +13391,7 @@ SOLUTION NEEDED:
                                 # Update all transactions in database
                                 update_result = supabase.table('policies').update({
                                     'Transaction Type': merge["to"]
-                                }).eq('Transaction Type', merge["from"]).execute()
+                                }).eq('Transaction Type', merge["from"]).eq('user_id', st.session_state.get('user_id')).execute()
                                 
                                 # Count actual updates
                                 updated_count = len(update_result.data) if update_result.data else 0
@@ -13178,11 +13410,10 @@ SOLUTION NEEDED:
                             del new_definitions[type_to_delete]
                         st.info(f"🗑️ Deleted type '{type_to_delete}'")
                     
-                    # Save to file
+                    # Save to database
                     try:
-                        with open(trans_types_file, 'w') as f:
-                            json.dump(new_definitions, f, indent=2)
-                        st.success("✅ Transaction type changes saved successfully!")
+                        if user_transaction_types.save_user_transaction_types(new_definitions):
+                            st.success("✅ Transaction type changes saved successfully!")
                         
                         # Clear cache if database was modified
                         if merges_to_perform:
@@ -13221,18 +13452,13 @@ SOLUTION NEEDED:
                     if new_type_code in trans_type_definitions:
                         st.error(f"Transaction type '{new_type_code}' already exists!")
                     else:
-                        # Add new type
-                        trans_type_definitions[new_type_code] = {
-                            "description": new_type_desc,
-                            "active": True
-                        }
-                        
-                        # Save to file
+                        # Add new type using database method
                         try:
-                            with open(trans_types_file, 'w') as f:
-                                json.dump(trans_type_definitions, f, indent=2)
-                            st.success(f"✅ Added transaction type: {new_type_code}")
-                            st.rerun()
+                            if user_transaction_types.add_transaction_type(new_type_code, new_type_desc, True):
+                                st.success(f"✅ Added transaction type: {new_type_code}")
+                                st.rerun()
+                            else:
+                                st.error("Error adding transaction type")
                         except Exception as e:
                             st.error(f"Error saving: {e}")
             
@@ -13242,24 +13468,8 @@ SOLUTION NEEDED:
             st.markdown("### 🔀 Statement Transaction Type Mapping")
             st.info("Map transaction types from reconciliation statements to your standardized types")
             
-            # Load or initialize mappings
-            mapping_file = "config_files/transaction_type_mappings.json"
-            try:
-                if os.path.exists(mapping_file):
-                    with open(mapping_file, 'r') as f:
-                        trans_mappings = json.load(f)
-                else:
-                    # Default mappings including STL -> PMT
-                    trans_mappings = {
-                        "STL": "PMT"
-                    }
-                    # Save default mappings
-                    os.makedirs("config_files", exist_ok=True)
-                    with open(mapping_file, 'w') as f:
-                        json.dump(trans_mappings, f, indent=2)
-            except Exception as e:
-                st.error(f"Error loading mappings: {e}")
-                trans_mappings = {"STL": "PMT"}
+            # Load or initialize mappings from database
+            trans_mappings = user_mappings.get_user_transaction_type_mappings()
             
             # Get active transaction types for mapping
             valid_transaction_types = [t for t, d in trans_type_definitions.items() 
@@ -13342,16 +13552,13 @@ SOLUTION NEEDED:
                         if new_statement_value in trans_mappings:
                             st.error(f"Mapping for '{new_statement_value}' already exists!")
                         else:
-                            # Add new mapping
-                            trans_mappings[new_statement_value] = new_maps_to
-                            
-                            # Save to file
+                            # Add new mapping using database method
                             try:
-                                os.makedirs("config_files", exist_ok=True)
-                                with open(mapping_file, 'w') as f:
-                                    json.dump(trans_mappings, f, indent=2)
-                                st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
-                                st.rerun()
+                                if user_mappings.add_transaction_mapping(new_statement_value, new_maps_to):
+                                    st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
+                                    st.rerun()
+                                else:
+                                    st.error("Error saving mapping")
                             except Exception as e:
                                 st.error(f"Error saving mapping: {e}")
                     else:
@@ -13404,27 +13611,19 @@ SOLUTION NEEDED:
                 """)
         
         with tab11:
-            st.subheader("Default Agent Commission Rates")
-            st.info("Configure the default commission rates that agents receive from the agency. These rates are used when creating new transactions.")
+            st.subheader("Your Default Agent Commission Rates")
+            st.info("🔒 Configure YOUR default commission rates that agents receive from the agency. These rates are used when creating new transactions in YOUR account.")
             
             # Load current rates
-            rates_file = "config_files/default_agent_commission_rates.json"
-            try:
-                with open(rates_file, 'r') as f:
-                    default_rates = json.load(f)
-            except Exception:
-                # If file doesn't exist or has errors, use defaults
-                default_rates = {
-                    "new_business_rate": 50.0,
-                    "renewal_rate": 25.0
-                }
+            from user_agent_rates_db import user_agent_rates
+            default_rates = user_agent_rates.get_user_rates()
             
             # Display current rates
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Current New Business Rate", f"{default_rates.get('new_business_rate', 50.0)}%")
+                st.metric("Current New Business Rate", f"{default_rates['new_business']}%")
             with col2:
-                st.metric("Current Renewal Rate", f"{default_rates.get('renewal_rate', 25.0)}%")
+                st.metric("Current Renewal Rate", f"{default_rates['renewal']}%")
             
             st.divider()
             
@@ -13439,7 +13638,7 @@ SOLUTION NEEDED:
                         "New Business Rate (%)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(default_rates.get('new_business_rate', 50.0)),
+                        value=float(default_rates['new_business']),
                         step=0.5,
                         help="Commission rate for NEW transactions"
                     )
@@ -13449,7 +13648,7 @@ SOLUTION NEEDED:
                         "Renewal Rate (%)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(default_rates.get('renewal_rate', 25.0)),
+                        value=float(default_rates['renewal']),
                         step=0.5,
                         help="Commission rate for RWL (renewal) transactions"
                     )
@@ -13457,20 +13656,13 @@ SOLUTION NEEDED:
                 submitted = st.form_submit_button("💾 Save Rates", type="primary")
                 
                 if submitted:
-                    # Update rates
-                    default_rates['new_business_rate'] = new_business_rate
-                    default_rates['renewal_rate'] = renewal_rate
-                    default_rates['last_updated'] = datetime.datetime.now().strftime("%Y-%m-%d")
-                    
-                    # Save to file
-                    try:
-                        with open(rates_file, 'w') as f:
-                            json.dump(default_rates, f, indent=2)
-                        st.success("✅ Default agent commission rates updated successfully!")
+                    # Save user-specific rates
+                    if user_agent_rates.save_user_rates(new_business_rate, renewal_rate):
+                        st.success("✅ Default agent commission rates updated successfully for your account!")
                         time.sleep(1)
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving rates: {e}")
+                    else:
+                        st.error("Failed to save rates. Please ensure rates are between 0 and 100.")
             
             st.divider()
             
@@ -13549,14 +13741,20 @@ SOLUTION NEEDED:
             # Try to load carriers
             try:
                 # Filter by user in production
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    user_email = get_normalized_user_email()
-                    # Debug logging
-                    print(f"DEBUG: Raw session email: {st.session_state.get('user_email', 'NOT SET')}")
-                    print(f"DEBUG: Normalized email: {user_email}")
-                    print(f"DEBUG: Loading carriers for user: {user_email}")
-                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
-                    print(f"DEBUG: Query returned {len(response.data)} carriers")
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
+                    if user_id:
+                        # Debug logging
+                        print(f"DEBUG: User ID: {user_id}")
+                        print(f"DEBUG: Loading carriers for user ID: {user_id}")
+                        response = supabase.table('carriers').select("*").eq('user_id', user_id).execute()
+                        print(f"DEBUG: Query returned {len(response.data)} carriers")
+                    else:
+                        # Fallback to email if no user_id
+                        user_email = get_normalized_user_email()
+                        print(f"DEBUG: No user_id, using email: {user_email}")
+                        response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
                 else:
                     print("DEBUG: Loading all carriers (non-production mode)")
                     response = supabase.table('carriers').select("*").execute()
@@ -13591,16 +13789,24 @@ SOLUTION NEEDED:
             # Try to load MGAs
             try:
                 # Filter by user in production
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    user_email = get_normalized_user_email()
-                    print(f"DEBUG: Loading MGAs for user: {user_email}")
-                    response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
-                    
-                    # Debug for demo user
-                    if user_email.lower().startswith('demo'):
-                        st.info(f"🔍 MGA Query Debug:\n- Looking for MGAs with email: {user_email}\n- Found {len(response.data)} MGAs")
-                        if len(response.data) == 0:
-                            st.warning("No MGAs found. Checking database...")
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
+                    if user_id:
+                        print(f"DEBUG: Loading MGAs for user ID: {user_id}")
+                        response = supabase.table('mgas').select("*").eq('user_id', user_id).execute()
+                        
+                        # Debug for demo user
+                        user_email = get_normalized_user_email()
+                        if user_email.lower().startswith('demo'):
+                            st.info(f"🔍 MGA Query Debug:\n- Using user ID: {user_id}\n- Found {len(response.data)} MGAs")
+                            if len(response.data) == 0:
+                                st.warning("No MGAs found. Checking database...")
+                    else:
+                        # Fallback to email
+                        user_email = get_normalized_user_email()
+                        print(f"DEBUG: No user_id, loading MGAs by email: {user_email}")
+                        response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
                 else:
                     response = supabase.table('mgas').select("*").execute()
                 st.session_state.mgas_data = response.data if response.data else []
@@ -13610,9 +13816,15 @@ SOLUTION NEEDED:
             
             # Try to load commission rules - filter by user in production
             try:
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    user_email = get_normalized_user_email()
-                    response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
+                    if user_id:
+                        response = supabase.table('commission_rules').select("*").eq('user_id', user_id).execute()
+                    else:
+                        # Fallback to email
+                        user_email = get_normalized_user_email()
+                        response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
                 else:
                     response = supabase.table('commission_rules').select("*").execute()
                 st.session_state.commission_rules = response.data if response.data else []
@@ -13970,7 +14182,7 @@ SOLUTION NEEDED:
                                             "notes": edited_notes if edited_notes else None
                                         }
                                         
-                                        supabase.table('carriers').update(update_data).eq('carrier_id', selected_carrier['carrier_id']).execute()
+                                        supabase.table('carriers').update(update_data).eq('carrier_id', selected_carrier['carrier_id']).eq('user_id', st.session_state.get('user_id')).execute()
                                         st.success(f"✅ Updated {edited_name}")
                                         del st.session_state['editing_carrier']
                                         st.rerun()
@@ -14190,7 +14402,16 @@ SOLUTION NEEDED:
                                                 current_desc = rule.get('rule_description', '')
                                                 update_data['rule_description'] = f"{current_desc} | Ended: {reason}"
                                             
-                                            supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
+                                            update_query = supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id'])
+                                            # Add user filtering for security
+                                            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            update_query.execute()
                                             # Clear MGA cache for this carrier since we updated a rule
                                             cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
                                             if cache_key in st.session_state:
@@ -14254,7 +14475,16 @@ SOLUTION NEEDED:
                                                 "rule_description": rule_description if rule_description else None
                                             }
                                             
-                                            supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id']).execute()
+                                            update_query = supabase.table('commission_rules').update(update_data).eq('rule_id', rule['rule_id'])
+                                            # Add user filtering for security
+                                            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            update_query.execute()
                                             
                                             # Clear MGA cache for this carrier since we updated a rule
                                             cache_key = f'mgas_for_carrier_{selected_carrier["carrier_id"]}'
@@ -14281,9 +14511,18 @@ SOLUTION NEEDED:
                                                             continue  # Skip other types
                                                         
                                                         # Update policy with new agent commission
-                                                        supabase.table('policies').update({
+                                                        update_query = supabase.table('policies').update({
                                                             'Agent Estimated Comm $': new_agent_comm
-                                                        }).eq('_id', policy['_id']).execute()
+                                                        }).eq('_id', policy['_id'])
+                                                        # Add user filtering for security
+                                                        if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                            user_id = get_user_id()
+                                                            if user_id:
+                                                                update_query = update_query.eq('user_id', user_id)
+                                                            else:
+                                                                user_email = get_normalized_user_email()
+                                                                update_query = update_query.eq('user_email', user_email)
+                                                        update_query.execute()
                                                         
                                                         updated_count += 1
                                                     
@@ -14399,7 +14638,7 @@ SOLUTION NEEDED:
                                             "notes": edited_notes if edited_notes else None
                                         }
                                         
-                                        supabase.table('mgas').update(update_data).eq('mga_id', selected_mga['mga_id']).execute()
+                                        supabase.table('mgas').update(update_data).eq('mga_id', selected_mga['mga_id']).eq('user_id', st.session_state.get('user_id')).execute()
                                         st.success(f"✅ Updated {edited_name}")
                                         del st.session_state['editing_mga']
                                         st.rerun()
@@ -14804,9 +15043,18 @@ SOLUTION NEEDED:
                                 
                                 try:
                                     # Update the record
-                                    supabase.table('policies').update({
+                                    update_query = supabase.table('policies').update({
                                         'Policy Origination Date': update['New Origination Date']
-                                    }).eq('Transaction ID', update['Transaction ID']).execute()
+                                    }).eq('Transaction ID', update['Transaction ID'])
+                                    # Add user filtering for security
+                                    if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                        user_id = get_user_id()
+                                        if user_id:
+                                            update_query = update_query.eq('user_id', user_id)
+                                        else:
+                                            user_email = get_normalized_user_email()
+                                            update_query = update_query.eq('user_email', user_email)
+                                    update_query.execute()
                                     
                                     success_count += 1
                                 except Exception as e:
@@ -14815,6 +15063,20 @@ SOLUTION NEEDED:
                             
                             progress_bar.empty()
                             status_text.empty()
+                            
+                            # Log the bulk update operation
+                            if success_count > 0:
+                                log_audit_trail(
+                                    operation_type="BULK_UPDATE",
+                                    table_name="policies",
+                                    affected_records=success_count,
+                                    details={
+                                        "field_updated": "Policy Origination Date",
+                                        "total_attempted": len(updates),
+                                        "failed_count": error_count,
+                                        "source": "tools_origination_date_updates"
+                                    }
+                                )
                             
                             # Clear the updates from session state
                             del st.session_state['origination_updates']
@@ -15369,7 +15631,16 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                         update_data[col] = value
                                             
                                             # Update the record
-                                            response = supabase.table('policies').update(update_data).eq('"Transaction ID"', transaction_id).execute()
+                                            update_query = supabase.table('policies').update(update_data).eq('"Transaction ID"', transaction_id)
+                                            # Add user filtering for security
+                                            if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    user_email = get_normalized_user_email()
+                                                    update_query = update_query.eq('user_email', user_email)
+                                            response = update_query.execute()
                                             
                                             if response.data:
                                                 success_count += 1
@@ -15648,6 +15919,15 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 # Get all Transaction IDs to delete
                                                 ids_to_delete = transactions_to_delete['Transaction ID'].tolist()
                                                 
+                                                # First verify ownership of ALL records before deleting any
+                                                all_owned, user_records = verify_bulk_ownership('policies', ids_to_delete, 'Transaction ID')
+                                                
+                                                if not all_owned:
+                                                    st.error("❌ Security Error: You can only delete your own records!")
+                                                    unauthorized_count = len(ids_to_delete) - len(user_records)
+                                                    st.warning(f"⚠️ {unauthorized_count} record(s) do not belong to you and cannot be deleted.")
+                                                    return
+                                                
                                                 # Delete in batches of 100 (Supabase limit)
                                                 deleted_count = 0
                                                 batch_size = 100
@@ -15657,14 +15937,34 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 for i in range(0, len(ids_to_delete), batch_size):
                                                     batch_ids = ids_to_delete[i:i + batch_size]
                                                     
-                                                    # Delete batch
-                                                    delete_response = supabase.table('policies').delete().in_('"Transaction ID"', batch_ids).execute()
+                                                    # Delete batch with user filtering for security
+                                                    delete_query = supabase.table('policies').delete().in_('"Transaction ID"', batch_ids)
+                                                    # Add user filtering for security
+                                                    if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                                        user_id = get_user_id()
+                                                        if user_id:
+                                                            delete_query = delete_query.eq('user_id', user_id)
+                                                        else:
+                                                            user_email = get_normalized_user_email()
+                                                            delete_query = delete_query.eq('user_email', user_email)
+                                                    delete_response = delete_query.execute()
                                                     
                                                     deleted_count += len(batch_ids)
                                                     progress = deleted_count / len(ids_to_delete)
                                                     progress_bar.progress(progress)
                                                 
                                                 progress_bar.empty()
+                                                
+                                                # Log the bulk deletion
+                                                log_audit_trail(
+                                                    operation_type="BULK_DELETE",
+                                                    table_name="policies",
+                                                    affected_records=deleted_count,
+                                                    details={
+                                                        "transaction_ids_count": len(ids_to_delete),
+                                                        "source": "tools_batch_data_delete"
+                                                    }
+                                                )
                                                 
                                                 # Clear cache
                                                 clear_policies_cache()
@@ -15709,20 +16009,35 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 commission_rules_data = []
                 
                 # Filter by user in production mode
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
-                    user_email = get_normalized_user_email()
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
                     
-                    # Get carriers
-                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
-                    carriers_data = response.data if response.data else []
+                    if user_id:
+                        # Get carriers
+                        response = supabase.table('carriers').select("*").eq('user_id', user_id).execute()
+                        carriers_data = response.data if response.data else []
+                    else:
+                        # Fallback to email
+                        user_email = get_normalized_user_email()
+                        response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                        carriers_data = response.data if response.data else []
                     
                     # Get MGAs
-                    response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
-                    mgas_data = response.data if response.data else []
+                    if user_id:
+                        response = supabase.table('mgas').select("*").eq('user_id', user_id).execute()
+                        mgas_data = response.data if response.data else []
+                    else:
+                        response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
+                        mgas_data = response.data if response.data else []
                     
                     # Get commission rules
-                    response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
-                    commission_rules_data = response.data if response.data else []
+                    if user_id:
+                        response = supabase.table('commission_rules').select("*").eq('user_id', user_id).execute()
+                        commission_rules_data = response.data if response.data else []
+                    else:
+                        response = supabase.table('commission_rules').select("*").eq('user_email', user_email).execute()
+                        commission_rules_data = response.data if response.data else []
                 else:
                     # Private mode - get all data
                     response = supabase.table('carriers').select("*").execute()
@@ -15955,15 +16270,58 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             
                             try:
                                 user_email = None
-                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION" and "user_email" in st.session_state:
+                                user_id = None
+                                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                                    ensure_user_id()
+                                    user_id = get_user_id()
                                     user_email = get_normalized_user_email()
                                 
                                 # Replace mode - delete existing data
-                                if import_mode == "Replace all" and user_email:
+                                if import_mode == "Replace all" and (user_id or user_email):
                                     status_text.text("Deleting existing data...")
-                                    supabase.table('commission_rules').delete().eq('user_email', user_email).execute()
-                                    supabase.table('mgas').delete().eq('user_email', user_email).execute()
-                                    supabase.table('carriers').delete().eq('user_email', user_email).execute()
+                                    deleted_counts = {}
+                                    
+                                    if user_id:
+                                        # Count records before deletion for audit
+                                        rules_result = supabase.table('commission_rules').select("count", count='exact').eq('user_id', user_id).execute()
+                                        mgas_result = supabase.table('mgas').select("count", count='exact').eq('user_id', user_id).execute()
+                                        carriers_result = supabase.table('carriers').select("count", count='exact').eq('user_id', user_id).execute()
+                                        
+                                        deleted_counts['commission_rules'] = rules_result.count if hasattr(rules_result, 'count') else 0
+                                        deleted_counts['mgas'] = mgas_result.count if hasattr(mgas_result, 'count') else 0
+                                        deleted_counts['carriers'] = carriers_result.count if hasattr(carriers_result, 'count') else 0
+                                        
+                                        supabase.table('commission_rules').delete().eq('user_id', user_id).execute()
+                                        supabase.table('mgas').delete().eq('user_id', user_id).execute()
+                                        supabase.table('carriers').delete().eq('user_id', user_id).execute()
+                                    else:
+                                        # Fallback to email - count records before deletion
+                                        rules_result = supabase.table('commission_rules').select("count", count='exact').eq('user_email', user_email).execute()
+                                        mgas_result = supabase.table('mgas').select("count", count='exact').eq('user_email', user_email).execute()
+                                        carriers_result = supabase.table('carriers').select("count", count='exact').eq('user_email', user_email).execute()
+                                        
+                                        deleted_counts['commission_rules'] = rules_result.count if hasattr(rules_result, 'count') else 0
+                                        deleted_counts['mgas'] = mgas_result.count if hasattr(mgas_result, 'count') else 0
+                                        deleted_counts['carriers'] = carriers_result.count if hasattr(carriers_result, 'count') else 0
+                                        
+                                        supabase.table('commission_rules').delete().eq('user_email', user_email).execute()
+                                        supabase.table('mgas').delete().eq('user_email', user_email).execute()
+                                        supabase.table('carriers').delete().eq('user_email', user_email).execute()
+                                    
+                                    # Log the bulk deletion
+                                    total_deleted = sum(deleted_counts.values())
+                                    if total_deleted > 0:
+                                        log_audit_trail(
+                                            operation_type="BULK_DELETE",
+                                            table_name="contacts",
+                                            affected_records=total_deleted,
+                                            details={
+                                                "deleted_counts": deleted_counts,
+                                                "import_mode": import_mode,
+                                                "source": "contacts_import_replace"
+                                            }
+                                        )
+                                    
                                     progress_bar.progress(0.1)
                                 
                                 # Import carriers
@@ -15980,6 +16338,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 'status': row.get('status', 'Active'),
                                                 'notes': row.get('notes', '') if pd.notna(row.get('notes')) else ''
                                             }
+                                            if user_id:
+                                                carrier_data['user_id'] = user_id
                                             if user_email:
                                                 carrier_data['user_email'] = user_email
                                             
@@ -16015,6 +16375,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                             else:
                                                 mga_data['contact_info'] = {}
                                             
+                                            if user_id:
+                                                mga_data['user_id'] = user_id
                                             if user_email:
                                                 mga_data['user_email'] = user_email
                                             
@@ -16027,10 +16389,18 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                         progress_bar.progress(0.3 + (0.2 * (idx + 1) / len(mgas_df)))
                                 
                                 # Reload carriers and MGAs for commission rules
-                                if user_email:
-                                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                                if user_id:
+                                    response = supabase.table('carriers').select("*").eq('user_id', user_id).execute()
                                     carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
                                     # Also create a normalized lookup for better matching
+                                    carriers_lookup_normalized = {c['carrier_name'].strip(): c['carrier_id'] for c in response.data}
+                                    
+                                    response = supabase.table('mgas').select("*").eq('user_id', user_id).execute()
+                                    mgas_lookup = {m['mga_name']: m['mga_id'] for m in response.data}
+                                    mgas_lookup_normalized = {m['mga_name'].strip(): m['mga_id'] for m in response.data}
+                                elif user_email:
+                                    response = supabase.table('carriers').select("*").eq('user_email', user_email).execute()
+                                    carriers_lookup = {c['carrier_name']: c['carrier_id'] for c in response.data}
                                     carriers_lookup_normalized = {c['carrier_name'].strip(): c['carrier_id'] for c in response.data}
                                     
                                     response = supabase.table('mgas').select("*").eq('user_email', user_email).execute()
@@ -16086,6 +16456,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                                 elif mga_name in mgas_lookup_normalized:
                                                     rule_data['mga_id'] = mgas_lookup_normalized[mga_name]
                                             
+                                            if user_id:
+                                                rule_data['user_id'] = user_id
                                             if user_email:
                                                 rule_data['user_email'] = user_email
                                             
@@ -16115,6 +16487,26 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 
                                 progress_bar.progress(1.0)
                                 status_text.empty()
+                                
+                                # Log the import operation
+                                total_imported = (carriers_imported if 'carriers_imported' in locals() else 0) + \
+                                                (mgas_imported if 'mgas_imported' in locals() else 0) + \
+                                                (rules_imported if 'rules_imported' in locals() else 0)
+                                
+                                if total_imported > 0:
+                                    log_audit_trail(
+                                        operation_type="BULK_IMPORT",
+                                        table_name="contacts",
+                                        affected_records=total_imported,
+                                        details={
+                                            "carriers_imported": carriers_imported if 'carriers_imported' in locals() else 0,
+                                            "mgas_imported": mgas_imported if 'mgas_imported' in locals() else 0,
+                                            "rules_imported": rules_imported if 'rules_imported' in locals() else 0,
+                                            "rules_skipped": rules_skipped if 'rules_skipped' in locals() else 0,
+                                            "import_mode": import_mode,
+                                            "source": "contacts_import"
+                                        }
+                                    )
                                 
                                 # Show results
                                 st.success("✅ Import completed!")
@@ -16883,6 +17275,9 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
             if st.button("🚪 Logout", type="primary", use_container_width=True, key="account_logout"):
+                # Clean up user-specific session state first
+                cleanup_user_session_state()
+                # Then clean up authentication state
                 for key in ['password_correct', 'user_email']:
                     if key in st.session_state:
                         del st.session_state[key]
@@ -18995,16 +19390,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             
             # Initialize session state for templates before any UI
             if "prl_templates" not in st.session_state:
-                # Load templates from file if exists
-                templates_file = "config_files/prl_templates.json"
-                if os.path.exists(templates_file):
-                    try:
-                        with open(templates_file, 'r') as f:
-                            st.session_state.prl_templates = json.load(f)
-                    except:
-                        st.session_state.prl_templates = {}
-                else:
-                    st.session_state.prl_templates = {}
+                # Load templates from database
+                st.session_state.prl_templates = user_prl_templates.get_user_templates()
             
             # Check if we need to add As Earned Balance Due column
             has_payment_plans = False
@@ -19200,26 +19587,27 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     )
                 
                     if st.button("💾 Save Template", disabled=not new_template_name or not selected_columns):
-                        if new_template_name in st.session_state.prl_templates:
+                        if user_prl_templates.template_exists(new_template_name):
                             st.error(f"Template '{new_template_name}' already exists!")
                         else:
-                            st.session_state.prl_templates[new_template_name] = {
-                                "columns": selected_columns.copy(),
-                                "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "view_mode": view_mode  # Store which view this template is for
-                            }
-                        
-                            # Save templates to file for persistence
-                            templates_file = "config_files/prl_templates.json"
-                            os.makedirs("config_files", exist_ok=True)
-                            try:
-                                with open(templates_file, 'w') as f:
-                                    json.dump(st.session_state.prl_templates, f, indent=2)
+                            # Save template to database
+                            success = user_prl_templates.save_template(
+                                new_template_name, 
+                                selected_columns.copy(), 
+                                view_mode
+                            )
+                            
+                            if success:
+                                # Update session state
+                                st.session_state.prl_templates[new_template_name] = {
+                                    "columns": selected_columns.copy(),
+                                    "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "view_mode": view_mode
+                                }
                                 st.success(f"✅ Template '{new_template_name}' saved!")
-                            except Exception as e:
-                                st.error(f"Error saving template: {str(e)}")
-                        
-                            st.rerun()
+                                st.rerun()
+                            else:
+                                st.error("Error saving template to database")
                     
                     # Add Update Template button if we're editing a template
                     if 'editing_template' in st.session_state and st.session_state.editing_template:
@@ -19228,29 +19616,33 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         if st.button("🔄 Update Template", type="primary"):
                             # Update the existing template
                             template_name = st.session_state.editing_template
-                            # Preserve the default status if it exists
-                            is_default = st.session_state.prl_templates[template_name].get("is_default", False)
                             
-                            st.session_state.prl_templates[template_name] = {
-                                "columns": selected_columns.copy(),
-                                "created": st.session_state.prl_templates[template_name].get("created", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                "view_mode": view_mode,  # Update view mode
-                                "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "is_default": is_default
-                            }
+                            # Update template in database
+                            success = user_prl_templates.update_template(
+                                template_name,
+                                selected_columns.copy(),
+                                view_mode
+                            )
                             
-                            # Save templates to file
-                            templates_file = "config_files/prl_templates.json"
-                            try:
-                                with open(templates_file, 'w') as f:
-                                    json.dump(st.session_state.prl_templates, f, indent=2)
+                            if success:
+                                # Update session state
+                                # Preserve the default status if it exists
+                                is_default = st.session_state.prl_templates[template_name].get("is_default", False)
+                                
+                                st.session_state.prl_templates[template_name] = {
+                                    "columns": selected_columns.copy(),
+                                    "created": st.session_state.prl_templates[template_name].get("created", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                    "view_mode": view_mode,  # Update view mode
+                                    "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "is_default": is_default
+                                }
+                                
                                 st.success(f"✅ Template '{template_name}' updated successfully!")
                                 # Clear editing state
                                 del st.session_state.editing_template
-                            except Exception as e:
-                                st.error(f"Error updating template: {str(e)}")
-                            
-                            st.rerun()
+                                st.rerun()
+                            else:
+                                st.error("Error updating template in database")
             
                 with template_col2:
                     st.markdown("**Load Template:**")
@@ -19262,32 +19654,13 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         if not view_templates:
                             st.info(f"No templates available for {view_mode} view. Create one in the template management section.")
                         else:
-                            # Show current default template if exists for this view
-                            current_default = None
-                            for name, data in view_templates.items():
-                                if data.get("is_default", False):
-                                    current_default = name
-                                    break
-                        
-                            if current_default:
-                                st.info(f"⭐ Default template: {current_default}")
-                        
                             template_options = list(view_templates.keys())
-                            template_display = []
-                            for template_name in template_options:
-                                if view_templates[template_name].get("is_default", False):
-                                    template_display.append(f"⭐ {template_name}")
-                                else:
-                                    template_display.append(template_name)
                         
-                            selected_template_display = st.selectbox(
+                            template_to_load = st.selectbox(
                                 "Select template to load",
-                                options=template_display,
+                                options=template_options,
                                 key="template_loader"
                             )
-                        
-                            # Get actual template name (remove star if present)
-                            template_to_load = selected_template_display.replace("⭐ ", "")
                         
                             col1, col2 = st.columns(2)
                             with col1:
@@ -19300,41 +19673,9 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     st.rerun()
                         
                             with col2:
-                                # Show set/unset default button
-                                is_current_default = st.session_state.prl_templates[template_to_load].get("is_default", False)
-                                if is_current_default:
-                                    if st.button("✖️ Unset Default"):
-                                        # Remove default flag
-                                        st.session_state.prl_templates[template_to_load]["is_default"] = False
-                                    
-                                        # Save templates to file
-                                        templates_file = "config_files/prl_templates.json"
-                                        try:
-                                            with open(templates_file, 'w') as f:
-                                                json.dump(st.session_state.prl_templates, f, indent=2)
-                                            st.success(f"✅ Removed default status from: {template_to_load}")
-                                        except Exception as e:
-                                            st.error(f"Error saving changes: {str(e)}")
-                                        st.rerun()
-                                else:
-                                    if st.button("⭐ Set as Default"):
-                                        # Remove default from all other templates for this view mode
-                                        for name in st.session_state.prl_templates:
-                                            if st.session_state.prl_templates[name].get("view_mode", "Detailed Transactions") == view_mode:
-                                                st.session_state.prl_templates[name]["is_default"] = False
-                                    
-                                        # Set this template as default
-                                        st.session_state.prl_templates[template_to_load]["is_default"] = True
-                                    
-                                        # Save templates to file
-                                        templates_file = "config_files/prl_templates.json"
-                                        try:
-                                            with open(templates_file, 'w') as f:
-                                                json.dump(st.session_state.prl_templates, f, indent=2)
-                                            st.success(f"✅ Set as default template: {template_to_load}")
-                                        except Exception as e:
-                                            st.error(f"Error saving changes: {str(e)}")
-                                        st.rerun()
+                                # Default template functionality temporarily disabled
+                                # TODO: Add is_default column to database table if needed
+                                pass
                     else:
                         st.info("No saved templates yet")
             
@@ -19364,18 +19705,16 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         
                             with manage_col2:
                                 if st.button("🗑️ Delete"):
-                                    del st.session_state.prl_templates[template_to_manage]
-                                
-                                    # Save updated templates to file
-                                    templates_file = "config_files/prl_templates.json"
-                                    try:
-                                        with open(templates_file, 'w') as f:
-                                            json.dump(st.session_state.prl_templates, f, indent=2)
-                                        st.success(f"✅ Deleted template: {template_to_manage}")
-                                    except Exception as e:
-                                        st.error(f"Error saving changes: {str(e)}")
+                                    # Delete template from database
+                                    success = user_prl_templates.delete_template(template_to_manage)
                                     
-                                    st.rerun()
+                                    if success:
+                                        # Remove from session state
+                                        del st.session_state.prl_templates[template_to_manage]
+                                        st.success(f"✅ Deleted template: {template_to_manage}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Error deleting template from database")
                         else:
                             st.info(f"No templates for {view_mode} view")
                     else:
@@ -20397,13 +20736,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         
                         # Apply combined styling for special transactions and subtotals
                         # Load user preferences for color theme
-                        color_theme = "light"  # Default
-                        try:
-                            with open("config_files/user_preferences.json", "r") as f:
-                                prefs = json.load(f)
-                                color_theme = prefs.get("color_theme", {}).get("transaction_colors", "light")
-                        except:
-                            pass  # Use default if file doesn't exist
+                        from user_preferences_db import get_color_theme
+                        color_theme = get_color_theme()  # Gets user-specific theme or default
                         
                         def combined_styling(row):
                             # First check if it's a subtotal row (either '=' or solid blocks for orphan rows)
@@ -20465,13 +20799,15 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 display_data = editable_data
                             styled_data = display_data.style.apply(combined_styling, axis=1)
                             # Store the display_data (which has subtotals) for export
-                            st.session_state.prl_export_data = display_data.copy()
+                            prl_export_key = get_user_session_key('prl_export_data')
+                            st.session_state[prl_export_key] = display_data.copy()
                             
                         else:
                             # Apply only transaction type styling
                             styled_data = style_special_transactions(editable_data)
                             # Store editable_data for export
-                            st.session_state.prl_export_data = editable_data.copy()
+                            prl_export_key = get_user_session_key('prl_export_data')
+                            st.session_state[prl_export_key] = editable_data.copy()
                         
                         # Use data_editor with styled data
                         edited_df = st.data_editor(
@@ -20753,10 +21089,11 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         
                         # Format numeric columns in the export data
                         # Use editable_data if we're in detailed view with subtotals, otherwise use working_data
-                        if view_mode != "Aggregated by Policy" and 'prl_export_data' in st.session_state and 'Group' in st.session_state.prl_export_data.columns:
+                        prl_export_key = get_user_session_key('prl_export_data')
+                        if view_mode != "Aggregated by Policy" and prl_export_key in st.session_state and 'Group' in st.session_state[prl_export_key].columns:
                             # For Detailed view with subtotals, use the editable_data which includes subtotals
                             # But we need to clean it up for export
-                            export_data = st.session_state.prl_export_data.copy()
+                            export_data = st.session_state[prl_export_key].copy()
                             
                             # Remove internal columns
                             cols_to_remove = ['_term_group', '_term_dates']
@@ -20822,9 +21159,10 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             
                             # Write data to second sheet with formatted numeric columns
                             # Use editable_data if we're in detailed view with subtotals, otherwise use working_data
-                            if view_mode != "Aggregated by Policy" and 'prl_export_data' in st.session_state and 'Group' in st.session_state.prl_export_data.columns:
+                            prl_export_key = get_user_session_key('prl_export_data')
+                        if view_mode != "Aggregated by Policy" and prl_export_key in st.session_state and 'Group' in st.session_state[prl_export_key].columns:
                                 # For Detailed view with subtotals, use the editable_data which includes subtotals
-                                excel_export_data = st.session_state.prl_export_data.copy()
+                                excel_export_data = st.session_state[prl_export_key].copy()
                                 
                                 # Remove internal columns
                                 cols_to_remove = ['_term_group', '_term_dates']
@@ -21094,6 +21432,20 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
         import pandas as pd
         import io
         
+        # Get user-specific keys for edit variables
+        edit_selected_carrier_id_key = get_user_session_key('edit_selected_carrier_id')
+        edit_selected_carrier_name_key = get_user_session_key('edit_selected_carrier_name')
+        edit_carrier_name_manual_key = get_user_session_key('edit_carrier_name_manual')
+        edit_selected_mga_id_key = get_user_session_key('edit_selected_mga_id')
+        edit_selected_mga_name_key = get_user_session_key('edit_selected_mga_name')
+        edit_mga_name_manual_key = get_user_session_key('edit_mga_name_manual')
+        edit_final_carrier_name_key = get_user_session_key('edit_final_carrier_name')
+        edit_final_mga_name_key = get_user_session_key('edit_final_mga_name')
+        edit_commission_new_rate_key = get_user_session_key('edit_commission_new_rate')
+        edit_commission_renewal_rate_key = get_user_session_key('edit_commission_renewal_rate')
+        edit_commission_rule_id_key = get_user_session_key('edit_commission_rule_id')
+        edit_has_commission_rule_key = get_user_session_key('edit_has_commission_rule')
+        
         display_app_header()
         # Add refresh button in the header
         col1, col2 = st.columns([4, 1])
@@ -21348,8 +21700,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     selected_carrier_id = None
                     if selected_carrier_name:
                         selected_carrier_id = next((c['carrier_id'] for c in carriers_list if c['carrier_name'] == selected_carrier_name), None)
-                        st.session_state['edit_selected_carrier_id'] = selected_carrier_id
-                        st.session_state['edit_selected_carrier_name'] = selected_carrier_name
+                        st.session_state[edit_selected_carrier_id_key] = selected_carrier_id
+                        st.session_state[edit_selected_carrier_name_key] = selected_carrier_name
                     
                     # Fallback text input for manual entry
                     if not selected_carrier_name:
@@ -21359,7 +21711,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             placeholder="Type carrier name", 
                             key="renewal_carrier_manual"
                         )
-                        st.session_state['edit_carrier_name_manual'] = carrier_name_manual
+                        st.session_state[edit_carrier_name_manual_key] = carrier_name_manual
                 
                 with col_mga:
                     # Load MGAs based on selected carrier
@@ -21387,11 +21739,11 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         # Store MGA ID if selected
                         if selected_mga_name != "Direct Appointment" and selected_carrier_id:
                             selected_mga_id = next((m['mga_id'] for m in mgas_list if m['mga_name'] == selected_mga_name), None)
-                            st.session_state['edit_selected_mga_id'] = selected_mga_id
-                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                            st.session_state[edit_selected_mga_id_key] = selected_mga_id
+                            st.session_state[edit_selected_mga_name_key] = selected_mga_name
                         else:
-                            st.session_state['edit_selected_mga_id'] = None
-                            st.session_state['edit_selected_mga_name'] = selected_mga_name
+                            st.session_state[edit_selected_mga_id_key] = None
+                            st.session_state[edit_selected_mga_name_key] = selected_mga_name
                     
                     # Fallback text input for manual entry
                     if not selected_carrier_name:
@@ -21401,7 +21753,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             placeholder="Type MGA name or leave blank", 
                             key="renewal_mga_manual"
                         )
-                        st.session_state['edit_mga_name_manual'] = mga_name_manual
+                        st.session_state[edit_mga_name_manual_key] = mga_name_manual
                 
                 # Store final values for form submission
                 if selected_carrier_name:
@@ -21412,8 +21764,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     final_mga_name = st.session_state.get('edit_mga_name_manual', '')
                 
                 # Store in session state for form to access
-                st.session_state['edit_final_carrier_name'] = final_carrier_name
-                st.session_state['edit_final_mga_name'] = final_mga_name
+                st.session_state[edit_final_carrier_name_key] = final_carrier_name
+                st.session_state[edit_final_mga_name_key] = final_mga_name
                 
                 # Display selection status and commission info
                 if selected_carrier_name and selected_carrier_id:
@@ -21453,23 +21805,23 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                         st.success(f"✅ Renewal rate will be applied: {renewal_rate}%")
                         
                         # Store both rates in session state
-                        st.session_state['edit_commission_new_rate'] = new_rate
-                        st.session_state['edit_commission_renewal_rate'] = renewal_rate
-                        st.session_state['edit_commission_rule_id'] = commission_rule.get('rule_id')
-                        st.session_state['edit_has_commission_rule'] = True
+                        st.session_state[edit_commission_new_rate_key] = new_rate
+                        st.session_state[edit_commission_renewal_rate_key] = renewal_rate
+                        st.session_state[edit_commission_rule_id_key] = commission_rule.get('rule_id')
+                        st.session_state[edit_has_commission_rule_key] = True
                     else:
                         st.info(f"ℹ️ No commission rule found for {selected_carrier_name}. Enter rate manually.")
-                        st.session_state['edit_commission_new_rate'] = None
-                        st.session_state['edit_commission_renewal_rate'] = None
-                        st.session_state['edit_commission_rule_id'] = None
-                        st.session_state['edit_has_commission_rule'] = False
+                        st.session_state[edit_commission_new_rate_key] = None
+                        st.session_state[edit_commission_renewal_rate_key] = None
+                        st.session_state[edit_commission_rule_id_key] = None
+                        st.session_state[edit_has_commission_rule_key] = False
                 else:
                     # No carrier selected
                     if not selected_carrier_name and not st.session_state.get('edit_carrier_name_manual'):
                         st.info("ℹ️ No carrier selected. Commission rates must be entered manually.")
                     else:
                         st.info(f"ℹ️ Carrier '{final_carrier_name}' is not in the system. Commission rates must be entered manually.")
-                    st.session_state['edit_has_commission_rule'] = False
+                    st.session_state[edit_has_commission_rule_key] = False
                 
                 st.markdown("---")
                 

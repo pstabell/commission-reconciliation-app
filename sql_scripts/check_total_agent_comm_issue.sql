@@ -55,4 +55,4 @@ AND "Transaction Type" NOT IN ('CAN', 'XCL');
 -- 5. Fix suggestion - Update Total Agent Comm
 SELECT 'Fix Command:' as check_type;
 SELECT 
-    'UPDATE policies SET "Total Agent Comm" = COALESCE(CAST("Agent Estimated Comm $" AS NUMERIC), 0) + COALESCE(CAST("Broker Fee Agent Comm" AS NUMERIC), 0) WHERE user_email = ''demo@agentcommissiontracker.com'' AND ("Total Agent Comm" IS NULL OR "Total Agent Comm" = 0 OR "Total Agent Comm" = '''');' as fix_command;
+    'UPDATE policies SET "Total Agent Comm" = COALESCE(CAST("Agent Estimated Comm $" AS NUMERIC), 0) + COALESCE(CAST("Broker Fee Agent Comm" AS NUMERIC), 0) WHERE user_email = ''demo@agentcommissiontracker.com'' AND ("Total Agent Comm" IS NULL OR CAST("Total Agent Comm" AS TEXT) = ''0'' OR CAST("Total Agent Comm" AS TEXT) = '''');' as fix_command;
