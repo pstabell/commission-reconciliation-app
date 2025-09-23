@@ -4677,7 +4677,7 @@ def edit_transaction_form(modal_data, source_page="edit_policies", is_renewal=Fa
                     options=options,
                     index=options.index(current_policy_type) if current_policy_type in options else 0,
                     key="modal_Policy Type",
-                    help="Go to Admin Panel → Policy Types to add new types"
+                    help="Go to Tools → System Tools tab → Policy Types to add new types"
                 )
                 rendered_fields.add('Policy Type')
         
@@ -6227,7 +6227,7 @@ def main():
                 with col3:
                     st.markdown("""
                     **Step 3: Set Up Contacts**
-                    - Click >> menu → Admin Panel → Contacts
+                    - Click >> menu → Contacts & Commission Rules
                     - Add carriers and MGAs
                     - Configure commission rates
                     """)
@@ -8737,7 +8737,7 @@ def main():
             # Just need to ensure carriers and MGAs are set up
             if 'carriers_data' not in st.session_state or not st.session_state.carriers_data:
                 st.warning("⚠️ No carriers found. Please set up carriers first.")
-                st.info("Navigate to **Admin Panel > Contacts** to add carriers and commission rules.")
+                st.info("Navigate to **Contacts & Commission Rules** to add carriers and commission rules.")
                 return
             if 'mgas_data' not in st.session_state or not st.session_state.mgas_data:
                 st.info("💡 No MGAs found. You can still add policies with direct carrier appointments.")
@@ -10445,12 +10445,12 @@ def main():
                                             st.write(f"• **{unmapped_type}**")
                                         
                                         st.info("👉 **Next Steps:**")
-                                        st.write("1. Go to **Admin Panel** → **Policy Type Mapping** tab")
+                                        st.write("1. Go to **Tools** → **System Tools** tab → **Policy Type Mapping** section")
                                         st.write("2. Add mappings for the policy types listed above")
                                         st.write("3. Return here and try the import again")
                                         
                                         # Provide helpful instructions
-                                        st.markdown("**💡 Quick Tip:** Use the navigation menu on the left sidebar to go to Admin Panel.")
+                                        st.markdown("**💡 Quick Tip:** Use the navigation menu on the left sidebar to go to Tools page.")
                                         
                                         # Stop processing
                                         st.stop()
@@ -11708,7 +11708,7 @@ def main():
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs(["Database Info", "Column Mapping", "Data Management", "System Tools", "Deletion History", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping", "Default Agent Rates"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Database Info", "Debug Logs", "Formulas & Calculations", "Policy Types", "Policy Type Mapping", "Transaction Types & Mapping"])
         
         with tab1:
             st.subheader("Database Information")
@@ -11733,457 +11733,6 @@ def main():
                 st.info("No data available")
         
         with tab2:
-            st.subheader("Your Column Mapping Configuration")
-            st.info("🔒 Map database columns to user-friendly display names. Changes affect only YOUR account.")
-            
-            if not all_data.empty:
-                # Load existing mappings
-                current_mapping = column_mapper.get_user_mapping()
-                
-                # Create editable mapping interface
-                st.write("**Edit Column Display Names:**")
-                st.caption("Change how column names appear in the app without modifying the database")
-                
-                # Initialize session state for editing
-                if 'column_mapping_edits' not in st.session_state:
-                    # Clean up the current mapping to remove duplicates and fix issues
-                    cleaned_mapping = {}
-                    seen_db_cols = set()
-                    
-                    for ui_field, db_col in current_mapping.items():
-                        # Skip duplicate STMT DATE mapping
-                        if db_col == "STMT DATE" and db_col in seen_db_cols:
-                            continue
-                        # Keep calculated fields
-                        if db_col == "(Calculated/Virtual)":
-                            cleaned_mapping[ui_field] = db_col
-                        # Keep valid mappings
-                        elif db_col in all_data.columns or db_col == "NOTES":
-                            cleaned_mapping[ui_field] = db_col
-                            seen_db_cols.add(db_col)
-                    
-                    st.session_state.column_mapping_edits = cleaned_mapping
-                
-                # Create columns for better layout
-                col1, col2, col3 = st.columns([2, 2, 1])
-                with col1:
-                    st.markdown("**Database Column**")
-                with col2:
-                    st.markdown("**Display Name (UI)**")
-                with col3:
-                    st.markdown("**Action**")
-                
-                # Display editable mappings for important columns
-                important_columns = [
-                    "Agent Comm %",
-                    "Agency Estimated Comm/Revenue (CRM)",
-                    "Agent Estimated Comm $",
-                    "Agent Paid Amount (STMT)",
-                    "Agency Comm Received (STMT)",
-                    "Policy Gross Comm %",
-                    "Premium Sold",
-                    "Policy Balance Due",
-                    "Customer",
-                    "Policy Number",
-                    "Transaction Type",
-                    "Effective Date",
-                    "X-DATE"
-                ]
-                
-                # Show mapped columns first
-                st.markdown("---")
-                
-                # Also show calculated fields that need mapping
-                calculated_fields = ["Policy Balance Due", "Agent Estimated Comm $"]
-                
-                for db_col in important_columns:
-                    if db_col in all_data.columns or db_col in calculated_fields:
-                        col1, col2, col3 = st.columns([2, 2, 1])
-                        with col1:
-                            if db_col in calculated_fields:
-                                st.text(f"{db_col} (Calculated)")
-                            else:
-                                st.text(db_col)
-                        with col2:
-                            # Find the UI name for this database column
-                            ui_name = db_col  # default
-                            for ui_field, mapped_col in st.session_state.column_mapping_edits.items():
-                                if mapped_col == db_col or (db_col in calculated_fields and ui_field == db_col):
-                                    ui_name = ui_field
-                                    break
-                            
-                            new_name = st.text_input(
-                                "Display name",
-                                value=ui_name,
-                                key=f"map_{db_col}",
-                                label_visibility="hidden"
-                            )
-                            
-                            # Update session state if changed
-                            if new_name != ui_name:
-                                if db_col in calculated_fields:
-                                    st.session_state.column_mapping_edits[new_name] = "(Calculated/Virtual)"
-                                else:
-                                    st.session_state.column_mapping_edits[new_name] = db_col
-                                # Remove old mapping if UI name changed
-                                if ui_name in st.session_state.column_mapping_edits and ui_name != new_name:
-                                    del st.session_state.column_mapping_edits[ui_name]
-                        
-                        with col3:
-                            if db_col == "Agent Comm %":
-                                st.caption("⭐ Rename to 'Agent Comm %'")
-                
-                # Show other database columns
-                st.markdown("---")
-                st.markdown("**Other Database Columns:**")
-                other_cols = [col for col in sorted(all_data.columns) if col not in important_columns]
-                
-                # Display in a more compact format
-                cols_per_row = 3
-                for i in range(0, len(other_cols), cols_per_row):
-                    cols = st.columns(cols_per_row)
-                    for j, col in enumerate(other_cols[i:i+cols_per_row]):
-                        if j < len(cols):
-                            cols[j].write(f"• {col}")
-                
-                # Save button
-                st.markdown("---")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("💾 Save Column Mappings", type="primary"):
-                        try:
-                            # Save user-specific mappings
-                            if column_mapper.save_user_mapping(st.session_state.column_mapping_edits):
-                                st.success("✅ Column mappings saved successfully for your account!")
-                                # Clear cache to force reload
-                                if 'data_editor_key' in st.session_state:
-                                    st.session_state.data_editor_key = f"editor_{datetime.datetime.now().timestamp()}"
-                                st.rerun()
-                                st.balloons()
-                            else:
-                                st.error("Failed to save mappings. Please try again.")
-                        except Exception as e:
-                            st.error(f"Error saving mappings: {str(e)}")
-                
-                with col2:
-                    if st.button("🔄 Reset to Defaults"):
-                        st.session_state.column_mapping_edits = column_mapper.default_ui_fields.copy()
-                        st.rerun()
-        
-        with tab3:
-            st.subheader("Data Management")
-            
-            st.warning("⚠️ These operations affect your database. Use with caution!")
-            
-            # Database backup
-            if st.button("📁 Create Database Backup"):
-                try:
-                    import shutil
-                    backup_name = f"commissions_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-                    shutil.copy2("commissions.db", backup_name)
-                    st.success(f"Database backed up as {backup_name}")
-                except Exception as e:
-                    st.error(f"Backup failed: {e}")
-            
-            # Data validation
-            if st.button("🔍 Validate Data Integrity"):
-                if not all_data.empty:
-                    issues = []
-                    
-                    # Check for duplicates
-                    if 'Transaction_ID' in all_data.columns:
-                        duplicates = all_data['Transaction_ID'].duplicated().sum()
-                        if duplicates > 0:
-                            issues.append(f"Found {duplicates} duplicate Transaction IDs")
-                    
-                    # Check for missing critical data
-                    if 'Customer' in all_data.columns:
-                        missing_customers = all_data['Customer'].isnull().sum()
-                        if missing_customers > 0:
-                            issues.append(f"Found {missing_customers} records with missing customer names")
-                    
-                    if issues:
-                        st.warning("Data integrity issues found:")
-                        for issue in issues:
-                            st.write(f"• {issue}")
-                    else:
-                        st.success("No data integrity issues found!")
-                else:
-                    st.info("No data to validate")
-        
-        with tab4:
-            st.subheader("System Tools")
-            
-            # System information
-            st.write("**System Information:**")
-            st.write(f"• Python version: {pd.__version__}")
-            st.write(f"• Pandas version: {pd.__version__}")
-            st.write(f"• Database: Supabase Cloud")
-            
-            # Clear session state
-            if st.button("🔄 Clear Session State"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.success("Session state cleared!")
-                st.rerun()
-            
-            st.divider()
-            
-            # Display Preferences section
-            st.subheader("Your Display Preferences")
-            st.info("🔒 Customize how transactions are displayed. Changes affect only YOUR account.")
-            
-            # Load current preferences
-            from user_preferences_db import user_preferences
-            current_theme = user_preferences.get_color_theme()
-            
-            st.markdown("#### Transaction Color Theme")
-            st.write("Choose how STMT (statement) and VOID transactions are highlighted:")
-            
-            # Current theme display is already loaded above
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Light Theme (Powder Blue)**")
-                st.markdown("""
-                <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                    STMT Transaction
-                </div>
-                <div style="background-color: #ffe6e6; padding: 10px; border-radius: 5px;">
-                    VOID Transaction
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with col2:
-                st.markdown("**Dark Theme (Dark Blue)**")
-                st.markdown("""
-                <div style="background-color: #4a90e2; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 500;">
-                    STMT Transaction
-                </div>
-                <div style="background-color: #e85855; color: white; padding: 10px; border-radius: 5px; font-weight: 500;">
-                    VOID Transaction
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Theme selection
-            color_theme = st.radio(
-                "Select Color Theme",
-                options=["light", "dark"],
-                index=0 if current_theme == "light" else 1,
-                help="Light theme uses softer colors suitable for light mode. Dark theme uses higher contrast colors.",
-                horizontal=True
-            )
-            
-            if st.button("Save Color Theme Preference", type="primary"):
-                if user_preferences.set_color_theme(color_theme):
-                    st.success("✅ Color theme updated successfully for your account!")
-                    st.rerun()
-                else:
-                    st.error("Failed to save color theme preference. Please try again.")
-        
-        with tab5:
-            st.subheader("🗑️ Deletion History - Last 100 Deleted Policy Transactions")
-            st.info("View and restore recently deleted policies. Records are kept for recovery purposes.")
-            
-            try:
-                # Fetch deleted policies from Supabase
-                # Filter by user in production
-                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
-                    ensure_user_id()
-                    user_id = get_user_id()
-                    if user_id:
-                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_id', user_id).order('deleted_at', desc=True).limit(100).execute()
-                    else:
-                        # Fallback to email
-                        user_email = get_normalized_user_email()
-                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', user_email).order('deleted_at', desc=True).limit(100).execute()
-                else:
-                    deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
-                
-                if deleted_response.data:
-                    # Extract policy data from JSONB structure
-                    deleted_records = []
-                    for record in deleted_response.data:
-                        policy_info = {
-                            'deletion_id': record['deletion_id'],
-                            'deleted_at': record['deleted_at'],
-                            'transaction_id': record['transaction_id'],
-                            'customer_name': record['customer_name']
-                        }
-                        # Add the policy data fields
-                        if 'policy_data' in record and record['policy_data']:
-                            policy_info.update(record['policy_data'])
-                        deleted_records.append(policy_info)
-                    
-                    deleted_df = pd.DataFrame(deleted_records)
-                    
-                    # Convert deleted_at to datetime
-                    if 'deleted_at' in deleted_df.columns:
-                        deleted_df['deleted_at'] = pd.to_datetime(deleted_df['deleted_at'])
-                    
-                    # Add a selection column for restoration
-                    deleted_df.insert(0, 'Restore', False)
-                    
-                    # Display the deleted records
-                    st.write(f"**Found {len(deleted_df)} deleted records:**")
-                    
-                    # Show key info at the top
-                    edited_deleted = st.data_editor(
-                        deleted_df,
-                        use_container_width=True,
-                        height=400,
-                        key="deleted_policies_editor",
-                        column_config={
-                            "Restore": st.column_config.CheckboxColumn(
-                                "Restore",
-                                help="Select records to restore",
-                                default=False,
-                            ),
-                            "deleted_at": st.column_config.DatetimeColumn(
-                                "Deleted At",
-                                format="DD/MM/YYYY HH:mm",
-                                timezone="local"
-                            )
-                        }
-                    )
-                    
-                    # Restore functionality
-                    st.divider()
-                    col1, col2 = st.columns([2, 3])
-                    
-                    with col1:
-                        if st.button("♻️ Restore Selected Records", type="primary"):
-                            # Find rows where Restore checkbox is True
-                            selected_to_restore = edited_deleted[edited_deleted['Restore'] == True]
-                            
-                            if not selected_to_restore.empty:
-                                try:
-                                    restored_count = 0
-                                    for idx, row in selected_to_restore.iterrows():
-                                        # Prepare data for restoration (exclude deletion-specific columns)
-                                        restore_data = {}
-                                        for col in row.index:
-                                            # Exclude metadata columns that aren't part of the policies table
-                                            if col not in ['Restore', 'deletion_id', 'deleted_at', 'transaction_id', 'customer_name']:
-                                                if pd.notna(row[col]):
-                                                    value = row[col]
-                                                    # Clean numeric values for proper data types
-                                                    if isinstance(value, (int, float)):
-                                                        # Check if it should be an integer (no decimal part)
-                                                        if isinstance(value, float) and value.is_integer():
-                                                            restore_data[col] = int(value)
-                                                        else:
-                                                            restore_data[col] = clean_numeric_value(value)
-                                                    else:
-                                                        restore_data[col] = value
-                                        
-                                        # Restore to policies table
-                                        supabase.table('policies').insert(add_user_email_to_data(restore_data)).execute()
-                                        
-                                        # Remove from deleted_policies table with user filtering
-                                        deletion_id = row['deletion_id']
-                                        delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
-                                        # Add user filtering for security
-                                        user_email = get_normalized_user_email()
-                                        if user_email:
-                                            delete_query = delete_query.eq('user_email', user_email)
-                                        delete_query.execute()
-                                        
-                                        restored_count += 1
-                                    
-                                    # Log the restore operation
-                                    if restored_count > 0:
-                                        log_audit_trail(
-                                            operation_type="RESTORE",
-                                            table_name="policies",
-                                            affected_records=restored_count,
-                                            details={
-                                                "source": "deleted_records_recovery",
-                                                "restored_from": "deleted_policies"
-                                            }
-                                        )
-                                    
-                                    # Clear cache and show success
-                                    clear_policies_cache()
-                                    st.success(f"Successfully restored {restored_count} records!")
-                                    st.rerun()
-                                    
-                                except Exception as restore_error:
-                                    st.error(f"Error restoring records: {restore_error}")
-                            else:
-                                st.warning("Please select records to restore using the checkboxes.")
-                    
-                    with col2:
-                        if st.button("🗑️ Permanently Delete Selected", type="secondary"):
-                            # Find rows where Restore checkbox is True (using same checkbox for selection)
-                            selected_to_delete = edited_deleted[edited_deleted['Restore'] == True]
-                            
-                            if not selected_to_delete.empty:
-                                st.warning(f"⚠️ This will permanently delete {len(selected_to_delete)} records from history!")
-                                if st.button("Confirm Permanent Deletion", key="confirm_perm_delete"):
-                                    try:
-                                        deleted_count = 0
-                                        deletion_ids = []
-                                        for idx, row in selected_to_delete.iterrows():
-                                            deletion_id = row['deletion_id']
-                                            deletion_ids.append(deletion_id)
-                                            # Delete with user filtering
-                                            delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
-                                            user_email = get_normalized_user_email()
-                                            if user_email:
-                                                delete_query = delete_query.eq('user_email', user_email)
-                                            delete_query.execute()
-                                            deleted_count += 1
-                                        
-                                        # Log the permanent deletion
-                                        log_audit_trail(
-                                            operation_type="PERMANENT_DELETE",
-                                            table_name="deleted_policies",
-                                            affected_records=deleted_count,
-                                            details={
-                                                "deletion_ids": deletion_ids,
-                                                "source": "deleted_records_recovery"
-                                            }
-                                        )
-                                        
-                                        st.success(f"Permanently deleted {len(selected_to_delete)} records from history.")
-                                        st.rerun()
-                                    except Exception as perm_delete_error:
-                                        st.error(f"Error permanently deleting records: {perm_delete_error}")
-                    
-                    # Export deleted records
-                    st.divider()
-                    st.write("**Export Deletion History:**")
-                    csv_data = deleted_df.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Deletion History CSV",
-                        data=csv_data,
-                        file_name=f"deletion_history_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-                else:
-                    st.info("No deleted policies found. Deleted records will appear here for recovery.")
-                    
-            except Exception as e:
-                if "relation \"deleted_policies\" does not exist" in str(e):
-                    st.warning("The deleted_policies table doesn't exist yet. Please run the SQL script to create it:")
-                    st.code("""
--- Run this in your Supabase SQL editor:
-CREATE TABLE IF NOT EXISTS deleted_policies (
-    deletion_id SERIAL PRIMARY KEY,
-    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Copy all columns from policies table
-    _id INTEGER,
-    "Client ID" TEXT,
-    "Transaction ID" TEXT,
-    "Customer" TEXT,
-    -- ... (see create_deleted_policies_table.sql for full schema)
-);
-                    """)
-                else:
-                    st.error(f"Error loading deletion history: {e}")
-        
-        with tab6:
             st.subheader("🐛 Debug Logs")
             st.info("This section captures all debug messages, errors, and system events to help diagnose issues.")
             
@@ -12266,7 +11815,7 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
             else:
                 st.info("No debug logs yet. Logs will appear here as you use the application.")
         
-        with tab7:
+        with tab3:
             st.subheader("📊 Formulas & Calculations - Complete Documentation")
             st.info("⚠️ CRITICAL: This section contains ALL formulas used throughout the application. Review carefully to understand the complete calculation matrix.")
             
@@ -12403,1302 +11952,100 @@ Where Used:
 - Add New Policy Transaction form (Endorsement Calculator section)
 - Only for END and PCH transaction types
                 """, language="text")
-                
-            with formula_tab2:
-                st.markdown("### 📋 Commission Rate Matrix")
-                
-                # Create rate matrix dataframe
-                rate_data = {
-                    "Transaction Type": ["NEW", "NBS", "STL", "BoR", "RWL", "REWRITE", "END (New)", "END (Renewal)", "PCH (New)", "PCH (Renewal)", "CAN", "XCL"],
-                    "Full Name": [
-                        "New Business", "New Business (Special)", "Still (Continuing)", "Book of Renewals",
-                        "Renewal", "Rewrite", "Endorsement (New)", "Endorsement (Renewal)",
-                        "Policy Change (New)", "Policy Change (Renewal)", "Cancellation", "Excluded"
-                    ],
-                    "Agent Rate": ["50%", "50%", "50%", "50%", "25%", "25%", "50%", "25%", "50%", "25%", "0%", "0%"],
-                    "Condition": [
-                        "Always", "Always", "Always", "Always", "Always", "Always",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "If Orig Date = Eff Date", "If Orig Date ≠ Eff Date",
-                        "No commission", "No commission"
-                    ]
-                }
-                
-                rate_df = pd.DataFrame(rate_data)
-                st.dataframe(rate_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("#### Special Rules")
-                st.markdown("""
-                - **NEW vs RWL Detection**: Based on Policy Origination Date vs Effective Date
-                - **Endorsements/Changes**: Commission rate depends on whether it's on a new or renewal policy
-                - **Cancellations**: No agent commission paid on CAN or XCL transactions
-                - **Override Capability**: Admin users can manually adjust commission amounts if needed
-                """)
-                
-            with formula_tab3:
-                st.markdown("### 🔗 Field Dependencies & Data Flow")
-                
-                st.info("This shows how fields depend on each other and the flow of calculations through the system.")
-                
-                # Dependency Tree
-                st.markdown("#### Calculation Dependency Tree")
-                st.code("""
-1. Premium Sold (USER INPUT)
-   └── Policy Taxes & Fees (USER INPUT)
-       └── Commissionable Premium (CALCULATED)
-           └── Policy Gross Comm % (USER INPUT)
-               └── Agency Estimated Comm/Revenue (CRM) (CALCULATED)
-                   └── Transaction Type (USER INPUT)
-                   └── Policy Origination Date (USER INPUT - for END/PCH)
-                   └── Effective Date (USER INPUT - for END/PCH)
-                       └── Agent Comm Rate (CALCULATED)
-                           └── Agent Estimated Comm $ (CALCULATED)
-                               └── Agent Paid Amount (STMT) (FROM RECONCILIATION)
-                                   └── Policy Balance Due (CALCULATED)
-
-2. Broker Fee (USER INPUT)
-   └── Broker Fee Agent Comm (CALCULATED - always 50%)
-       └── Total Agent Comm (CALCULATED with Agent Est Comm)
-                """, language="text")
-                
-                # Field Impact Matrix
-                st.markdown("#### Field Impact Matrix")
-                impact_data = {
-                    "When This Changes": [
-                        "Premium Sold",
-                        "Policy Taxes & Fees",
-                        "Policy Gross Comm %",
-                        "Transaction Type",
-                        "Broker Fee",
-                        "Policy Orig Date",
-                        "Effective Date",
-                        "Agent Paid Amount"
-                    ],
-                    "These Fields Update": [
-                        "Commissionable Premium, Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
-                        "Commissionable Premium, Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
-                        "Agency Comm, Agent Comm, Total Agent Comm, Balance Due",
-                        "Agent Comm Rate, Agent Comm, Total Agent Comm, Balance Due",
-                        "Broker Fee Agent Comm, Total Agent Comm",
-                        "Agent Comm Rate (for END/PCH), Agent Comm, Total Agent Comm, Balance Due",
-                        "Agent Comm Rate (for END/PCH), Agent Comm, Total Agent Comm, Balance Due",
-                        "Policy Balance Due"
-                    ],
-                    "Calculation Type": [
-                        "Cascading",
-                        "Cascading",
-                        "Cascading",
-                        "Rate Determination",
-                        "Direct",
-                        "Conditional",
-                        "Conditional",
-                        "Direct"
-                    ]
-                }
-                
-                impact_df = pd.DataFrame(impact_data)
-                st.dataframe(impact_df, use_container_width=True, hide_index=True)
-                
-                # Critical Fields
-                st.markdown("#### 🚨 Critical Fields for Calculations")
-                st.warning("""
-                These fields MUST have values for calculations to work correctly:
-                - Premium Sold (or calculated from Endorsement Calculator)
-                - Policy Gross Comm %
-                - Transaction Type
-                - Policy Origination Date (for END/PCH transactions)
-                - Effective Date (for END/PCH transactions)
-                """)
-                
-                # Locked vs Editable
-                st.markdown("#### 🔒 Formula-Locked vs Editable Fields")
-                field_status = {
-                    "Field Name": [
-                        "Premium Sold",
-                        "Policy Taxes & Fees",
-                        "Commissionable Premium",
-                        "Broker Fee",
-                        "Policy Gross Comm %",
-                        "Agency Estimated Comm/Revenue (CRM)",
-                        "Agent Comm %",
-                        "Agent Estimated Comm $",
-                        "Broker Fee Agent Comm",
-                        "Total Agent Comm",
-                        "Policy Balance Due"
-                    ],
-                    "Status": [
-                        "✏️ Editable",
-                        "✏️ Editable",
-                        "🔒 Formula-Locked",
-                        "✏️ Editable",
-                        "✏️ Editable",
-                        "🔒 Formula-Locked",
-                        "✏️ Editable (but shows rate)",
-                        "🔒 Formula-Locked",
-                        "🔒 Formula-Locked",
-                        "🔒 Formula-Locked",
-                        "🔒 Formula-Locked"
-                    ],
-                    "Notes": [
-                        "User enters or calculates via Endorsement Calculator",
-                        "User enters carrier taxes/fees",
-                        "Auto-calculated: Premium - Taxes",
-                        "User enters broker fee amount",
-                        "User enters commission percentage",
-                        "Auto-calculated: Commissionable × Rate",
-                        "Shows rate but stored as editable field",
-                        "Auto-calculated: Agency × Agent Rate",
-                        "Auto-calculated: Always 50% of Broker Fee",
-                        "Auto-calculated: Agent + Broker commissions",
-                        "Auto-calculated: Estimated - Paid"
-                    ]
-                }
-                
-                status_df = pd.DataFrame(field_status)
-                st.dataframe(status_df, use_container_width=True, hide_index=True)
-                
-            with formula_tab4:
-                st.markdown("### 🧪 Formula Testing & Verification")
-                
-                st.markdown("#### Test Commission Calculations")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    test_premium = st.number_input("Test Premium Amount", value=1000.0, format="%.2f", key="test_premium")
-                    test_comm_rate = st.number_input("Commission Rate (%)", value=10.0, format="%.2f", key="test_comm_rate")
-                    test_trans_type = st.selectbox("Transaction Type", 
-                        get_transaction_type_codes(),
-                        key="test_trans_type"
-                    )
-                    
-                    if test_trans_type in ["END", "PCH"]:
-                        st.markdown("**Date Check for END/PCH**")
-                        col1a, col1b = st.columns(2)
-                        with col1a:
-                            orig_date = st.date_input("Origination Date", key="test_orig_date")
-                        with col1b:
-                            eff_date = st.date_input("Effective Date", key="test_eff_date")
-                        is_new = orig_date == eff_date
-                    else:
-                        is_new = None
-                
-                with col2:
-                    st.markdown("**Calculated Results:**")
-                    
-                    # Calculate agency commission
-                    agency_comm = test_premium * (test_comm_rate / 100)
-                    st.metric("Agency Commission", f"${agency_comm:.2f}")
-                    
-                    # Calculate agent commission based on type
-                    if test_trans_type in ["NEW", "NBS", "STL", "BoR"]:
-                        agent_rate = 0.50
-                        rate_display = "50%"
-                    elif test_trans_type in ["RWL", "REWRITE"]:
-                        agent_rate = 0.25
-                        rate_display = "25%"
-                    elif test_trans_type in ["END", "PCH"]:
-                        if is_new:
-                            agent_rate = 0.50
-                            rate_display = "50% (New)"
-                        else:
-                            agent_rate = 0.25
-                            rate_display = "25% (Renewal)"
-                    else:  # CAN, XCL
-                        agent_rate = 0.0
-                        rate_display = "0%"
-                    
-                    agent_comm = agency_comm * agent_rate
-                    
-                    st.metric("Agent Rate", rate_display)
-                    st.metric("Agent Commission", f"${agent_comm:.2f}")
-                    
-                    # Show calculation breakdown
-                    st.markdown("**Calculation Breakdown:**")
-                    st.text(f"""
-Premium: ${test_premium:.2f}
-Commission Rate: {test_comm_rate}%
-Agency Commission: ${test_premium:.2f} × {test_comm_rate}% = ${agency_comm:.2f}
-Agent Rate: {rate_display}
-Agent Commission: ${agency_comm:.2f} × {agent_rate:.2%} = ${agent_comm:.2f}
-                    """)
-            
-            with formula_tab5:
-                st.markdown("### ⚙️ Implementation Details")
-                
-                st.warning("CRITICAL: Understanding where formulas are implemented is essential for troubleshooting")
-                
-                st.markdown("#### Formula Implementation Locations")
-                
-                implementation_data = {
-                    "Formula": [
-                        "Agent Comm Rate Determination",
-                        "Agent Comm Rate Determination",
-                        "Agent Comm Rate Determination",
-                        "Agency Commission Calculation",
-                        "Agency Commission Calculation",
-                        "Agent Commission Calculation",
-                        "Agent Commission Calculation",
-                        "Field Locking/Display",
-                        "Field Locking/Display"
-                    ],
-                    "Location": [
-                        "get_agent_rate() function (lines 370-383)",
-                        "Add New Policy form (lines 3864-3874)",
-                        "Edit Transaction form (lines 3108-3117)",
-                        "Add New Policy form (auto-calc)",
-                        "Edit Transaction form (auto-calc)",
-                        "Add New Policy form (auto-calc)",
-                        "Edit Transaction form (auto-calc)",
-                        "Add New Policy form",
-                        "Edit Transaction form"
-                    ],
-                    "Implementation": [
-                        "✅ Full logic with date checking for END/PCH",
-                        "⚠️ Defaults END/PCH to 50% (no date check)",
-                        "❌ Just displays stored value (no logic)",
-                        "✅ Uses Commissionable Premium",
-                        "✅ Uses Commissionable Premium",
-                        "✅ Full calculation",
-                        "✅ Full calculation",
-                        "✅ Shows as disabled fields",
-                        "✅ Shows as disabled fields"
-                    ],
-                    "Issue": [
-                        "Working correctly",
-                        "Missing date comparison logic",
-                        "No automatic rate determination",
-                        "Working correctly",
-                        "Working correctly",
-                        "Working correctly",
-                        "Working correctly",
-                        "Working correctly",
-                        "Working correctly"
-                    ]
-                }
-                
-                impl_df = pd.DataFrame(implementation_data)
-                st.dataframe(impl_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("#### Key Functions")
-                st.code("""
-1. get_agent_rate(row) - Main logic for determining agent commission rate
-   - Location: Lines 370-383
-   - Used by: Batch calculations, reports
-   - NOT used by: Add/Edit forms (they have their own logic)
-
-2. calculate_agency_commission(premium, rate) - Calculate agency commission
-   - Used by: Forms for real-time calculation
-
-3. calculate_agent_commission(agency_comm, trans_type, is_new) - Calculate agent commission
-   - Used by: Forms for real-time calculation
-
-4. is_reconciliation_transaction(trans_id) - Check if transaction is locked
-   - Prevents editing of -STMT-, -VOID-, -ADJ- transactions
-                """, language="text")
-                
-                st.markdown("#### Formula Execution Flow")
-                st.code("""
-Add New Policy Transaction:
-1. User enters Premium Sold, Taxes, Broker Fee
-2. System calculates Commissionable Premium (real-time)
-3. User enters Policy Gross Comm %
-4. System calculates Agency Commission (real-time)
-5. System determines Agent Rate based on Transaction Type
-6. System calculates Agent Commission (real-time)
-7. System calculates Broker Fee Commission (always 50%)
-8. System calculates Total Agent Commission
-9. Data saved to database
-
-Edit Policy Transaction:
-1. Form loads with existing data
-2. User can edit input fields
-3. System recalculates all formula fields on save
-4. Agent Comm Rate is NOT automatically determined (uses stored value)
-                """, language="text")
-            
-            with formula_tab6:
-                st.markdown("### ⚠️ Known Formula Issues & Inconsistencies")
-                
-                st.error("These issues affect calculation accuracy and user experience")
-                
-                st.markdown("#### 🔴 CRITICAL ISSUE: Agent Comm Rate Inconsistency")
-                st.code("""
-PROBLEM: Agent Commission Rate logic is implemented differently in different places
-
-1. Batch Calculation Function (get_agent_rate):
-   ✅ Correctly checks if Policy Orig Date = Effective Date for END/PCH
-
-2. Add New Policy Form:
-   ⚠️ Always defaults END/PCH to 50% (doesn't check dates)
-   
-3. Edit Transaction Form:
-   ❌ Just shows whatever is in the database (no logic at all)
-   
-IMPACT:
-- END/PCH transactions may have wrong commission rates
-- Users must manually know to check/update the rate
-- No validation that the stored rate matches the business rules
-
-SOLUTION NEEDED:
-- Implement consistent date-checking logic in all forms
-- For Edit form: Look up the NEW transaction for the policy to determine correct rate
-                """, language="text")
-                
-                st.markdown("#### 🟡 Other Known Issues")
-                
-                issues_data = {
-                    "Issue": [
-                        "Edit form doesn't recalculate rates",
-                        "No validation of commission rates",
-                        "Decimal vs percentage confusion",
-                        "No audit trail for formula changes",
-                        "Formula fields can be manually edited in database"
-                    ],
-                    "Impact": [
-                        "Wrong rates stay wrong until manually fixed",
-                        "Users can enter any rate without warning",
-                        "Agent rate stored as 0.50 or 50 inconsistently",
-                        "Can't track when/why calculations changed",
-                        "Database edits bypass all formula logic"
-                    ],
-                    "Severity": [
-                        "High",
-                        "Medium",
-                        "Medium",
-                        "Low",
-                        "High"
-                    ],
-                    "Workaround": [
-                        "Manually verify and update rates",
-                        "User training on correct rates",
-                        "System handles both formats",
-                        "Document changes manually",
-                        "Lock formula fields at database level"
-                    ]
-                }
-                
-                issues_df = pd.DataFrame(issues_data)
-                st.dataframe(issues_df, use_container_width=True, hide_index=True)
-                
-                st.markdown("#### 📊 Formula Validation Checklist")
-                st.info("""
-                When reviewing transactions, check:
-                1. ✓ Is Transaction Type correct?
-                2. ✓ For END/PCH: Does Agent Rate match the Policy Orig Date vs Effective Date rule?
-                3. ✓ Is Agency Commission = Commissionable Premium × Gross Rate?
-                4. ✓ Is Agent Commission = Agency Commission × Agent Rate?
-                5. ✓ Is Broker Fee Commission = Broker Fee × 50%?
-                6. ✓ Is Total Agent Commission = Agent + Broker Fee commissions?
-                7. ✓ Is Balance Due = Agent Estimated - Agent Paid?
-                """)
         
-        with tab8:
-            st.subheader("📋 Policy Types Configuration")
+        with tab4:
+            st.subheader("Policy Types Management")
+            st.info("Manage your available policy types. These are used when creating new policies.")
             
-            # Try to load policy types from configuration file
-            try:
-                # Load policy types from database
-                config_data = user_policy_types.get_user_policy_types()
-                policy_types_data = config_data.get("policy_types", [])
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.markdown("### Current Policy Types")
                 
-                # Create a modern, compact display
-                with st.container():
-                    
-                    # Summary metrics in a compact row
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        active_count = sum(1 for pt in policy_types_data if pt.get('active', True))
-                        st.metric("Active Types", active_count)
-                    with col2:
-                        st.metric("Total Types", len(policy_types_data))
-                    with col3:
-                        st.metric("Categories", len(set(pt.get('category', 'Other') for pt in policy_types_data)))
-                    
-                    st.divider()
-                    
-                    # Display policy types in a grid format
-                    st.markdown("### Active Policy Types")
-                    
-                    # Group by category
-                    categories = {}
-                    for pt in policy_types_data:
-                        if pt.get('active', True):
-                            category = pt.get('category', 'Other')
-                            if category not in categories:
-                                categories[category] = []
-                            categories[category].append(pt)
-                    
-                    # Display each category
-                    for category, types in categories.items():
-                        st.markdown(f"**{category}**")
-                        
-                        # Create a grid of policy types
-                        cols = st.columns(4)
-                        for idx, policy_type in enumerate(types):
-                            with cols[idx % 4]:
-                                # Display as a compact card
-                                st.success(f"✅ {policy_type.get('code', policy_type.get('name'))}")
-                    
-                    st.divider()
-                    
-                    # Add/Edit Policy Types Section
-                    st.markdown("### ➕ Add New Policy Type")
-                    
-                    with st.form("add_policy_type_form"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            new_code = st.text_input("Code", placeholder="e.g., EPL", max_chars=10)
-                            new_category = st.selectbox(
-                                "Category",
-                                options=["Personal", "Commercial", "Specialty", "Other"]
-                            )
-                        with col2:
-                            new_name = st.text_input("Name", placeholder="e.g., Employment Practices Liability")
-                            new_active = st.checkbox("Active", value=True)
-                        
-                        submitted = st.form_submit_button("Add Policy Type", type="primary")
-                        
-                        if submitted and new_code and new_name:
-                            # Add the new policy type
-                            new_policy_type = {
-                                "code": new_code.upper(),
-                                "name": new_name,
-                                "active": new_active,
-                                "category": new_category
-                            }
-                            
-                            # Check if policy type already exists
-                            existing_codes = [pt.get('code', '').upper() for pt in policy_types_data]
-                            if new_code.upper() in existing_codes:
-                                st.error(f"Policy type with code '{new_code}' already exists!")
-                            else:
-                                # Add to the list
-                                policy_types_data.append(new_policy_type)
-                                
-                                # Update the configuration in database
-                                try:
-                                    # Save to database using user_policy_types module
-                                    success = user_policy_types.save_user_policy_types(
-                                        policy_types_data,
-                                        config_data.get('default', 'HO3'),
-                                        config_data.get('categories')
-                                    )
-                                    if success:
-                                        st.success(f"✅ Added policy type: {new_code} - {new_name}")
-                                        st.rerun()
-                                    else:
-                                        st.error("Failed to save policy type")
-                                except Exception as e:
-                                    st.error(f"Error saving configuration: {e}")
-                    
-                    # Edit/Delete existing policy types
-                    st.markdown("### 📝 Edit Policy Types")
-                    
-                    # Create an editable dataframe
-                    if policy_types_data:
-                        # Convert to DataFrame for easier editing
-                        df = pd.DataFrame(policy_types_data)
-                        
-                        # Get transaction counts from database and find any policy types not in config
-                        try:
-                            supabase = get_supabase_client()
-                            transaction_counts = {}
-                            db_policy_types = set()
-                            
-                            # Get all unique policy types and their counts in one query
-                            response = supabase.table('policies').select('"Policy Type"').execute()
-                            if response.data:
-                                # Count occurrences of each policy type
-                                for record in response.data:
-                                    pt = record.get('Policy Type')
-                                    if pt:
-                                        transaction_counts[pt] = transaction_counts.get(pt, 0) + 1
-                                        db_policy_types.add(pt)
-                            
-                            # Find policy types in database but not in configuration
-                            config_policy_types = set(pt['name'] for pt in policy_types_data)
-                            missing_types = db_policy_types - config_policy_types
-                            
-                            # Add missing policy types to the dataframe
-                            for missing_type in missing_types:
-                                new_row = {
-                                    'code': missing_type,
-                                    'name': missing_type,
-                                    'active': True,
-                                    'category': 'Other'
-                                }
-                                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                            
-                            # Add transaction count to dataframe
-                            df['Transaction Count'] = df['name'].apply(lambda x: transaction_counts.get(x, 0))
-                            
-                            # Sort by transaction count (descending) to show most used types first
-                            df = df.sort_values('Transaction Count', ascending=False)
-                            
-                            if missing_types:
-                                st.warning(f"📌 Found {len(missing_types)} policy type(s) in database not in configuration: {', '.join(sorted(missing_types))}")
-                        except Exception as e:
-                            st.error(f"Error fetching transaction counts: {e}")
-                            df['Transaction Count'] = 0
-                        
-                        # Add columns for merge and delete operations
-                        df['Delete'] = False
-                        df['Merge From'] = False
-                        df['Merge To'] = ''
-                        
-                        # Display editable dataframe
-                        edited_df = st.data_editor(
-                            df,
-                            column_config={
-                                "code": None,  # Hide the code column since it's the same as name
-                                "name": st.column_config.TextColumn("Policy Type", width="medium"),
-                                "Transaction Count": st.column_config.NumberColumn(
-                                    "Transactions",
-                                    help="Number of transactions using this policy type",
-                                    format="%d",
-                                    width="small"
-                                ),
-                                "category": st.column_config.SelectboxColumn(
-                                    "Category",
-                                    options=["Personal", "Commercial", "Specialty", "Other"],
-                                    width="small"
-                                ),
-                                "active": st.column_config.CheckboxColumn("Active", width="small"),
-                                "Merge From": st.column_config.CheckboxColumn("Merge From", width="small", help="Select this policy type to merge FROM (will be deleted)"),
-                                "Merge To": st.column_config.SelectboxColumn(
-                                    "Merge To",
-                                    options=[""] + [pt['name'] for pt in policy_types_data],
-                                    width="medium",
-                                    help="Select the policy type to merge INTO (will be kept)"
-                                ),
-                                "Delete": st.column_config.CheckboxColumn("Delete", width="small")
-                            },
-                            hide_index=True,
-                            use_container_width=True,
-                            disabled=["Transaction Count"]  # Make transaction count read-only
-                        )
-                        
-                        # Save changes button
-                        if st.button("💾 Save Changes", type="primary"):
-                            try:
-                                # First, handle any merge operations
-                                merge_operations = []
-                                for _, row in edited_df.iterrows():
-                                    if row.get('Merge From', False) and row.get('Merge To', ''):
-                                        merge_operations.append({
-                                            'from': row.get('name', ''),
-                                            'to': row.get('Merge To', '')
-                                        })
-                                
-                                # Perform merge operations in the database
-                                if merge_operations:
-                                    supabase = get_supabase_client()
-                                    total_merged = 0
-                                    merge_details = []
-                                    
-                                    for merge_op in merge_operations:
-                                        if merge_op['from'] != merge_op['to']:
-                                            # Update all transactions with the merge_from type to use merge_to
-                                            update_response = supabase.table('policies').update({'Policy Type': merge_op['to']}).eq('"Policy Type"', merge_op['from']).eq('user_id', st.session_state.get('user_id')).execute()
-                                            if update_response.data:
-                                                affected_count = len(update_response.data)
-                                                total_merged += affected_count
-                                                merge_details.append({
-                                                    'from': merge_op['from'],
-                                                    'to': merge_op['to'],
-                                                    'affected_records': affected_count
-                                                })
-                                                st.success(f"✅ Merged '{merge_op['from']}' into '{merge_op['to']}' ({affected_count} records)")
-                                            
-                                            # Also update the policy type mappings if the merged type was mapped
-                                            try:
-                                                mappings = user_mappings.get_user_policy_type_mappings()
-                                                
-                                                # Update any mappings that pointed to the merged type
-                                                updated_mappings = False
-                                                for key, value in mappings.items():
-                                                    if value == merge_op['from']:
-                                                        mappings[key] = merge_op['to']
-                                                        updated_mappings = True
-                                                
-                                                if updated_mappings:
-                                                    user_mappings.save_user_policy_type_mappings(mappings)
-                                            except:
-                                                pass
-                                    
-                                    # Log merge operations after all are complete
-                                    if total_merged > 0:
-                                        log_audit_trail(
-                                            operation_type="MERGE",
-                                            table_name="policies",
-                                            affected_records=total_merged,
-                                            details={
-                                                "merge_operations": merge_details,
-                                                "source": "policy_type_management"
-                                            }
-                                        )
-                                
-                                # Filter out deleted items and merged items
-                                updated_policy_types = []
-                                merged_types = [op['from'] for op in merge_operations]
-                                
-                                for _, row in edited_df.iterrows():
-                                    if not row.get('Delete', False) and row.get('name', '') not in merged_types:
-                                        updated_policy_types.append({
-                                            "code": row.get('code', ''),
-                                            "name": row.get('name', ''),
-                                            "active": row.get('active', True),
-                                            "category": row.get('category', 'Other')
-                                        })
-                                
-                                # Update configuration in database
-                                success = user_policy_types.save_user_policy_types(
-                                    updated_policy_types,
-                                    config_data.get('default', 'HO3'),
-                                    config_data.get('categories')
-                                )
-                                
-                                if success:
-                                    st.success("✅ Policy types updated successfully!")
-                                    
-                                    # Clear the cache to reflect changes
-                                    clear_policies_cache()
-                                    
-                                    st.rerun()
-                                else:
-                                    st.error("Failed to update policy types")
-                            except Exception as e:
-                                st.error(f"Error saving changes: {e}")
-                    
-                    
-                    # Backup/Download section
-                    st.divider()
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if 'config_data' in locals():
-                            config_json = json.dumps(config_data, indent=2)
-                            st.download_button(
-                                label="📥 Download Current Configuration",
-                                data=config_json,
-                                file_name=f"policy_types_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                                mime="application/json"
-                            )
-                    with col2:
-                        st.info("💡 Download a backup before making major changes")
-                    
-            except Exception as e:
-                st.error(f"Error loading policy types configuration: {e}")
-                st.info("Using fallback policy types display")
+                # Get current policy types
+                policy_types = user_policy_types.get_policy_types_list()
                 
-                # Fallback to basic display
-                policy_types, allow_custom = load_policy_types()
                 if policy_types:
-                    st.dataframe(pd.DataFrame(policy_types), use_container_width=True)
-        
-        with tab9:
-            st.subheader("🔄 Policy Type Mapping")
-            st.info("Map policy types from reconciliation statements to your standardized policy types")
-            
-            # Load or initialize mappings
-            # Load policy type mappings from database
-            try:
-                mappings = user_mappings.get_user_policy_type_mappings()
-            except Exception as e:
-                st.error(f"Error loading mappings: {e}")
-                mappings = {}
-            
-            # Get list of active policy types for dropdown
-            active_types = user_policy_types.get_policy_types_list()
-            active_types.sort()  # Sort for better display
-            
-            # Display current mappings
-            st.markdown("### Current Mappings")
-            if mappings:
-                # Create editable dataframe for mappings
-                mapping_data = []
-                for statement_value, mapped_to in mappings.items():
-                    mapping_data.append({
-                        "Statement Value": statement_value,
-                        "Maps To": mapped_to,
-                        "Delete": False
+                    # Create a dataframe for display
+                    types_df = pd.DataFrame({
+                        'Policy Type': policy_types,
+                        'Status': ['Active' for _ in policy_types]
                     })
-                
-                mapping_df = pd.DataFrame(mapping_data)
-                edited_df = st.data_editor(
-                    mapping_df,
-                    column_config={
-                        "Maps To": st.column_config.SelectboxColumn(
-                            "Maps To",
-                            options=active_types,
-                            required=True
-                        ),
-                        "Delete": st.column_config.CheckboxColumn(
-                            "Delete",
-                            help="Check to delete this mapping"
-                        )
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="fixed"
-                )
-                
-                # Save changes button
-                if st.button("💾 Save Mapping Changes", type="primary"):
-                    # Update mappings based on edits
-                    new_mappings = {}
-                    for idx, row in edited_df.iterrows():
-                        if not row["Delete"]:
-                            new_mappings[row["Statement Value"]] = row["Maps To"]
                     
-                    # Save to database
-                    try:
-                        if user_mappings.save_user_policy_type_mappings(new_mappings):
-                            st.success("✅ Mappings saved successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Failed to save mappings")
-                    except Exception as e:
-                        st.error(f"Error saving mappings: {e}")
-            else:
-                st.info("No mappings configured yet. Add your first mapping below.")
-            
-            st.divider()
-            
-            # Add new mapping
-            st.markdown("### Add New Mapping")
-            with st.form("add_mapping_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_statement_value = st.text_input(
-                        "Statement Value",
-                        placeholder="e.g., AUTO, HO3, CONDO",
-                        help="The policy type as it appears in your reconciliation statements"
-                    )
-                with col2:
-                    new_maps_to = st.selectbox(
-                        "Maps To",
-                        options=[""] + active_types,
-                        help="Your standardized policy type"
-                    )
-                
-                submitted = st.form_submit_button("➕ Add Mapping", type="primary")
-                
-                if submitted:
-                    if new_statement_value and new_maps_to:
-                        # Check if mapping already exists
-                        if new_statement_value in mappings:
-                            st.error(f"Mapping for '{new_statement_value}' already exists!")
-                        else:
-                            # Add new mapping using database method
-                            try:
-                                if user_mappings.add_policy_mapping(new_statement_value, new_maps_to):
-                                    st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
-                                    st.rerun()
-                                else:
-                                    st.error("Error saving mapping")
-                            except Exception as e:
-                                st.error(f"Error saving mapping: {e}")
-                    else:
-                        st.error("Please fill in both fields")
-            
-            st.divider()
-            
-            # Mapping summary
-            st.markdown("### Mapping Summary")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total Mappings", len(mappings))
-            with col2:
-                st.metric("Active Policy Types", len(active_types))
-            
-            # Help text
-            with st.expander("ℹ️ How Policy Type Mapping Works"):
-                st.markdown("""
-                **Purpose**: Prevent duplicate policy types during reconciliation by mapping statement values to your standardized types.
-                
-                **How it works**:
-                1. During reconciliation import, the system checks each policy type against these mappings
-                2. If a mapping exists, it automatically uses your standardized type
-                3. If no mapping exists, the import will stop and ask you to add the mapping
-                
-                **Example**:
-                - Statement has "AUTO" → Maps to "Private Passenger Auto"
-                - Statement has "HO3" → Maps to "Homeowners"
-                - Statement has "DWELLING" → Maps to "Dwelling Fire"
-                
-                **Benefits**:
-                - No more duplicate policy types
-                - Consistent data across all imports
-                - Easy to maintain and update
-                """)
-        
-        with tab10:
-            col_title, col_refresh = st.columns([10, 1])
-            with col_title:
-                st.subheader("📋 Transaction Types & Mapping")
-            with col_refresh:
-                if st.button("🔄", help="Refresh page"):
-                    st.rerun()
-            
-            st.info("Manage transaction types used in your database and map statement codes to standardized types")
-            
-            # Load all transaction types from database
-            supabase = get_supabase_client()
-            
-            # Get unique transaction types from database with counts
-            try:
-                # Query to get all unique transaction types and their counts
-                trans_type_data = supabase.table('policies').select('"Transaction Type", "Transaction ID"').execute()
-                
-                if trans_type_data.data:
-                    # Filter out reconciliation transactions (-STMT-, -VOID-, -ADJ-)
-                    # to match the dashboard's calculation
-                    filtered_data = []
-                    for row in trans_type_data.data:
-                        trans_id = row.get('Transaction ID', '')
-                        trans_type = row.get('Transaction Type')
-                        # Exclude reconciliation entries
-                        if trans_id and not any(suffix in str(trans_id) for suffix in ['-STMT-', '-VOID-', '-ADJ-']):
-                            if trans_type:
-                                filtered_data.append(trans_type)
-                    
-                    trans_type_counts = pd.Series(filtered_data).value_counts().to_dict() if filtered_data else {}
+                    st.dataframe(types_df, use_container_width=True, hide_index=True)
                 else:
-                    trans_type_counts = {}
-            except Exception as e:
-                st.error(f"Error loading transaction types: {e}")
-                trans_type_counts = {}
-            
-            # Load transaction type definitions from user-specific database
-            trans_type_definitions = user_transaction_types.get_user_transaction_types()
-            
-            # Ensure trans_type_definitions is always a dictionary
-            if not isinstance(trans_type_definitions, dict):
-                trans_type_definitions = {}
-            
-            # Section 1: Transaction Types List
-            st.markdown("### 📊 Transaction Types in Database")
-            
-            # Summary metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Types", len(trans_type_counts))
-            with col2:
-                st.metric("Total Transactions", sum(trans_type_counts.values()))
-            with col3:
-                active_count = sum(1 for k, v in trans_type_definitions.items() 
-                                 if isinstance(v, dict) and v.get('active', True))
-                st.metric("Active Types", active_count)
-            with col4:
-                undefined_count = len([t for t in trans_type_counts.keys() if t not in trans_type_definitions])
-                st.metric("Undefined Types", undefined_count)
-            
-            # Display transaction types table
-            type_data = []
-            all_types = set(trans_type_counts.keys()) | set(trans_type_definitions.keys())
-            
-            # Get list of types for merge dropdown
-            type_list = sorted(all_types)
-            
-            for trans_type in type_list:
-                count = trans_type_counts.get(trans_type, 0)
-                definition = trans_type_definitions.get(trans_type, {})
-                # Ensure definition is a dictionary
-                if not isinstance(definition, dict):
-                    definition = {}
-                type_data.append({
-                    "Type": trans_type,
-                    "Count": count,
-                    "Description": definition.get('description', ''),
-                    "Active": definition.get('active', True),
-                    "In Database": count > 0,
-                    "Delete": False,
-                    "Merge To": ""
-                })
-            
-            # Create editable dataframe
-            type_df = pd.DataFrame(type_data)
-            
-            edited_type_df = st.data_editor(
-                type_df,
-                key="trans_type_editor",
-                column_config={
-                    "Type": st.column_config.TextColumn("Type", disabled=True),
-                    "Count": st.column_config.NumberColumn("Count", disabled=True),
-                    "Description": st.column_config.TextColumn("Description", help="Add a description for this transaction type"),
-                    "Active": st.column_config.CheckboxColumn("Active", help="Uncheck to deactivate this type"),
-                    "In Database": st.column_config.CheckboxColumn("In Database", disabled=True),
-                    "Delete": st.column_config.CheckboxColumn("Delete", help="Check to delete this type (only if not in database)"),
-                    "Merge To": st.column_config.SelectboxColumn(
-                        "Merge To",
-                        help="Select a type to merge this one into",
-                        options=[""] + type_list,
-                        required=False
-                    )
-                },
-                use_container_width=True,
-                hide_index=True,
-                height=400
-            )
-            
-            # Save changes button for transaction types
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                if st.button("💾 Save Transaction Type Changes", type="primary", key="save_trans_types"):
-                    # Track operations
-                    merges_to_perform = []
-                    types_to_delete = []
-                    
-                    # First pass - collect operations
-                    new_definitions = {}
-                    for idx, row in edited_type_df.iterrows():
-                        trans_type = row["Type"]
-                        merge_to = row.get("Merge To", "")
-                        
-                        # Check for merge operation - handle both None and empty string
-                        if merge_to and merge_to.strip() and merge_to != trans_type:
-                            merges_to_perform.append({
-                                "from": trans_type,
-                                "to": merge_to,
-                                "count": row["Count"]
-                            })
-                            # Don't include merged types in the new definitions
-                        # Check for delete operation
-                        elif row["Delete"]:
-                            if row["Count"] > 0:
-                                st.error(f"❌ Cannot delete '{trans_type}' - has {row['Count']} transactions in database")
-                            else:
-                                types_to_delete.append(trans_type)
-                        else:
-                            # Regular update
-                            new_definitions[trans_type] = {
-                                "description": row["Description"],
-                                "active": row["Active"]
-                            }
-                    
-                    # Show what we're about to do
-                    if merges_to_perform:
-                        st.write("**Merges to perform:**")
-                        for merge in merges_to_perform:
-                            st.write(f"- {merge['from']} → {merge['to']} ({merge['count']} transactions)")
-                    
-                    # Perform merges
-                    if merges_to_perform:
-                        st.info(f"Performing {len(merges_to_perform)} merge operations...")
-                        for merge in merges_to_perform:
-                            try:
-                                # Update all transactions in database
-                                update_result = supabase.table('policies').update({
-                                    'Transaction Type': merge["to"]
-                                }).eq('Transaction Type', merge["from"]).eq('user_id', st.session_state.get('user_id')).execute()
-                                
-                                # Count actual updates
-                                updated_count = len(update_result.data) if update_result.data else 0
-                                st.success(f"✅ Merged {updated_count} transactions from '{merge['from']}' to '{merge['to']}' (expected {merge['count']})")
-                                
-                                # Don't save the merged type
-                                if merge["from"] in new_definitions:
-                                    del new_definitions[merge["from"]]
-                                    
-                            except Exception as e:
-                                st.error(f"Error merging {merge['from']}: {e}")
-                    
-                    # Remove deleted types
-                    for type_to_delete in types_to_delete:
-                        if type_to_delete in new_definitions:
-                            del new_definitions[type_to_delete]
-                        st.info(f"🗑️ Deleted type '{type_to_delete}'")
-                    
-                    # Save to database
-                    try:
-                        if user_transaction_types.save_user_transaction_types(new_definitions):
-                            st.success("✅ Transaction type changes saved successfully!")
-                        
-                        # Clear cache if database was modified
-                        if merges_to_perform:
-                            clear_policies_cache()
-                        
-                        # Clear debug info
-                        if 'trans_type_debug' in st.session_state:
-                            del st.session_state['trans_type_debug']
-                        
-                        # Auto refresh after successful operations
-                        if merges_to_perform or types_to_delete:
-                            time.sleep(2)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving definitions: {e}")
+                    st.info("No custom policy types defined. Using system defaults.")
+                
+                # Show system default types
+                with st.expander("System Default Policy Types"):
+                    default_types = ["GL", "WC", "BOP", "CPK", "CARGO", "AUTO", "EXCESS", "CYBER", "D&O", "E&O", "EPLI", "OTHER"]
+                    st.write("The following policy types are always available:")
+                    st.write(", ".join(default_types))
             
             with col2:
-                st.caption("ℹ️ **Delete**: Only available for types with 0 transactions | **Merge**: Moves all transactions to target type")
-            
-            st.divider()
-            
-            # Section 2: Add New Transaction Type
-            st.markdown("### ➕ Add New Transaction Type")
-            
-            with st.form("add_trans_type_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_type_code = st.text_input("Type Code", placeholder="e.g., REI", max_chars=10)
-                with col2:
-                    new_type_desc = st.text_input("Description", placeholder="e.g., Reinstatement")
+                st.markdown("### Add New Policy Type")
                 
-                submitted = st.form_submit_button("Add Transaction Type", type="primary")
-                
-                if submitted and new_type_code:
-                    new_type_code = new_type_code.upper()
-                    if new_type_code in trans_type_definitions:
-                        st.error(f"Transaction type '{new_type_code}' already exists!")
-                    else:
-                        # Add new type using database method
-                        try:
-                            if user_transaction_types.add_transaction_type(new_type_code, new_type_desc, True):
-                                st.success(f"✅ Added transaction type: {new_type_code}")
+                with st.form("add_policy_type"):
+                    new_type = st.text_input("Policy Type Code", max_chars=10, help="Short code (e.g., UMBR, FLOOD)")
+                    
+                    if st.form_submit_button("Add Policy Type", type="primary"):
+                        if new_type:
+                            # Add the new policy type
+                            if user_policy_types.add_policy_type(new_type.upper()):
+                                st.success(f"✅ Added policy type: {new_type.upper()}")
                                 st.rerun()
                             else:
-                                st.error("Error adding transaction type")
-                        except Exception as e:
-                            st.error(f"Error saving: {e}")
-            
-            st.divider()
-            
-            # Section 4: Transaction Type Mapping (moved to bottom)
-            st.markdown("### 🔀 Statement Transaction Type Mapping")
-            st.info("Map transaction types from reconciliation statements to your standardized types")
-            
-            # Load or initialize mappings from database
-            trans_mappings = user_mappings.get_user_transaction_type_mappings()
-            
-            # Get active transaction types for mapping
-            valid_transaction_types = [t for t, d in trans_type_definitions.items() 
-                                     if isinstance(d, dict) and d.get('active', True)]
-            
-            # Display current mappings
-            if trans_mappings:
-                # Create editable dataframe for mappings
-                mapping_data = []
-                for statement_value, mapped_to in trans_mappings.items():
-                    mapping_data.append({
-                        "Statement Value": statement_value,
-                        "Maps To": mapped_to,
-                        "Delete": False
-                    })
-                
-                mapping_df = pd.DataFrame(mapping_data)
-                edited_df = st.data_editor(
-                    mapping_df,
-                    column_config={
-                        "Maps To": st.column_config.SelectboxColumn(
-                            "Maps To",
-                            options=valid_transaction_types,
-                            required=True
-                        ),
-                        "Delete": st.column_config.CheckboxColumn(
-                            "Delete",
-                            help="Check to delete this mapping"
-                        )
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="fixed"
-                )
-                
-                # Save changes button
-                if st.button("💾 Save Mapping Changes", type="primary", key="save_trans_type_mapping"):
-                    # Update mappings based on edits
-                    new_mappings = {}
-                    for idx, row in edited_df.iterrows():
-                        if not row["Delete"]:
-                            new_mappings[row["Statement Value"]] = row["Maps To"]
-                    
-                    # Save to file
-                    try:
-                        os.makedirs("config_files", exist_ok=True)
-                        with open(mapping_file, 'w') as f:
-                            json.dump(new_mappings, f, indent=2)
-                        st.success("✅ Mappings saved successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving mappings: {e}")
-            else:
-                st.info("No mappings configured yet. STL → PMT is added by default.")
-            
-            st.divider()
-            
-            # Add new mapping
-            st.markdown("### Add New Mapping")
-            with st.form("add_trans_mapping_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_statement_value = st.text_input(
-                        "Statement Value",
-                        placeholder="e.g., STL, XCL, NBS",
-                        help="The transaction type as it appears in your reconciliation statements"
-                    )
-                with col2:
-                    new_maps_to = st.selectbox(
-                        "Maps To",
-                        options=[""] + valid_transaction_types,
-                        help="Your standardized transaction type"
-                    )
-                
-                submitted = st.form_submit_button("➕ Add Mapping", type="primary")
-                
-                if submitted:
-                    if new_statement_value and new_maps_to:
-                        # Check if mapping already exists
-                        if new_statement_value in trans_mappings:
-                            st.error(f"Mapping for '{new_statement_value}' already exists!")
+                                st.error("Failed to add policy type. It may already exist.")
                         else:
-                            # Add new mapping using database method
-                            try:
-                                if user_mappings.add_transaction_mapping(new_statement_value, new_maps_to):
-                                    st.success(f"✅ Added mapping: {new_statement_value} → {new_maps_to}")
-                                    st.rerun()
-                                else:
-                                    st.error("Error saving mapping")
-                            except Exception as e:
-                                st.error(f"Error saving mapping: {e}")
-                    else:
-                        st.error("Please fill in both fields")
-            
-            st.divider()
-            
-            # Mapping summary
-            st.markdown("### Summary")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Statement Mappings", len(trans_mappings))
-            with col2:
-                st.metric("Active Types", len(valid_transaction_types))
-            with col3:
-                unused_types = [t for t in trans_type_definitions.keys() if trans_type_counts.get(t, 0) == 0]
-                st.metric("Unused Types", len(unused_types))
-            
-            # Help text
-            with st.expander("ℹ️ How Transaction Types & Mapping Works"):
-                st.markdown("""
-                **Transaction Types Section**:
-                - View all transaction types in your database with counts
-                - Add descriptions to document what each type means
-                - Activate/deactivate types as needed
-                - Add new transaction types for future use
-                - Merge duplicate or incorrect types
+                            st.warning("Please enter a policy type code.")
                 
-                **Statement Mapping Section**:
-                - Map codes from statements to your standardized types
-                - During import, system automatically converts mapped types
-                - Import stops if unmapped type is found
+                # Remove policy types
+                st.markdown("### Remove Policy Type")
                 
-                **Commission Calculation by Type**:
-                - **NEW**: 50% of agency commission
-                - **RWL**: 25% of agency commission (renewals)
-                - **END**: Depends on policy age (50% if new, 25% if renewal)
-                - **CAN/XCL**: Negative commission (chargeback)
-                - **PMT**: Payment-driven commission (as-earned)
+                removable_types = [t for t in policy_types if t not in ["GL", "WC", "BOP", "CPK", "CARGO", "AUTO", "EXCESS", "CYBER", "D&O", "E&O", "EPLI", "OTHER"]]
                 
-                **Best Practices**:
-                1. Keep descriptions updated for clarity
-                2. Deactivate unused types rather than deleting
-                3. Use merge feature to consolidate duplicates
-                4. Map all statement codes before importing
+                if removable_types:
+                    selected_type = st.selectbox("Select type to remove", removable_types)
+                    
+                    if st.button("🗑️ Remove Selected", type="secondary"):
+                        if user_policy_types.remove_policy_type(selected_type):
+                            st.success(f"✅ Removed policy type: {selected_type}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to remove policy type.")
+                else:
+                    st.info("No custom policy types to remove.")
+        
+        with tab5:
+            st.subheader("📋 Policy Type Mapping")
+            st.info("Map your custom policy types to standard categories for better organization and reporting.")
+            
+            # Placeholder for policy type mapping functionality
+            st.write("Policy type mapping functionality will be implemented here.")
+        
+        with tab6:
+            st.subheader("📋 Transaction Types & Mapping")
+            st.info("Manage transaction types and their mappings for reconciliation.")
+            
+            col_title, col_refresh = st.columns([10, 1])
+            with col_refresh:
+                if st.button("🔄 Refresh", help="Refresh transaction types"):
+                    st.rerun()
+            
+            # Transaction types content
+            st.write("Transaction types and mapping functionality will be implemented here.")
+            st.info("""
+                **Transaction Types Overview**:
+                - NEW: New Business
+                - RWL: Renewal
+                - END: Endorsement
+                - CAN: Cancellation
+                - And more...
                 
                 **Special Note on PMT**:
                 PMT represents commissions paid when customers make payments on their policies. 
                 These are NOT directly tied to policy actions (NEW, RWL, END) but to customer payment events.
                 """)
-        
-        with tab11:
-            st.subheader("Your Default Agent Commission Rates")
-            st.info("🔒 Configure YOUR default commission rates that agents receive from the agency. These rates are used when creating new transactions in YOUR account.")
-            
-            # Load current rates
-            from user_agent_rates_db import user_agent_rates
-            default_rates = user_agent_rates.get_user_rates()
-            
-            # Display current rates
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Current New Business Rate", f"{default_rates['new_business']}%")
-            with col2:
-                st.metric("Current Renewal Rate", f"{default_rates['renewal']}%")
-            
-            st.divider()
-            
-            # Edit rates form
-            st.markdown("### Update Default Rates")
-            
-            with st.form("update_default_rates"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    new_business_rate = st.number_input(
-                        "New Business Rate (%)",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=float(default_rates['new_business']),
-                        step=0.5,
-                        help="Commission rate for NEW transactions"
-                    )
-                
-                with col2:
-                    renewal_rate = st.number_input(
-                        "Renewal Rate (%)",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=float(default_rates['renewal']),
-                        step=0.5,
-                        help="Commission rate for RWL (renewal) transactions"
-                    )
-                
-                submitted = st.form_submit_button("💾 Save Rates", type="primary")
-                
-                if submitted:
-                    # Save user-specific rates
-                    if user_agent_rates.save_user_rates(new_business_rate, renewal_rate):
-                        st.success("✅ Default agent commission rates updated successfully for your account!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Failed to save rates. Please ensure rates are between 0 and 100.")
-            
-            st.divider()
-            
-            # Information about how rates are used
-            st.markdown("### How Default Rates Are Used")
-            
-            with st.expander("📘 Rate Application Guide", expanded=True):
-                st.markdown("""
-                **When these rates apply:**
-                - When creating new transactions in the **Add New Policy Transaction** form
-                - When no specific commission rule exists for a carrier/MGA combination
-                - As the default starting point for agent commissions
-                
-                **Transaction type logic:**
-                - **NEW**: Uses the New Business Rate
-                - **RWL**: Uses the Renewal Rate  
-                - **END/PCH**: 
-                  - If Policy Origination Date = Effective Date → New Business Rate
-                  - Otherwise → Renewal Rate
-                - **CAN/XCL**: 
-                  - Uses the appropriate rate (new or renewal) as negative value
-                  - Based on whether Prior Policy Number exists
-                
-                **Important notes:**
-                1. These are **agent** commission rates (what agents receive from the agency)
-                2. These are different from **policy** commission rates (what the agency receives from carriers)
-                3. Rates can be manually overridden when editing individual transactions
-                4. Changes to these rates only affect **new** transactions going forward
-                
-                **Carrier-specific rates:**
-                To set different rates for specific carriers or MGAs, use the **Contacts** page to create commission rules.
-                """)
-            
-            # Show last update info
-            if 'last_updated' in default_rates:
-                st.caption(f"Last updated: {default_rates['last_updated']}")
     
         display_app_footer()
     
@@ -14809,7 +13156,7 @@ SOLUTION NEEDED:
         # Load fresh data for this page
         all_data = load_policies_data()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Data Tools", "Utility Functions", "Policies Import/Export", "🗑️ Delete Last Import", "Contacts Import/Export"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(["Data Tools", "Utility Functions", "Policies Import/Export", "🗑️ Delete Last Import", "Contacts Import/Export", "Column Mapping", "Preferences", "Default Agent Rates", "Recovery Tools"])
         
         with tab1:
             st.subheader("Data Tools")
@@ -15118,6 +13465,51 @@ SOLUTION NEEDED:
                                 file_name=f"origination_date_updates_{timestamp}.csv",
                                 mime="text/csv"
                             )
+            
+            st.divider()
+            
+            # Database Backup section
+            st.write("**📁 Database Backup**")
+            st.warning("⚠️ These operations affect your database. Use with caution!")
+            
+            if st.button("📁 Create Database Backup"):
+                try:
+                    import shutil
+                    backup_name = f"commissions_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                    shutil.copy2("commissions.db", backup_name)
+                    st.success(f"Database backed up as {backup_name}")
+                except Exception as e:
+                    st.error(f"Backup failed: {e}")
+            
+            st.divider()
+            
+            # Data Validation section
+            st.write("**🔍 Data Validation**")
+            
+            if st.button("🔍 Validate Data Integrity"):
+                if not all_data.empty:
+                    issues = []
+                    
+                    # Check for duplicates
+                    if 'Transaction ID' in all_data.columns:
+                        duplicates = all_data['Transaction ID'].duplicated().sum()
+                        if duplicates > 0:
+                            issues.append(f"Found {duplicates} duplicate Transaction IDs")
+                    
+                    # Check for missing critical data
+                    if 'Customer' in all_data.columns:
+                        missing_customers = all_data['Customer'].isnull().sum()
+                        if missing_customers > 0:
+                            issues.append(f"Found {missing_customers} records with missing customer names")
+                    
+                    if issues:
+                        st.warning("Data integrity issues found:")
+                        for issue in issues:
+                            st.write(f"• {issue}")
+                    else:
+                        st.success("No data integrity issues found!")
+                else:
+                    st.info("No data to validate")
         
         with tab2:
             st.subheader("Utility Functions")
@@ -16542,6 +14934,506 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 st.error(f"Error loading contacts data: {str(e)}")
                 import traceback
                 st.code(traceback.format_exc())
+        
+        with tab6:
+            st.subheader("Your Column Mapping Configuration")
+            st.info("🔒 Map database columns to user-friendly display names. Changes affect only YOUR account.")
+            
+            if not all_data.empty:
+                # Load existing mappings
+                current_mapping = column_mapper.get_user_mapping()
+                
+                # Create editable mapping interface
+                st.write("**Edit Column Display Names:**")
+                st.caption("Change how column names appear in the app without modifying the database")
+                
+                # Initialize session state for editing
+                if 'column_mapping_edits' not in st.session_state:
+                    # Clean up the current mapping to remove duplicates and fix issues
+                    cleaned_mapping = {}
+                    seen_db_cols = set()
+                    
+                    for ui_field, db_col in current_mapping.items():
+                        # Skip duplicate STMT DATE mapping
+                        if db_col == "STMT DATE" and db_col in seen_db_cols:
+                            continue
+                        # Keep calculated fields
+                        if db_col == "(Calculated/Virtual)":
+                            cleaned_mapping[ui_field] = db_col
+                        # Keep valid mappings
+                        elif db_col in all_data.columns or db_col == "NOTES":
+                            cleaned_mapping[ui_field] = db_col
+                            seen_db_cols.add(db_col)
+                    
+                    st.session_state.column_mapping_edits = cleaned_mapping
+                
+                # Create columns for better layout
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    st.markdown("**Database Column**")
+                with col2:
+                    st.markdown("**Display Name (UI)**")
+                with col3:
+                    st.markdown("**Action**")
+                
+                # Display editable mappings for important columns
+                important_columns = [
+                    "Agent Comm %",
+                    "Agency Estimated Comm/Revenue (CRM)",
+                    "Agent Estimated Comm $",
+                    "Agent Paid Amount (STMT)",
+                    "Agency Comm Received (STMT)",
+                    "Policy Gross Comm %",
+                    "Premium Sold",
+                    "Policy Balance Due",
+                    "Customer",
+                    "Policy Number",
+                    "Transaction Type",
+                    "Effective Date",
+                    "X-DATE"
+                ]
+                
+                # Show mapped columns first
+                st.markdown("---")
+                
+                # Also show calculated fields that need mapping
+                calculated_fields = ["Policy Balance Due", "Agent Estimated Comm $"]
+                
+                for db_col in important_columns:
+                    if db_col in all_data.columns or db_col in calculated_fields:
+                        col1, col2, col3 = st.columns([2, 2, 1])
+                        with col1:
+                            if db_col in calculated_fields:
+                                st.text(f"{db_col} (Calculated)")
+                            else:
+                                st.text(db_col)
+                        with col2:
+                            # Find the UI name for this database column
+                            ui_name = db_col  # default
+                            for ui_field, mapped_col in st.session_state.column_mapping_edits.items():
+                                if mapped_col == db_col or (db_col in calculated_fields and ui_field == db_col):
+                                    ui_name = ui_field
+                                    break
+                            
+                            new_name = st.text_input(
+                                "Display name",
+                                value=ui_name,
+                                key=f"map_{db_col}",
+                                label_visibility="hidden"
+                            )
+                            
+                            # Update session state if changed
+                            if new_name != ui_name:
+                                if db_col in calculated_fields:
+                                    st.session_state.column_mapping_edits[new_name] = "(Calculated/Virtual)"
+                                else:
+                                    st.session_state.column_mapping_edits[new_name] = db_col
+                                # Remove old mapping if UI name changed
+                                if ui_name in st.session_state.column_mapping_edits and ui_name != new_name:
+                                    del st.session_state.column_mapping_edits[ui_name]
+                        
+                        with col3:
+                            if db_col == "Agent Comm %":
+                                st.caption("⭐ Rename to 'Agent Comm %'")
+                
+                # Show other database columns
+                st.markdown("---")
+                st.markdown("**Other Database Columns:**")
+                other_cols = [col for col in sorted(all_data.columns) if col not in important_columns]
+                
+                # Display in a more compact format
+                cols_per_row = 3
+                for i in range(0, len(other_cols), cols_per_row):
+                    cols = st.columns(cols_per_row)
+                    for j, col in enumerate(other_cols[i:i+cols_per_row]):
+                        if j < len(cols):
+                            cols[j].write(f"• {col}")
+                
+                # Save button
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("💾 Save Column Mappings", type="primary"):
+                        try:
+                            # Save user-specific mappings
+                            if column_mapper.save_user_mapping(st.session_state.column_mapping_edits):
+                                st.success("✅ Column mappings saved successfully for your account!")
+                                # Clear cache to force reload
+                                if 'data_editor_key' in st.session_state:
+                                    st.session_state.data_editor_key = f"editor_{datetime.datetime.now().timestamp()}"
+                                st.rerun()
+                                st.balloons()
+                            else:
+                                st.error("Failed to save mappings. Please try again.")
+                        except Exception as e:
+                            st.error(f"Error saving mappings: {str(e)}")
+                
+                with col2:
+                    if st.button("🔄 Reset to Defaults"):
+                        st.session_state.column_mapping_edits = column_mapper.default_ui_fields.copy()
+                        st.rerun()
+        
+        with tab7:
+            st.subheader("Preferences")
+            
+            # System information
+            st.write("**System Information:**")
+            st.write(f"• Python version: {pd.__version__}")
+            st.write(f"• Pandas version: {pd.__version__}")
+            st.write(f"• Database: Supabase Cloud")
+            
+            # Clear session state
+            if st.button("🔄 Clear Session State"):
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.success("Session state cleared!")
+                st.rerun()
+            
+            st.divider()
+            
+            # Display Preferences section
+            st.subheader("Your Display Preferences")
+            st.info("🔒 Customize how transactions are displayed. Changes affect only YOUR account.")
+            
+            # Load current preferences
+            from user_preferences_db import user_preferences
+            current_theme = user_preferences.get_color_theme()
+            
+            st.markdown("#### Transaction Color Theme")
+            st.write("Choose how STMT (statement) and VOID transactions are highlighted:")
+            
+            # Current theme display is already loaded above
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Light Theme (Powder Blue)**")
+                st.markdown("""
+                <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                    STMT Transaction
+                </div>
+                <div style="background-color: #ffe6e6; padding: 10px; border-radius: 5px;">
+                    VOID Transaction
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col2:
+                st.markdown("**Dark Theme (Dark Blue)**")
+                st.markdown("""
+                <div style="background-color: #4a90e2; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 500;">
+                    STMT Transaction
+                </div>
+                <div style="background-color: #e85855; color: white; padding: 10px; border-radius: 5px; font-weight: 500;">
+                    VOID Transaction
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Theme selection
+            color_theme = st.radio(
+                "Select Color Theme",
+                options=["light", "dark"],
+                index=0 if current_theme == "light" else 1,
+                help="Light theme uses softer colors suitable for light mode. Dark theme uses higher contrast colors.",
+                horizontal=True
+            )
+            
+            if st.button("Save Color Theme Preference", type="primary"):
+                if user_preferences.set_color_theme(color_theme):
+                    st.success("✅ Color theme updated successfully for your account!")
+                    st.rerun()
+                else:
+                    st.error("Failed to save color theme preference. Please try again.")
+        
+        with tab8:
+            st.subheader("Your Default Agent Commission Rates")
+            st.info("🔒 Configure YOUR default commission rates that agents receive from the agency. These rates are used when creating new transactions in YOUR account.")
+            
+            # Load current rates
+            from user_agent_rates_db import user_agent_rates
+            default_rates = user_agent_rates.get_user_rates()
+            
+            # Display current rates
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Current New Business Rate", f"{default_rates['new_business']}%")
+            with col2:
+                st.metric("Current Renewal Rate", f"{default_rates['renewal']}%")
+            
+            st.divider()
+            
+            # Edit rates form
+            st.markdown("### Update Default Rates")
+            
+            with st.form("update_default_rates"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    new_business_rate = st.number_input(
+                        "New Business Rate (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(default_rates['new_business']),
+                        step=0.5,
+                        help="Commission rate for NEW transactions"
+                    )
+                
+                with col2:
+                    renewal_rate = st.number_input(
+                        "Renewal Rate (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(default_rates['renewal']),
+                        step=0.5,
+                        help="Commission rate for RWL (renewal) transactions"
+                    )
+                
+                submitted = st.form_submit_button("💾 Save Rates", type="primary")
+                
+                if submitted:
+                    # Save user-specific rates
+                    if user_agent_rates.save_user_rates(new_business_rate, renewal_rate):
+                        st.success("✅ Default agent commission rates updated successfully for your account!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Failed to save rates. Please ensure rates are between 0 and 100.")
+            
+            st.divider()
+            
+            # Information about how rates are used
+            st.markdown("### How Default Rates Are Used")
+            
+            with st.expander("📘 Rate Application Guide", expanded=True):
+                st.markdown("""
+                **When these rates apply:**
+                - When creating new transactions in the **Add New Policy Transaction** form
+                - When no specific commission rule exists for a carrier/MGA combination
+                - As the default starting point for agent commissions
+                
+                **Transaction type logic:**
+                - **NEW**: Uses the New Business Rate
+                - **RWL**: Uses the Renewal Rate  
+                - **END/PCH**: 
+                  - If Policy Origination Date = Effective Date → New Business Rate
+                  - Otherwise → Renewal Rate
+                - **CAN/XCL**: 
+                  - Uses the appropriate rate (new or renewal) as negative value
+                  - Based on whether Prior Policy Number exists
+                
+                **Important notes:**
+                1. These are **agent** commission rates (what agents receive from the agency)
+                2. These are different from **policy** commission rates (what the agency receives from carriers)
+                3. Rates can be manually overridden when editing individual transactions
+                4. Changes to these rates only affect **new** transactions going forward
+                
+                **Carrier-specific rates:**
+                To set different rates for specific carriers or MGAs, use the **Contacts** page to create commission rules.
+                """)
+            
+            # Show last update info
+            if 'last_updated' in default_rates:
+                st.caption(f"Last updated: {default_rates['last_updated']}")
+        
+        with tab9:
+            st.subheader("🗑️ Recovery Tools - Last 100 Deleted Policy Transactions")
+            st.info("View and restore recently deleted policies. Records are kept for recovery purposes.")
+            
+            try:
+                # Fetch deleted policies from Supabase
+                # Filter by user in production
+                if os.getenv("APP_ENVIRONMENT") == "PRODUCTION":
+                    ensure_user_id()
+                    user_id = get_user_id()
+                    if user_id:
+                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_id', user_id).order('deleted_at', desc=True).limit(100).execute()
+                    else:
+                        # Fallback to email
+                        user_email = get_normalized_user_email()
+                        deleted_response = supabase.table('deleted_policies').select("*").eq('user_email', user_email).order('deleted_at', desc=True).limit(100).execute()
+                else:
+                    deleted_response = supabase.table('deleted_policies').select("*").order('deleted_at', desc=True).limit(100).execute()
+                
+                if deleted_response.data:
+                    # Extract policy data from JSONB structure
+                    deleted_records = []
+                    for record in deleted_response.data:
+                        policy_info = {
+                            'deletion_id': record['deletion_id'],
+                            'deleted_at': record['deleted_at'],
+                            'transaction_id': record['transaction_id'],
+                            'customer_name': record['customer_name']
+                        }
+                        # Add the policy data fields
+                        if 'policy_data' in record and record['policy_data']:
+                            policy_info.update(record['policy_data'])
+                        deleted_records.append(policy_info)
+                    
+                    deleted_df = pd.DataFrame(deleted_records)
+                    
+                    # Convert deleted_at to datetime
+                    if 'deleted_at' in deleted_df.columns:
+                        deleted_df['deleted_at'] = pd.to_datetime(deleted_df['deleted_at'])
+                    
+                    # Add a selection column for restoration
+                    deleted_df.insert(0, 'Restore', False)
+                    
+                    # Display the deleted records
+                    st.write(f"**Found {len(deleted_df)} deleted records:**")
+                    
+                    # Show key info at the top
+                    edited_deleted = st.data_editor(
+                        deleted_df,
+                        use_container_width=True,
+                        height=400,
+                        key="deleted_policies_editor",
+                        column_config={
+                            "Restore": st.column_config.CheckboxColumn(
+                                "Restore",
+                                help="Select records to restore",
+                                default=False,
+                            ),
+                            "deleted_at": st.column_config.DatetimeColumn(
+                                "Deleted At",
+                                format="DD/MM/YYYY HH:mm",
+                                timezone="local"
+                            )
+                        }
+                    )
+                    
+                    # Restore functionality
+                    st.divider()
+                    col1, col2 = st.columns([2, 3])
+                    
+                    with col1:
+                        if st.button("♻️ Restore Selected Records", type="primary"):
+                            # Find rows where Restore checkbox is True
+                            selected_to_restore = edited_deleted[edited_deleted['Restore'] == True]
+                            
+                            if not selected_to_restore.empty:
+                                try:
+                                    restored_count = 0
+                                    for idx, row in selected_to_restore.iterrows():
+                                        # Prepare data for restoration (exclude deletion-specific columns)
+                                        restore_data = {}
+                                        for col in row.index:
+                                            # Exclude metadata columns that aren't part of the policies table
+                                            if col not in ['Restore', 'deletion_id', 'deleted_at', 'transaction_id', 'customer_name']:
+                                                if pd.notna(row[col]):
+                                                    value = row[col]
+                                                    # Clean numeric values for proper data types
+                                                    if isinstance(value, (int, float)):
+                                                        # Check if it should be an integer (no decimal part)
+                                                        if isinstance(value, float) and value.is_integer():
+                                                            restore_data[col] = int(value)
+                                                        else:
+                                                            restore_data[col] = clean_numeric_value(value)
+                                                    else:
+                                                        restore_data[col] = value
+                                        
+                                        # Restore to policies table
+                                        supabase.table('policies').insert(add_user_email_to_data(restore_data)).execute()
+                                        
+                                        # Remove from deleted_policies table with user filtering
+                                        deletion_id = row['deletion_id']
+                                        delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
+                                        # Add user filtering for security
+                                        user_email = get_normalized_user_email()
+                                        if user_email:
+                                            delete_query = delete_query.eq('user_email', user_email)
+                                        delete_query.execute()
+                                        
+                                        restored_count += 1
+                                    
+                                    # Log the restore operation
+                                    if restored_count > 0:
+                                        log_audit_trail(
+                                            operation_type="RESTORE",
+                                            table_name="policies",
+                                            affected_records=restored_count,
+                                            details={
+                                                "source": "deleted_records_recovery",
+                                                "restored_from": "deleted_policies"
+                                            }
+                                        )
+                                    
+                                    # Clear cache and show success
+                                    clear_policies_cache()
+                                    st.success(f"Successfully restored {restored_count} records!")
+                                    st.rerun()
+                                    
+                                except Exception as restore_error:
+                                    st.error(f"Error restoring records: {restore_error}")
+                            else:
+                                st.warning("Please select records to restore using the checkboxes.")
+                    
+                    with col2:
+                        if st.button("🗑️ Permanently Delete Selected", type="secondary"):
+                            # Find rows where Restore checkbox is True (using same checkbox for selection)
+                            selected_to_delete = edited_deleted[edited_deleted['Restore'] == True]
+                            
+                            if not selected_to_delete.empty:
+                                st.warning(f"⚠️ This will permanently delete {len(selected_to_delete)} records from history!")
+                                if st.button("Confirm Permanent Deletion", key="confirm_perm_delete"):
+                                    try:
+                                        deleted_count = 0
+                                        deletion_ids = []
+                                        for idx, row in selected_to_delete.iterrows():
+                                            deletion_id = row['deletion_id']
+                                            deletion_ids.append(deletion_id)
+                                            # Delete with user filtering
+                                            delete_query = supabase.table('deleted_policies').delete().eq('deletion_id', deletion_id)
+                                            user_email = get_normalized_user_email()
+                                            if user_email:
+                                                delete_query = delete_query.eq('user_email', user_email)
+                                            delete_query.execute()
+                                            deleted_count += 1
+                                        
+                                        # Log the permanent deletion
+                                        log_audit_trail(
+                                            operation_type="PERMANENT_DELETE",
+                                            table_name="deleted_policies",
+                                            affected_records=deleted_count,
+                                            details={
+                                                "deletion_ids": deletion_ids,
+                                                "source": "deleted_records_recovery"
+                                            }
+                                        )
+                                        
+                                        st.success(f"Permanently deleted {len(selected_to_delete)} records from history.")
+                                        st.rerun()
+                                    except Exception as perm_delete_error:
+                                        st.error(f"Error permanently deleting records: {perm_delete_error}")
+                    
+                    # Export deleted records
+                    st.divider()
+                    st.write("**Export Deletion History:**")
+                    csv_data = deleted_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Deletion History CSV",
+                        data=csv_data,
+                        file_name=f"deletion_history_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("No deleted policies found. Deleted records will appear here for recovery.")
+                    
+            except Exception as e:
+                if "relation \"deleted_policies\" does not exist" in str(e):
+                    st.warning("The deleted_policies table doesn't exist yet. Please run the SQL script to create it:")
+                    st.code("""
+-- Run this in your Supabase SQL editor:
+CREATE TABLE IF NOT EXISTS deleted_policies (
+    deletion_id SERIAL PRIMARY KEY,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy all columns from policies table
+    _id INTEGER,
+    "Client ID" TEXT,
+    "Transaction ID" TEXT,
+    "Customer" TEXT,
+    -- ... (see create_deleted_policies_table.sql for full schema)
+);
+                    """)
+                else:
+                    st.error(f"Error loading deletion history: {e}")
     
         display_app_footer()
     
@@ -17581,7 +16473,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 **💾 Lost Data?**
                 1. Check filters (might be hiding data)
                 2. Check correct page
-                3. Admin Panel → Backup & Restore
+                3. Tools → Backup & Restore
                 4. Data auto-saves every change
                 """)
         
@@ -17699,7 +16591,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 - **Wrong data**: Go to Edit Policy Transactions
                 - **Wrong client**: Search and update Client ID
                 - **Wrong amount**: Click in cell and edit
-                - **Major mistake**: Admin Panel has backups
+                - **Major mistake**: Tools page has backups
                 """)
             
             # Show welcome dashboard button
@@ -17927,8 +16819,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             
             # Administrative features
             st.write("**⚙️ Administrative Tools**")
-            st.write("- **Admin Panel**: Database management and system tools")
-            st.write("- **Tools**: Utilities for calculations and data formatting")
+            st.write("- **Admin Panel**: User management and advanced database settings")
+            st.write("- **Tools**: Column mapping, backups, preferences, data import/export, system settings, and utilities")
             st.write("- **Reconciliation**: Commission matching, payment tracking, and statement imports")
             
             st.divider()
@@ -17936,7 +16828,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
             # Color Theme Preferences
             st.write("**🎨 Transaction Color Themes**")
             st.write("- **Customize Display**: Choose between light (powder blue) or dark (high contrast) colors for STMT/VOID transactions")
-            st.write("- **Location**: Admin Panel → System Tools tab → Display Preferences")
+            st.write("- **Location**: Tools → Preferences tab → Display Preferences")
             st.write("- **Light Theme**: Powder blue (#e6f3ff) for STMT, light red for VOID - best for light mode browsers")
             st.write("- **Dark Theme**: Dark blue (#4a90e2) for STMT, dark red for VOID - best for dark mode browsers")
             st.write("- **Applies To**: Dashboard, All Policy Transactions, Search Results, PRL Reports, and Reconciliation")
@@ -18149,7 +17041,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     5. **Pagination**: Check other pages (might be on page 2+)
                     
                     **Data Recovery:**
-                    - Admin Panel → Enhanced Backup & Restore
+                    - Tools → Backup & Restore
                     - Data auto-saves every change
                     - Check audit trail in Reconciliation History
                     """)
@@ -18249,7 +17141,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                     
                     **During operation**:
                     - Refresh page
-                    - Check Admin Panel column mappings
+                    - Check Tools → Column Mapping
                     """)
                 
                 with st.expander('"🔵 NoneType/Empty Data"'):
@@ -18609,7 +17501,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 ### Managing Database Columns
                 
                 **Adding New Columns**:
-                1. Go to `Admin Panel` → `Column Management`
+                1. Go to `Tools` → `Column Mapping`
                 2. Click `Add Column`
                 3. Enter column name and type
                 4. Map to app function if needed
@@ -18636,14 +17528,14 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 - Daily system backups
                 
                 **Manual Backup**:
-                1. Go to `Admin Panel`
-                2. Select `Enhanced Backup & Restore`
+                1. Go to `Tools`
+                2. Select `Backup & Restore` tab
                 3. Click `Create New Backup`
                 4. Download backup file
                 5. Store securely
                 
                 **Restore Process**:
-                1. Same location in Admin Panel
+                1. Same location in Tools page
                 2. Select backup from list
                 3. Review what will be restored
                 4. Click `Restore`
@@ -18674,7 +17566,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                 - CAN can be manually adjusted
                 
                 **Managing Types**:
-                Admin Panel → Transaction Types tab
+                Tools → System Tools tab → Transaction Types section
                 """)
                 
             elif tech_topic == "📊 Calculated Fields":
