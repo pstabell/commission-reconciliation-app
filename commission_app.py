@@ -10313,6 +10313,10 @@ def main():
                         st.markdown("### 🔗 Map Statement Columns to System Fields")
                         st.info(f"📅 Statement Date will be set to: {statement_date.strftime('%m/%d/%Y')}")
                         
+                        # Initialize column_mapping if not exists
+                        if 'column_mapping' not in st.session_state:
+                            st.session_state.column_mapping = {}
+                        
                         # Required fields
                         required_fields = {
                             'Customer': 'Customer/Client Name',
