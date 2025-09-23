@@ -68,29 +68,59 @@ class UserPolicyTypes:
             data = {
                 'policy_types': policy_types,
                 'default_type': default_type,
-                'categories': categories or self._get_default_categories(),
                 'version': '1.0.0',
                 'user_email': user_email
             }
             if user_id:
                 data['user_id'] = user_id
             
+            # Try with categories first
+            if categories is not None or hasattr(self, '_table_has_categories'):
+                data['categories'] = categories or self._get_default_categories()
+            
             # Try to update existing record
             if user_id:
-                response = self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+                try:
+                    response = self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+                except Exception as e:
+                    if 'categories' in str(e):
+                        # Remove categories and try again
+                        data.pop('categories', None)
+                        response = self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+                    else:
+                        raise e
             else:
                 # Check if record exists
                 check_response = self.supabase.table('user_policy_types').select('id').eq('user_email', user_email).execute()
                 if check_response.data:
                     # Update existing
-                    response = self.supabase.table('user_policy_types').update({
+                    update_data = {
                         'policy_types': policy_types,
-                        'default_type': default_type,
-                        'categories': categories or self._get_default_categories()
-                    }).eq('user_email', user_email).execute()
+                        'default_type': default_type
+                    }
+                    if 'categories' in data:
+                        update_data['categories'] = data['categories']
+                    
+                    try:
+                        response = self.supabase.table('user_policy_types').update(update_data).eq('user_email', user_email).execute()
+                    except Exception as e:
+                        if 'categories' in str(e) and 'categories' in update_data:
+                            # Remove categories and try again
+                            update_data.pop('categories', None)
+                            response = self.supabase.table('user_policy_types').update(update_data).eq('user_email', user_email).execute()
+                        else:
+                            raise e
                 else:
                     # Insert new
-                    response = self.supabase.table('user_policy_types').insert(data).execute()
+                    try:
+                        response = self.supabase.table('user_policy_types').insert(data).execute()
+                    except Exception as e:
+                        if 'categories' in str(e):
+                            # Remove categories and try again
+                            data.pop('categories', None)
+                            response = self.supabase.table('user_policy_types').insert(data).execute()
+                        else:
+                            raise e
             
             # Clear cache to force reload
             self._types_cache = None
@@ -194,7 +224,6 @@ class UserPolicyTypes:
         data = {
             'policy_types': default_config['policy_types'],
             'default_type': default_config['default'],
-            'categories': default_config['categories'],
             'version': '1.0.0',
             'user_email': user_email
         }
@@ -202,11 +231,23 @@ class UserPolicyTypes:
             data['user_id'] = user_id
         
         try:
+            # Try with categories first
+            data['categories'] = default_config['categories']
             self.supabase.table('user_policy_types').insert(data).execute()
-        except:
-            # Might already exist, try upsert
-            if user_id:
-                self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+        except Exception as e:
+            # If categories column doesn't exist, try without it
+            if 'categories' in str(e):
+                data.pop('categories', None)
+                try:
+                    self.supabase.table('user_policy_types').insert(data).execute()
+                except:
+                    # Might already exist, try upsert
+                    if user_id:
+                        self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+            else:
+                # Other error, try upsert
+                if user_id:
+                    self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
         
         return default_config
     
