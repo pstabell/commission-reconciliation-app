@@ -11991,17 +11991,18 @@ Where Used:
                 
                 with st.form("add_policy_type"):
                     new_type = st.text_input("Policy Type Code", max_chars=10, help="Short code (e.g., UMBR, FLOOD)")
+                    new_name = st.text_input("Policy Type Name", help="Display name (e.g., Umbrella, Flood)")
                     
                     if st.form_submit_button("Add Policy Type", type="primary"):
-                        if new_type:
+                        if new_type and new_name:
                             # Add the new policy type
-                            if user_policy_types.add_policy_type(new_type.upper()):
-                                st.success(f"✅ Added policy type: {new_type.upper()}")
+                            if user_policy_types.add_policy_type(new_type.upper(), new_name):
+                                st.success(f"✅ Added policy type: {new_type.upper()} - {new_name}")
                                 st.rerun()
                             else:
                                 st.error("Failed to add policy type. It may already exist.")
                         else:
-                            st.warning("Please enter a policy type code.")
+                            st.warning("Please enter both policy type code and name.")
                 
                 # Remove policy types
                 st.markdown("### Remove Policy Type")
