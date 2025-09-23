@@ -11966,19 +11966,26 @@ Where Used:
             with col1:
                 st.markdown("### Current Policy Types")
                 
-                # Get current policy types
-                policy_types = user_policy_types.get_policy_types_list()
+                # Get the full configuration to show ALL policy types
+                full_config = user_policy_types.get_user_policy_types()
+                all_policy_types = full_config.get('policy_types', [])
                 
-                if policy_types:
-                    # Create a dataframe for display
-                    types_df = pd.DataFrame({
-                        'Policy Type': policy_types,
-                        'Status': ['Active' for _ in policy_types]
-                    })
+                if all_policy_types:
+                    # Create a dataframe for display with more details
+                    types_data = []
+                    for pt in all_policy_types:
+                        types_data.append({
+                            'Code': pt.get('code', ''),
+                            'Name': pt.get('name', ''),
+                            'Category': pt.get('category', 'Other'),
+                            'Active': '✅' if pt.get('active', True) else '❌'
+                        })
                     
-                    st.dataframe(types_df, use_container_width=True, hide_index=True)
+                    types_df = pd.DataFrame(types_data)
+                    st.dataframe(types_df, use_container_width=True, hide_index=True, height=400)
+                    st.caption(f"Total policy types: {len(all_policy_types)}")
                 else:
-                    st.info("No custom policy types defined. Using system defaults.")
+                    st.info("No policy types found. This should not happen - defaults should load.")
                 
                 # Show system default types
                 with st.expander("System Default Policy Types"):
@@ -11995,19 +12002,32 @@ Where Used:
                     
                     if st.form_submit_button("Add Policy Type", type="primary"):
                         if new_type and new_name:
-                            # Add the new policy type
-                            if user_policy_types.add_policy_type(new_type.upper(), new_name):
-                                st.success(f"✅ Added policy type: {new_type.upper()} - {new_name}")
-                                st.rerun()
+                            # Check if it already exists first
+                            existing_types = [pt['code'] for pt in full_config.get('policy_types', [])]
+                            if new_type.upper() in existing_types:
+                                # Find the existing entry to show its current name
+                                existing_entry = next((pt for pt in full_config['policy_types'] if pt['code'] == new_type.upper()), None)
+                                if existing_entry:
+                                    st.error(f"Policy type '{new_type.upper()}' already exists with name '{existing_entry['name']}'. Please use a different code.")
+                                else:
+                                    st.error(f"Policy type '{new_type.upper()}' already exists. Please use a different code.")
                             else:
-                                st.error("Failed to add policy type. It may already exist.")
+                                # Add the new policy type
+                                if user_policy_types.add_policy_type(new_type.upper(), new_name):
+                                    st.success(f"✅ Added policy type: {new_type.upper()} - {new_name}")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to add policy type. Please check the logs for details.")
                         else:
                             st.warning("Please enter both policy type code and name.")
                 
                 # Remove policy types
                 st.markdown("### Remove Policy Type")
                 
-                removable_types = [t for t in policy_types if t not in ["GL", "WC", "BOP", "CPK", "CARGO", "AUTO", "EXCESS", "CYBER", "D&O", "E&O", "EPLI", "OTHER"]]
+                # Get all policy types and filter out protected ones
+                all_codes = [pt['code'] for pt in full_config.get('policy_types', [])]
+                protected_types = ["GL", "WC", "BOP", "CPK", "CARGO", "AUTO", "EXCESS", "CYBER", "D&O", "E&O", "EPLI", "OTHER"]
+                removable_types = [t for t in all_codes if t not in protected_types]
                 
                 if removable_types:
                     selected_type = st.selectbox("Select type to remove", removable_types)

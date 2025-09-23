@@ -155,6 +155,34 @@ class UserPolicyTypes:
         
         return True
     
+    def remove_policy_type(self, code: str) -> bool:
+        """Remove a policy type if it's not a system default."""
+        # List of protected system defaults that cannot be removed
+        protected_types = ["GL", "WC", "BOP", "CPK", "CARGO", "AUTO", "EXCESS", "CYBER", "D&O", "E&O", "EPLI", "OTHER"]
+        
+        if code in protected_types:
+            return False  # Cannot remove protected types
+        
+        config = self.get_user_policy_types()
+        
+        # Filter out the type to remove
+        original_count = len(config['policy_types'])
+        config['policy_types'] = [
+            pt for pt in config['policy_types'] 
+            if pt['code'] != code
+        ]
+        
+        # Check if anything was removed
+        if len(config['policy_types']) == original_count:
+            return False  # Type didn't exist
+        
+        # Save the updated configuration
+        return self.save_user_policy_types(
+            config['policy_types'], 
+            config['default'], 
+            config.get('categories')
+        )
+    
     def _create_user_types(self) -> Dict[str, Any]:
         """Create default policy types for a new user."""
         user_id = st.session_state.get('user_id')
