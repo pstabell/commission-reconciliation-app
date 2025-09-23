@@ -177,6 +177,7 @@ from user_transaction_types_db import user_transaction_types, get_active_transac
 from user_mappings_db import user_mappings
 from user_prl_templates_db import user_prl_templates
 # from utils.styling_minimal import apply_css  # Temporarily disabled for mobile testing
+from database_utils import get_supabase_client
 import stripe
 
 # Configure Stripe (only for production environment)
@@ -401,43 +402,7 @@ def calculate_as_earned_balance(transaction, all_data=None):
     # For non-STMT transactions, just return the earned amount
     return earned_amount
 
-def get_supabase_client():
-    """Get cached Supabase client based on environment."""
-    app_mode = os.getenv("APP_ENVIRONMENT")
-    
-    if app_mode == "PRODUCTION":
-        # Use production database credentials
-        url = os.getenv("PRODUCTION_SUPABASE_URL", os.getenv("SUPABASE_URL"))
-        # Try service role key first (bypasses RLS), fall back to anon key
-        # Also check for shorter env var names in case of Render issues
-        service_key = os.getenv("PRODUCTION_SUPABASE_SERVICE_ROLE_KEY") or os.getenv("PROD_SERVICE_KEY")
-        anon_key = os.getenv("PRODUCTION_SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
-        key = service_key or anon_key
-        
-        # Debug logging
-        if service_key:
-            print("Using PRODUCTION service role key (RLS bypassed)")
-        else:
-            print("Using PRODUCTION anon key (RLS enforced)")
-    else:
-        # Use personal database credentials (default)
-        url = os.getenv("SUPABASE_URL")
-        # Try service role key first (bypasses RLS), fall back to anon key
-        service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        anon_key = os.getenv("SUPABASE_ANON_KEY")
-        key = service_key or anon_key
-        
-        # Debug logging
-        if service_key:
-            print("Using service role key (RLS bypassed)")
-        else:
-            print("Using anon key (RLS enforced)")
-    
-    if not url or not key:
-        st.error("Missing Supabase credentials. Please check your .env file.")
-        st.stop()
-    
-    return create_client(url, key)
+# Removed get_supabase_client function - now imported from database_utils at top of file
 
 def add_user_email_to_data(data_dict):
     """Add current user's email AND user_id to data dictionary for multi-tenancy."""
@@ -12033,7 +11998,6 @@ Where Used:
                                     data['user_id'] = user_id
                                 
                                 # Direct database call
-                                from database_utils import get_supabase_client
                                 supabase = get_supabase_client()
                                 response = supabase.table('user_policy_types').upsert(data, on_conflict='user_email').execute()
                                 
