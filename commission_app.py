@@ -11985,7 +11985,21 @@ Where Used:
                     st.dataframe(types_df, use_container_width=True, hide_index=True, height=400)
                     st.caption(f"Total policy types: {len(all_policy_types)}")
                 else:
-                    st.info("No policy types found. This should not happen - defaults should load.")
+                    st.warning("⚠️ No policy types found in your account.")
+                    st.info("Policy types are required for creating new policies. Click the button below to initialize with default policy types.")
+                    
+                    if st.button("🚀 Initialize Default Policy Types", type="primary", use_container_width=True):
+                        # Create default policy types for the user
+                        with st.spinner("Creating default policy types..."):
+                            try:
+                                # Force creation of default types by calling the private method
+                                default_config = user_policy_types._create_user_types()
+                                st.success("✅ Successfully initialized default policy types!")
+                                st.info(f"Created {len(default_config.get('policy_types', []))} policy types.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to initialize policy types: {str(e)}")
+                                st.info("Please contact support if this error persists.")
                 
                 # Show system default types
                 with st.expander("System Default Policy Types"):
