@@ -4,7 +4,7 @@ Each user can manage their own transaction types for categorization.
 """
 
 import streamlit as st
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from database_utils import get_supabase_client
 import json
 
@@ -16,7 +16,7 @@ class UserTransactionTypes:
         self._types_cache = None
         self._cache_user_id = None
     
-    def get_user_transaction_types(self) -> Dict[str, Dict[str, any]]:
+    def get_user_transaction_types(self) -> Dict[str, Dict[str, Any]]:
         """Get transaction types for the current user."""
         user_id = st.session_state.get('user_id')
         user_email = st.session_state.get('user_email', '').lower()
@@ -50,7 +50,7 @@ class UserTransactionTypes:
             print(f"Error loading user transaction types: {e}")
             return self._get_default_transaction_types()
     
-    def save_user_transaction_types(self, transaction_types: Dict[str, Dict[str, any]]) -> bool:
+    def save_user_transaction_types(self, transaction_types: Dict[str, Dict[str, Any]]) -> bool:
         """Save transaction types for the current user."""
         user_id = st.session_state.get('user_id')
         user_email = st.session_state.get('user_email', '').lower()
@@ -132,7 +132,7 @@ class UserTransactionTypes:
             if info.get('active', True)
         }
     
-    def _create_user_types(self) -> Dict[str, Dict[str, any]]:
+    def _create_user_types(self) -> Dict[str, Dict[str, Any]]:
         """Create default transaction types for a new user."""
         user_id = st.session_state.get('user_id')
         user_email = st.session_state.get('user_email', '').lower()
@@ -156,7 +156,7 @@ class UserTransactionTypes:
         
         return default_types
     
-    def _get_default_transaction_types(self) -> Dict[str, Dict[str, any]]:
+    def _get_default_transaction_types(self) -> Dict[str, Dict[str, Any]]:
         """Get default transaction types."""
         return {
             "BOR": {
@@ -209,11 +209,11 @@ class UserTransactionTypes:
 user_transaction_types = UserTransactionTypes()
 
 # Backward compatible functions
-def load_transaction_types() -> Dict[str, Dict[str, any]]:
+def load_transaction_types() -> Dict[str, Dict[str, Any]]:
     """Load transaction types for current user."""
     return user_transaction_types.get_user_transaction_types()
 
-def save_transaction_types(types: Dict[str, Dict[str, any]]) -> bool:
+def save_transaction_types(types: Dict[str, Dict[str, Any]]) -> bool:
     """Save transaction types for current user."""
     return user_transaction_types.save_user_transaction_types(types)
 

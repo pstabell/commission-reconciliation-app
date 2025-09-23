@@ -4,6 +4,7 @@ Each user has their own column display preferences.
 """
 
 import streamlit as st
+import pandas as pd
 from typing import Dict, Optional
 import json
 from database_utils import get_supabase_client
@@ -172,3 +173,50 @@ def get_reverse_mapping() -> Dict[str, str]:
 def save_column_mapping(new_mapping: Dict[str, str]) -> bool:
     """Save column mapping for current user."""
     return user_column_mapper.save_user_mapping(new_mapping)
+
+def get_ui_field_name(db_column: str) -> str:
+    """Get UI field name for a database column (alias for get_mapped_column)."""
+    return user_column_mapper.get_mapped_column(db_column)
+
+def is_calculated_field(ui_field: str) -> bool:
+    """Check if a field is calculated/virtual."""
+    # List of calculated fields that don't exist in database
+    calculated_fields = {
+        "Policy Balance Due",
+        "Agent Estimated Comm $",
+        "Agency Estimated Comm/Revenue (CRM)",
+        "Commissionable Premium",
+        "Broker Fee Agent Comm",
+        "Total Agent Comm"
+    }
+    return ui_field in calculated_fields
+
+def safe_column_reference(df, ui_field: str, default_value=None, return_series: bool = True):
+    """
+    Safely reference a column in a DataFrame using UI field name.
+    
+    Args:
+        df: DataFrame to reference
+        ui_field: UI field name 
+        default_value: Value to return/fill if column not found
+        return_series: If True, return Series; if False, return values
+        
+    Returns:
+        Series or values from the mapped column, or default_value if not found
+    """
+    import pandas as pd
+    
+    # Get the database column name
+    mapping = user_column_mapper.get_user_mapping()
+    db_col = mapping.get(ui_field, ui_field)
+    
+    if db_col and db_col in df.columns:
+        if return_series:
+            return df[db_col]
+        else:
+            return df[db_col].values
+    else:
+        if return_series:
+            return pd.Series([default_value] * len(df), index=df.index)
+        else:
+            return [default_value] * len(df)
