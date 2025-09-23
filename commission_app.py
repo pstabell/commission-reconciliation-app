@@ -11992,14 +11992,57 @@ Where Used:
                         # Create default policy types for the user
                         with st.spinner("Creating default policy types..."):
                             try:
-                                # Force creation of default types by calling the private method
-                                default_config = user_policy_types._create_user_types()
+                                # Direct database insert with only essential columns
+                                user_email = st.session_state.get('user_email', '').lower()
+                                user_id = st.session_state.get('user_id')
+                                
+                                default_types = [
+                                    {"code": "GL", "name": "General Liability", "active": True},
+                                    {"code": "WC", "name": "Workers Compensation", "active": True},
+                                    {"code": "BOP", "name": "Business Owners Policy", "active": True},
+                                    {"code": "CPK", "name": "Commercial Package", "active": True},
+                                    {"code": "CARGO", "name": "Cargo", "active": True},
+                                    {"code": "AUTO", "name": "Auto", "active": True},
+                                    {"code": "AUTOP", "name": "Auto Personal", "active": True},
+                                    {"code": "AUTOB", "name": "Auto Business", "active": True},
+                                    {"code": "EXCESS", "name": "Excess/Umbrella", "active": True},
+                                    {"code": "CYBER", "name": "Cyber Liability", "active": True},
+                                    {"code": "D&O", "name": "Directors & Officers", "active": True},
+                                    {"code": "E&O", "name": "Errors & Omissions", "active": True},
+                                    {"code": "EPLI", "name": "Employment Practices", "active": True},
+                                    {"code": "HOME", "name": "Homeowners", "active": True},
+                                    {"code": "CONDO", "name": "Condo", "active": True},
+                                    {"code": "RENTERS", "name": "Renters", "active": True},
+                                    {"code": "FLOOD", "name": "Flood", "active": True},
+                                    {"code": "WIND", "name": "Wind/Hurricane", "active": True},
+                                    {"code": "BOAT", "name": "Boat/Marine", "active": True},
+                                    {"code": "RV", "name": "Recreational Vehicle", "active": True},
+                                    {"code": "CYCLE", "name": "Motorcycle", "active": True},
+                                    {"code": "UMBR", "name": "Umbrella Personal", "active": True},
+                                    {"code": "LIFE", "name": "Life Insurance", "active": True},
+                                    {"code": "HEALTH", "name": "Health Insurance", "active": True},
+                                    {"code": "OTHER", "name": "Other", "active": True}
+                                ]
+                                
+                                # Simple direct insert with minimal columns
+                                data = {
+                                    'user_email': user_email,
+                                    'policy_types': default_types
+                                }
+                                if user_id:
+                                    data['user_id'] = user_id
+                                
+                                # Direct database call
+                                from database_utils import get_supabase_client
+                                supabase = get_supabase_client()
+                                response = supabase.table('user_policy_types').upsert(data, on_conflict='user_email').execute()
+                                
                                 st.success("✅ Successfully initialized default policy types!")
-                                st.info(f"Created {len(default_config.get('policy_types', []))} policy types.")
+                                st.info(f"Created {len(default_types)} policy types.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Failed to initialize policy types: {str(e)}")
-                                st.info("Please contact support if this error persists.")
+                                st.info("Try running the emergency SQL script: sql_scripts/emergency_create_policy_types.sql")
                 
                 # Show system default types
                 with st.expander("System Default Policy Types"):

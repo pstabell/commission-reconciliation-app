@@ -43,7 +43,8 @@
       "Bash(rsync:*)",
       "Bash(for file in user_*.py database_utils.py)",
       "Bash(do echo \"Checking $file...\")",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(cd:*)"
     ],
     "deny": []
   }

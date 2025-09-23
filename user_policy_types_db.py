@@ -38,12 +38,27 @@ class UserPolicyTypes:
             
             if response.data and len(response.data) > 0:
                 types_data = response.data[0]
+                # Build result with only existing columns
                 result = {
-                    'policy_types': types_data.get('policy_types', []),
-                    'default': types_data.get('default_type', 'HO3'),
-                    'categories': types_data.get('categories', self._get_default_categories()),
-                    'version': types_data.get('version', '1.0.0')
+                    'policy_types': types_data.get('policy_types', [])
                 }
+                
+                # Add optional fields if they exist
+                if 'default_type' in types_data:
+                    result['default'] = types_data['default_type']
+                else:
+                    result['default'] = 'HO3'  # Use default value
+                
+                if 'categories' in types_data:
+                    result['categories'] = types_data['categories']
+                else:
+                    result['categories'] = self._get_default_categories()
+                
+                if 'version' in types_data:
+                    result['version'] = types_data['version']
+                else:
+                    result['version'] = '1.0.0'
+                
                 self._types_cache = result
                 self._cache_user_id = user_id
                 return result
@@ -64,63 +79,57 @@ class UserPolicyTypes:
             return False
         
         try:
-            # Prepare the data
+            # Prepare minimal required data first
             data = {
                 'policy_types': policy_types,
-                'default_type': default_type,
-                'version': '1.0.0',
                 'user_email': user_email
             }
             if user_id:
                 data['user_id'] = user_id
             
-            # Try with categories first
-            if categories is not None or hasattr(self, '_table_has_categories'):
-                data['categories'] = categories or self._get_default_categories()
+            # Optional fields to try adding
+            optional_fields = []
+            if default_type:
+                optional_fields.append(('default_type', default_type))
+            optional_fields.append(('version', '1.0.0'))
+            if categories is not None:
+                optional_fields.append(('categories', categories))
             
-            # Try to update existing record
-            if user_id:
-                try:
-                    response = self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
-                except Exception as e:
-                    if 'categories' in str(e):
-                        # Remove categories and try again
-                        data.pop('categories', None)
-                        response = self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
-                    else:
-                        raise e
-            else:
-                # Check if record exists
-                check_response = self.supabase.table('user_policy_types').select('id').eq('user_email', user_email).execute()
-                if check_response.data:
-                    # Update existing
-                    update_data = {
-                        'policy_types': policy_types,
-                        'default_type': default_type
-                    }
-                    if 'categories' in data:
-                        update_data['categories'] = data['categories']
+            # Function to try saving with different column combinations
+            def try_save_with_columns(base_data, optional_cols):
+                """Try to save with progressively fewer optional columns."""
+                for i in range(len(optional_cols) + 1):
+                    test_data = base_data.copy()
+                    # Add optional columns for this attempt
+                    for j in range(len(optional_cols) - i):
+                        col_name, col_value = optional_cols[j]
+                        test_data[col_name] = col_value
                     
                     try:
-                        response = self.supabase.table('user_policy_types').update(update_data).eq('user_email', user_email).execute()
-                    except Exception as e:
-                        if 'categories' in str(e) and 'categories' in update_data:
-                            # Remove categories and try again
-                            update_data.pop('categories', None)
-                            response = self.supabase.table('user_policy_types').update(update_data).eq('user_email', user_email).execute()
+                        if user_id:
+                            return self.supabase.table('user_policy_types').upsert(test_data, on_conflict='user_id').execute()
                         else:
-                            raise e
-                else:
-                    # Insert new
-                    try:
-                        response = self.supabase.table('user_policy_types').insert(data).execute()
+                            # For email-based, we need to check if exists first
+                            check = self.supabase.table('user_policy_types').select('id').eq('user_email', user_email).execute()
+                            if check.data:
+                                # Update existing - only include updateable fields
+                                update_data = {'policy_types': policy_types}
+                                for col_name, col_value in optional_cols[:len(optional_cols) - i]:
+                                    if col_name != 'version':  # Don't update version on updates
+                                        update_data[col_name] = col_value
+                                return self.supabase.table('user_policy_types').update(update_data).eq('user_email', user_email).execute()
+                            else:
+                                # Insert new
+                                return self.supabase.table('user_policy_types').insert(test_data).execute()
                     except Exception as e:
-                        if 'categories' in str(e):
-                            # Remove categories and try again
-                            data.pop('categories', None)
-                            response = self.supabase.table('user_policy_types').insert(data).execute()
-                        else:
+                        if i == len(optional_cols):  # Last attempt with minimal columns
                             raise e
+                        print(f"Save attempt {i + 1} failed: {str(e)}")
+                        continue
+            
+            # Try to save
+            response = try_save_with_columns(data, optional_fields)
+            # The try_save_with_columns function above handles all cases
             
             # Clear cache to force reload
             self._types_cache = None
@@ -207,11 +216,7 @@ class UserPolicyTypes:
             return False  # Type didn't exist
         
         # Save the updated configuration
-        return self.save_user_policy_types(
-            config['policy_types'], 
-            config['default'], 
-            config.get('categories')
-        )
+        return self.save_user_policy_types(config)
     
     def _create_user_types(self) -> Dict[str, Any]:
         """Create default policy types for a new user."""
@@ -221,33 +226,50 @@ class UserPolicyTypes:
         default_config = self._get_default_policy_types()
         
         # Save the default configuration for this user
+        # Start with minimal required data
         data = {
             'policy_types': default_config['policy_types'],
-            'default_type': default_config['default'],
-            'version': '1.0.0',
             'user_email': user_email
         }
         if user_id:
             data['user_id'] = user_id
         
-        try:
-            # Try with categories first
-            data['categories'] = default_config['categories']
-            self.supabase.table('user_policy_types').insert(data).execute()
-        except Exception as e:
-            # If categories column doesn't exist, try without it
-            if 'categories' in str(e):
-                data.pop('categories', None)
-                try:
-                    self.supabase.table('user_policy_types').insert(data).execute()
-                except:
-                    # Might already exist, try upsert
-                    if user_id:
-                        self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
-            else:
-                # Other error, try upsert
-                if user_id:
-                    self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+        # Try to save with progressive fallback
+        columns_to_try = [
+            ('categories', default_config['categories']),
+            ('default_type', default_config['default']),
+            ('version', '1.0.0')
+        ]
+        
+        for attempt in range(len(columns_to_try) + 1):
+            try:
+                # Add optional columns based on attempt number
+                test_data = data.copy()
+                for i in range(len(columns_to_try) - attempt):
+                    col_name, col_value = columns_to_try[i]
+                    test_data[col_name] = col_value
+                
+                # Try to insert
+                self.supabase.table('user_policy_types').insert(test_data).execute()
+                return default_config
+            except Exception as e:
+                error_str = str(e)
+                print(f"Insert attempt {attempt + 1} failed: {error_str}")
+                
+                # If it's the last attempt with minimal data, try upsert
+                if attempt == len(columns_to_try):
+                    try:
+                        if user_id:
+                            self.supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+                        else:
+                            # For email-only, check if exists first
+                            check = self.supabase.table('user_policy_types').select('id').eq('user_email', user_email).execute()
+                            if not check.data:
+                                raise e  # Re-raise if doesn't exist
+                        return default_config
+                    except:
+                        print(f"Failed to create user policy types: {e}")
+                        pass
         
         return default_config
     
