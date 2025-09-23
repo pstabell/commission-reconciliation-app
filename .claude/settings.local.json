@@ -40,7 +40,10 @@
       "Bash(done)",
       "Bash(cd:*)",
       "Bash(psql:*)",
-      "Bash(rsync:*)"
+      "Bash(rsync:*)",
+      "Bash(for file in user_*.py database_utils.py)",
+      "Bash(do echo \"Checking $file...\")",
+      "Bash(echo:*)"
     ],
     "deny": []
   }

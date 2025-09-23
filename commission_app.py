@@ -20121,6 +20121,12 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                             for col in subtotal_cols:
                                 if col not in editable_data.columns and col in working_data.columns:
                                     editable_data[col] = working_data[col]
+                            
+                            # Also ensure columns needed for sorting and grouping are present
+                            required_cols = ['STMT DATE', 'Effective Date', 'Transaction ID', 'Transaction Type', 'Policy Number', 'X-DATE']
+                            for col in required_cols:
+                                if col not in editable_data.columns and col in working_data.columns:
+                                    editable_data[col] = working_data[col]
                         
                         # Add Reviewed checkbox column for Detailed view
                         if view_mode != "Aggregated by Policy" and 'Transaction ID' in editable_data.columns:
@@ -20358,8 +20364,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                 if len(group_df) > 0:
                                     # Add a sort key for transaction types to ensure proper ordering
                                     def get_type_sort_key(row):
-                                        trans_id = str(row['Transaction ID'])
-                                        trans_type = row['Transaction Type']
+                                        trans_id = str(row.get('Transaction ID', ''))
+                                        trans_type = row.get('Transaction Type', '')
                                         
                                         # Check if it's STMT/VOID
                                         if '-STMT-' in trans_id or '-VOID-' in trans_id:
@@ -20390,7 +20396,7 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                     
                                     # Create a unified date column for sorting
                                     group_df['_sort_date'] = group_df.apply(
-                                        lambda row: row['STMT DATE'] if ('-STMT-' in str(row['Transaction ID']) or '-VOID-' in str(row['Transaction ID'])) else row['Effective Date'],
+                                        lambda row: row.get('STMT DATE', row.get('Effective Date', '')) if ('-STMT-' in str(row.get('Transaction ID', '')) or '-VOID-' in str(row.get('Transaction ID', ''))) else row.get('Effective Date', ''),
                                         axis=1
                                     )
                                     
