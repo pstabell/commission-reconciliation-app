@@ -11997,9 +11997,25 @@ Where Used:
                                 if user_id:
                                     data['user_id'] = user_id
                                 
-                                # Direct database call
+                                # Direct database call - check table structure
                                 supabase = get_supabase_client()
-                                response = supabase.table('user_policy_types').upsert(data, on_conflict='user_email').execute()
+                                
+                                # First, add the policy_types column if it doesn't exist
+                                try:
+                                    # Check if we can insert with policy_types column
+                                    response = supabase.table('user_policy_types').upsert(data, on_conflict='user_email').execute()
+                                except Exception as e:
+                                    if "policy_types" in str(e):
+                                        # Column doesn't exist - try to add it
+                                        st.warning("The policy_types column is missing. Please run this SQL to fix:")
+                                        st.code("""
+ALTER TABLE user_policy_types 
+ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
+                                        """, language="sql")
+                                        st.info("After running the SQL, refresh the page and try again.")
+                                        st.stop()
+                                    else:
+                                        raise e
                                 
                                 st.success("✅ Successfully initialized default policy types!")
                                 st.info(f"Created {len(default_types)} policy types.")
