@@ -39,13 +39,16 @@ CREATE TABLE IF NOT EXISTS user_default_agent_rates (
 -- 4. User Policy Types (replaces policy_types_updated.json)
 CREATE TABLE IF NOT EXISTS user_policy_types (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES users(id) NOT NULL,
+    user_id UUID REFERENCES users(id),
     user_email TEXT NOT NULL,
-    policy_type TEXT NOT NULL,
-    display_order INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT true,
+    policy_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+    default_type TEXT DEFAULT 'HO3',
+    categories JSONB DEFAULT '["Personal Property", "Personal Auto", "Commercial", "Specialty", "Personal", "Other"]'::jsonb,
+    version TEXT DEFAULT '1.0.0',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, policy_type)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT unique_user_id UNIQUE(user_id),
+    CONSTRAINT unique_user_email UNIQUE(user_email)
 );
 
 -- 5. User Transaction Types (replaces transaction_types.json)
