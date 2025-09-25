@@ -12003,7 +12003,12 @@ Where Used:
                                 # First, add the policy_types column if it doesn't exist
                                 try:
                                     # Check if we can insert with policy_types column
-                                    response = supabase.table('user_policy_types').upsert(data, on_conflict='user_email').execute()
+                                    # Use user_id for conflict resolution per security migration
+                                    if user_id:
+                                        response = supabase.table('user_policy_types').upsert(data, on_conflict='user_id').execute()
+                                    else:
+                                        # No user_id, so just insert (no conflict expected for new user)
+                                        response = supabase.table('user_policy_types').insert(data).execute()
                                 except Exception as e:
                                     if "policy_types" in str(e):
                                         # Column doesn't exist - try to add it
