@@ -11931,6 +11931,26 @@ Where Used:
             with col1:
                 st.markdown("### Current Policy Types")
                 
+                # Debug information
+                with st.expander("🔍 Debug Information", expanded=True):
+                    st.write("**Session State:**")
+                    st.write(f"- user_email: {st.session_state.get('user_email', 'Not set')}")
+                    st.write(f"- user_id: {st.session_state.get('user_id', 'Not set')}")
+                    
+                    st.write("\n**Database Query:**")
+                    # Get the full configuration to show ALL policy types
+                    full_config = user_policy_types.get_user_policy_types()
+                    st.write(f"- full_config type: {type(full_config)}")
+                    st.write(f"- full_config keys: {list(full_config.keys()) if isinstance(full_config, dict) else 'Not a dict'}")
+                    st.write(f"- full_config content: {full_config}")
+                    
+                    all_policy_types = full_config.get('policy_types', [])
+                    st.write(f"\n**Policy Types Data:**")
+                    st.write(f"- all_policy_types type: {type(all_policy_types)}")
+                    st.write(f"- all_policy_types length: {len(all_policy_types) if isinstance(all_policy_types, list) else 'Not a list'}")
+                    st.write(f"- all_policy_types content: {all_policy_types[:3] if all_policy_types else 'Empty or None'}")
+                    st.write(f"- Boolean check (if all_policy_types): {bool(all_policy_types)}")
+                
                 # Get the full configuration to show ALL policy types
                 full_config = user_policy_types.get_user_policy_types()
                 all_policy_types = full_config.get('policy_types', [])

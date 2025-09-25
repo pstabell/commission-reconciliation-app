@@ -38,9 +38,36 @@ class UserPolicyTypes:
             
             if response.data and len(response.data) > 0:
                 types_data = response.data[0]
+                
+                # DEBUG: Log what we got from database
+                raw_policy_types = types_data.get('policy_types', [])
+                print(f"DEBUG get_user_policy_types: Found data for {user_email}")
+                print(f"DEBUG: raw_policy_types type = {type(raw_policy_types)}")
+                print(f"DEBUG: raw_policy_types length = {len(raw_policy_types) if hasattr(raw_policy_types, '__len__') else 'N/A'}")
+                if raw_policy_types and isinstance(raw_policy_types, list) and len(raw_policy_types) > 0:
+                    print(f"DEBUG: First item type = {type(raw_policy_types[0])}")
+                    print(f"DEBUG: First item = {raw_policy_types[0]}")
+                
+                # Handle case where policy_types might be strings instead of dicts
+                processed_policy_types = []
+                if isinstance(raw_policy_types, list):
+                    for item in raw_policy_types:
+                        if isinstance(item, dict):
+                            processed_policy_types.append(item)
+                        elif isinstance(item, str):
+                            # If it's just a string, convert it to the expected format
+                            processed_policy_types.append({
+                                'code': item,
+                                'name': item,
+                                'active': True,
+                                'category': 'Other'
+                            })
+                else:
+                    processed_policy_types = []
+                
                 # Build result with only existing columns
                 result = {
-                    'policy_types': types_data.get('policy_types', [])
+                    'policy_types': processed_policy_types
                 }
                 
                 # Add optional fields if they exist
@@ -58,6 +85,21 @@ class UserPolicyTypes:
                     result['version'] = types_data['version']
                 else:
                     result['version'] = '1.0.0'
+                
+                # Check if policy_types is empty and populate with defaults if needed
+                if not result['policy_types']:
+                    print(f"Empty policy_types found for user {user_email}, initializing with defaults...")
+                    default_config = self._get_default_policy_types()
+                    result['policy_types'] = default_config['policy_types']
+                    
+                    # Save the default policy types back to the database
+                    self.save_user_policy_types(
+                        result['policy_types'],
+                        result['default'],
+                        result.get('categories')
+                    )
+                else:
+                    print(f"DEBUG: Successfully loaded {len(result['policy_types'])} policy types for {user_email}")
                 
                 self._types_cache = result
                 self._cache_user_id = user_id
