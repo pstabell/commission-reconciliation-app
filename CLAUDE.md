@@ -8,9 +8,12 @@
 - **Benefits**: High-speed parallel searching, pin-point accuracy, comprehensive analysis
 
 ### 2. Troubleshooting Protocol
-- **After 3 failed attempts** to solve any issue, ALWAYS search and read ALL .md files in the docs folder
+- **After 3 failed attempts**: ALWAYS search and read ALL .md files in the docs folder
+- **After 4 failed attempts**: Debug thoroughly after reading the documentation
+- **After 5 failed attempts**: Check recent backups to see how code worked before
 - Use commands like: `grep -r "error_keyword" docs/` or `find docs -name "*.md" -exec grep -l "issue_pattern" {} \;`
 - Previous issues and their solutions are documented - don't reinvent the wheel!
+- Remember: If it worked before, be very cautious about "fixing" it - the issue might be elsewhere
 
 ### 3. Documentation Requirements
 - **When user confirms an issue is resolved**, IMMEDIATELY create or update the relevant .md file
