@@ -11129,28 +11129,36 @@ def main():
                                         # Stop processing
                                         st.stop()
                                     
-                                    # Calculate statement total from all rows (including totals row)
+                                    # Calculate statement total from individual transactions only
                                     # This gives us the check-and-balance figure
                                     statement_total_amount = 0
                                     if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
                                         agent_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
                                         try:
-                                            # Sum all rows including any totals
+                                            # Convert to numeric
                                             all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
-                                            # Check if there's a totals row (last row or row with 'total' in customer name)
+                                            
+                                            # Check if there's a totals row to exclude
                                             customer_col = st.session_state.column_mapping.get('Customer', '')
                                             if customer_col:
-                                                # Find rows that look like totals
-                                                totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|sum', na=False)
-                                                if totals_mask.any():
-                                                    # Use the totals row value
-                                                    statement_total_amount = all_amounts[totals_mask].max()
-                                                else:
-                                                    # No totals row found, sum all non-total rows
-                                                    statement_total_amount = all_amounts.sum()
+                                                # Find rows that look like totals (to exclude them)
+                                                totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
+                                                # Also check for empty customer names which might be totals rows
+                                                empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
+                                                exclude_mask = totals_mask | empty_customer_mask
+                                                
+                                                # Sum only non-total rows
+                                                statement_total_amount = all_amounts[~exclude_mask].sum()
+                                                
+                                                # Debug info
+                                                excluded_count = exclude_mask.sum()
+                                                if excluded_count > 0:
+                                                    st.info(f"📊 Excluded {excluded_count} total/summary row(s) from statement total calculation")
                                             else:
+                                                # No customer column mapped, just sum all
                                                 statement_total_amount = all_amounts.sum()
-                                        except:
+                                        except Exception as e:
+                                            print(f"Error calculating statement total: {str(e)}")
                                             statement_total_amount = 0
                                     
                                     statement_total_key = get_user_session_key('statement_file_total')
