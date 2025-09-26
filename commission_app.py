@@ -3547,6 +3547,10 @@ def show_import_results(statement_date, all_data):
     column_mapping_key = get_user_session_key('column_mapping')
     statement_total_key = get_user_session_key('statement_file_total')
     
+    # Initialize manual_matches if not exists
+    if manual_key not in st.session_state:
+        st.session_state[manual_key] = {}
+    
     # Initialize or get the current view preference
     if view_pref_key not in st.session_state:
         # Default to unmatched if there are any
@@ -3713,8 +3717,8 @@ def show_import_results(statement_date, all_data):
                 st.info("💡 Click 'Use' to select customers, then 'Confirm Match' or check 'Create new transaction'.")
             
             # Create session state for manual matches if not exists
-            if 'manual_matches' not in st.session_state:
-                st.session_state.manual_matches = {}
+            if manual_key not in st.session_state:
+                st.session_state[manual_key] = {}
                 
             # Initialize state for all unmatched items to preserve user work
             if 'unmatched_state' not in st.session_state:
@@ -3913,8 +3917,8 @@ def show_import_results(statement_date, all_data):
                                                 st.session_state[unmatched_key] = new_unmatched
                                                 
                                                 # Clear any manual match entry for this index
-                                                if idx in st.session_state.manual_matches:
-                                                    del st.session_state.manual_matches[idx]
+                                                if idx in st.session_state[manual_key]:
+                                                    del st.session_state[manual_key][idx]
                                                 
                                                 # Show success and immediately refresh
                                                 st.success("✅ Match confirmed! This item has been moved to the matched list.")
@@ -4104,7 +4108,7 @@ def show_import_results(statement_date, all_data):
                                     if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
                                         st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
                             
-                                st.session_state.manual_matches[idx] = {
+                                st.session_state[manual_key][idx] = {
                                     'statement_item': item,
                                     'create_new': True,
                                     'transaction_type': selected_type,
@@ -4129,16 +4133,16 @@ def show_import_results(statement_date, all_data):
                             st.info("Manual transaction matching available above")
             
             # Show confirmed matches
-            if st.session_state.manual_matches:
+            if st.session_state[manual_key]:
                 st.divider()
                 st.markdown("### ✅ Confirmed Manual Matches")
                 
-                manual_match_count = len(st.session_state.manual_matches)
+                manual_match_count = len(st.session_state[manual_key])
                 st.metric("Manual Matches", manual_match_count)
                 
                 if st.button("Apply Manual Matches", type="primary"):
                     # Move manually matched items to appropriate lists
-                    for idx, match_info in st.session_state.manual_matches.items():
+                    for idx, match_info in st.session_state[manual_key].items():
                         if 'create_new' in match_info and match_info['create_new']:
                             # Move to create list with selected transaction type
                             item_to_create = match_info['statement_item'].copy()
@@ -4200,14 +4204,14 @@ def show_import_results(statement_date, all_data):
                             st.session_state[matched_key].append(matched_item)
                     
                     # Remove from unmatched
-                    indices_to_remove = list(st.session_state.manual_matches.keys())
+                    indices_to_remove = list(st.session_state[manual_key].keys())
                     st.session_state[unmatched_key] = [
                         item for i, item in enumerate(st.session_state[unmatched_key]) 
                         if i not in indices_to_remove
                     ]
                     
                     # Clear manual matches
-                    st.session_state.manual_matches = {}
+                    st.session_state[manual_key] = {}
                     st.success("Manual matches applied!")
                     st.rerun()
             
@@ -4421,8 +4425,8 @@ def show_import_results(statement_date, all_data):
                                                 st.session_state[unmatched_key] = new_unmatched
                                                 
                                                 # Clear any manual match entry for this index
-                                                if idx in st.session_state.manual_matches:
-                                                    del st.session_state.manual_matches[idx]
+                                                if idx in st.session_state[manual_key]:
+                                                    del st.session_state[manual_key][idx]
                                                 
                                                 # Show success and immediately refresh
                                                 st.success("✅ Match confirmed! This item has been moved to the matched list.")
@@ -4487,7 +4491,7 @@ def show_import_results(statement_date, all_data):
                                 client_name = display_customer
                             
                             # Update manual matches
-                            st.session_state.manual_matches[idx] = {
+                            st.session_state[manual_key][idx] = {
                                 'statement_item': item,
                                 'create_new': True,
                                 'transaction_type': selected_type,
@@ -4502,8 +4506,8 @@ def show_import_results(statement_date, all_data):
                                 st.warning(f"⚠️ Will create {selected_type} transaction with NEW client (no existing match found)")
                         else:
                             # Remove from manual matches if unchecked
-                            if idx in st.session_state.get('manual_matches', {}):
-                                del st.session_state.manual_matches[idx]
+                            if idx in st.session_state.get(manual_key, {}):
+                                del st.session_state[manual_key][idx]
                 
             # Only show completion message if truly all processed
             if len(st.session_state[unmatched_key]) == 0:
@@ -4612,7 +4616,7 @@ def show_import_results(statement_date, all_data):
     # Import button - allow if we have matched transactions OR transactions to create OR pending manual matches
     has_matched = len(st.session_state[matched_key]) > 0
     has_to_create = create_selected and len(st.session_state[to_create_key]) > 0
-    has_manual_matches = 'manual_matches' in st.session_state and len(st.session_state[manual_key]) > 0
+    has_manual_matches = manual_key in st.session_state and len(st.session_state[manual_key]) > 0
     can_import = has_matched or has_to_create or has_manual_matches
     
     # Show a hint if there are pending manual matches
@@ -4631,8 +4635,8 @@ def show_import_results(statement_date, all_data):
                 batch_id = f"IMPORT-{statement_date.strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
                 
                 # Step 0: Process any pending manual matches first
-                if 'manual_matches' in st.session_state and st.session_state[manual_key]:
-                    for idx, match_info in st.session_state.manual_matches.items():
+                if manual_key in st.session_state and st.session_state[manual_key]:
+                    for idx, match_info in st.session_state[manual_key].items():
                         if 'create_new' in match_info and match_info['create_new']:
                             # Add to create list with client info
                             item_to_create = match_info['statement_item'].copy()
