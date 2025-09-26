@@ -11132,23 +11132,69 @@ def main():
                                     # Calculate statement total from individual transactions only
                                     # This gives us the check-and-balance figure
                                     statement_total_amount = 0
+                                    
+                                    # EXTENSIVE DEBUGGING FOR STATEMENT TOTAL CALCULATION
+                                    st.markdown("### 🔍 DEBUG: Statement Total Calculation")
+                                    
+                                    # Show all available columns in the dataframe
+                                    st.write("**Available columns in uploaded file:**")
+                                    st.write(list(df.columns))
+                                    
+                                    # Show the current column mapping
+                                    st.write("\n**Current column mapping:**")
+                                    st.write(st.session_state.column_mapping)
+                                    
                                     if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
                                         agent_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
+                                        st.write(f"\n**Agent Paid Amount mapped to column:** '{agent_col}'")
+                                        
                                         try:
+                                            # Show raw values in the agent column
+                                            st.write(f"\n**Sample raw values in column '{agent_col}':**")
+                                            st.write(df[agent_col].head(10).to_list())
+                                            
                                             # Convert to numeric
                                             all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
+                                            
+                                            # Show converted numeric values
+                                            st.write(f"\n**Converted numeric values (first 10):**")
+                                            st.write(all_amounts.head(10).to_list())
+                                            
+                                            # Show all non-zero amounts
+                                            non_zero_amounts = all_amounts[all_amounts != 0]
+                                            st.write(f"\n**All non-zero amounts ({len(non_zero_amounts)} rows):**")
+                                            st.write(non_zero_amounts.to_list())
                                             
                                             # Check if there's a totals row to exclude
                                             customer_col = st.session_state.column_mapping.get('Customer', '')
                                             if customer_col:
+                                                st.write(f"\n**Customer column mapped to:** '{customer_col}'")
+                                                
                                                 # Find rows that look like totals (to exclude them)
                                                 totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
                                                 # Also check for empty customer names which might be totals rows
                                                 empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
                                                 exclude_mask = totals_mask | empty_customer_mask
                                                 
+                                                # Show which rows are being excluded
+                                                if exclude_mask.any():
+                                                    st.write(f"\n**Rows being excluded as totals (indices):**")
+                                                    excluded_indices = df[exclude_mask].index.tolist()
+                                                    st.write(excluded_indices)
+                                                    
+                                                    st.write("\n**Excluded rows details:**")
+                                                    for idx in excluded_indices:
+                                                        st.write(f"Row {idx}: Customer='{df.loc[idx, customer_col]}', Amount={all_amounts.loc[idx]}")
+                                                
+                                                # Show amounts being summed
+                                                amounts_to_sum = all_amounts[~exclude_mask]
+                                                st.write(f"\n**Amounts being summed ({len(amounts_to_sum)} rows):**")
+                                                st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
+                                                
                                                 # Sum only non-total rows
-                                                statement_total_amount = all_amounts[~exclude_mask].sum()
+                                                statement_total_amount = amounts_to_sum.sum()
+                                                
+                                                st.write(f"\n**Calculated total (excluding totals rows):** ${statement_total_amount:,.2f}")
                                                 
                                                 # Debug info
                                                 excluded_count = exclude_mask.sum()
@@ -11156,10 +11202,38 @@ def main():
                                                     st.info(f"📊 Excluded {excluded_count} total/summary row(s) from statement total calculation")
                                             else:
                                                 # No customer column mapped, just sum all
+                                                st.write("\n**No customer column mapped - summing all amounts**")
+                                                amounts_to_sum = all_amounts
+                                                st.write(f"**All amounts being summed ({len(amounts_to_sum)} rows):**")
+                                                st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
+                                                
                                                 statement_total_amount = all_amounts.sum()
+                                                st.write(f"\n**Calculated total (all rows):** ${statement_total_amount:,.2f}")
+                                            
+                                            # Also check if there's a Pay Amount column that might be the correct one
+                                            st.write("\n**🔍 CHECKING FOR 'PAY AMOUNT' COLUMNS:**")
+                                            pay_columns = [col for col in df.columns if 'pay' in col.lower() and 'amount' in col.lower()]
+                                            if pay_columns:
+                                                st.write(f"Found potential Pay Amount columns: {pay_columns}")
+                                                for pay_col in pay_columns:
+                                                    pay_amounts = pd.to_numeric(df[pay_col], errors='coerce').fillna(0)
+                                                    pay_total = pay_amounts.sum()
+                                                    st.write(f"- Column '{pay_col}' total: ${pay_total:,.2f}")
+                                                    if abs(pay_total - 1568.94) < 0.01:
+                                                        st.success(f"✓ Column '{pay_col}' matches expected total of $1,568.94!")
+                                            
                                         except Exception as e:
-                                            print(f"Error calculating statement total: {str(e)}")
+                                            st.error(f"Error calculating statement total: {str(e)}")
+                                            import traceback
+                                            st.write("Full traceback:")
+                                            st.code(traceback.format_exc())
                                             statement_total_amount = 0
+                                    else:
+                                        st.warning("'Agent Paid Amount (STMT)' not found in column mapping!")
+                                        st.write("Available mappings:", list(st.session_state.column_mapping.keys()))
+                                    
+                                    st.markdown(f"### **FINAL STATEMENT TOTAL: ${statement_total_amount:,.2f}**")
+                                    st.divider()
                                     
                                     statement_total_key = get_user_session_key('statement_file_total')
                                     st.session_state[statement_total_key] = statement_total_amount
