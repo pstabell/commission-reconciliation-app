@@ -10413,7 +10413,7 @@ def main():
                                         
                                         st.info("👉 **Next Steps:**")
                                         st.write("1. Go to **Tools** → **System Tools** tab → **Policy Type Mapping** section")
-                                        st.write("2. Add mappings for the policy types listed above")
+                                        st.write("2. Map these CSV policy types to your own policy types")
                                         st.write("3. Return here and try the import again")
                                         
                                         # Provide helpful instructions
@@ -12103,7 +12103,7 @@ ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
         
         with tab5:
             st.subheader("📋 Policy Type Mapping")
-            st.info("Map your custom policy types to standard categories for better organization and reporting.")
+            st.info("Map incoming CSV/import policy type values to your own policy types defined in the Policy Types tab.")
             
             # Import the user mappings module
             from user_mappings_db import user_mappings
@@ -12121,8 +12121,8 @@ ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
                     mapping_data = []
                     for from_type, to_type in sorted(current_mappings.items()):
                         mapping_data.append({
-                            "From (Your Type)": from_type,
-                            "To (Standard Type)": to_type
+                            "From (CSV/Import)": from_type,
+                            "To (Your Policy Type)": to_type
                         })
                     
                     if mapping_data:
@@ -12145,22 +12145,33 @@ ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
             with col2:
                 st.markdown("### Add/Edit Mapping")
                 
-                # Get all available policy types
-                all_policy_types = []
-                if 'policy_types_data' in st.session_state:
-                    all_policy_types = [pt['type'] for pt in st.session_state['policy_types_data']]
+                # Get user's policy types
+                user_types_config = user_policy_types.get_user_policy_types()
+                user_policy_type_list = []
+                user_policy_type_names = {}
                 
-                # Standard policy types (target types)
-                standard_types = ["HOME", "AUTOP", "AUTOB", "PL", "GL", "WC", "PROP-C", 
-                                "CONDO", "FLOOD", "BOAT", "DFIRE", "UMBRELLA", "OTHER"]
+                if user_types_config and 'policy_types' in user_types_config:
+                    for pt in user_types_config['policy_types']:
+                        if pt.get('active', True):
+                            code = pt['code']
+                            name = pt['name']
+                            user_policy_type_list.append(code)
+                            user_policy_type_names[code] = f"{code} - {name}" if code != name else code
+                
+                # If no user types, fall back to some defaults
+                if not user_policy_type_list:
+                    user_policy_type_list = ["HOME", "AUTOP", "AUTOB", "PL", "GL", "WC", "PROP-C", 
+                                           "CONDO", "FLOOD", "BOAT", "DFIRE", "UMBRELLA", "OTHER"]
+                    user_policy_type_names = {code: code for code in user_policy_type_list}
                 
                 with st.form("add_policy_mapping"):
-                    from_type = st.text_input("From Type (Your Custom Type)", 
-                                            help="Enter the policy type as it appears in your data")
+                    from_type = st.text_input("From Type (CSV/Import Value)", 
+                                            help="Enter the policy type as it appears in your imported data")
                     
-                    to_type = st.selectbox("To Type (Standard Category)", 
-                                         options=standard_types,
-                                         help="Select the standard category this should map to")
+                    to_type = st.selectbox("To Type (Your Policy Type)", 
+                                         options=user_policy_type_list,
+                                         format_func=lambda x: user_policy_type_names.get(x, x),
+                                         help="Select which of your policy types this should map to")
                     
                     submitted = st.form_submit_button("Add/Update Mapping", type="primary")
                     
