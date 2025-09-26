@@ -5792,6 +5792,7 @@ def show_privacy_policy():
 def main():
     # Import modules that might not be accessible from global scope in this long function
     from user_mappings_db import user_mappings
+    import os
     
     # Check for special URL parameters
     query_params = st.query_params
