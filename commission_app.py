@@ -2803,27 +2803,66 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # Check if mapped columns actually exist
         st.markdown("\n**Column Mapping Validation:**")
         for field, col in column_mapping.items():
-            exists = col in statement_df.columns
-            st.markdown(f"- {field} → '{col}' {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
-            if exists and not statement_df.empty:
-                # Show sample values
-                sample_values = statement_df[col].dropna().head(3).tolist()
-                if sample_values:
-                    st.markdown(f"  Sample values: {sample_values}")
+            # Check if it's a numeric index
+            try:
+                col_index = int(col)
+                # It's a numeric index
+                if 0 <= col_index < len(statement_df.columns):
+                    exists = True
+                    st.markdown(f"- {field} → column index {col_index} ✅ EXISTS")
+                    if not statement_df.empty:
+                        # Show sample values using iloc
+                        sample_values = statement_df.iloc[:, col_index].dropna().head(3).tolist()
+                        if sample_values:
+                            st.markdown(f"  Sample values: {sample_values}")
+                else:
+                    exists = False
+                    st.markdown(f"- {field} → column index {col_index} ❌ OUT OF RANGE (max index: {len(statement_df.columns)-1})")
+            except ValueError:
+                # Not a numeric index, check as column name
+                exists = col in statement_df.columns
+                st.markdown(f"- {field} → '{col}' {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
+                if exists and not statement_df.empty:
+                    # Show sample values
+                    sample_values = statement_df[col].dropna().head(3).tolist()
+                    if sample_values:
+                        st.markdown(f"  Sample values: {sample_values}")
     
     # REMOVE DUPLICATES from statement before processing
     # Create a key for each row based on customer, policy, amount, and date
     if not statement_df.empty:
         # Create columns for deduplication
         dedup_cols = []
-        if 'Customer' in column_mapping and column_mapping['Customer'] in statement_df.columns:
-            dedup_cols.append(column_mapping['Customer'])
-        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in statement_df.columns:
-            dedup_cols.append(column_mapping['Policy Number'])
-        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in statement_df.columns:
-            dedup_cols.append(column_mapping['Effective Date'])
-        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns:
-            dedup_cols.append(column_mapping['Agent Paid Amount (STMT)'])
+        
+        # Helper function to check if column exists (handles both names and indices)
+        def column_exists_and_get_name(mapped_col):
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, return the column index if valid
+                if 0 <= col_index < len(statement_df.columns):
+                    return col_index
+            except ValueError:
+                # Not a numeric index, check as column name
+                if mapped_col in statement_df.columns:
+                    return mapped_col
+            return None
+        
+        if 'Customer' in column_mapping:
+            col = column_exists_and_get_name(column_mapping['Customer'])
+            if col is not None:
+                dedup_cols.append(col)
+        if 'Policy Number' in column_mapping:
+            col = column_exists_and_get_name(column_mapping['Policy Number'])
+            if col is not None:
+                dedup_cols.append(col)
+        if 'Effective Date' in column_mapping:
+            col = column_exists_and_get_name(column_mapping['Effective Date'])
+            if col is not None:
+                dedup_cols.append(col)
+        if 'Agent Paid Amount (STMT)' in column_mapping:
+            col = column_exists_and_get_name(column_mapping['Agent Paid Amount (STMT)'])
+            if col is not None:
+                dedup_cols.append(col)
         
         if dedup_cols:
             # Remove duplicates based on key columns
@@ -2884,14 +2923,39 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         if not statement_df.empty:
             st.markdown("**Column Mapping:**")
             for key, col in column_mapping.items():
-                if col in statement_df.columns:
-                    st.markdown(f"- {key} → {col}")
+                # Check if it's a numeric index or column name
+                try:
+                    col_index = int(col)
+                    if 0 <= col_index < len(statement_df.columns):
+                        st.markdown(f"- {key} → Column index {col_index}")
+                except ValueError:
+                    if col in statement_df.columns:
+                        st.markdown(f"- {key} → {col}")
             
             st.markdown("\n**Sample Statement Data:**")
-            # Show mapped columns in the sample
-            mapped_cols = [col for col in column_mapping.values() if col in statement_df.columns]
-            if mapped_cols:
-                st.dataframe(statement_df.head(5)[mapped_cols])
+            # Build list of columns to show (handling both names and indices)
+            cols_to_show = []
+            for col in column_mapping.values():
+                try:
+                    col_index = int(col)
+                    if 0 <= col_index < len(statement_df.columns):
+                        cols_to_show.append(col_index)
+                except ValueError:
+                    if col in statement_df.columns:
+                        cols_to_show.append(col)
+            
+            if cols_to_show:
+                # Create a subset dataframe with the mapped columns
+                subset_data = pd.DataFrame()
+                for i, (key, col) in enumerate(column_mapping.items()):
+                    try:
+                        col_index = int(col)
+                        if 0 <= col_index < len(statement_df.columns):
+                            subset_data[f"{key} (col {col_index})"] = statement_df.iloc[:5, col_index]
+                    except ValueError:
+                        if col in statement_df.columns:
+                            subset_data[f"{key} ({col})"] = statement_df[col].head(5)
+                st.dataframe(subset_data)
             else:
                 st.dataframe(statement_df.head(5))
         else:
@@ -2982,60 +3046,97 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # Extract Customer
         if 'Customer' in column_mapping:
             mapped_col = column_mapping['Customer']
-            # Try exact match first, then case-insensitive match
-            if mapped_col in statement_df.columns:
-                val = row[mapped_col]
-                if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
-                    customer = str(val).strip()
-            else:
-                # Try case-insensitive column lookup
-                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
-                if matching_cols:
-                    val = row[matching_cols[0]]
+            # Check if mapped_col is a numeric index (string representation of integer)
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, use iloc
+                if 0 <= col_index < len(row):
+                    val = row.iloc[col_index]
                     if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
                         customer = str(val).strip()
-                    if debug_matches['total_rows'] <= 3:
-                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
                 else:
                     if debug_matches['total_rows'] <= 3:
-                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
+                        st.error(f"Column index {col_index} is out of range (row has {len(row)} columns)")
+            except ValueError:
+                # Not a numeric index, proceed with column name lookup
+                # Try exact match first, then case-insensitive match
+                if mapped_col in statement_df.columns:
+                    val = row[mapped_col]
+                    if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                        customer = str(val).strip()
+                else:
+                    # Try case-insensitive column lookup
+                    matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                    if matching_cols:
+                        val = row[matching_cols[0]]
+                        if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                            customer = str(val).strip()
+                        if debug_matches['total_rows'] <= 3:
+                            st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                    else:
+                        if debug_matches['total_rows'] <= 3:
+                            st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Extract Policy Number
         if 'Policy Number' in column_mapping:
             mapped_col = column_mapping['Policy Number']
-            # Try exact match first, then case-insensitive match
-            if mapped_col in statement_df.columns:
-                val = row[mapped_col]
-                if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
-                    policy_num = str(val).strip()
-            else:
-                # Try case-insensitive column lookup
-                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
-                if matching_cols:
-                    val = row[matching_cols[0]]
+            # Check if mapped_col is a numeric index (string representation of integer)
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, use iloc
+                if 0 <= col_index < len(row):
+                    val = row.iloc[col_index]
                     if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
                         policy_num = str(val).strip()
-                    if debug_matches['total_rows'] <= 3:
-                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
                 else:
                     if debug_matches['total_rows'] <= 3:
-                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
+                        st.error(f"Column index {col_index} is out of range (row has {len(row)} columns)")
+            except ValueError:
+                # Not a numeric index, proceed with column name lookup
+                # Try exact match first, then case-insensitive match
+                if mapped_col in statement_df.columns:
+                    val = row[mapped_col]
+                    if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                        policy_num = str(val).strip()
+                else:
+                    # Try case-insensitive column lookup
+                    matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                    if matching_cols:
+                        val = row[matching_cols[0]]
+                        if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                            policy_num = str(val).strip()
+                        if debug_matches['total_rows'] <= 3:
+                            st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                    else:
+                        if debug_matches['total_rows'] <= 3:
+                            st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Extract Effective Date
         if 'Effective Date' in column_mapping:
             mapped_col = column_mapping['Effective Date']
-            if mapped_col in statement_df.columns:
-                eff_date = row[mapped_col]
-            else:
-                # Try case-insensitive column lookup
-                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
-                if matching_cols:
-                    eff_date = row[matching_cols[0]]
-                    if debug_matches['total_rows'] <= 3:
-                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+            # Check if mapped_col is a numeric index (string representation of integer)
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, use iloc
+                if 0 <= col_index < len(row):
+                    eff_date = row.iloc[col_index]
                 else:
                     if debug_matches['total_rows'] <= 3:
-                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
+                        st.error(f"Column index {col_index} is out of range (row has {len(row)} columns)")
+            except ValueError:
+                # Not a numeric index, proceed with column name lookup
+                if mapped_col in statement_df.columns:
+                    eff_date = row[mapped_col]
+                else:
+                    # Try case-insensitive column lookup
+                    matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                    if matching_cols:
+                        eff_date = row[matching_cols[0]]
+                        if debug_matches['total_rows'] <= 3:
+                            st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                    else:
+                        if debug_matches['total_rows'] <= 3:
+                            st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip rows that appear to be totals
         # Check if customer name contains common total indicators
@@ -3050,29 +3151,45 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         amount = 0
         if 'Agent Paid Amount (STMT)' in column_mapping:
             mapped_col = column_mapping['Agent Paid Amount (STMT)']
-            # Try exact match first, then case-insensitive match
-            if mapped_col in statement_df.columns:
-                try:
-                    val = row[mapped_col]
-                    if pd.notna(val):
-                        amount = float(val)
-                except (ValueError, TypeError):
-                    amount = 0
-            else:
-                # Try case-insensitive column lookup
-                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
-                if matching_cols:
+            # Check if mapped_col is a numeric index (string representation of integer)
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, use iloc
+                if 0 <= col_index < len(row):
                     try:
-                        val = row[matching_cols[0]]
+                        val = row.iloc[col_index]
                         if pd.notna(val):
                             amount = float(val)
                     except (ValueError, TypeError):
                         amount = 0
-                    if debug_matches['total_rows'] <= 3:
-                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
                 else:
                     if debug_matches['total_rows'] <= 3:
-                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
+                        st.error(f"Column index {col_index} is out of range (row has {len(row)} columns)")
+            except ValueError:
+                # Not a numeric index, proceed with column name lookup
+                # Try exact match first, then case-insensitive match
+                if mapped_col in statement_df.columns:
+                    try:
+                        val = row[mapped_col]
+                        if pd.notna(val):
+                            amount = float(val)
+                    except (ValueError, TypeError):
+                        amount = 0
+                else:
+                    # Try case-insensitive column lookup
+                    matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                    if matching_cols:
+                        try:
+                            val = row[matching_cols[0]]
+                            if pd.notna(val):
+                                amount = float(val)
+                        except (ValueError, TypeError):
+                            amount = 0
+                        if debug_matches['total_rows'] <= 3:
+                            st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                    else:
+                        if debug_matches['total_rows'] <= 3:
+                            st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip only if ALL key fields are empty/missing
         # A row needs at least customer OR policy number OR a non-zero amount to be valid
@@ -3093,14 +3210,29 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                 if 'Customer' in column_mapping:
                     mapped_col = column_mapping['Customer']
                     st.text(f"   - Mapped column: '{mapped_col}'")
-                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
-                    if mapped_col in statement_df.columns:
-                        raw_val = row[mapped_col]
-                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
-                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
-                        st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
-                        st.text(f"   - Is empty after strip: {not str(raw_val).strip() if pd.notna(raw_val) else True}")
-                        st.text(f"   - Lower is in ['nan', 'none']: {str(raw_val).strip().lower() in ['nan', 'none'] if pd.notna(raw_val) and str(raw_val).strip() else False}")
+                    
+                    # Check if it's numeric index or column name
+                    try:
+                        col_index = int(mapped_col)
+                        st.text(f"   - Column type: Numeric index {col_index}")
+                        st.text(f"   - Index valid: {0 <= col_index < len(row)}")
+                        if 0 <= col_index < len(row):
+                            raw_val = row.iloc[col_index]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                            st.text(f"   - Is empty after strip: {not str(raw_val).strip() if pd.notna(raw_val) else True}")
+                            st.text(f"   - Lower is in ['nan', 'none']: {str(raw_val).strip().lower() in ['nan', 'none'] if pd.notna(raw_val) and str(raw_val).strip() else False}")
+                    except ValueError:
+                        st.text(f"   - Column type: Named column")
+                        st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                        if mapped_col in statement_df.columns:
+                            raw_val = row[mapped_col]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                            st.text(f"   - Is empty after strip: {not str(raw_val).strip() if pd.notna(raw_val) else True}")
+                            st.text(f"   - Lower is in ['nan', 'none']: {str(raw_val).strip().lower() in ['nan', 'none'] if pd.notna(raw_val) and str(raw_val).strip() else False}")
                 else:
                     st.text("   - 'Customer' not in column_mapping")
                 st.text(f"   - Final customer value: '{customer}' (empty: {not customer})")
@@ -3110,12 +3242,25 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                 if 'Policy Number' in column_mapping:
                     mapped_col = column_mapping['Policy Number']
                     st.text(f"   - Mapped column: '{mapped_col}'")
-                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
-                    if mapped_col in statement_df.columns:
-                        raw_val = row[mapped_col]
-                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
-                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
-                        st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                    
+                    # Check if it's numeric index or column name
+                    try:
+                        col_index = int(mapped_col)
+                        st.text(f"   - Column type: Numeric index {col_index}")
+                        st.text(f"   - Index valid: {0 <= col_index < len(row)}")
+                        if 0 <= col_index < len(row):
+                            raw_val = row.iloc[col_index]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                    except ValueError:
+                        st.text(f"   - Column type: Named column")
+                        st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                        if mapped_col in statement_df.columns:
+                            raw_val = row[mapped_col]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
                 else:
                     st.text("   - 'Policy Number' not in column_mapping")
                 st.text(f"   - Final policy_num value: '{policy_num}' (empty: {not policy_num})")
@@ -3125,16 +3270,33 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                 if 'Agent Paid Amount (STMT)' in column_mapping:
                     mapped_col = column_mapping['Agent Paid Amount (STMT)']
                     st.text(f"   - Mapped column: '{mapped_col}'")
-                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
-                    if mapped_col in statement_df.columns:
-                        raw_val = row[mapped_col]
-                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
-                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
-                        try:
-                            float_val = float(raw_val) if pd.notna(raw_val) else 0
-                            st.text(f"   - float(val): {float_val}")
-                        except Exception as e:
-                            st.text(f"   - float(val) failed: {str(e)}")
+                    
+                    # Check if it's numeric index or column name
+                    try:
+                        col_index = int(mapped_col)
+                        st.text(f"   - Column type: Numeric index {col_index}")
+                        st.text(f"   - Index valid: {0 <= col_index < len(row)}")
+                        if 0 <= col_index < len(row):
+                            raw_val = row.iloc[col_index]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            try:
+                                float_val = float(raw_val) if pd.notna(raw_val) else 0
+                                st.text(f"   - float(val): {float_val}")
+                            except Exception as e:
+                                st.text(f"   - float(val) failed: {str(e)}")
+                    except ValueError:
+                        st.text(f"   - Column type: Named column")
+                        st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                        if mapped_col in statement_df.columns:
+                            raw_val = row[mapped_col]
+                            st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                            st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                            try:
+                                float_val = float(raw_val) if pd.notna(raw_val) else 0
+                                st.text(f"   - float(val): {float_val}")
+                            except Exception as e:
+                                st.text(f"   - float(val) failed: {str(e)}")
                 else:
                     st.text("   - 'Agent Paid Amount (STMT)' not in column_mapping")
                 st.text(f"   - Final amount value: {amount} (zero: {amount == 0})")
@@ -3151,24 +3313,40 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         agency_amount = 0
         if 'Agency Comm Received (STMT)' in column_mapping:
             mapped_col = column_mapping['Agency Comm Received (STMT)']
-            # Try exact match first, then case-insensitive match
-            if mapped_col in statement_df.columns:
-                try:
-                    val = row[mapped_col]
-                    if pd.notna(val):
-                        agency_amount = float(val)
-                except (ValueError, TypeError):
-                    agency_amount = 0
-            else:
-                # Try case-insensitive column lookup
-                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
-                if matching_cols:
+            # Check if mapped_col is a numeric index (string representation of integer)
+            try:
+                col_index = int(mapped_col)
+                # It's a numeric index, use iloc
+                if 0 <= col_index < len(row):
                     try:
-                        val = row[matching_cols[0]]
+                        val = row.iloc[col_index]
                         if pd.notna(val):
                             agency_amount = float(val)
                     except (ValueError, TypeError):
                         agency_amount = 0
+                else:
+                    if debug_matches['total_rows'] <= 3:
+                        st.error(f"Column index {col_index} is out of range (row has {len(row)} columns)")
+            except ValueError:
+                # Not a numeric index, proceed with column name lookup
+                # Try exact match first, then case-insensitive match
+                if mapped_col in statement_df.columns:
+                    try:
+                        val = row[mapped_col]
+                        if pd.notna(val):
+                            agency_amount = float(val)
+                    except (ValueError, TypeError):
+                        agency_amount = 0
+                else:
+                    # Try case-insensitive column lookup
+                    matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                    if matching_cols:
+                        try:
+                            val = row[matching_cols[0]]
+                            if pd.notna(val):
+                                agency_amount = float(val)
+                        except (ValueError, TypeError):
+                            agency_amount = 0
         
         # Convert effective date to string format
         if pd.notna(eff_date):
