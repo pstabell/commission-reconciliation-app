@@ -4078,7 +4078,14 @@ def show_import_results(statement_date, all_data):
                             
                                 # Show transaction type selector
                                 transaction_types = get_transaction_type_codes()
-                                default_type = "NEW" if "NEW" in transaction_types else transaction_types[0] if transaction_types else "NEW"
+                                
+                                # Ensure we have at least one transaction type
+                                if not transaction_types:
+                                    st.error("No active transaction types found. Please configure transaction types in Admin Panel.")
+                                    transaction_types = ["NEW"]  # Fallback to prevent errors
+                                
+                                # Set default type, ensuring it exists in the list
+                                default_type = "NEW" if "NEW" in transaction_types else transaction_types[0]
                             
                                 # Try to guess from statement if available with mapping applied
                                 if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
@@ -4095,6 +4102,10 @@ def show_import_results(statement_date, all_data):
                                     if mapped_type in transaction_types:
                                         default_type = mapped_type
                             
+                                # Ensure default_type is in transaction_types (defensive check)
+                                if default_type not in transaction_types:
+                                    default_type = transaction_types[0]
+                                
                                 selected_type = st.selectbox(
                                     "Transaction Type",
                                     transaction_types,
