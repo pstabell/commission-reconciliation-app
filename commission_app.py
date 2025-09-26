@@ -10332,6 +10332,10 @@ def main():
                             'Rate': 'Commission Rate % → Agent Comm %'
                         }
                         
+                        # Initialize column_mapping if not exists
+                        if 'column_mapping' not in st.session_state:
+                            st.session_state.column_mapping = {}
+                        
                         # Create mapping interface - vertical layout
                         st.markdown("**Required Fields**")
                         
