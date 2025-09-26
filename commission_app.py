@@ -1642,38 +1642,25 @@ def inject_scroll_to_top():
     """, unsafe_allow_html=True)
 
 # Column mapping persistence functions
-def load_saved_column_mappings():
-    """Load saved column mappings from session state with user prefix."""
-    user_email = st.session_state.get('user_email', 'default').lower()
-    mapping_key = f"{user_email}_column_mappings"
-    
-    # Check session state first
-    if mapping_key in st.session_state:
-        return st.session_state[mapping_key]
-    
-    # For backward compatibility, try loading from old JSON file once
-    mappings_file = os.path.join('config_files', 'saved_mappings.json')
-    try:
-        if os.path.exists(mappings_file):
-            with open(mappings_file, 'r') as f:
-                mappings = json.load(f)
-                # Save to session state for future use
-                st.session_state[mapping_key] = mappings
-                return mappings
-    except Exception:
-        pass
-    
-    return {}
+# These functions are now handled by user_reconciliation_mappings_db module
+# Keeping these as wrappers for backward compatibility
+from user_reconciliation_mappings_db import (
+    load_saved_column_mappings,
+    save_reconciliation_column_mapping,
+    delete_reconciliation_column_mapping
+)
 
 def save_column_mappings_to_file(mappings):
-    """Save column mappings to session state with user prefix."""
-    user_email = st.session_state.get('user_email', 'default').lower()
-    mapping_key = f"{user_email}_column_mappings"
-    
+    """Legacy function - converts old format to new database format."""
+    # This function is called by the reconciliation page with the full mappings dict
+    # We need to extract and save individual mappings
     try:
-        # Save to session state
-        st.session_state[mapping_key] = mappings
-        return True
+        success = True
+        for mapping_name, mapping_data in mappings.items():
+            if isinstance(mapping_data, dict) and 'mapping' in mapping_data:
+                if not save_reconciliation_column_mapping(mapping_name, mapping_data['mapping']):
+                    success = False
+        return success
     except Exception as e:
         st.error(f"Error saving mappings: {str(e)}")
         return False
@@ -5803,6 +5790,9 @@ def show_privacy_policy():
         st.rerun()
 
 def main():
+    # Import modules that might not be accessible from global scope in this long function
+    from user_mappings_db import user_mappings
+    
     # Check for special URL parameters
     query_params = st.query_params
     
@@ -10211,16 +10201,18 @@ def main():
                             # Save current mapping
                             if st.button("💾 Save Mapping", type="secondary", disabled=not mapping_name, key="save_mapping_top"):
                                 if st.session_state.column_mapping:
-                                    st.session_state.saved_column_mappings[mapping_name] = {
-                                        'mapping': st.session_state.column_mapping.copy(),
-                                        'created': dt.now().strftime("%Y-%m-%d %H:%M"),
-                                        'field_count': len(st.session_state.column_mapping)
-                                    }
-                                    # Save to file for persistence
-                                    if save_column_mappings_to_file(st.session_state.saved_column_mappings):
+                                    # Save directly to database
+                                    if save_reconciliation_column_mapping(mapping_name, st.session_state.column_mapping):
+                                        # Update the session state cache
+                                        st.session_state.saved_column_mappings[mapping_name] = {
+                                            'mapping': st.session_state.column_mapping.copy(),
+                                            'created': dt.now().strftime("%Y-%m-%d %H:%M"),
+                                            'field_count': len(st.session_state.column_mapping)
+                                        }
                                         st.success(f"✅ Saved mapping: {mapping_name}")
+                                        st.rerun()  # Rerun to refresh the saved mappings list
                                     else:
-                                        st.error("Failed to save mapping to file")
+                                        st.error("Failed to save mapping to database")
                                 else:
                                     st.warning("No mapping to save")
                         
@@ -10269,9 +10261,14 @@ def main():
                                         st.text(f"{info['field_count']} fields")
                                     with col4:
                                         if st.button("🗑️", key=f"delete_{name}", help=f"Delete {name}"):
-                                            del st.session_state.saved_column_mappings[name]
-                                            save_column_mappings_to_file(st.session_state.saved_column_mappings)
-                                            st.rerun()
+                                            # Delete from database
+                                            if delete_reconciliation_column_mapping(name):
+                                                # Also remove from session state cache
+                                                del st.session_state.saved_column_mappings[name]
+                                                st.success(f"Deleted mapping: {name}")
+                                                st.rerun()
+                                            else:
+                                                st.error("Failed to delete mapping")
                         
                         # Step 2: Column Mapping
                         st.divider()

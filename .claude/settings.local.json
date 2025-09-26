@@ -44,7 +44,8 @@
       "Bash(for file in user_*.py database_utils.py)",
       "Bash(do echo \"Checking $file...\")",
       "Bash(echo:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(xxd:*)"
     ],
     "deny": []
   }
