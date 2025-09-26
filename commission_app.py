@@ -2661,13 +2661,6 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
         # Calculate credits (commission owed) - use Total Agent Comm which includes broker fees
         credit = float(row.get('Total Agent Comm', 0) or 0)
         
-        # Fallback calculation if Total Agent Comm is missing or zero
-        if credit == 0:
-            # Calculate from components if Total Agent Comm is missing
-            agent_comm = float(row.get('Agent Estimated Comm $', 0) or 0)
-            broker_comm = float(row.get('Broker Fee Agent Comm', 0) or 0)
-            credit = agent_comm + broker_comm
-        
         # Calculate debits (total paid for this policy)
         policy_num = row['Policy Number']
         
