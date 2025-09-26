@@ -10364,30 +10364,6 @@ def main():
                                     # Remove from mapping if deselected
                                     del st.session_state.column_mapping[sys_field]
                         
-                        # Add save button for the current column mappings
-                        st.divider()
-                        col_save1, col_save2, col_save3 = st.columns([1, 2, 1])
-                        with col_save2:
-                            if st.button("💾 Save Current Column Mapping", type="secondary", use_container_width=True):
-                                if st.session_state.column_mapping:
-                                    # Generate a default name based on the CSV filename or current date
-                                    default_name = f"Mapping_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                                    if uploaded_file:
-                                        # Use the filename without extension
-                                        import os
-                                        base_name = os.path.splitext(uploaded_file.name)[0]
-                                        default_name = f"{base_name}_mapping"
-                                    
-                                    # Save with a generated name
-                                    if save_reconciliation_column_mapping(default_name, st.session_state.column_mapping):
-                                        st.success(f"✅ Saved column mapping as: {default_name}")
-                                        # Reload saved mappings
-                                        st.session_state.saved_column_mappings = load_saved_column_mappings()
-                                    else:
-                                        st.error("Failed to save column mapping")
-                                else:
-                                    st.warning("No column mapping to save")
-                        
                         # Check if all required fields are mapped
                         required_mapped = all(
                             field in st.session_state.column_mapping and st.session_state.column_mapping[field]
