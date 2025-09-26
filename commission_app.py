@@ -10228,6 +10228,10 @@ def main():
                                 
                                 if selected_mapping and st.button("📂 Load", type="secondary", key="load_mapping_top"):
                                     saved_map = st.session_state.saved_column_mappings[selected_mapping]['mapping']
+                                    # Debug: Show what we're loading
+                                    print(f"DEBUG: Loading mapping '{selected_mapping}' with {len(saved_map)} fields")
+                                    print(f"DEBUG: Saved mapping content: {saved_map}")
+                                    
                                     # Verify columns exist in current file
                                     valid_mapping = {}
                                     missing_cols = []
@@ -10238,10 +10242,15 @@ def main():
                                         else:
                                             missing_cols.append(stmt_col)
                                     
+                                    print(f"DEBUG: Valid mapping after verification: {valid_mapping}")
+                                    
                                     # Store the loaded mapping in session state
                                     st.session_state.column_mapping = valid_mapping
-                                    # Flag that we just loaded a mapping
-                                    st.session_state.mapping_just_loaded = True
+                                    
+                                    # Also update the widget keys directly
+                                    for sys_field, stmt_col in valid_mapping.items():
+                                        widget_key = f"map_{sys_field}"
+                                        st.session_state[widget_key] = stmt_col
                                     
                                     if missing_cols:
                                         st.warning(f"Some columns not found in current file: {', '.join(missing_cols)}")
@@ -10318,10 +10327,13 @@ def main():
                                 except:
                                     default_index = 0
                                 
+                                # Use session state directly for the selectbox value
+                                widget_key = f"map_{sys_field}"
+                                
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
                                     options=options,
-                                    key=f"map_{sys_field}",
+                                    key=widget_key,
                                     index=default_index,
                                     help=f"Select the column that contains {description}"
                                 )
@@ -10351,10 +10363,13 @@ def main():
                                 except:
                                     default_index = 0
                                 
+                                # Use session state directly for the selectbox value
+                                widget_key = f"map_{sys_field}"
+                                
                                 selected_col = st.selectbox(
                                     f"{sys_field} ({description})",
                                     options=options,
-                                    key=f"map_{sys_field}",
+                                    key=widget_key,
                                     index=default_index,
                                     help=f"Select the column that contains {description}"
                                 )
