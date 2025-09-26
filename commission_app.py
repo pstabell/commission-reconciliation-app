@@ -2788,6 +2788,29 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     unmatched = []
     can_create = []
     
+    # DEBUG: Show raw input data
+    with st.expander("🔍 DEBUG: Raw statement data and mapping", expanded=True):
+        st.markdown("**Column Mapping:**")
+        st.json(column_mapping)
+        
+        st.markdown("**Statement DataFrame Info:**")
+        st.markdown(f"- Shape: {statement_df.shape}")
+        st.markdown(f"- Columns: {list(statement_df.columns)}")
+        
+        st.markdown("**First 5 rows of statement data:**")
+        st.dataframe(statement_df.head())
+        
+        # Check if mapped columns actually exist
+        st.markdown("\n**Column Mapping Validation:**")
+        for field, col in column_mapping.items():
+            exists = col in statement_df.columns
+            st.markdown(f"- {field} → '{col}' {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
+            if exists and not statement_df.empty:
+                # Show sample values
+                sample_values = statement_df[col].dropna().head(3).tolist()
+                if sample_values:
+                    st.markdown(f"  Sample values: {sample_values}")
+    
     # REMOVE DUPLICATES from statement before processing
     # Create a key for each row based on customer, policy, amount, and date
     if not statement_df.empty:
@@ -2946,19 +2969,19 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         eff_date = None
         
         # Extract Customer
-        if 'Customer' in column_mapping and column_mapping['Customer'] in row.index:
+        if 'Customer' in column_mapping and column_mapping['Customer'] in statement_df.columns:
             val = row[column_mapping['Customer']]
             if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
                 customer = str(val).strip()
         
         # Extract Policy Number
-        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in row.index:
+        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in statement_df.columns:
             val = row[column_mapping['Policy Number']]
             if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
                 policy_num = str(val).strip()
         
         # Extract Effective Date
-        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in row.index:
+        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in statement_df.columns:
             eff_date = row[column_mapping['Effective Date']]
         
         # Skip rows that appear to be totals
@@ -2972,7 +2995,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # Check if this is truly an empty row
         # Get the amount to help determine if row has data
         amount = 0
-        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in row.index:
+        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns:
             try:
                 val = row[column_mapping['Agent Paid Amount (STMT)']]
                 if pd.notna(val):
@@ -2984,11 +3007,27 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # A row needs at least customer OR policy number OR a non-zero amount to be valid
         if not customer and not policy_num and amount == 0:
             debug_matches['skipped_empty'] += 1
+            # Log first few skipped rows for debugging
+            if debug_matches['skipped_empty'] <= 3:
+                with st.expander(f"⚠️ DEBUG: Skipped empty row {idx}", expanded=False):
+                    st.markdown("**Row data:**")
+                    st.json(row.to_dict())
+                    st.markdown("**Extracted values:**")
+                    st.text(f"Customer: '{customer}' (empty: {not customer})")
+                    st.text(f"Policy: '{policy_num}' (empty: {not policy_num})")
+                    st.text(f"Amount: {amount} (zero: {amount == 0})")
+                    st.markdown("**Column mapping check:**")
+                    if 'Customer' in column_mapping:
+                        st.text(f"Customer col '{column_mapping['Customer']}' in df.columns: {column_mapping['Customer'] in statement_df.columns}")
+                    if 'Policy Number' in column_mapping:
+                        st.text(f"Policy col '{column_mapping['Policy Number']}' in df.columns: {column_mapping['Policy Number'] in statement_df.columns}")
+                    if 'Agent Paid Amount (STMT)' in column_mapping:
+                        st.text(f"Amount col '{column_mapping['Agent Paid Amount (STMT)']}' in df.columns: {column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns}")
             continue
         
         # Agency amount is optional for audit purposes
         agency_amount = 0
-        if 'Agency Comm Received (STMT)' in column_mapping and column_mapping['Agency Comm Received (STMT)'] in row.index:
+        if 'Agency Comm Received (STMT)' in column_mapping and column_mapping['Agency Comm Received (STMT)'] in statement_df.columns:
             try:
                 val = row[column_mapping['Agency Comm Received (STMT)']]
                 if pd.notna(val):
