@@ -12107,8 +12107,103 @@ ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
             st.subheader("📋 Policy Type Mapping")
             st.info("Map your custom policy types to standard categories for better organization and reporting.")
             
-            # Placeholder for policy type mapping functionality
-            st.write("Policy type mapping functionality will be implemented here.")
+            # Import the user mappings module
+            from user_mappings_db import user_mappings
+            
+            # Load current mappings
+            current_mappings = user_mappings.get_user_policy_type_mappings()
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.markdown("### Current Mappings")
+                
+                if current_mappings:
+                    # Create a DataFrame for better display
+                    mapping_data = []
+                    for from_type, to_type in sorted(current_mappings.items()):
+                        mapping_data.append({
+                            "From (Your Type)": from_type,
+                            "To (Standard Type)": to_type
+                        })
+                    
+                    if mapping_data:
+                        df = pd.DataFrame(mapping_data)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No mappings configured yet.")
+                else:
+                    st.info("No mappings configured yet.")
+                
+                # Download current mappings
+                if current_mappings:
+                    st.download_button(
+                        label="📥 Download Current Mappings",
+                        data=json.dumps(current_mappings, indent=2),
+                        file_name="policy_type_mappings.json",
+                        mime="application/json"
+                    )
+            
+            with col2:
+                st.markdown("### Add/Edit Mapping")
+                
+                # Get all available policy types
+                all_policy_types = []
+                if 'policy_types_data' in st.session_state:
+                    all_policy_types = [pt['type'] for pt in st.session_state['policy_types_data']]
+                
+                # Standard policy types (target types)
+                standard_types = ["HOME", "AUTOP", "AUTOB", "PL", "GL", "WC", "PROP-C", 
+                                "CONDO", "FLOOD", "BOAT", "DFIRE", "UMBRELLA", "OTHER"]
+                
+                with st.form("add_policy_mapping"):
+                    from_type = st.text_input("From Type (Your Custom Type)", 
+                                            help="Enter the policy type as it appears in your data")
+                    
+                    to_type = st.selectbox("To Type (Standard Category)", 
+                                         options=standard_types,
+                                         help="Select the standard category this should map to")
+                    
+                    submitted = st.form_submit_button("Add/Update Mapping", type="primary")
+                    
+                    if submitted and from_type:
+                        if user_mappings.add_policy_mapping(from_type.upper(), to_type):
+                            st.success(f"Added mapping: {from_type.upper()} → {to_type}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to save mapping")
+                
+                # Remove mapping section
+                st.markdown("### Remove Mapping")
+                if current_mappings:
+                    mapping_to_remove = st.selectbox(
+                        "Select mapping to remove",
+                        options=list(current_mappings.keys()),
+                        format_func=lambda x: f"{x} → {current_mappings[x]}"
+                    )
+                    
+                    if st.button("🗑️ Remove Selected Mapping", type="secondary"):
+                        # Remove the selected mapping
+                        updated_mappings = current_mappings.copy()
+                        del updated_mappings[mapping_to_remove]
+                        
+                        if user_mappings.save_user_policy_type_mappings(updated_mappings):
+                            st.success(f"Removed mapping: {mapping_to_remove}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to remove mapping")
+                else:
+                    st.info("No mappings to remove")
+                
+                # Reset to defaults
+                st.markdown("### Reset Options")
+                if st.button("🔄 Reset to Default Mappings", help="Reset all mappings to system defaults"):
+                    default_mappings = user_mappings._get_default_policy_mappings()
+                    if user_mappings.save_user_policy_type_mappings(default_mappings):
+                        st.success("Reset to default mappings")
+                        st.rerun()
+                    else:
+                        st.error("Failed to reset mappings")
         
         with tab6:
             st.subheader("📋 Transaction Types & Mapping")
@@ -12119,20 +12214,111 @@ ADD COLUMN IF NOT EXISTS policy_types JSONB NOT NULL DEFAULT '[]'::jsonb;
                 if st.button("🔄 Refresh", help="Refresh transaction types"):
                     st.rerun()
             
-            # Transaction types content
-            st.write("Transaction types and mapping functionality will be implemented here.")
-            st.info("""
-                **Transaction Types Overview**:
-                - NEW: New Business
-                - RWL: Renewal
-                - END: Endorsement
-                - CAN: Cancellation
-                - And more...
+            # Load current transaction mappings
+            current_tx_mappings = user_mappings.get_user_transaction_type_mappings()
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.markdown("### Current Transaction Mappings")
+                
+                if current_tx_mappings:
+                    # Create a DataFrame for better display
+                    tx_mapping_data = []
+                    for from_type, to_type in sorted(current_tx_mappings.items()):
+                        tx_mapping_data.append({
+                            "From (Your Type)": from_type,
+                            "To (Standard Type)": to_type
+                        })
+                    
+                    if tx_mapping_data:
+                        df_tx = pd.DataFrame(tx_mapping_data)
+                        st.dataframe(df_tx, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No transaction mappings configured yet.")
+                else:
+                    st.info("No transaction mappings configured yet.")
+                
+                # Standard transaction types info
+                st.info("""
+                **Standard Transaction Types**:
+                - **NEW**: New Business
+                - **RWL**: Renewal
+                - **END**: Endorsement
+                - **CAN**: Cancellation
+                - **PMT**: Payment/Commission
+                - **REI**: Reinstatement
+                - **AUD**: Audit
+                - **OTH**: Other
                 
                 **Special Note on PMT**:
                 PMT represents commissions paid when customers make payments on their policies. 
                 These are NOT directly tied to policy actions (NEW, RWL, END) but to customer payment events.
                 """)
+                
+                # Download current mappings
+                if current_tx_mappings:
+                    st.download_button(
+                        label="📥 Download Transaction Mappings",
+                        data=json.dumps(current_tx_mappings, indent=2),
+                        file_name="transaction_type_mappings.json",
+                        mime="application/json"
+                    )
+            
+            with col2:
+                st.markdown("### Add/Edit Transaction Mapping")
+                
+                # Standard transaction types (target types)
+                standard_tx_types = ["NEW", "RWL", "END", "CAN", "PMT", "REI", "AUD", "OTH"]
+                
+                with st.form("add_transaction_mapping"):
+                    tx_from_type = st.text_input("From Type (Your Transaction Code)", 
+                                                help="Enter the transaction type as it appears in your data (e.g., STL, NBS, XLC)")
+                    
+                    tx_to_type = st.selectbox("To Type (Standard Category)", 
+                                            options=standard_tx_types,
+                                            help="Select the standard transaction type this should map to")
+                    
+                    tx_submitted = st.form_submit_button("Add/Update Mapping", type="primary")
+                    
+                    if tx_submitted and tx_from_type:
+                        if user_mappings.add_transaction_mapping(tx_from_type.upper(), tx_to_type):
+                            st.success(f"Added transaction mapping: {tx_from_type.upper()} → {tx_to_type}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to save transaction mapping")
+                
+                # Remove mapping section
+                st.markdown("### Remove Transaction Mapping")
+                if current_tx_mappings:
+                    tx_mapping_to_remove = st.selectbox(
+                        "Select transaction mapping to remove",
+                        options=list(current_tx_mappings.keys()),
+                        format_func=lambda x: f"{x} → {current_tx_mappings[x]}"
+                    )
+                    
+                    if st.button("🗑️ Remove Selected Transaction Mapping", type="secondary"):
+                        # Remove the selected mapping
+                        updated_tx_mappings = current_tx_mappings.copy()
+                        del updated_tx_mappings[tx_mapping_to_remove]
+                        
+                        if user_mappings.save_user_transaction_type_mappings(updated_tx_mappings):
+                            st.success(f"Removed transaction mapping: {tx_mapping_to_remove}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to remove transaction mapping")
+                else:
+                    st.info("No transaction mappings to remove")
+                
+                # Reset to defaults
+                st.markdown("### Reset Options")
+                if st.button("🔄 Reset to Default Transaction Mappings", help="Reset all transaction mappings to system defaults"):
+                    default_tx_mappings = user_mappings._get_default_transaction_mappings()
+                    if user_mappings.save_user_transaction_type_mappings(default_tx_mappings):
+                        st.success("Reset to default transaction mappings")
+                        st.rerun()
+                    else:
+                        st.error("Failed to reset transaction mappings")
     
         display_app_footer()
     
