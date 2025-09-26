@@ -21134,7 +21134,7 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                             # Write data to second sheet with formatted numeric columns
                             # Use editable_data if we're in detailed view with subtotals, otherwise use working_data
                             prl_export_key = get_user_session_key('prl_export_data')
-                        if view_mode != "Aggregated by Policy" and prl_export_key in st.session_state and 'Group' in st.session_state[prl_export_key].columns:
+                            if view_mode != "Aggregated by Policy" and prl_export_key in st.session_state and 'Group' in st.session_state[prl_export_key].columns:
                                 # For Detailed view with subtotals, use the editable_data which includes subtotals
                                 excel_export_data = st.session_state[prl_export_key].copy()
                                 
