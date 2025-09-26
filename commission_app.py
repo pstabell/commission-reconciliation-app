@@ -2640,6 +2640,10 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     if original_trans.empty:
         return pd.DataFrame()
     
+    # Debug: Check if Total Agent Comm column exists
+    if 'Total Agent Comm' not in original_trans.columns:
+        print("WARNING: 'Total Agent Comm' column not found in data!")
+    
     # Normalize effective dates for comparison
     # Convert all dates to a consistent format for comparison
     all_data_normalized = all_data.copy()
@@ -2659,7 +2663,30 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     # Calculate balance for each transaction
     for idx, row in original_trans.iterrows():
         # Calculate credits (commission owed) - use Total Agent Comm which includes broker fees
-        credit = float(row.get('Total Agent Comm', 0) or 0)
+        if 'Total Agent Comm' in row.index:
+            total_agent_comm = row['Total Agent Comm']
+        else:
+            total_agent_comm = 0
+        
+        # Handle NaN values explicitly
+        if pd.isna(total_agent_comm) or total_agent_comm == 0:
+            # Fallback: Calculate from components if Total Agent Comm is missing
+            agent_est_comm = 0
+            broker_fee_comm = 0
+            
+            if 'Agent Estimated Comm $' in row.index:
+                agent_est_comm = row['Agent Estimated Comm $']
+                if pd.isna(agent_est_comm):
+                    agent_est_comm = 0
+                    
+            if 'Broker Fee Agent Comm' in row.index:
+                broker_fee_comm = row['Broker Fee Agent Comm']
+                if pd.isna(broker_fee_comm):
+                    broker_fee_comm = 0
+            
+            total_agent_comm = float(agent_est_comm or 0) + float(broker_fee_comm or 0)
+        
+        credit = float(total_agent_comm or 0)
         
         # Calculate debits (total paid for this policy)
         policy_num = row['Policy Number']
@@ -2704,6 +2731,7 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
         recent_trans = original_trans[original_trans['_parsed_date'] >= cutoff_date].copy()
         recent_trans = recent_trans.drop('_parsed_date', axis=1)
         
+        
         return recent_trans
     else:
         # Normal mode - return only transactions with outstanding balance
@@ -2744,6 +2772,19 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     
     # Get all transactions from past 18 months for reconciliation matching
     outstanding_trans = calculate_transaction_balances(existing_data, show_all_for_reconciliation=True)
+    
+    # Debug output
+    if outstanding_trans.empty:
+        st.warning("⚠️ No transactions found with commission data in the past 18 months.")
+    else:
+        # Check commission data quality
+        valid_balance_count = (outstanding_trans['_balance'] > 0.01).sum()
+        total_agent_comm_count = outstanding_trans['Total Agent Comm'].notna().sum()
+        positive_comm_count = (outstanding_trans['Total Agent Comm'] > 0).sum()
+        
+        st.info(f"📊 Found {len(outstanding_trans)} transactions from the past 18 months for matching.")
+        if valid_balance_count == 0:
+            st.warning(f"⚠️ None of the transactions have an outstanding balance. Check Total Agent Comm values: {total_agent_comm_count} have values, {positive_comm_count} are positive.")
     
     # Build lookup dictionaries
     existing_lookup = {}
