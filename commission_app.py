@@ -3139,35 +3139,13 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                             st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip rows that appear to be totals
-        # Only skip rows where BOTH customer AND policy are empty (common pattern for totals rows)
-        is_totals_row = False
-        skip_reason = ""
+        # Check if customer name contains common total indicators
+        customer_lower = customer.lower()
+        if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
+            continue
         
-        # Check if both customer AND policy are empty/missing
-        # This is the most reliable indicator of a totals row
-        if not customer and not policy_num and amount != 0:
-            is_totals_row = True
-            skip_reason = "Both customer and policy are empty but has amount (likely totals row)"
-        
-        if is_totals_row:
-            debug_matches['skipped_totals'] += 1
-            # Show debug info for skipped totals row
-            with st.expander(f"ℹ️ Skipped Totals Row {idx}", expanded=False):
-                st.info(f"Reason: {skip_reason}")
-                st.markdown("**Row data:**")
-                st.text(f"Customer: '{customer}'")
-                st.text(f"Policy: '{policy_num}'")
-                st.text(f"Amount: ${amount:,.2f}")
-                if agency_amount != 0:
-                    st.text(f"Agency Amount: ${agency_amount:,.2f}")
-                st.caption("This row appears to be a totals/summary row and will not be processed.")
-            
-            # Store the statement total for verification
-            statement_total_key = get_user_session_key('statement_file_total')
-            if statement_total_key not in st.session_state:
-                st.session_state[statement_total_key] = 0
-            # Add to the total (in case there are multiple totals rows)
-            st.session_state[statement_total_key] += amount
+        # Also skip if policy number or customer is empty/missing and it looks like a summary row
+        if (not customer or customer.lower() in ['', 'nan', 'none']) and (not policy_num or policy_num.lower() in ['', 'nan', 'none']):
             continue
         
         # Check if this is truly an empty row
