@@ -2963,26 +2963,79 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     # Process each statement row
     for idx, row in statement_df.iterrows():
         debug_matches['total_rows'] += 1
+        
+        # Show debug for first 3 rows to understand the data
+        if debug_matches['total_rows'] <= 3:
+            with st.expander(f"🔍 DEBUG: Processing row {idx} - BEFORE extraction", expanded=True):
+                st.markdown("**Raw row data:**")
+                st.json(row.to_dict())
+                st.markdown("**Column mapping:**")
+                st.json(column_mapping)
+                st.markdown("**DataFrame columns:**")
+                st.text(list(statement_df.columns))
+        
         # Extract mapped values more carefully
         customer = ''
         policy_num = ''
         eff_date = None
         
         # Extract Customer
-        if 'Customer' in column_mapping and column_mapping['Customer'] in statement_df.columns:
-            val = row[column_mapping['Customer']]
-            if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
-                customer = str(val).strip()
+        if 'Customer' in column_mapping:
+            mapped_col = column_mapping['Customer']
+            # Try exact match first, then case-insensitive match
+            if mapped_col in statement_df.columns:
+                val = row[mapped_col]
+                if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                    customer = str(val).strip()
+            else:
+                # Try case-insensitive column lookup
+                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                if matching_cols:
+                    val = row[matching_cols[0]]
+                    if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                        customer = str(val).strip()
+                    if debug_matches['total_rows'] <= 3:
+                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                else:
+                    if debug_matches['total_rows'] <= 3:
+                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Extract Policy Number
-        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in statement_df.columns:
-            val = row[column_mapping['Policy Number']]
-            if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
-                policy_num = str(val).strip()
+        if 'Policy Number' in column_mapping:
+            mapped_col = column_mapping['Policy Number']
+            # Try exact match first, then case-insensitive match
+            if mapped_col in statement_df.columns:
+                val = row[mapped_col]
+                if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                    policy_num = str(val).strip()
+            else:
+                # Try case-insensitive column lookup
+                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                if matching_cols:
+                    val = row[matching_cols[0]]
+                    if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                        policy_num = str(val).strip()
+                    if debug_matches['total_rows'] <= 3:
+                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                else:
+                    if debug_matches['total_rows'] <= 3:
+                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Extract Effective Date
-        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in statement_df.columns:
-            eff_date = row[column_mapping['Effective Date']]
+        if 'Effective Date' in column_mapping:
+            mapped_col = column_mapping['Effective Date']
+            if mapped_col in statement_df.columns:
+                eff_date = row[mapped_col]
+            else:
+                # Try case-insensitive column lookup
+                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                if matching_cols:
+                    eff_date = row[matching_cols[0]]
+                    if debug_matches['total_rows'] <= 3:
+                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                else:
+                    if debug_matches['total_rows'] <= 3:
+                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip rows that appear to be totals
         # Check if customer name contains common total indicators
@@ -2995,45 +3048,127 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # Check if this is truly an empty row
         # Get the amount to help determine if row has data
         amount = 0
-        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns:
-            try:
-                val = row[column_mapping['Agent Paid Amount (STMT)']]
-                if pd.notna(val):
-                    amount = float(val)
-            except (ValueError, TypeError):
-                amount = 0
+        if 'Agent Paid Amount (STMT)' in column_mapping:
+            mapped_col = column_mapping['Agent Paid Amount (STMT)']
+            # Try exact match first, then case-insensitive match
+            if mapped_col in statement_df.columns:
+                try:
+                    val = row[mapped_col]
+                    if pd.notna(val):
+                        amount = float(val)
+                except (ValueError, TypeError):
+                    amount = 0
+            else:
+                # Try case-insensitive column lookup
+                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                if matching_cols:
+                    try:
+                        val = row[matching_cols[0]]
+                        if pd.notna(val):
+                            amount = float(val)
+                    except (ValueError, TypeError):
+                        amount = 0
+                    if debug_matches['total_rows'] <= 3:
+                        st.warning(f"Column '{mapped_col}' not found exactly, but found case-insensitive match: '{matching_cols[0]}'")
+                else:
+                    if debug_matches['total_rows'] <= 3:
+                        st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip only if ALL key fields are empty/missing
         # A row needs at least customer OR policy number OR a non-zero amount to be valid
         if not customer and not policy_num and amount == 0:
             debug_matches['skipped_empty'] += 1
-            # Log first few skipped rows for debugging
-            if debug_matches['skipped_empty'] <= 3:
-                with st.expander(f"⚠️ DEBUG: Skipped empty row {idx}", expanded=False):
-                    st.markdown("**Row data:**")
-                    st.json(row.to_dict())
-                    st.markdown("**Extracted values:**")
-                    st.text(f"Customer: '{customer}' (empty: {not customer})")
-                    st.text(f"Policy: '{policy_num}' (empty: {not policy_num})")
-                    st.text(f"Amount: {amount} (zero: {amount == 0})")
-                    st.markdown("**Column mapping check:**")
-                    if 'Customer' in column_mapping:
-                        st.text(f"Customer col '{column_mapping['Customer']}' in df.columns: {column_mapping['Customer'] in statement_df.columns}")
-                    if 'Policy Number' in column_mapping:
-                        st.text(f"Policy col '{column_mapping['Policy Number']}' in df.columns: {column_mapping['Policy Number'] in statement_df.columns}")
-                    if 'Agent Paid Amount (STMT)' in column_mapping:
-                        st.text(f"Amount col '{column_mapping['Agent Paid Amount (STMT)']}' in df.columns: {column_mapping['Agent Paid Amount (STMT)'] in statement_df.columns}")
+            # Log ALL skipped rows for debugging (not just first 3)
+            with st.expander(f"⚠️ DEBUG: Skipped empty row {idx} (#{debug_matches['skipped_empty']})", expanded=True):
+                st.markdown("**Raw row data:**")
+                st.json(row.to_dict())
+                
+                st.markdown("**Column mapping being used:**")
+                st.json(column_mapping)
+                
+                st.markdown("**Extraction attempts:**")
+                
+                # Customer extraction debug
+                st.markdown("1. **Customer extraction:**")
+                if 'Customer' in column_mapping:
+                    mapped_col = column_mapping['Customer']
+                    st.text(f"   - Mapped column: '{mapped_col}'")
+                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                    if mapped_col in statement_df.columns:
+                        raw_val = row[mapped_col]
+                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                        st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                        st.text(f"   - Is empty after strip: {not str(raw_val).strip() if pd.notna(raw_val) else True}")
+                        st.text(f"   - Lower is in ['nan', 'none']: {str(raw_val).strip().lower() in ['nan', 'none'] if pd.notna(raw_val) and str(raw_val).strip() else False}")
+                else:
+                    st.text("   - 'Customer' not in column_mapping")
+                st.text(f"   - Final customer value: '{customer}' (empty: {not customer})")
+                
+                # Policy Number extraction debug
+                st.markdown("2. **Policy Number extraction:**")
+                if 'Policy Number' in column_mapping:
+                    mapped_col = column_mapping['Policy Number']
+                    st.text(f"   - Mapped column: '{mapped_col}'")
+                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                    if mapped_col in statement_df.columns:
+                        raw_val = row[mapped_col]
+                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                        st.text(f"   - str(val).strip(): '{str(raw_val).strip() if pd.notna(raw_val) else ''}'")
+                else:
+                    st.text("   - 'Policy Number' not in column_mapping")
+                st.text(f"   - Final policy_num value: '{policy_num}' (empty: {not policy_num})")
+                
+                # Amount extraction debug
+                st.markdown("3. **Amount extraction:**")
+                if 'Agent Paid Amount (STMT)' in column_mapping:
+                    mapped_col = column_mapping['Agent Paid Amount (STMT)']
+                    st.text(f"   - Mapped column: '{mapped_col}'")
+                    st.text(f"   - Column exists in df: {mapped_col in statement_df.columns}")
+                    if mapped_col in statement_df.columns:
+                        raw_val = row[mapped_col]
+                        st.text(f"   - Raw value: {repr(raw_val)} (type: {type(raw_val).__name__})")
+                        st.text(f"   - pd.notna(val): {pd.notna(raw_val)}")
+                        try:
+                            float_val = float(raw_val) if pd.notna(raw_val) else 0
+                            st.text(f"   - float(val): {float_val}")
+                        except Exception as e:
+                            st.text(f"   - float(val) failed: {str(e)}")
+                else:
+                    st.text("   - 'Agent Paid Amount (STMT)' not in column_mapping")
+                st.text(f"   - Final amount value: {amount} (zero: {amount == 0})")
+                
+                st.markdown("**Decision:**")
+                st.text(f"Customer empty: {not customer}")
+                st.text(f"Policy empty: {not policy_num}")
+                st.text(f"Amount zero: {amount == 0}")
+                st.text(f"All empty/zero: {not customer and not policy_num and amount == 0}")
+                st.text("**Row will be SKIPPED**")
             continue
         
         # Agency amount is optional for audit purposes
         agency_amount = 0
-        if 'Agency Comm Received (STMT)' in column_mapping and column_mapping['Agency Comm Received (STMT)'] in statement_df.columns:
-            try:
-                val = row[column_mapping['Agency Comm Received (STMT)']]
-                if pd.notna(val):
-                    agency_amount = float(val)
-            except (ValueError, TypeError):
-                agency_amount = 0
+        if 'Agency Comm Received (STMT)' in column_mapping:
+            mapped_col = column_mapping['Agency Comm Received (STMT)']
+            # Try exact match first, then case-insensitive match
+            if mapped_col in statement_df.columns:
+                try:
+                    val = row[mapped_col]
+                    if pd.notna(val):
+                        agency_amount = float(val)
+                except (ValueError, TypeError):
+                    agency_amount = 0
+            else:
+                # Try case-insensitive column lookup
+                matching_cols = [col for col in statement_df.columns if col.lower() == mapped_col.lower()]
+                if matching_cols:
+                    try:
+                        val = row[matching_cols[0]]
+                        if pd.notna(val):
+                            agency_amount = float(val)
+                    except (ValueError, TypeError):
+                        agency_amount = 0
         
         # Convert effective date to string format
         if pd.notna(eff_date):
