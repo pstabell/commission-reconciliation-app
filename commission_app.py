@@ -4603,6 +4603,13 @@ def show_import_results(statement_date, all_data):
         st.divider()
         st.markdown("### ✅ Verification Check")
         
+        # DEBUG: Show what's in the statement total key
+        st.write(f"**DEBUG: Statement total from session state = ${st.session_state[statement_total_key]:,.2f}**")
+        if abs(st.session_state[statement_total_key] - 3179.13) < 0.01:
+            st.error("❌ Displaying incorrect total of $3,179.13 - this appears to be Total Agent Comm, not Agent Paid Amount!")
+        elif abs(st.session_state[statement_total_key] - 1568.94) < 0.01:
+            st.success("✅ Displaying correct total of $1,568.94")
+        
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Statement Total", f"${st.session_state[statement_total_key]:,.2f}", 
@@ -10963,6 +10970,13 @@ def main():
                                 )
                                 if selected_col:
                                     st.session_state.column_mapping[sys_field] = selected_col
+                                    
+                                    # WARNING: Check for Total Agent Comm confusion
+                                    if sys_field == 'Agent Paid Amount (STMT)' and 'total' in selected_col.lower() and 'agent' in selected_col.lower() and 'comm' in selected_col.lower():
+                                        st.error(f"⚠️ WARNING: You selected '{selected_col}' for Agent Paid Amount!")
+                                        st.warning("'Total Agent Comm' is usually the EARNED commission amount, not the PAID amount.")
+                                        st.info("💡 Look for a column like 'Pay Amount', 'Agent Pay', or 'Commission Paid'")
+                                    
                                 elif sys_field in st.session_state.column_mapping:
                                     # Remove from mapping if deselected
                                     del st.session_state.column_mapping[sys_field]
@@ -10999,6 +11013,13 @@ def main():
                                 )
                                 if selected_col:
                                     st.session_state.column_mapping[sys_field] = selected_col
+                                    
+                                    # WARNING: Check for Total Agent Comm confusion
+                                    if sys_field == 'Agent Paid Amount (STMT)' and 'total' in selected_col.lower() and 'agent' in selected_col.lower() and 'comm' in selected_col.lower():
+                                        st.error(f"⚠️ WARNING: You selected '{selected_col}' for Agent Paid Amount!")
+                                        st.warning("'Total Agent Comm' is usually the EARNED commission amount, not the PAID amount.")
+                                        st.info("💡 Look for a column like 'Pay Amount', 'Agent Pay', or 'Commission Paid'")
+                                    
                                 elif sys_field in st.session_state.column_mapping:
                                     # Remove from mapping if deselected
                                     del st.session_state.column_mapping[sys_field]
@@ -11011,6 +11032,35 @@ def main():
                         
                         if required_mapped:
                             st.divider()
+                            
+                            # Additional validation for column mapping
+                            if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
+                                mapped_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
+                                
+                                # Check if there are Total Agent Comm columns that might be confused
+                                total_agent_comm_cols = [col for col in df.columns if 'total' in col.lower() and 'agent' in col.lower() and 'comm' in col.lower()]
+                                pay_amount_cols = [col for col in df.columns if 'pay' in col.lower() and 'amount' in col.lower()]
+                                
+                                if total_agent_comm_cols and mapped_col in total_agent_comm_cols:
+                                    st.error("❌ **Column Mapping Issue Detected!**")
+                                    st.warning(f"You have mapped '{mapped_col}' as the Agent Paid Amount, but this appears to be a Total Commission column.")
+                                    
+                                    if pay_amount_cols:
+                                        st.info("💡 **Suggestion:** Try one of these columns instead:")
+                                        for col in pay_amount_cols:
+                                            st.write(f"   • {col}")
+                                    else:
+                                        st.info("💡 Look for columns that represent amounts PAID to the agent, not amounts EARNED.")
+                                    
+                                    # Calculate both totals for comparison
+                                    total_agent_sum = pd.to_numeric(df[mapped_col], errors='coerce').fillna(0).sum()
+                                    st.metric("Current column total", f"${total_agent_sum:,.2f}")
+                                    
+                                    if pay_amount_cols:
+                                        st.write("**Totals for suggested columns:**")
+                                        for col in pay_amount_cols:
+                                            col_sum = pd.to_numeric(df[col], errors='coerce').fillna(0).sum()
+                                            st.write(f"• {col}: ${col_sum:,.2f}")
                             
                             # Process and match transactions
                             if st.button("🔍 Process & Match Transactions", type="primary"):
@@ -11213,8 +11263,28 @@ def main():
                                     st.markdown(f"### **FINAL STATEMENT TOTAL: ${statement_total_amount:,.2f}**")
                                     st.divider()
                                     
+                                    # DEBUG: Check for Total Agent Comm confusion
+                                    st.write("\n**🔍 CHECKING FOR TOTAL AGENT COMM CONFUSION:**")
+                                    total_agent_comm_columns = [col for col in df.columns if 'total' in col.lower() and 'agent' in col.lower() and 'comm' in col.lower()]
+                                    if total_agent_comm_columns:
+                                        st.warning(f"⚠️ Found 'Total Agent Comm' columns that might cause confusion: {total_agent_comm_columns}")
+                                        for tac_col in total_agent_comm_columns:
+                                            tac_amounts = pd.to_numeric(df[tac_col], errors='coerce').fillna(0)
+                                            tac_total = tac_amounts.sum()
+                                            st.write(f"- Column '{tac_col}' total: ${tac_total:,.2f}")
+                                            if abs(tac_total - 3179.13) < 0.01:
+                                                st.error(f"❌ Column '{tac_col}' has total $3,179.13 - this is NOT the statement total!")
+                                                st.info("✅ The correct statement total should be the 'Agent Paid Amount (STMT)' column")
+                                    
                                     statement_total_key = get_user_session_key('statement_file_total')
                                     st.session_state[statement_total_key] = statement_total_amount
+                                    
+                                    # DEBUG: Confirm what's being stored
+                                    st.success(f"✅ Stored statement total: ${statement_total_amount:,.2f} in key '{statement_total_key}'")
+                                    if abs(statement_total_amount - 1568.94) < 0.01:
+                                        st.success("✅ This matches the expected total of $1,568.94!")
+                                    elif abs(statement_total_amount - 3179.13) < 0.01:
+                                        st.error("❌ This is the incorrect total of $3,179.13 - check column mapping!")
                                     
                                     # Copy the column mappings from the UI to the user-specific key
                                     st.session_state[column_mapping_key] = st.session_state.column_mapping.copy()
