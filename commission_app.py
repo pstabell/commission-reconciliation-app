@@ -11098,6 +11098,9 @@ def main():
                                     statement_total_key = get_user_session_key('statement_file_total')
                                     st.session_state[statement_total_key] = statement_total_amount
                                     
+                                    # Copy the column mappings from the UI to the user-specific key
+                                    st.session_state[column_mapping_key] = st.session_state.column_mapping.copy()
+                                    
                                     matched, unmatched, to_create = match_statement_transactions(
                                         df, 
                                         st.session_state[column_mapping_key],
