@@ -3139,12 +3139,88 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                             st.error(f"Column '{mapped_col}' not found in DataFrame columns!")
         
         # Skip rows that appear to be totals
+        # Enhanced totals detection - check multiple indicators
+        is_totals_row = False
+        skip_reason = ""
+        
         # Check if customer name contains common total indicators
         if customer:
             customer_lower = customer.lower()
             if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
-                debug_matches['skipped_totals'] += 1
-                continue
+                is_totals_row = True
+                skip_reason = f"Customer name contains totals indicator: '{customer}'"
+        
+        # Check if this is the last row (common for totals)
+        if idx == len(statement_df) - 1:
+            # Additional checks for last row being a totals row
+            # 1. Check if customer is empty but amount is populated (common pattern)
+            if not customer and not policy_num and amount != 0:
+                is_totals_row = True
+                skip_reason = "Last row with empty customer/policy but has amount (likely totals)"
+            
+            # 2. Check if amount is suspiciously large compared to other rows
+            if amount != 0 and len(statement_df) > 1:
+                # Calculate average of other amounts
+                other_amounts = []
+                for other_idx, other_row in statement_df.iterrows():
+                    if other_idx != idx:
+                        other_amount = 0
+                        if 'Agent Paid Amount (STMT)' in column_mapping:
+                            mapped_col = column_mapping['Agent Paid Amount (STMT)']
+                            try:
+                                col_index = int(mapped_col)
+                                if 0 <= col_index < len(other_row):
+                                    try:
+                                        val = other_row.iloc[col_index]
+                                        if pd.notna(val):
+                                            other_amount = abs(float(val))
+                                    except:
+                                        pass
+                            except ValueError:
+                                if mapped_col in statement_df.columns:
+                                    try:
+                                        val = other_row[mapped_col]
+                                        if pd.notna(val):
+                                            other_amount = abs(float(val))
+                                    except:
+                                        pass
+                        if other_amount > 0:
+                            other_amounts.append(other_amount)
+                
+                if other_amounts:
+                    avg_amount = sum(other_amounts) / len(other_amounts)
+                    # If this amount is more than 5x the average, it's likely a total
+                    if abs(amount) > avg_amount * 5:
+                        is_totals_row = True
+                        skip_reason = f"Last row amount ({amount:.2f}) is >5x average ({avg_amount:.2f})"
+        
+        # Check policy number field for totals indicators
+        if policy_num:
+            policy_lower = str(policy_num).lower()
+            if any(total_word in policy_lower for total_word in ['total', 'totals', 'sum', 'grand']):
+                is_totals_row = True
+                skip_reason = f"Policy field contains totals indicator: '{policy_num}'"
+        
+        if is_totals_row:
+            debug_matches['skipped_totals'] += 1
+            # Show debug info for skipped totals row
+            with st.expander(f"ℹ️ Skipped Totals Row {idx}", expanded=False):
+                st.info(f"Reason: {skip_reason}")
+                st.markdown("**Row data:**")
+                st.text(f"Customer: '{customer}'")
+                st.text(f"Policy: '{policy_num}'")
+                st.text(f"Amount: ${amount:,.2f}")
+                if agency_amount != 0:
+                    st.text(f"Agency Amount: ${agency_amount:,.2f}")
+                st.caption("This row appears to be a totals/summary row and will not be processed.")
+            
+            # Store the statement total for verification
+            statement_total_key = get_user_session_key('statement_file_total')
+            if statement_total_key not in st.session_state:
+                st.session_state[statement_total_key] = 0
+            # Add to the total (in case there are multiple totals rows)
+            st.session_state[statement_total_key] += amount
+            continue
         
         # Check if this is truly an empty row
         # Get the amount to help determine if row has data
@@ -10754,12 +10830,29 @@ def main():
                 )
                 
                 if uploaded_file is not None:
+                    # Check file size first (Streamlit has a default 200MB limit)
+                    file_size_mb = uploaded_file.size / (1024 * 1024)  # Convert to MB
+                    st.info(f"📁 File: {uploaded_file.name} ({file_size_mb:.2f} MB)")
+                    
+                    if file_size_mb > 200:
+                        st.error(f"❌ File size ({file_size_mb:.2f} MB) exceeds the 200 MB limit. Please use a smaller file.")
+                        st.stop()
+                    
                     # Parse file
                     try:
                         if uploaded_file.name.endswith('.csv'):
                             df = pd.read_csv(uploaded_file)
                         else:
                             df = pd.read_excel(uploaded_file)
+                        
+                        # Check if dataframe is empty
+                        if df.empty:
+                            st.error("❌ The uploaded file appears to be empty. Please check your file.")
+                            st.stop()
+                        
+                        # Check for very large files that might cause processing issues
+                        if len(df) > 10000:
+                            st.warning(f"⚠️ Large file detected: {len(df):,} rows. Processing may take longer.")
                         
                         st.session_state[import_data_key] = df
                         
@@ -10771,7 +10864,9 @@ def main():
                                 if df[col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False).any():
                                     transaction_count = len(df) - df[col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False).sum()
                                     break
-                            except:
+                            except Exception as e:
+                                # Log the error but continue processing
+                                print(f"Warning: Error checking column {col} for totals: {str(e)}")
                                 continue
                         
                         if transaction_count == len(df):
