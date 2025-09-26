@@ -2660,6 +2660,24 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
     except:
         original_trans_normalized['_normalized_date'] = pd.to_datetime(original_trans['Effective Date'], errors='coerce')
     
+    # DEBUG: Check column names first
+    if len(original_trans) > 0:
+        with st.expander("🔍 DEBUG: Column names in transaction data", expanded=False):
+            st.markdown("**Available columns:**")
+            cols_list = list(original_trans.columns)
+            # Check for commission-related columns
+            comm_cols = [col for col in cols_list if 'comm' in col.lower() or 'agent' in col.lower()]
+            st.markdown(f"Commission-related columns: {comm_cols}")
+            
+            # Check specifically for Total Agent Comm variations
+            total_agent_variations = [col for col in cols_list if 'total' in col.lower() and 'agent' in col.lower()]
+            st.markdown(f"Total Agent Comm variations: {total_agent_variations}")
+            
+            # Show all columns
+            st.text("All columns:")
+            for col in sorted(cols_list):
+                st.text(f"  - {col}")
+    
     # Calculate balance for each transaction
     for idx, row in original_trans.iterrows():
         # Calculate credits (commission owed) - use Total Agent Comm which includes broker fees
@@ -2731,6 +2749,29 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
         recent_trans = original_trans[original_trans['_parsed_date'] >= cutoff_date].copy()
         recent_trans = recent_trans.drop('_parsed_date', axis=1)
         
+        # DEBUG: Show balance calculation details for first few transactions
+        if not recent_trans.empty and '_balance' in recent_trans.columns:
+            sample_size = min(5, len(recent_trans))
+            debug_sample = recent_trans.head(sample_size)
+            
+            # Create a debug dataframe with key fields
+            debug_data = []
+            for idx, row in debug_sample.iterrows():
+                debug_row = {
+                    'Transaction ID': row.get('Transaction ID', ''),
+                    'Customer': row.get('Customer', '')[:30],  # Truncate for display
+                    'Total Agent Comm': row.get('Total Agent Comm', 0),
+                    'Agent Est Comm': row.get('Agent Est Comm', 0),
+                    'Broker Fee Agent Comm': row.get('Broker Fee Agent Comm', 0),
+                    '_balance': row.get('_balance', 0),
+                    'Has STMT entries': 'Check DB'
+                }
+                debug_data.append(debug_row)
+            
+            with st.expander("🔍 DEBUG: Balance Calculation Sample", expanded=False):
+                st.markdown("**Sample of balance calculations:**")
+                st.dataframe(pd.DataFrame(debug_data))
+                st.markdown("**Note:** Balance = Total Agent Comm - (sum of Agent Paid Amount from STMT entries)")
         
         return recent_trans
     else:
@@ -2783,8 +2824,55 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         positive_comm_count = (outstanding_trans['Total Agent Comm'] > 0).sum()
         
         st.info(f"📊 Found {len(outstanding_trans)} transactions from the past 18 months for matching.")
+        
+        # DEBUG: Show sample of transactions found
+        with st.expander("🔍 DEBUG: Sample of transactions found", expanded=False):
+            if not outstanding_trans.empty:
+                debug_cols = ['Transaction ID', 'Customer', 'Policy Number', 'Effective Date', 
+                             'Total Agent Comm', '_balance', 'Agent Paid Amount (STMT)', 'Status']
+                available_cols = [col for col in debug_cols if col in outstanding_trans.columns]
+                sample_trans = outstanding_trans.head(10)[available_cols]
+                st.dataframe(sample_trans)
+                
+                # Show balance calculation details
+                st.markdown("**Balance Calculation Details:**")
+                st.markdown("- Credit = Total Agent Comm (amount owed to agent)")
+                st.markdown("- Debit = Sum of Agent Paid Amount (STMT) from reconciliation entries")
+                st.markdown("- Balance = Credit - Debit")
+                
+                # Check for common issues
+                zero_comm = (outstanding_trans['Total Agent Comm'] == 0).sum()
+                null_comm = outstanding_trans['Total Agent Comm'].isna().sum()
+                negative_comm = (outstanding_trans['Total Agent Comm'] < 0).sum()
+                
+                st.markdown(f"**Commission Data Quality:**")
+                st.markdown(f"- Total transactions: {len(outstanding_trans)}")
+                st.markdown(f"- With zero commission: {zero_comm}")
+                st.markdown(f"- With null commission: {null_comm}")
+                st.markdown(f"- With negative commission: {negative_comm}")
+                st.markdown(f"- With positive commission: {positive_comm_count}")
+                st.markdown(f"- With outstanding balance > 0: {valid_balance_count}")
+        
         if valid_balance_count == 0:
             st.warning(f"⚠️ None of the transactions have an outstanding balance. Check Total Agent Comm values: {total_agent_comm_count} have values, {positive_comm_count} are positive.")
+    
+    # DEBUG: Show statement data sample
+    with st.expander("🔍 DEBUG: Statement data being matched", expanded=False):
+        if not statement_df.empty:
+            st.markdown("**Column Mapping:**")
+            for key, col in column_mapping.items():
+                if col in statement_df.columns:
+                    st.markdown(f"- {key} → {col}")
+            
+            st.markdown("\n**Sample Statement Data:**")
+            # Show mapped columns in the sample
+            mapped_cols = [col for col in column_mapping.values() if col in statement_df.columns]
+            if mapped_cols:
+                st.dataframe(statement_df.head(5)[mapped_cols])
+            else:
+                st.dataframe(statement_df.head(5))
+        else:
+            st.warning("Statement dataframe is empty!")
     
     # Build lookup dictionaries
     existing_lookup = {}
@@ -2818,11 +2906,40 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     if not existing_data.empty:
         all_customers = existing_data['Customer'].dropna().unique().tolist()
     
+    # DEBUG: Show lookup dictionary sample
+    with st.expander("🔍 DEBUG: Transaction lookup dictionaries", expanded=False):
+        st.markdown(f"**Existing lookup keys (first 10):**")
+        if existing_lookup:
+            for i, (key, trans) in enumerate(list(existing_lookup.items())[:10]):
+                st.text(f"  {key}: {trans.get('Customer', 'Unknown')} - Balance: ${trans.get('balance', 0):.2f}")
+        else:
+            st.warning("No transactions in existing_lookup dictionary!")
+        
+        st.markdown(f"\n**Customer lookup (first 5 customers):**")
+        if customer_trans_lookup:
+            for i, (customer, trans_list) in enumerate(list(customer_trans_lookup.items())[:5]):
+                st.text(f"  {customer}: {len(trans_list)} transaction(s)")
+        else:
+            st.warning("No customers in customer_trans_lookup dictionary!")
+    
     # Track processed statement rows to prevent duplicates
     processed_statement_rows = set()
     
+    # DEBUG: Track matching attempts
+    debug_matches = {
+        'total_rows': 0,
+        'skipped_totals': 0,
+        'skipped_empty': 0,
+        'policy_date_attempts': 0,
+        'customer_attempts': 0,
+        'matched': 0,
+        'unmatched': 0,
+        'can_create': 0
+    }
+    
     # Process each statement row
     for idx, row in statement_df.iterrows():
+        debug_matches['total_rows'] += 1
         # Extract mapped values
         customer = str(row[column_mapping['Customer']]).strip() if 'Customer' in column_mapping else ''
         policy_num = str(row[column_mapping['Policy Number']]).strip() if 'Policy Number' in column_mapping else ''
@@ -2832,10 +2949,12 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         # Check if customer name contains common total indicators
         customer_lower = customer.lower()
         if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
+            debug_matches['skipped_totals'] += 1
             continue
         
         # Also skip if policy number or customer is empty/missing and it looks like a summary row
         if (not customer or customer.lower() in ['', 'nan', 'none']) and (not policy_num or policy_num.lower() in ['', 'nan', 'none']):
+            debug_matches['skipped_empty'] += 1
             continue
         # Primary reconciliation amount is what the agent was paid
         amount = float(row[column_mapping['Agent Paid Amount (STMT)']]) if 'Agent Paid Amount (STMT)' in column_mapping else 0
@@ -2859,16 +2978,32 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
             'statement_data': row.to_dict()
         }
         
+        # DEBUG: Show first 3 match attempts in detail
+        if debug_matches['total_rows'] <= 3:
+            with st.expander(f"🔍 DEBUG: Matching row {idx} - {customer[:30]}", expanded=False):
+                st.markdown(f"**Statement data:**")
+                st.text(f"  Customer: {customer}")
+                st.text(f"  Policy: {policy_num}")
+                st.text(f"  Eff Date: {eff_date}")
+                st.text(f"  Amount: ${amount:.2f}")
+                st.text(f"  Agency Amount: ${agency_amount:.2f}")
+                st.markdown(f"\n**Matching attempt:**")
+                st.text(f"  Policy key: {policy_num}_{eff_date}")
+                st.text(f"  Key exists in lookup: {f'{policy_num}_{eff_date}' in existing_lookup}")
+        
         # Try to match: Policy Number + Effective Date (highest confidence)
         policy_key = f"{policy_num}_{eff_date}"
+        debug_matches['policy_date_attempts'] += 1
         if policy_key in existing_lookup:
             match_result['match'] = existing_lookup[policy_key]
             match_result['confidence'] = 100
             match_result['match_type'] = 'Policy + Date'
             matched.append(match_result)
+            debug_matches['matched'] += 1
             continue
         
         # Try enhanced customer matching
+        debug_matches['customer_attempts'] += 1
         potential_customers = find_potential_customer_matches(customer, all_customers)
         
         if potential_customers:
@@ -2983,6 +3118,28 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                 # No match found - can create new transaction
                 match_result['can_create'] = True
                 can_create.append(match_result)
+                debug_matches['can_create'] += 1
+    
+    # Count unmatched at the end
+    debug_matches['unmatched'] = len(unmatched)
+    debug_matches['matched'] = len(matched)
+    
+    # DEBUG: Show matching summary
+    with st.expander("🔍 DEBUG: Matching Summary", expanded=True):
+        st.markdown("**Statement Processing:**")
+        st.markdown(f"- Total rows processed: {debug_matches['total_rows']}")
+        st.markdown(f"- Skipped (totals): {debug_matches['skipped_totals']}")
+        st.markdown(f"- Skipped (empty): {debug_matches['skipped_empty']}")
+        st.markdown(f"- Valid rows: {debug_matches['total_rows'] - debug_matches['skipped_totals'] - debug_matches['skipped_empty']}")
+        
+        st.markdown("\n**Matching Attempts:**")
+        st.markdown(f"- Policy + Date attempts: {debug_matches['policy_date_attempts']}")
+        st.markdown(f"- Customer matching attempts: {debug_matches['customer_attempts']}")
+        
+        st.markdown("\n**Results:**")
+        st.markdown(f"- Matched: {debug_matches['matched']}")
+        st.markdown(f"- Unmatched (need review): {debug_matches['unmatched']}")
+        st.markdown(f"- Can create new: {debug_matches['can_create']}")
     
     return matched, unmatched, can_create
 
