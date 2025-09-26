@@ -1,4 +1,4 @@
-# PRL KeyError 'STMT DATE' Fix - January 22, 2025
+# PRL KeyError 'STMT DATE' Fix - September 22, 2025
 
 ## Issue Description
 Users encountered a KeyError when accessing the Policy Revenue Ledger Reports page in the "Detailed Transactions" section:

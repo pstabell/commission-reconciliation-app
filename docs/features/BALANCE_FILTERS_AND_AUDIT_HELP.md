@@ -1,6 +1,6 @@
 # Balance Filters and Audit Help Feature
 
-## Date: 2025-01-19
+## Date: 2025-09-19
 
 ### Overview
 Added two new features to improve policy auditing and reporting capabilities:

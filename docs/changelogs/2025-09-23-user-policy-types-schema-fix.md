@@ -1,5 +1,5 @@
 # User Policy Types Schema Fix
-**Date**: 2025-01-23  
+**Date**: 2025-09-23  
 **Issue**: Users starting with 0 policy types instead of 34 defaults  
 **Root Cause**: Database schema mismatch between SQL tables and Python code  
 

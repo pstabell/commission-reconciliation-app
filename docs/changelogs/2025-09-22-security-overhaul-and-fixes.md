@@ -1,4 +1,4 @@
-# Security Overhaul and Critical Fixes - January 22, 2025
+# Security Overhaul and Critical Fixes - September 22, 2025
 
 ## Version 5.0.0 - Complete Security Overhaul
 
@@ -70,11 +70,11 @@
 - create_user_prl_templates_table.sql
 
 #### Documentation:
-- docs/security/user_isolation_audit_2025-01-23.md
+- docs/security/user_isolation_audit_2025-09-23.md
 - docs/admin_settings_isolation_report.md
 - docs/testing/reconciliation_security_test_summary.md
-- docs/changelogs/2025-01-22-remove-shared-json-files.md
-- docs/changelogs/2025-01-22-prl-keyerror-fix.md
+- docs/changelogs/2025-09-22-remove-shared-json-files.md
+- docs/changelogs/2025-09-22-prl-keyerror-fix.md
 
 ### Impact
 - **Complete user isolation** - No possibility of cross-user data access

@@ -1,5 +1,5 @@
 # Complete User Isolation & Security Overhaul - v5.0.0
-**Date**: January 22, 2025  
+**Date**: September 22, 2025  
 **Version**: 5.0.0  
 **Type**: Major Security Update
 

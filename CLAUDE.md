@@ -34,12 +34,12 @@
 - **No hardcoded values**: Use config files for defaults (see config_files/ folder)
 
 ### 6. Known Recurring Issues
-- **UnboundLocalError with datetime**: Check `/docs/changelogs/2025-01-09-webhook-datetime-fix.md`
+- **UnboundLocalError with datetime**: Check `/docs/changelogs/2025-09-09-webhook-datetime-fix.md`
 - **Mobile data visibility**: Check `/docs/troubleshooting/MOBILE_FIX_SUMMARY_2025.md`
 - **CSV Import / RLS**: Check `/docs/troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md`
-- **Demo data isolation**: Check `/docs/changelogs/2025-01-19-contacts-import-export-feature.md`
+- **Demo data isolation**: Check `/docs/changelogs/2025-09-19-contacts-import-export-feature.md`
 - **Missing MGA associations**: Export logic must preserve mga_id relationships
-- **Edit Policy Duplicate Bug**: Check `/docs/changelogs/2025-01-20-edit-policy-duplicate-bug-complete-fix.md`
+- **Edit Policy Duplicate Bug**: Check `/docs/changelogs/2025-09-20-edit-policy-duplicate-bug-complete-fix.md`
   - Editing transactions could create duplicates (425 → 535+ records)
   - PRODUCTION vs PRIVATE behave differently due to user filtering
   - 5 layers of protection now prevent duplicates
@@ -52,7 +52,7 @@
 - ALL transactions with an effective date within a policy term must follow consistent rules
 - Master Policy Term Rules are designed to be unbreakable
 
-## CRITICAL SECURITY FIXES (January 13-19, 2025)
+## CRITICAL SECURITY FIXES (September 13-19, 2025)
 
 ### Cache Poisoning Issue - RESOLVED
 - **Problem**: Users could see other users' data due to global caching
@@ -74,7 +74,7 @@
 
 **Full Details**: See `/docs/troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md`
 
-## Recent Updates (v4.3.0 - January 20, 2025)
+## Recent Updates (v4.3.0 - September 20, 2025)
 
 1. **Edit Policy Duplicate Bug Fix**:
    - Fixed critical bug where editing transactions created duplicates
@@ -85,20 +85,20 @@
      - Transaction ID verification
      - Update-only fallback
    - Auto-save disabled by default to prevent conflicts
-   - See: `/docs/changelogs/2025-01-20-edit-policy-duplicate-bug-complete-fix.md`
+   - See: `/docs/changelogs/2025-09-20-edit-policy-duplicate-bug-complete-fix.md`
 
-## Prior Updates (v4.2.0 - January 19, 2025)
+## Prior Updates (v4.2.0 - September 19, 2025)
 
 1. **Contacts Import/Export Feature**:
    - Added new tab in Tools page for complete contacts management
    - Users can export/import carriers, MGAs, and commission rules
    - Full data isolation between users
-   - See: `/docs/changelogs/2025-01-19-contacts-import-export-feature.md`
+   - See: `/docs/changelogs/2025-09-19-contacts-import-export-feature.md`
 
 2. **Color Theme Preferences**:
    - Users can choose between light and dark blue color schemes
    - Preference saved per user in config_files/user_preferences.json
-   - See: `/docs/changelogs/2025-01-18-color-theme-preferences.md`
+   - See: `/docs/changelogs/2025-09-18-color-theme-preferences.md`
 
 3. **Configurable Default Agent Commission Rates**:
    - Added "Default Agent Rates" tab in Admin Panel

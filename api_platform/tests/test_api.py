@@ -59,7 +59,7 @@ class TestPolicyEndpoints:
         policy_data = {
             "policy_number": "TEST-123456",
             "customer": "Test Customer",
-            "effective_date": "2025-01-01",
+            "effective_date": "2025-09-01",
             "premium": 1000.0,
             "policy_type": "AUTO",
             "carrier": "Test Carrier",
@@ -150,7 +150,7 @@ class TestAnalyticsEndpoints:
         headers = {"Authorization": f"Bearer {TEST_API_KEY}"}
         response = client.get(
             "/v1/analytics/summary",
-            params={"start_date": "2025-01-01", "end_date": "2025-01-31"},
+            params={"start_date": "2025-09-01", "end_date": "2025-09-31"},
             headers=headers
         )
         assert response.status_code == 200
@@ -208,7 +208,7 @@ class TestEdgeCases:
             {  # Valid
                 "policy_number": "BATCH-001",
                 "customer": "Customer 1",
-                "effective_date": "2025-01-01",
+                "effective_date": "2025-09-01",
                 "premium": 1000.0
             },
             {  # Invalid - missing required field

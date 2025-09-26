@@ -1,4 +1,4 @@
-# 2025-01-19: Contacts Import/Export Feature & Fix
+# 2025-09-19: Contacts Import/Export Feature & Fix
 
 ## Issue
 After implementing complete user isolation in the database, users needed a way to manage their own carriers, MGAs, and commission rules independently. Demo account was missing data after security fortification.

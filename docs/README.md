@@ -39,14 +39,14 @@ Welcome to the Commission Tracker documentation! This index helps you quickly fi
 - [Contacts Data Issues](troubleshooting/contacts-data-visibility-issues.md) - Demo account
 
 ### 📅 Recent Changes (2025)
-- [2025-01-22: Complete User Isolation & Security Overhaul v5.0.0](changelogs/2025-01-22-complete-user-isolation-security-overhaul.md) - **MAJOR UPDATE**
-- [2025-01-19: Contacts Import/Export Fix](changelogs/2025-01-19-contacts-import-export-fix.md)
-- [2025-01-18: Color Theme Preferences](changelogs/2025-01-18-color-theme-preferences.md)
-- [2025-01-18: Demo User MGA Fix](changelogs/2025-01-18-demo-user-mga-visibility-fix.md)
-- [2025-01-14: Reconciliation DateTime Fix](changelogs/2025-01-14-reconciliation-datetime-fix.md)
-- [2025-01-09: Webhook DateTime Fix](changelogs/2025-01-09-webhook-datetime-fix.md)
-- [2025-01-07: Carrd AI Bot Integration](changelogs/2025-01-07-carrd-ai-bot-integration.md)
-- [2025-01-07: Free Trial Password Flow](changelogs/2025-01-07-free-trial-password-flow.md)
+- [2025-09-22: Complete User Isolation & Security Overhaul v5.0.0](changelogs/2025-09-22-complete-user-isolation-security-overhaul.md) - **MAJOR UPDATE**
+- [2025-09-19: Contacts Import/Export Fix](changelogs/2025-09-19-contacts-import-export-fix.md)
+- [2025-09-18: Color Theme Preferences](changelogs/2025-09-18-color-theme-preferences.md)
+- [2025-09-18: Demo User MGA Fix](changelogs/2025-09-18-demo-user-mga-visibility-fix.md)
+- [2025-09-14: Reconciliation DateTime Fix](changelogs/2025-09-14-reconciliation-datetime-fix.md)
+- [2025-09-09: Webhook DateTime Fix](changelogs/2025-09-09-webhook-datetime-fix.md)
+- [2025-09-07: Carrd AI Bot Integration](changelogs/2025-09-07-carrd-ai-bot-integration.md)
+- [2025-09-07: Free Trial Password Flow](changelogs/2025-09-07-free-trial-password-flow.md)
 
 ### 📚 Help Content
 - [Getting Started](../help_content/01_getting_started.md)

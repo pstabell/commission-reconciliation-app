@@ -2940,26 +2940,61 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     # Process each statement row
     for idx, row in statement_df.iterrows():
         debug_matches['total_rows'] += 1
-        # Extract mapped values
-        customer = str(row[column_mapping['Customer']]).strip() if 'Customer' in column_mapping else ''
-        policy_num = str(row[column_mapping['Policy Number']]).strip() if 'Policy Number' in column_mapping else ''
-        eff_date = row[column_mapping['Effective Date']] if 'Effective Date' in column_mapping else None
+        # Extract mapped values more carefully
+        customer = ''
+        policy_num = ''
+        eff_date = None
+        
+        # Extract Customer
+        if 'Customer' in column_mapping and column_mapping['Customer'] in row.index:
+            val = row[column_mapping['Customer']]
+            if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                customer = str(val).strip()
+        
+        # Extract Policy Number
+        if 'Policy Number' in column_mapping and column_mapping['Policy Number'] in row.index:
+            val = row[column_mapping['Policy Number']]
+            if pd.notna(val) and str(val).strip() and str(val).strip().lower() not in ['nan', 'none']:
+                policy_num = str(val).strip()
+        
+        # Extract Effective Date
+        if 'Effective Date' in column_mapping and column_mapping['Effective Date'] in row.index:
+            eff_date = row[column_mapping['Effective Date']]
         
         # Skip rows that appear to be totals
         # Check if customer name contains common total indicators
-        customer_lower = customer.lower()
-        if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
-            debug_matches['skipped_totals'] += 1
-            continue
+        if customer:
+            customer_lower = customer.lower()
+            if any(total_word in customer_lower for total_word in ['total', 'totals', 'subtotal', 'sub-total', 'grand total', 'sum']):
+                debug_matches['skipped_totals'] += 1
+                continue
         
-        # Also skip if policy number or customer is empty/missing and it looks like a summary row
-        if (not customer or customer.lower() in ['', 'nan', 'none']) and (not policy_num or policy_num.lower() in ['', 'nan', 'none']):
+        # Check if this is truly an empty row
+        # Get the amount to help determine if row has data
+        amount = 0
+        if 'Agent Paid Amount (STMT)' in column_mapping and column_mapping['Agent Paid Amount (STMT)'] in row.index:
+            try:
+                val = row[column_mapping['Agent Paid Amount (STMT)']]
+                if pd.notna(val):
+                    amount = float(val)
+            except (ValueError, TypeError):
+                amount = 0
+        
+        # Skip only if ALL key fields are empty/missing
+        # A row needs at least customer OR policy number OR a non-zero amount to be valid
+        if not customer and not policy_num and amount == 0:
             debug_matches['skipped_empty'] += 1
             continue
-        # Primary reconciliation amount is what the agent was paid
-        amount = float(row[column_mapping['Agent Paid Amount (STMT)']]) if 'Agent Paid Amount (STMT)' in column_mapping else 0
+        
         # Agency amount is optional for audit purposes
-        agency_amount = float(row[column_mapping['Agency Comm Received (STMT)']]) if 'Agency Comm Received (STMT)' in column_mapping else 0
+        agency_amount = 0
+        if 'Agency Comm Received (STMT)' in column_mapping and column_mapping['Agency Comm Received (STMT)'] in row.index:
+            try:
+                val = row[column_mapping['Agency Comm Received (STMT)']]
+                if pd.notna(val):
+                    agency_amount = float(val)
+            except (ValueError, TypeError):
+                agency_amount = 0
         
         # Convert effective date to string format
         if pd.notna(eff_date):
@@ -3131,6 +3166,9 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         st.markdown(f"- Skipped (totals): {debug_matches['skipped_totals']}")
         st.markdown(f"- Skipped (empty): {debug_matches['skipped_empty']}")
         st.markdown(f"- Valid rows: {debug_matches['total_rows'] - debug_matches['skipped_totals'] - debug_matches['skipped_empty']}")
+        
+        if debug_matches['skipped_empty'] > 0:
+            st.warning(f"⚠️ {debug_matches['skipped_empty']} rows were skipped as empty. This happens when a row has no customer name, no policy number, AND zero amount. Check your column mappings!")
         
         st.markdown("\n**Matching Attempts:**")
         st.markdown(f"- Policy + Date attempts: {debug_matches['policy_date_attempts']}")

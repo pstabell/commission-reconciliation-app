@@ -1,6 +1,6 @@
 # Admin Panel Transaction Count Fix
 
-## Date: 2025-01-22
+## Date: 2025-09-22
 
 ## Issue
 The Admin Panel's "Transaction Types & Mapping" tab was showing an incorrect total transaction count of 824 instead of the correct 425 shown in the dashboard. The discrepancy was due to the Admin Panel counting reconciliation transactions (-STMT-, -VOID-, -ADJ-) along with regular policy transactions.

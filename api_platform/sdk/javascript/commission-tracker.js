@@ -229,7 +229,7 @@ console.log(`Found ${policies.length} policies`);
 const newPolicy = await client.createPolicy({
     policy_number: 'AUTO-123456',
     customer: 'John Doe',
-    effective_date: '2025-01-01',
+    effective_date: '2025-09-01',
     premium: 1200.00,
     commission_rate: 12.0
 });

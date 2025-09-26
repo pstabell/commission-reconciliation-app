@@ -1,5 +1,5 @@
 # Edit Policy Transactions Duplicate Bug Fix
-**Date**: 2025-01-20
+**Date**: 2025-09-20
 **Fixed**: Transaction duplication when saving edits
 
 ## Problem

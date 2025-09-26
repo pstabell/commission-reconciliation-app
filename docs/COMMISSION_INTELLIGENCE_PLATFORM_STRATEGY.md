@@ -278,7 +278,7 @@ POST /api/v1/inbound/ams/policy
   "action": "policy_issued",
   "data": {
     "policy_number": "HOME-123456",
-    "effective_date": "2025-01-01",
+    "effective_date": "2025-09-01",
     "expiration_date": "2026-01-01",
     "premium": 1200.00,
     "client_id": "CLIENT-789",
@@ -327,7 +327,7 @@ GET /api/v1/outbound/accounting/commissions
 Response: {
   "period": "2025-01",
   "entries": [{
-    "date": "2025-01-31",
+    "date": "2025-09-31",
     "account": "Commission Income",
     "amount": 25432.10,
     "breakdown": [{
@@ -362,7 +362,7 @@ Response: {
 // Real-time Performance Metrics
 GET /api/v1/outbound/analytics/performance
 Response: {
-  "timestamp": "2025-01-27T10:00:00Z",
+  "timestamp": "2025-09-27T10:00:00Z",
   "metrics": {
     "agency_totals": {
       "mtd_commission": 125000.00,
@@ -401,7 +401,7 @@ POST /api/v1/webhooks/register
 POST https://agency.com/webhooks/commission-tracker
 {
   "event": "commission.calculated",
-  "timestamp": "2025-01-27T10:00:00Z",
+  "timestamp": "2025-09-27T10:00:00Z",
   "data": {
     "policy_number": "HOME-123",
     "commission_amount": 120.00,

@@ -261,7 +261,7 @@ $ uvicorn api_platform.main:app --reload --host 0.0.0.0 --port 8000
 
 # Test the API
 $ curl http://localhost:8000/health
-# Should return: {"status":"healthy","timestamp":"2025-01-27T..."}
+# Should return: {"status":"healthy","timestamp":"2025-09-27T..."}
 ```
 
 ### Step 2: Authentication Implementation

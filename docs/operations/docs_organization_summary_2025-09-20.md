@@ -23,7 +23,7 @@
 
 ### 4. Key Documents Retained
 - `/docs/operations/CLAUDE.md` - Comprehensive 877-line AI guide (kept separate from root)
-- `/docs/troubleshooting/ISSUE_SUMMARY_JAN_2025.md` - Quick reference for Jan 2025 issues
+- `/docs/troubleshooting/ISSUE_SUMMARY_JAN_2025.md` - Quick reference for Sep 2025 issues
 - All recent changelogs preserved for complete history
 
 ## Directory Structure

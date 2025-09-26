@@ -1,6 +1,6 @@
 # Plan for Renaming "Agent Comm (NEW 50% RWL 25%)" to "Agent Comm %"
 
-## Date: 2025-01-27
+## Date: 2025-09-27
 
 ### 1. Impact Analysis
 

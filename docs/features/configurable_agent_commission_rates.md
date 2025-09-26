@@ -24,7 +24,7 @@ Location: `config_files/default_agent_commission_rates.json`
   "new_business_rate": 50.0,
   "renewal_rate": 25.0,
   "description": "Default agent commission rates (percentage) for transactions when no specific commission rule applies",
-  "last_updated": "2025-01-06"
+  "last_updated": "2025-09-06"
 }
 ```
 

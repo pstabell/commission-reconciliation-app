@@ -207,7 +207,7 @@ async def example_webhook_usage():
                 "customer": "John Doe",
                 "premium": 1200.00,
                 "commission": 144.00,
-                "effective_date": "2025-01-01"
+                "effective_date": "2025-09-01"
             }
         },
         user_email="user@example.com"

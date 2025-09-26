@@ -129,7 +129,7 @@ Complete Excel support alongside existing CSV capabilities
 
 ---
 
-## 2025-01-28: Version 2.1.1 Released - Database Backup & Navigation Fixes
+## 2025-09-28: Version 2.1.1 Released - Database Backup & Navigation Fixes
 
 ### Database Backup Implementation
 - **Automatic Backup Creation**: `commissions_backup.db` for database protection

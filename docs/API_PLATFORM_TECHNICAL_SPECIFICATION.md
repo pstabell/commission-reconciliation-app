@@ -195,7 +195,7 @@ POST   /v1/integrations/{id}/test       # Test connection
         "type": "policy",
         "attributes": {
             "policy_number": "AUTO-123456",
-            "effective_date": "2025-01-01",
+            "effective_date": "2025-09-01",
             "premium": 1200.00
         },
         "relationships": {
@@ -223,7 +223,7 @@ POST   /v1/integrations/{id}/test       # Test connection
     },
     "meta": {
         "request_id": "req-456",
-        "timestamp": "2025-01-27T10:00:00Z"
+        "timestamp": "2025-09-27T10:00:00Z"
     }
 }
 ```

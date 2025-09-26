@@ -17,7 +17,7 @@ Traceback at line 9187: value=datetime.date.today()
 ```
 
 ### Root Cause
-Similar to the webhook server issue documented in `2025-01-09-webhook-datetime-fix.md`, the commission_app.py had conflicting datetime imports:
+Similar to the webhook server issue documented in `2025-09-09-webhook-datetime-fix.md`, the commission_app.py had conflicting datetime imports:
 1. Module-level imports (lines 2-3):
    - `import datetime` - imports the full module
    - `from datetime import datetime as dt` - imports datetime class as dt

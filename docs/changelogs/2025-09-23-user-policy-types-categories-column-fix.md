@@ -1,6 +1,6 @@
 # User Policy Types Categories Column Fix
 
-## Date: 2025-01-23
+## Date: 2025-09-23
 
 ## Issue
 - Error: "Could not find the 'categories' column of 'user_policy_types' in the schema cache"

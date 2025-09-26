@@ -5,7 +5,7 @@ All notable changes to the Sales Commission App will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.3.1] - 2025-01-09 - Webhook DateTime Import Fix
+## [4.3.1] - 2025-09-09 - Webhook DateTime Import Fix
 
 ### Fixed
 - **Critical Webhook Server Error**
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolved conflicting datetime imports causing webhook crashes
   - Restored user creation after Stripe checkout
   - Fixed password setup email delivery
-  - See detailed changelog: `/docs/changelogs/2025-01-09-webhook-datetime-fix.md`
+  - See detailed changelog: `/docs/changelogs/2025-09-09-webhook-datetime-fix.md`
 
 ### Added
 - **Project Structure Documentation**
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Explains webhook server location and deployment
   - Prevents future confusion about project organization
 
-## [4.3.0] - 2025-01-07 - 14-Day Free Trial and Password Setup Flow
+## [4.3.0] - 2025-09-07 - 14-Day Free Trial and Password Setup Flow
 
 ### Added
 - **14-Day Free Trial with Credit Card**
@@ -47,9 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive email delivery instructions
 
 ### Technical Details
-- See detailed changelog: `/docs/changelogs/2025-01-07-free-trial-password-flow.md`
+- See detailed changelog: `/docs/changelogs/2025-09-07-free-trial-password-flow.md`
 
-## [4.2.0] - 2025-01-07 - Carrd AI Bot Integration
+## [4.2.0] - 2025-09-07 - Carrd AI Bot Integration
 
 ### Added
 - **AI-Powered Support Chatbot**
@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved chatbot response conciseness (under 1000 chars)
 
 ### Technical Details
-- See detailed changelog: `/docs/changelogs/2025-01-07-carrd-ai-bot-integration.md`
+- See detailed changelog: `/docs/changelogs/2025-09-07-carrd-ai-bot-integration.md`
 
 ## [3.9.54] - 2025-08-17 - Policy Revenue Ledger Export Balance Filter Fix
 
@@ -1325,7 +1325,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Calculate button applies the update
   - No auto-calculation for Custom term
 
-## [3.8.15] - 2025-01-28 - Hide Rows Functionality
+## [3.8.15] - 2025-09-28 - Hide Rows Functionality
 
 ### Added
 - **Hide Rows Feature for Policy Revenue Ledger Reports**
@@ -1353,7 +1353,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Intuitive checkbox interface for row selection
 - Maintained all existing functionality (templates, formatting, exports)
 
-## [3.8.14] - 2025-01-27 - Column Rename and Formatting Improvements
+## [3.8.14] - 2025-09-27 - Column Rename and Formatting Improvements
 
 ### Changed
 - **Database Column Rename**
@@ -1376,7 +1376,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better user experience with consistent decimal display
 - Expandable sections in Policy Revenue Ledger Reports (start collapsed)
 
-## [3.8.13] - 2025-01-27 - Default Template Feature
+## [3.8.13] - 2025-09-27 - Default Template Feature
 
 ### Added
 - **Default Template for Policy Revenue Ledger Reports**
@@ -1391,7 +1391,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workflow efficiency with automatic template loading
 - Template management with clear default indicators
 
-## [3.8.12] - 2025-01-27 - Contacts Edit Functionality
+## [3.8.12] - 2025-09-27 - Contacts Edit Functionality
 
 ### Added
 - **Carrier Edit Functionality**
@@ -1414,7 +1414,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Search results now clickable for both carriers and MGAs
 - Better organization with separate detail views
 
-## [3.8.11] - 2025-01-27 - Policy Revenue Ledger Improvements
+## [3.8.11] - 2025-09-27 - Policy Revenue Ledger Improvements
 
 ### Changed
 - **Policy Ledger Display**
@@ -1445,7 +1445,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All inline editing functionality from Policy Ledger
 - Edit Details button and associated form
 
-## [3.8.10] - 2025-01-27 - Policy Revenue Ledger Search Layout
+## [3.8.10] - 2025-09-27 - Policy Revenue Ledger Search Layout
 
 ### Changed
 - **Policy Revenue Ledger Search Criteria**
@@ -1460,7 +1460,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Page layout efficiency with better use of horizontal space
 - Visual consistency across the application
 
-## [3.8.9] - 2025-01-26 - Policy Details Card Layout
+## [3.8.9] - 2025-09-26 - Policy Details Card Layout
 
 ### Changed
 - **Policy Details Display**
@@ -1480,7 +1480,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Readability with proper information hierarchy
 - Mobile responsiveness with card-based layout
 
-## [3.8.8] - 2025-01-26 - Policy Ledger Financial Columns
+## [3.8.8] - 2025-09-26 - Policy Ledger Financial Columns
 
 ### Added
 - **Financial Columns in Policy Revenue Ledger**
@@ -1502,7 +1502,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy Revenue Ledger now supports horizontal scrolling for extended column view
 - Save Changes logic updated to handle all columns including financial fields
 
-## [3.8.7] - 2025-01-26 - Special Colors for STMT and VOID Transactions
+## [3.8.7] - 2025-09-26 - Special Colors for STMT and VOID Transactions
 
 ### Added
 - **Visual Highlighting for STMT and VOID Transactions**
@@ -1517,7 +1517,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated dataframe displays to use styled output where Transaction ID is visible
 - Policy Revenue Ledger (Editable) now includes a Type column with emoji indicators since st.data_editor doesn't support row styling
 
-## [3.8.6] - 2025-01-25 - Statement Month and X-DATE Filters
+## [3.8.6] - 2025-09-25 - Statement Month and X-DATE Filters
 
 ### Added
 - **Statement Month Filter in Policy Revenue Ledger Reports**
@@ -1562,7 +1562,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Better multi-sheet detection for Policy Revenue Report exports
   - Improved error messages
 
-## [3.8.5] - 2025-01-24 - Excel Update Tool and View Toggle
+## [3.8.5] - 2025-09-24 - Excel Update Tool and View Toggle
 
 ### Added
 - **Excel Update Tool in Tools → Import/Export**

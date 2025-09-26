@@ -268,7 +268,7 @@ def show_api_docs():
             {
               "id": "123",
               "policy_number": "HOME-456789",
-              "effective_date": "2025-01-01",
+              "effective_date": "2025-09-01",
               "premium": 1200.00,
               "commission": 144.00
             }

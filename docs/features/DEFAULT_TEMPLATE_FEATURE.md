@@ -1,6 +1,6 @@
 # Default Template Feature
 
-## Date: 2025-01-27
+## Date: 2025-09-27
 
 ### Overview
 Added the ability to set saved templates as default in Policy Revenue Ledger Reports, which automatically loads when visiting the page. This reduces user errors from forgetting to load their preferred template configuration.
