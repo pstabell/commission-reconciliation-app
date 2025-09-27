@@ -45,7 +45,8 @@
       "Bash(do echo \"Checking $file...\")",
       "Bash(echo:*)",
       "Bash(cd:*)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Bash(git revert:*)"
     ],
     "deny": []
   }

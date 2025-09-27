@@ -67,3 +67,6 @@ The system now actively prevents this common mistake by:
 - Providing clear explanations of column purposes
 
 This ensures users map the correct "paid amount" column for accurate reconciliation totals.
+
+## Update: September 26, 2025
+Additional issue discovered where totals row had NaN value in Customer column instead of empty string. See `/docs/troubleshooting/reconciliation-totals-detection-2025-09-26.md` for complete fix including NaN detection.

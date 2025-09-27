@@ -46,6 +46,10 @@
   - Editing transactions could create duplicates (425 → 535+ records)
   - PRODUCTION vs PRIVATE behave differently due to user filtering
   - 5 layers of protection now prevent duplicates
+- **Reconciliation Totals Detection**: Check `/docs/troubleshooting/reconciliation-totals-detection-2025-09-26.md`
+  - Statement totals row may have NaN values in Customer column
+  - Wrong column mapping (Total Agent Comm vs Pay Amount)
+  - Enhanced detection includes: keywords, empty strings, NaN values, and sum checking
 
 ## Policy Term Transaction Rules
 
@@ -77,7 +81,16 @@
 
 **Full Details**: See `/docs/troubleshooting/CSV_IMPORT_RLS_ISSUES_2025.md`
 
-## Recent Updates (v4.3.0 - September 20, 2025)
+## Recent Updates (v4.4.0 - September 26, 2025)
+
+1. **Reconciliation Totals Detection Fix**:
+   - Fixed statement total showing $3,137.88 instead of correct $1,568.94
+   - Root cause: Totals row had NaN value in Customer column, not empty string
+   - Added comprehensive totals detection: keywords, empty strings, NaN values, sum checking
+   - Added column mapping warnings for Total Agent Comm vs Pay Amount
+   - See: `/docs/troubleshooting/reconciliation-totals-detection-2025-09-26.md`
+
+## Prior Updates (v4.3.0 - September 20, 2025)
 
 1. **Edit Policy Duplicate Bug Fix**:
    - Fixed critical bug where editing transactions created duplicates
