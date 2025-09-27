@@ -11099,61 +11099,73 @@ def main():
                         if required_mapped:
                             st.divider()
                             
-                            # Show preview of mapped data
-                            st.markdown("### 📋 Mapped Data Preview")
-                            st.info("This shows how your data will be imported with the mapped columns")
-                            
-                            # Create preview dataframe with only mapped columns
-                            preview_data = {}
-                            column_configs = {}
-                            
-                            # Add mapped required fields
-                            for sys_field, col_name in st.session_state.column_mapping.items():
-                                if col_name and col_name in df.columns:
-                                    # Use the system field name as the column header
-                                    header = f"{sys_field}"
-                                    preview_data[header] = df[col_name]
-                                    
-                                    # Configure column display based on field type
-                                    if 'Amount' in sys_field or 'Premium' in sys_field or 'Comm' in sys_field or 'Fee' in sys_field:
-                                        # Format as currency
-                                        column_configs[header] = st.column_config.NumberColumn(
-                                            header,
-                                            help=f"Source column: {col_name}",
-                                            format="$%.2f"
-                                        )
-                                    elif 'Date' in sys_field:
-                                        # Format as date
-                                        column_configs[header] = st.column_config.DateColumn(
-                                            header,
-                                            help=f"Source column: {col_name}",
-                                            format="YYYY-MM-DD"
-                                        )
-                                    elif 'Rate' in sys_field or '%' in sys_field:
-                                        # Format as percentage
-                                        column_configs[header] = st.column_config.NumberColumn(
-                                            header,
-                                            help=f"Source column: {col_name}",
-                                            format="%.2f%%"
-                                        )
-                                    else:
-                                        # Regular text column
-                                        column_configs[header] = st.column_config.TextColumn(
-                                            header,
-                                            help=f"Source column: {col_name}"
-                                        )
-                            
-                            if preview_data:
-                                preview_df = pd.DataFrame(preview_data)
+                            # Show preview of mapped data in collapsible section
+                            with st.expander("📋 **Mapped Data Preview** - See how your data will be imported", expanded=False):
+                                st.info("This shows all your data with database column names and any mappings applied")
                                 
-                                # Show count and first 10 rows
-                                st.markdown(f"**Preview of {min(10, len(preview_df))} out of {len(preview_df)} rows:**")
-                                st.dataframe(
-                                    preview_df.head(10),
-                                    use_container_width=True,
-                                    hide_index=True,
-                                    column_config=column_configs
-                                )
+                                # Create preview dataframe with only mapped columns
+                                preview_data = {}
+                                column_configs = {}
+                                
+                                # Load transaction type mappings
+                                trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+                                
+                                # Add mapped required fields
+                                for sys_field, col_name in st.session_state.column_mapping.items():
+                                    if col_name and col_name in df.columns:
+                                        # Use the system field name as the column header
+                                        header = f"{sys_field}"
+                                        
+                                        # Special handling for Transaction Type to show mapped values
+                                        if sys_field == 'Transaction Type' and trans_type_mappings:
+                                            # Apply transaction type mapping
+                                            preview_data[header] = df[col_name].apply(
+                                                lambda x: trans_type_mappings.get(str(x).strip(), str(x).strip()) if pd.notna(x) else x
+                                            )
+                                        else:
+                                            preview_data[header] = df[col_name]
+                                        
+                                        # Configure column display based on field type
+                                        if 'Amount' in sys_field or 'Premium' in sys_field or 'Comm' in sys_field or 'Fee' in sys_field:
+                                            # Format as currency
+                                            column_configs[header] = st.column_config.NumberColumn(
+                                                header,
+                                                help=f"Source column: {col_name}",
+                                                format="$%.2f"
+                                            )
+                                        elif 'Date' in sys_field:
+                                            # Format as date
+                                            column_configs[header] = st.column_config.DateColumn(
+                                                header,
+                                                help=f"Source column: {col_name}",
+                                                format="YYYY-MM-DD"
+                                            )
+                                        elif 'Rate' in sys_field or '%' in sys_field:
+                                            # Format as percentage
+                                            column_configs[header] = st.column_config.NumberColumn(
+                                                header,
+                                                help=f"Source column: {col_name}",
+                                                format="%.2f%%"
+                                            )
+                                        else:
+                                            # Regular text column
+                                            column_configs[header] = st.column_config.TextColumn(
+                                                header,
+                                                help=f"Source column: {col_name}"
+                                            )
+                                
+                                if preview_data:
+                                    preview_df = pd.DataFrame(preview_data)
+                                    
+                                    # Show ALL rows
+                                    st.markdown(f"**Showing all {len(preview_df)} rows with mapped values:**")
+                                    st.dataframe(
+                                        preview_df,  # Show all rows, not just head(10)
+                                        use_container_width=True,
+                                        hide_index=True,
+                                        column_config=column_configs,
+                                        height=min(600, len(preview_df) * 35 + 50)  # Dynamic height based on rows
+                                    )
                                 
                                 # Show mapping summary
                                 with st.expander("📊 Mapping Summary", expanded=False):
