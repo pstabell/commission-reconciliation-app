@@ -11065,6 +11065,69 @@ def main():
                         if required_mapped:
                             st.divider()
                             
+                            # Show preview of mapped data
+                            st.markdown("### 📋 Mapped Data Preview")
+                            st.info("This shows how your data will be imported with the mapped columns")
+                            
+                            # Create preview dataframe with only mapped columns
+                            preview_data = {}
+                            column_configs = {}
+                            
+                            # Add mapped required fields
+                            for sys_field, col_name in st.session_state.column_mapping.items():
+                                if col_name and col_name in df.columns:
+                                    # Use the system field name as the column header
+                                    header = f"{sys_field}"
+                                    preview_data[header] = df[col_name]
+                                    
+                                    # Configure column display based on field type
+                                    if 'Amount' in sys_field or 'Premium' in sys_field or 'Comm' in sys_field or 'Fee' in sys_field:
+                                        # Format as currency
+                                        column_configs[header] = st.column_config.NumberColumn(
+                                            header,
+                                            help=f"Source column: {col_name}",
+                                            format="$%.2f"
+                                        )
+                                    elif 'Date' in sys_field:
+                                        # Format as date
+                                        column_configs[header] = st.column_config.DateColumn(
+                                            header,
+                                            help=f"Source column: {col_name}",
+                                            format="YYYY-MM-DD"
+                                        )
+                                    elif 'Rate' in sys_field or '%' in sys_field:
+                                        # Format as percentage
+                                        column_configs[header] = st.column_config.NumberColumn(
+                                            header,
+                                            help=f"Source column: {col_name}",
+                                            format="%.2f%%"
+                                        )
+                                    else:
+                                        # Regular text column
+                                        column_configs[header] = st.column_config.TextColumn(
+                                            header,
+                                            help=f"Source column: {col_name}"
+                                        )
+                            
+                            if preview_data:
+                                preview_df = pd.DataFrame(preview_data)
+                                
+                                # Show count and first 10 rows
+                                st.markdown(f"**Preview of {min(10, len(preview_df))} out of {len(preview_df)} rows:**")
+                                st.dataframe(
+                                    preview_df.head(10),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    column_config=column_configs
+                                )
+                                
+                                # Show mapping summary
+                                with st.expander("📊 Mapping Summary", expanded=False):
+                                    st.markdown("**Your column mappings:**")
+                                    for sys_field, source_col in st.session_state.column_mapping.items():
+                                        if source_col:
+                                            st.markdown(f"- **{sys_field}** → {source_col}")
+                            
                             # Additional validation for column mapping
                             if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
                                 mapped_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
