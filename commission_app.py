@@ -4162,10 +4162,24 @@ def show_import_results(statement_date, all_data):
                                     key=f"policy_term_{idx}",
                                     help="Select the policy duration"
                                 )
+                            
+                            # Create a separate section for offset transaction option
+                            if selected_type != 'NEW':
+                                st.divider()
+                                st.markdown("**🔄 Offset Transaction Option**")
+                                st.caption("Some agencies require a NEW transaction to pair with cancellations, endorsements, or renewals")
                                 
-                                # Show warning if creating non-NEW transaction
-                                if selected_type != 'NEW':
-                                    st.info(f"ℹ️ A NEW transaction with $0 agent paid amount will be created automatically to pair with this {selected_type} transaction")
+                                create_offset = st.checkbox(
+                                    f"Also create an offset NEW transaction to pair with this {selected_type}",
+                                    value=False,  # Default unchecked
+                                    key=f"create_offset_{idx}",
+                                    help="This will create a NEW transaction with $0 agent paid amount to maintain transaction history"
+                                )
+                                
+                                if create_offset:
+                                    st.info(f"✅ An additional NEW transaction with $0 agent paid amount will be created to pair with the {selected_type} transaction")
+                            else:
+                                create_offset = False
                             
                                 st.session_state[manual_key][idx] = {
                                     'statement_item': item,
@@ -4175,7 +4189,7 @@ def show_import_results(statement_date, all_data):
                                     'client_action': client_action,
                                     'client_id': client_id,
                                     'client_name': client_name,
-                                    'needs_offset': selected_type != 'NEW'
+                                    'needs_offset': create_offset  # Use checkbox value instead of automatic
                                 }
                             
                                 # Check if we have a manually confirmed customer
@@ -4186,6 +4200,12 @@ def show_import_results(statement_date, all_data):
                                     st.success(f"Will create {selected_type} transaction linked to Client ID: {client_id}")
                                 else:
                                     st.warning(f"⚠️ Will create {selected_type} transaction with NEW client (no existing match found)")
+                                
+                                # Summary of what will be created
+                                if selected_type != 'NEW' and create_offset:
+                                    st.info(f"📋 **Summary**: Will create 2 transactions - one {selected_type} and one offset NEW with $0 agent paid")
+                                else:
+                                    st.info(f"📋 **Summary**: Will create 1 transaction - {selected_type}")
                             st.caption("*(Use for new policies or endorsements not yet in system)*")
                     
                         with col2:
@@ -4543,6 +4563,29 @@ def show_import_results(statement_date, all_data):
                                 key=f"trans_type_all_{idx}"
                             )
                             
+                            # Add Policy Term dropdown
+                            policy_terms = [6, 12, "Custom"]
+                            selected_term = st.selectbox(
+                                "Policy Term",
+                                options=policy_terms,
+                                format_func=lambda x: f"{x} months" if x != "Custom" else "Custom",
+                                index=1,  # Default to 12 months
+                                key=f"policy_term_all_{idx}",
+                                help="Select the policy duration"
+                            )
+                            
+                            # Show checkbox and warning if creating non-NEW transaction
+                            create_offset = False
+                            if selected_type != 'NEW':
+                                create_offset = st.checkbox(
+                                    "Create offset NEW transaction",
+                                    value=False,  # Default unchecked
+                                    key=f"create_offset_all_{idx}",
+                                    help="Creates a NEW transaction with $0 agent paid amount to pair with this transaction"
+                                )
+                                if create_offset:
+                                    st.info(f"ℹ️ A NEW transaction with $0 agent paid amount will be created automatically to pair with this {selected_type} transaction")
+                            
                             # Determine client action based on manual confirmation
                             if manually_confirmed:
                                 client_action = 'existing'
@@ -4556,9 +4599,11 @@ def show_import_results(statement_date, all_data):
                                 'statement_item': item,
                                 'create_new': True,
                                 'transaction_type': selected_type,
+                                'policy_term': selected_term,
                                 'client_action': client_action,
                                 'client_id': None,
-                                'client_name': client_name
+                                'client_name': client_name,
+                                'needs_offset': create_offset  # Use checkbox value instead of automatic
                             }
                             
                             if manually_confirmed:
@@ -4603,6 +4648,15 @@ def show_import_results(statement_date, all_data):
                     'Effective Date': item['effective_date'],
                 }
                 
+                # Add checkbox for offset NEW transaction if this is not a NEW transaction
+                if trans_type != 'NEW':
+                    # Check if we have a needs_offset value from manual matching, otherwise default to False
+                    row_data['Create Offset NEW'] = item.get('needs_offset', False)
+                    row_data['Offset Info'] = '📋 NEW with $0 agent paid'
+                else:
+                    row_data['Create Offset NEW'] = False
+                    row_data['Offset Info'] = 'N/A'
+                
                 # Add all mapped fields from statement_data
                 if 'statement_data' in item:
                     # Get column mappings
@@ -4630,6 +4684,8 @@ def show_import_results(statement_date, all_data):
             column_config = {
                 "Create": st.column_config.CheckboxColumn("Create", help="Check to create this transaction"),
                 "Status": st.column_config.TextColumn("", help="Will create new transaction", width="small"),
+                "Create Offset NEW": st.column_config.CheckboxColumn("Create Offset", help="Check to create an offset NEW transaction with $0 agent paid amount"),
+                "Offset Info": st.column_config.TextColumn("Offset Info", help="Information about the offset transaction", width="medium"),
             }
             
             # Configure display for all columns
@@ -4642,8 +4698,8 @@ def show_import_results(statement_date, all_data):
                     elif 'Rate' in col or '%' in col:
                         column_config[col] = st.column_config.NumberColumn(col, format="%.2f%%")
             
-            # Make all columns except 'Create' disabled
-            disabled_cols = [col for col in df.columns if col != 'Create']
+            # Make all columns except 'Create' and 'Create Offset NEW' disabled
+            disabled_cols = [col for col in df.columns if col not in ['Create', 'Create Offset NEW']]
             
             edited_df = st.data_editor(
                 df,
@@ -4695,12 +4751,13 @@ def show_import_results(statement_date, all_data):
         st.divider()
         st.markdown("### ✅ Verification Check")
         
-        # DEBUG: Show what's in the statement total key
-        st.write(f"**DEBUG: Statement total from session state = ${st.session_state[statement_total_key]:,.2f}**")
-        if abs(st.session_state[statement_total_key] - 3179.13) < 0.01:
-            st.error("❌ Displaying incorrect total of $3,179.13 - this appears to be Total Agent Comm, not Agent Paid Amount!")
-        elif abs(st.session_state[statement_total_key] - 1568.94) < 0.01:
-            st.success("✅ Displaying correct total of $1,568.94")
+        # DEBUG: Show what's in the statement total key (wrapped in expander)
+        with st.expander("🔍 DEBUG: Statement total verification", expanded=False):
+            st.write(f"**Statement total from session state = ${st.session_state[statement_total_key]:,.2f}**")
+            if abs(st.session_state[statement_total_key] - 3179.13) < 0.01:
+                st.error("❌ Displaying incorrect total of $3,179.13 - this appears to be Total Agent Comm, not Agent Paid Amount!")
+            elif abs(st.session_state[statement_total_key] - 1568.94) < 0.01:
+                st.success("✅ Displaying correct total of $1,568.94")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -4780,6 +4837,25 @@ def show_import_results(statement_date, all_data):
                             # Generate new transaction ID with -IMPORT-YYYYMMDD suffix
                             import_suffix = f"-IMPORT-{statement_date.strftime('%Y%m%d')}"
                             new_trans_id = generate_transaction_id(suffix=import_suffix)
+                            
+                            # Check if offset should be created based on edited dataframe
+                            create_offset_for_item = False
+                            if 'create_selector' in st.session_state:
+                                # Rebuild the dataframe structure to check edited values
+                                # The dataframe editor stores the entire edited dataframe in session state
+                                edited_data = st.session_state.get('create_selector', None)
+                                if edited_data is not None and isinstance(edited_data, pd.DataFrame):
+                                    if idx < len(edited_data) and 'Create Offset NEW' in edited_data.columns:
+                                        create_offset_for_item = edited_data.loc[idx, 'Create Offset NEW']
+                                    else:
+                                        # Fallback to needs_offset from manual matching
+                                        create_offset_for_item = item.get('needs_offset', False)
+                                else:
+                                    # Fallback to needs_offset from manual matching
+                                    create_offset_for_item = item.get('needs_offset', False)
+                            else:
+                                # Fallback to needs_offset from manual matching
+                                create_offset_for_item = item.get('needs_offset', False)
                             
                             # Check if this item has client info from manual matching
                             client_id_to_use = None
@@ -4892,8 +4968,8 @@ def show_import_results(statement_date, all_data):
                             all_operations.append(('insert', 'policies', cleaned_trans))
                             created_count += 1
                             
-                            # Create offset NEW transaction if this is not a NEW transaction
-                            if item.get('needs_offset', False) and final_trans_type != 'NEW':
+                            # Create offset NEW transaction if checkbox is checked and this is not a NEW transaction
+                            if create_offset_for_item and final_trans_type != 'NEW':
                                 # Generate another transaction ID for the offset
                                 offset_trans_id = generate_transaction_id(suffix=import_suffix)
                                 
@@ -5034,10 +5110,13 @@ def show_import_results(statement_date, all_data):
                 if view_pref_key in st.session_state:
                     del st.session_state[view_pref_key]
                 
-                # Count offset transactions
-                offset_count = sum(1 for item in st.session_state.get(to_create_key, []) 
-                                 if item.get('needs_offset', False) and 
-                                 item.get('selected_transaction_type', 'NEW') != 'NEW')
+                # Count offset transactions that were actually created
+                offset_count = 0
+                for op_type, table, data in all_operations:
+                    if op_type == 'insert' and table == 'policies' and data.get('Transaction Type') == 'NEW':
+                        # Check if this is an offset transaction by looking at the NOTES field
+                        if 'NOTES' in data and 'Offset NEW transaction' in data['NOTES']:
+                            offset_count += 1
                 
                 success_msg = f"""
                 ✅ Import completed successfully!
@@ -8612,8 +8691,8 @@ def main():
                                                     insert_dict[col] = clean_numeric_value(value)
                                                 else:
                                                     insert_dict[col] = value if pd.notna(value) else None
-                                                
-                                        try:
+                                                    
+                                            try:
                                             # SAFETY CHECK: Verify this transaction ID truly doesn't exist
                                             if transaction_id_col and transaction_id:
                                                 check_exists = supabase.table('policies').select('_id').eq(transaction_id_col, transaction_id)
@@ -8648,8 +8727,8 @@ def main():
                                                     update_dict[col] = clean_numeric_value(value)
                                                 else:
                                                     update_dict[col] = value if pd.notna(value) else None
-                                                
-                                        try:
+                                                    
+                                            try:
                                             # Add user_id filtering for secure updates
                                             update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
                                             
@@ -11360,22 +11439,49 @@ def main():
                                     # This gives us the check-and-balance figure
                                     statement_total_amount = 0
                                     
-                                    # EXTENSIVE DEBUGGING FOR STATEMENT TOTAL CALCULATION
-                                    st.markdown("### 🔍 DEBUG: Statement Total Calculation")
-                                    
-                                    # Show all available columns in the dataframe
-                                    st.write("**Available columns in uploaded file:**")
-                                    st.write(list(df.columns))
-                                    
-                                    # Show the current column mapping
-                                    st.write("\n**Current column mapping:**")
-                                    st.write(st.session_state.column_mapping)
-                                    
+                                    # Calculate the total first to use in debug
                                     if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
                                         agent_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
-                                        st.write(f"\n**Agent Paid Amount mapped to column:** '{agent_col}'")
-                                        
                                         try:
+                                            # Convert to numeric
+                                            all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
+                                            
+                                            # Check if there's a totals row to exclude
+                                            customer_col = st.session_state.column_mapping.get('Customer', '')
+                                            if customer_col:
+                                                # Find rows that look like totals (to exclude them)
+                                                totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
+                                                # Also check for empty customer names which might be totals rows
+                                                empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
+                                                # Also check for NaN values
+                                                nan_mask = pd.isna(df[customer_col])
+                                                exclude_mask = totals_mask | empty_customer_mask | nan_mask
+                                                
+                                                # Sum only non-total rows
+                                                amounts_to_sum = all_amounts[~exclude_mask]
+                                                statement_total_amount = amounts_to_sum.sum()
+                                            else:
+                                                # No customer column mapped, just sum all
+                                                statement_total_amount = all_amounts.sum()
+                                        except Exception as e:
+                                            st.error(f"Error calculating statement total: {str(e)}")
+                                            statement_total_amount = 0
+                                    
+                                    # EXTENSIVE DEBUGGING FOR STATEMENT TOTAL CALCULATION
+                                    with st.expander("🔍 DEBUG: Statement Total Calculation", expanded=False):
+                                        # Show all available columns in the dataframe
+                                        st.write("**Available columns in uploaded file:**")
+                                        st.write(list(df.columns))
+                                        
+                                        # Show the current column mapping
+                                        st.write("\n**Current column mapping:**")
+                                        st.write(st.session_state.column_mapping)
+                                        
+                                        if 'Agent Paid Amount (STMT)' in st.session_state.column_mapping:
+                                            agent_col = st.session_state.column_mapping['Agent Paid Amount (STMT)']
+                                            st.write(f"\n**Agent Paid Amount mapped to column:** '{agent_col}'")
+                                            
+                                            try:
                                             # Show raw values in the agent column
                                             st.write(f"\n**Sample raw values in column '{agent_col}':**")
                                             st.write(df[agent_col].head(10).to_list())
@@ -11476,35 +11582,36 @@ def main():
                                             st.write("Full traceback:")
                                             st.code(traceback.format_exc())
                                             statement_total_amount = 0
-                                    else:
-                                        st.warning("'Agent Paid Amount (STMT)' not found in column mapping!")
-                                        st.write("Available mappings:", list(st.session_state.column_mapping.keys()))
+                                        else:
+                                            st.warning("'Agent Paid Amount (STMT)' not found in column mapping!")
+                                            st.write("Available mappings:", list(st.session_state.column_mapping.keys()))
+                                        
+                                        st.markdown(f"### **FINAL STATEMENT TOTAL: ${statement_total_amount:,.2f}**")
+                                        st.divider()
+                                        
+                                        # DEBUG: Check for Total Agent Comm confusion
+                                        st.write("\n**🔍 CHECKING FOR TOTAL AGENT COMM CONFUSION:**")
+                                        total_agent_comm_columns = [col for col in df.columns if 'total' in col.lower() and 'agent' in col.lower() and 'comm' in col.lower()]
+                                        if total_agent_comm_columns:
+                                            st.warning(f"⚠️ Found 'Total Agent Comm' columns that might cause confusion: {total_agent_comm_columns}")
+                                            for tac_col in total_agent_comm_columns:
+                                                tac_amounts = pd.to_numeric(df[tac_col], errors='coerce').fillna(0)
+                                                tac_total = tac_amounts.sum()
+                                                st.write(f"- Column '{tac_col}' total: ${tac_total:,.2f}")
+                                                if abs(tac_total - 3179.13) < 0.01:
+                                                    st.error(f"❌ Column '{tac_col}' has total $3,179.13 - this is NOT the statement total!")
+                                                    st.info("✅ The correct statement total should be the 'Agent Paid Amount (STMT)' column")
+                                        
+                                        # DEBUG: Confirm what's being stored
+                                        st.success(f"✅ Stored statement total: ${statement_total_amount:,.2f}")
+                                        if abs(statement_total_amount - 1568.94) < 0.01:
+                                            st.success("✅ This matches the expected total of $1,568.94!")
+                                        elif abs(statement_total_amount - 3179.13) < 0.01:
+                                            st.error("❌ This is the incorrect total of $3,179.13 - check column mapping!")
                                     
-                                    st.markdown(f"### **FINAL STATEMENT TOTAL: ${statement_total_amount:,.2f}**")
-                                    st.divider()
-                                    
-                                    # DEBUG: Check for Total Agent Comm confusion
-                                    st.write("\n**🔍 CHECKING FOR TOTAL AGENT COMM CONFUSION:**")
-                                    total_agent_comm_columns = [col for col in df.columns if 'total' in col.lower() and 'agent' in col.lower() and 'comm' in col.lower()]
-                                    if total_agent_comm_columns:
-                                        st.warning(f"⚠️ Found 'Total Agent Comm' columns that might cause confusion: {total_agent_comm_columns}")
-                                        for tac_col in total_agent_comm_columns:
-                                            tac_amounts = pd.to_numeric(df[tac_col], errors='coerce').fillna(0)
-                                            tac_total = tac_amounts.sum()
-                                            st.write(f"- Column '{tac_col}' total: ${tac_total:,.2f}")
-                                            if abs(tac_total - 3179.13) < 0.01:
-                                                st.error(f"❌ Column '{tac_col}' has total $3,179.13 - this is NOT the statement total!")
-                                                st.info("✅ The correct statement total should be the 'Agent Paid Amount (STMT)' column")
-                                    
+                                    # Store the statement total in session state
                                     statement_total_key = get_user_session_key('statement_file_total')
                                     st.session_state[statement_total_key] = statement_total_amount
-                                    
-                                    # DEBUG: Confirm what's being stored
-                                    st.success(f"✅ Stored statement total: ${statement_total_amount:,.2f} in key '{statement_total_key}'")
-                                    if abs(statement_total_amount - 1568.94) < 0.01:
-                                        st.success("✅ This matches the expected total of $1,568.94!")
-                                    elif abs(statement_total_amount - 3179.13) < 0.01:
-                                        st.error("❌ This is the incorrect total of $3,179.13 - check column mapping!")
                                     
                                     # Copy the column mappings from the UI to the user-specific key
                                     st.session_state[column_mapping_key] = st.session_state.column_mapping.copy()
@@ -15302,8 +15409,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                         progress = (idx + 1) / len(update_df)
                                         progress_bar.progress(progress)
                                         status_text.text(f"Updating {idx+1}/{len(update_df)}: {transaction_id}")
-                                        
-                                        try:
+                                            
+                                            try:
                                             # Prepare update data (exclude Transaction ID from updates)
                                             update_data = {}
                                             for col in update_df.columns:
