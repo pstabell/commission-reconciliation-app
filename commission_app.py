@@ -4573,22 +4573,56 @@ def show_import_results(statement_date, all_data):
                     if stmt_type:
                         trans_type = stmt_type
                 
-                create_df.append({
+                row_data = {
                     'Create': True,
+                    'Status': '➕',
                     'Customer': item['customer'],
-                    'Policy': item['policy_number'],
-                    'Type': trans_type,
-                    'Eff Date': item['effective_date'],
-                    'Amount': item['amount']
-                })
+                    'Policy Number': item['policy_number'],
+                    'Transaction Type': trans_type,
+                    'Effective Date': item['effective_date'],
+                }
+                
+                # Add all mapped fields from statement_data
+                if 'statement_data' in item:
+                    # Get column mappings
+                    for db_field, source_col in st.session_state[column_mapping_key].items():
+                        if source_col and source_col in item['statement_data']:
+                            # Skip fields we've already added above
+                            if db_field not in ['Customer', 'Policy Number', 'Transaction Type', 'Effective Date']:
+                                row_data[db_field] = item['statement_data'][source_col]
+                
+                # Always include amount fields
+                row_data['Agent Paid Amount (STMT)'] = item['amount']
+                if 'agency_amount' in item and item['agency_amount']:
+                    row_data['Agency Comm Received (STMT)'] = item['agency_amount']
+                
+                create_df.append(row_data)
             
             df = pd.DataFrame(create_df)
+            
+            # Build column configuration
+            column_config = {
+                "Create": st.column_config.CheckboxColumn("Create", help="Check to create this transaction"),
+                "Status": st.column_config.TextColumn("", help="Will create new transaction", width="small"),
+            }
+            
+            # Configure display for all columns
+            for col in df.columns:
+                if col not in column_config:
+                    if 'Amount' in col or 'Premium' in col or 'Comm' in col or 'Fee' in col:
+                        column_config[col] = st.column_config.NumberColumn(col, format="$%.2f")
+                    elif 'Date' in col:
+                        column_config[col] = st.column_config.TextColumn(col)  # Already formatted as string
+                    elif 'Rate' in col or '%' in col:
+                        column_config[col] = st.column_config.NumberColumn(col, format="%.2f%%")
+            
+            # Make all columns except 'Create' disabled
+            disabled_cols = [col for col in df.columns if col != 'Create']
+            
             edited_df = st.data_editor(
                 df,
-                column_config={
-                    "Create": st.column_config.CheckboxColumn("Create", help="Check to create this transaction"),
-                    "Amount": st.column_config.NumberColumn(format="$%.2f")
-                },
+                column_config=column_config,
+                disabled=disabled_cols,
                 use_container_width=True,
                 hide_index=True,
                 key="create_selector"
