@@ -4212,6 +4212,8 @@ def show_import_results(statement_date, all_data):
                             # Option to match existing transaction
                             # Note: This section is currently just a placeholder
                             st.info("Manual transaction matching available above")
+            
+            # Show confirmed matches
             if st.session_state[manual_key]:
                 st.divider()
                 st.markdown("### ✅ Confirmed Manual Matches")
@@ -4295,121 +4297,26 @@ def show_import_results(statement_date, all_data):
                     st.rerun()
             
             else:  # Show all at once mode
-                st.info("📊 Review all unmatched transactions in a table view for efficient batch processing")
-                
-                # Create a dataframe for all unmatched items
-                unmatched_data = []
-                trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
-                
+                # Show all unmatched items
                 for idx, item in enumerate(st.session_state[unmatched_key]):
-                    # Get transaction type from statement if available
-                    trans_type = 'NEW'  # Default
-                    if 'statement_data' in item and column_mapping_key in st.session_state:
-                        trans_type_col = st.session_state[column_mapping_key].get('Transaction Type', '')
-                        if trans_type_col and trans_type_col in item['statement_data']:
-                            stmt_type = str(item['statement_data'][trans_type_col]).strip()
-                            # Apply mapping
-                            trans_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
                     
-                    row = {
-                        'Index': idx,
-                        'Create Transaction': True,  # Default checked
-                        'Customer': item.get('customer', 'Unknown'),
-                        'Policy Number': item.get('policy_number', ''),
-                        'Amount': item.get('amount', 0),
-                        'Effective Date': item.get('effective_date', ''),
-                        'Transaction Type': trans_type,
-                        'Create Offset NEW': False if trans_type == 'NEW' else False,  # Default unchecked
-                        '_item': item  # Store the full item for processing
-                    }
-                    unmatched_data.append(row)
-                
-                if unmatched_data:
-                    df = pd.DataFrame(unmatched_data)
-                    
-                    # Configure columns
-                    column_config = {
-                        "Index": None,  # Hide index column
-                        "Create Transaction": st.column_config.CheckboxColumn(
-                            "Create", 
-                            help="Check to create this transaction"
-                        ),
-                        "Customer": st.column_config.TextColumn("Customer", disabled=True),
-                        "Policy Number": st.column_config.TextColumn("Policy", disabled=True),
-                        "Amount": st.column_config.NumberColumn("Amount", format="$%.2f", disabled=True),
-                        "Effective Date": st.column_config.TextColumn("Eff Date", disabled=True),
-                        "Transaction Type": st.column_config.SelectboxColumn(
-                            "Type",
-                            options=get_transaction_type_codes(),
-                            help="Select transaction type"
-                        ),
-                        "Create Offset NEW": st.column_config.CheckboxColumn(
-                            "Offset NEW", 
-                            help="Create offset NEW transaction with $0"
-                        ),
-                        "_item": None  # Hide the full item data
-                    }
-                    
-                    # Create editable dataframe
-                    edited_df = st.data_editor(
-                        df,
-                        column_config=column_config,
-                        use_container_width=True,
-                        hide_index=True,
-                        key="unmatched_batch_editor"
-                    )
-                    
-                    # Add batch action buttons
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        if st.button("✅ Check All", key="check_all_create"):
-                            # This would need to trigger a rerun with all checkboxes checked
-                            st.info("Use the checkboxes in the table to select items")
-                    
-                    with col2:
-                        if st.button("❌ Uncheck All", key="uncheck_all_create"):
-                            # This would need to trigger a rerun with all checkboxes unchecked
-                            st.info("Use the checkboxes in the table to deselect items")
-                    
-                    with col3:
-                        checked_count = edited_df['Create Transaction'].sum()
-                        st.metric("Selected", f"{checked_count} of {len(edited_df)}")
-                    
-                    with col4:
-                        if st.button("💾 Apply Batch Settings", type="primary", key="apply_batch"):
-                            # Process all checked items
-                            for idx, row in edited_df.iterrows():
-                                if row['Create Transaction']:
-                                    original_idx = row['Index']
-                                    item = row['_item']
-                                    
-                                    # Add to manual matches with selected settings
-                                    st.session_state[manual_key][original_idx] = {
-                                        'statement_item': item,
-                                        'create_new': True,
-                                        'transaction_type': row['Transaction Type'],
-                                        'policy_term': 12,  # Default to 12 months
-                                        'client_action': 'new',  # Default to new client
-                                        'client_id': None,
-                                        'client_name': row['Customer'],
-                                        'needs_offset': row['Create Offset NEW']
-                                    }
+                    # Show in "all at once" mode
+                    with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=False):
+                        # Create a unique identifier for this item
+                        item_id = f"{item.get('customer', 'Unknown')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{idx}"
+                        
+                        # Just copy the exact same interface from "Show one at a time" mode
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            # PHASE 1: Statement Details (moved to top)
+                            st.markdown(f"**Statement Details:**")
+                            st.text(f"Customer: {item.get('customer', 'Unknown')}")
+                            st.text(f"Policy: {item.get('policy_number', '')}")
+                            st.text(f"Effective Date: {item.get('effective_date', '')}")
+                            st.text(f"Amount: ${item.get('amount', 0):,.2f}")
                             
-                            st.success(f"✅ Batch settings applied to {checked_count} transactions!")
-                            st.info("Click 'Apply Manual Matches' above to finalize")
-                    
-                    # Show summary of offset transactions
-                    offset_count = edited_df[(edited_df['Create Transaction']) & 
-                                           (edited_df['Transaction Type'] != 'NEW') & 
-                                           (edited_df['Create Offset NEW'])]['Create Offset NEW'].sum()
-                    if offset_count > 0:
-                        st.info(f"ℹ️ {offset_count} offset NEW transactions will be created")
-                
-                else:
-                    st.info("No unmatched transactions to display")
-            
-            # Show confirmed matches
+                            # Show additional statement details if available
                             if 'statement_data' in item:
                                 stmt_data = item['statement_data']
                                 # Track if we found a direct Rate column
@@ -8786,29 +8693,29 @@ def main():
                                                     insert_dict[col] = value if pd.notna(value) else None
                                                     
                                             try:
-                                            # SAFETY CHECK: Verify this transaction ID truly doesn't exist
-                                            if transaction_id_col and transaction_id:
-                                                check_exists = supabase.table('policies').select('_id').eq(transaction_id_col, transaction_id)
-                                                user_id = get_user_id()
-                                                if user_id:
-                                                    check_exists = check_exists.eq('user_id', user_id)
-                                                else:
-                                                    user_email = get_normalized_user_email()
-                                                    if user_email:
-                                                        check_exists = check_exists.eq('user_email', user_email)
-                                                
-                                                exists_result = check_exists.execute()
-                                                if exists_result.data and len(exists_result.data) > 0:
-                                                    print(f"WARNING: Skipping duplicate insert - Transaction ID {transaction_id} already exists")
-                                                else:
-                                                    # Clean data before insertion
-                                                    cleaned_insert = clean_data_for_database(insert_dict)
-                                                    # Add user email for multi-tenancy
-                                                    cleaned_insert = add_user_email_to_data(cleaned_insert)
-                                                    supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
-                                                    inserted_count += 1
-                                        except Exception as insert_error:
-                                            st.error(f"Error inserting new record: {insert_error}")
+                                                # SAFETY CHECK: Verify this transaction ID truly doesn't exist
+                                                if transaction_id_col and transaction_id:
+                                                    check_exists = supabase.table('policies').select('_id').eq(transaction_id_col, transaction_id)
+                                                    user_id = get_user_id()
+                                                    if user_id:
+                                                        check_exists = check_exists.eq('user_id', user_id)
+                                                    else:
+                                                        user_email = get_normalized_user_email()
+                                                        if user_email:
+                                                            check_exists = check_exists.eq('user_email', user_email)
+                                                    
+                                                    exists_result = check_exists.execute()
+                                                    if exists_result.data and len(exists_result.data) > 0:
+                                                        print(f"WARNING: Skipping duplicate insert - Transaction ID {transaction_id} already exists")
+                                                    else:
+                                                        # Clean data before insertion
+                                                        cleaned_insert = clean_data_for_database(insert_dict)
+                                                        # Add user email for multi-tenancy
+                                                        cleaned_insert = add_user_email_to_data(cleaned_insert)
+                                                        supabase.table('policies').insert(add_user_email_to_data(cleaned_insert)).execute()
+                                                        inserted_count += 1
+                                            except Exception as insert_error:
+                                                st.error(f"Error inserting new record: {insert_error}")
                                     elif transaction_id:  # Only update if we have a transaction ID
                                         # UPDATE existing record
                                         update_dict = {}
@@ -8822,23 +8729,23 @@ def main():
                                                     update_dict[col] = value if pd.notna(value) else None
                                                     
                                             try:
-                                            # Add user_id filtering for secure updates
-                                            update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
+                                                # Add user_id filtering for secure updates
+                                                update_query = supabase.table('policies').update(update_dict).eq(transaction_id_col, transaction_id)
                                             
-                                            # Add user filtering for security
-                                            user_id = get_user_id()
-                                            if user_id:
-                                                update_query = update_query.eq('user_id', user_id)
-                                            else:
-                                                # Fallback to email if user_id not available
-                                                user_email = get_normalized_user_email()
-                                                if user_email:
-                                                    update_query = update_query.eq('user_email', user_email)
-                                            
-                                            update_query.execute()
-                                            updated_count += 1
-                                        except Exception as update_error:
-                                            st.error(f"Error updating record: {update_error}")
+                                                # Add user filtering for security
+                                                user_id = get_user_id()
+                                                if user_id:
+                                                    update_query = update_query.eq('user_id', user_id)
+                                                else:
+                                                    # Fallback to email if user_id not available
+                                                    user_email = get_normalized_user_email()
+                                                    if user_email:
+                                                        update_query = update_query.eq('user_email', user_email)
+                                                
+                                                update_query.execute()
+                                                updated_count += 1
+                                            except Exception as update_error:
+                                                st.error(f"Error updating record: {update_error}")
                                     else:
                                         # This shouldn't happen, but log it if it does
                                         st.warning(f"Skipped row {idx} - existing row but no transaction ID found")
@@ -11575,106 +11482,106 @@ def main():
                                             st.write(f"\n**Agent Paid Amount mapped to column:** '{agent_col}'")
                                             
                                             try:
-                                            # Show raw values in the agent column
-                                            st.write(f"\n**Sample raw values in column '{agent_col}':**")
-                                            st.write(df[agent_col].head(10).to_list())
-                                            
-                                            # Convert to numeric
-                                            all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
-                                            
-                                            # Show converted numeric values
-                                            st.write(f"\n**Converted numeric values (first 10):**")
-                                            st.write(all_amounts.head(10).to_list())
-                                            
-                                            # Show all non-zero amounts
-                                            non_zero_amounts = all_amounts[all_amounts != 0]
-                                            st.write(f"\n**All non-zero amounts ({len(non_zero_amounts)} rows):**")
-                                            st.write(non_zero_amounts.to_list())
-                                            
-                                            # Check if there's a totals row to exclude
-                                            customer_col = st.session_state.column_mapping.get('Customer', '')
-                                            if customer_col:
-                                                st.write(f"\n**Customer column mapped to:** '{customer_col}'")
+                                                # Show raw values in the agent column
+                                                st.write(f"\n**Sample raw values in column '{agent_col}':**")
+                                                st.write(df[agent_col].head(10).to_list())
                                                 
-                                                # Debug: Show what's in the last few rows
-                                                st.write("\n**DEBUG: Last 3 rows of data:**")
-                                                for idx in range(max(0, len(df)-3), len(df)):
-                                                    if idx < len(df):
-                                                        customer_val = df.iloc[idx][customer_col]
-                                                        amount_val = all_amounts.iloc[idx]
-                                                        st.write(f"Row {idx}: Customer='{customer_val}' (type: {type(customer_val).__name__}, repr: {repr(customer_val)}), Amount={amount_val}")
+                                                # Convert to numeric
+                                                all_amounts = pd.to_numeric(df[agent_col], errors='coerce').fillna(0)
                                                 
-                                                # Find rows that look like totals (to exclude them)
-                                                totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
-                                                # Also check for empty customer names which might be totals rows
-                                                empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
-                                                # Also check for NaN values
-                                                nan_mask = pd.isna(df[customer_col])
-                                                exclude_mask = totals_mask | empty_customer_mask | nan_mask
+                                                # Show converted numeric values
+                                                st.write(f"\n**Converted numeric values (first 10):**")
+                                                st.write(all_amounts.head(10).to_list())
                                                 
-                                                # Show which rows are being excluded
-                                                if exclude_mask.any():
-                                                    st.write(f"\n**Rows being excluded as totals (indices):**")
-                                                    excluded_indices = df[exclude_mask].index.tolist()
-                                                    st.write(excluded_indices)
+                                                # Show all non-zero amounts
+                                                non_zero_amounts = all_amounts[all_amounts != 0]
+                                                st.write(f"\n**All non-zero amounts ({len(non_zero_amounts)} rows):**")
+                                                st.write(non_zero_amounts.to_list())
+                                                
+                                                # Check if there's a totals row to exclude
+                                                customer_col = st.session_state.column_mapping.get('Customer', '')
+                                                if customer_col:
+                                                    st.write(f"\n**Customer column mapped to:** '{customer_col}'")
                                                     
-                                                    st.write("\n**Excluded rows details:**")
-                                                    for idx in excluded_indices:
-                                                        st.write(f"Row {idx}: Customer='{df.loc[idx, customer_col]}', Amount={all_amounts.loc[idx]}")
-                                                
-                                                # Show amounts being summed
-                                                amounts_to_sum = all_amounts[~exclude_mask]
-                                                st.write(f"\n**Amounts being summed ({len(amounts_to_sum)} rows):**")
-                                                st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
-                                                
-                                                # Sum only non-total rows
-                                                statement_total_amount = amounts_to_sum.sum()
-                                                
-                                                st.write(f"\n**Calculated total (excluding totals rows):** ${statement_total_amount:,.2f}")
-                                                
-                                                # Debug info
-                                                excluded_count = exclude_mask.sum()
-                                                if excluded_count > 0:
-                                                    st.info(f"📊 Excluded {excluded_count} total/summary row(s) from statement total calculation")
+                                                    # Debug: Show what's in the last few rows
+                                                    st.write("\n**DEBUG: Last 3 rows of data:**")
+                                                    for idx in range(max(0, len(df)-3), len(df)):
+                                                        if idx < len(df):
+                                                            customer_val = df.iloc[idx][customer_col]
+                                                            amount_val = all_amounts.iloc[idx]
+                                                            st.write(f"Row {idx}: Customer='{customer_val}' (type: {type(customer_val).__name__}, repr: {repr(customer_val)}), Amount={amount_val}")
+                                                    
+                                                    # Find rows that look like totals (to exclude them)
+                                                    totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
+                                                    # Also check for empty customer names which might be totals rows
+                                                    empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
+                                                    # Also check for NaN values
+                                                    nan_mask = pd.isna(df[customer_col])
+                                                    exclude_mask = totals_mask | empty_customer_mask | nan_mask
+                                                    
+                                                    # Show which rows are being excluded
+                                                    if exclude_mask.any():
+                                                        st.write(f"\n**Rows being excluded as totals (indices):**")
+                                                        excluded_indices = df[exclude_mask].index.tolist()
+                                                        st.write(excluded_indices)
+                                                        
+                                                        st.write("\n**Excluded rows details:**")
+                                                        for idx in excluded_indices:
+                                                            st.write(f"Row {idx}: Customer='{df.loc[idx, customer_col]}', Amount={all_amounts.loc[idx]}")
+                                                    
+                                                    # Show amounts being summed
+                                                    amounts_to_sum = all_amounts[~exclude_mask]
+                                                    st.write(f"\n**Amounts being summed ({len(amounts_to_sum)} rows):**")
+                                                    st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
+                                                    
+                                                    # Sum only non-total rows
+                                                    statement_total_amount = amounts_to_sum.sum()
+                                                    
+                                                    st.write(f"\n**Calculated total (excluding totals rows):** ${statement_total_amount:,.2f}")
+                                                    
+                                                    # Debug info
+                                                    excluded_count = exclude_mask.sum()
+                                                    if excluded_count > 0:
+                                                        st.info(f"📊 Excluded {excluded_count} total/summary row(s) from statement total calculation")
+                                                    else:
+                                                        # No rows excluded - check if last row might be a total
+                                                        st.write("\n**No rows excluded - checking if last row is a total:**")
+                                                        if len(all_amounts) > 1:
+                                                            last_row_amount = all_amounts.iloc[-1]
+                                                            sum_without_last = all_amounts.iloc[:-1].sum()
+                                                            st.write(f"Last row amount: ${last_row_amount:,.2f}")
+                                                            st.write(f"Sum of all other rows: ${sum_without_last:,.2f}")
+                                                            if abs(last_row_amount - sum_without_last) < 0.01:
+                                                                st.success(f"✅ Last row (${last_row_amount:,.2f}) equals sum of other rows - using it as statement total")
+                                                                statement_total_amount = last_row_amount
                                                 else:
-                                                    # No rows excluded - check if last row might be a total
-                                                    st.write("\n**No rows excluded - checking if last row is a total:**")
-                                                    if len(all_amounts) > 1:
-                                                        last_row_amount = all_amounts.iloc[-1]
-                                                        sum_without_last = all_amounts.iloc[:-1].sum()
-                                                        st.write(f"Last row amount: ${last_row_amount:,.2f}")
-                                                        st.write(f"Sum of all other rows: ${sum_without_last:,.2f}")
-                                                        if abs(last_row_amount - sum_without_last) < 0.01:
-                                                            st.success(f"✅ Last row (${last_row_amount:,.2f}) equals sum of other rows - using it as statement total")
-                                                            statement_total_amount = last_row_amount
-                                            else:
-                                                # No customer column mapped, just sum all
-                                                st.write("\n**No customer column mapped - summing all amounts**")
-                                                amounts_to_sum = all_amounts
-                                                st.write(f"**All amounts being summed ({len(amounts_to_sum)} rows):**")
-                                                st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
+                                                    # No customer column mapped, just sum all
+                                                    st.write("\n**No customer column mapped - summing all amounts**")
+                                                    amounts_to_sum = all_amounts
+                                                    st.write(f"**All amounts being summed ({len(amounts_to_sum)} rows):**")
+                                                    st.write(amounts_to_sum[amounts_to_sum != 0].to_list())
+                                                    
+                                                    statement_total_amount = all_amounts.sum()
+                                                    st.write(f"\n**Calculated total (all rows):** ${statement_total_amount:,.2f}")
                                                 
-                                                statement_total_amount = all_amounts.sum()
-                                                st.write(f"\n**Calculated total (all rows):** ${statement_total_amount:,.2f}")
-                                            
-                                            # Also check if there's a Pay Amount column that might be the correct one
-                                            st.write("\n**🔍 CHECKING FOR 'PAY AMOUNT' COLUMNS:**")
-                                            pay_columns = [col for col in df.columns if 'pay' in col.lower() and 'amount' in col.lower()]
-                                            if pay_columns:
-                                                st.write(f"Found potential Pay Amount columns: {pay_columns}")
-                                                for pay_col in pay_columns:
-                                                    pay_amounts = pd.to_numeric(df[pay_col], errors='coerce').fillna(0)
-                                                    pay_total = pay_amounts.sum()
-                                                    st.write(f"- Column '{pay_col}' total: ${pay_total:,.2f}")
-                                                    if abs(pay_total - 1568.94) < 0.01:
-                                                        st.success(f"✓ Column '{pay_col}' matches expected total of $1,568.94!")
-                                            
-                                        except Exception as e:
-                                            st.error(f"Error calculating statement total: {str(e)}")
-                                            import traceback
-                                            st.write("Full traceback:")
-                                            st.code(traceback.format_exc())
-                                            statement_total_amount = 0
+                                                # Also check if there's a Pay Amount column that might be the correct one
+                                                st.write("\n**🔍 CHECKING FOR 'PAY AMOUNT' COLUMNS:**")
+                                                pay_columns = [col for col in df.columns if 'pay' in col.lower() and 'amount' in col.lower()]
+                                                if pay_columns:
+                                                    st.write(f"Found potential Pay Amount columns: {pay_columns}")
+                                                    for pay_col in pay_columns:
+                                                        pay_amounts = pd.to_numeric(df[pay_col], errors='coerce').fillna(0)
+                                                        pay_total = pay_amounts.sum()
+                                                        st.write(f"- Column '{pay_col}' total: ${pay_total:,.2f}")
+                                                        if abs(pay_total - 1568.94) < 0.01:
+                                                            st.success(f"✓ Column '{pay_col}' matches expected total of $1,568.94!")
+                                                
+                                            except Exception as e:
+                                                st.error(f"Error calculating statement total: {str(e)}")
+                                                import traceback
+                                                st.write("Full traceback:")
+                                                st.code(traceback.format_exc())
+                                                statement_total_amount = 0
                                         else:
                                             st.warning("'Agent Paid Amount (STMT)' not found in column mapping!")
                                             st.write("Available mappings:", list(st.session_state.column_mapping.keys()))
