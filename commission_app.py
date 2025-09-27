@@ -3549,7 +3549,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
 def show_import_results(statement_date, all_data):
     """Display import results and allow user to review/confirm"""
     st.divider()
-    st.markdown("### 📊 Import Preview")
+    st.markdown("### 📊 Import Transactions Preview")
     
     # Get user-specific keys
     matched_key = get_user_session_key('matched_transactions')
@@ -4118,19 +4118,22 @@ def show_import_results(statement_date, all_data):
                                 default_type = "NEW" if "NEW" in transaction_types else transaction_types[0]
                             
                                 # Try to guess from statement if available with mapping applied
-                                if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
-                                    stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
-                                
-                                    # Load and apply transaction type mappings
-                                    trans_type_mappings = {}
-                                    # Load transaction type mappings from database
-                                    trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
-                                
-                                    # Apply mapping if available
-                                    mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                if 'statement_data' in item and column_mapping_key in st.session_state:
+                                    column_mapping = st.session_state[column_mapping_key]
+                                    # Get the actual column that's mapped to Transaction Type
+                                    trans_type_col = column_mapping.get('Transaction Type', '')
                                     
-                                    if mapped_type in transaction_types:
-                                        default_type = mapped_type
+                                    if trans_type_col and trans_type_col in item['statement_data']:
+                                        stmt_type = str(item['statement_data'][trans_type_col]).strip()
+                                    
+                                        # Load and apply transaction type mappings
+                                        trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+                                    
+                                        # Apply mapping if available
+                                        mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                        
+                                        if mapped_type in transaction_types:
+                                            default_type = mapped_type
                             
                                 # Ensure default_type is in transaction_types (defensive check)
                                 if default_type not in transaction_types:
@@ -4144,8 +4147,8 @@ def show_import_results(statement_date, all_data):
                                 )
                             
                                 # Show if mapping was applied
-                                if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
-                                    orig_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                if trans_type_col and trans_type_col in item['statement_data']:
+                                    orig_type = str(item['statement_data'][trans_type_col]).strip()
                                     if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
                                         st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
                             
@@ -4560,14 +4563,19 @@ def show_import_results(statement_date, all_data):
         if st.session_state[to_create_key]:
             st.info("These transactions don't exist in the database but can be created")
             
+            # Load transaction type mappings
+            trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+            
             create_df = []
             for item in st.session_state[to_create_key]:
                 # Use selected transaction type if available, otherwise try to get from statement
                 trans_type = item.get('selected_transaction_type', 'NEW')
                 if trans_type == 'NEW' and 'statement_data' in item and st.session_state[column_mapping_key].get('Transaction Type'):
-                    stmt_type = item['statement_data'].get(st.session_state[column_mapping_key].get('Transaction Type', ''), 'NEW')
-                    if stmt_type:
-                        trans_type = stmt_type
+                    trans_type_col = st.session_state[column_mapping_key].get('Transaction Type', '')
+                    if trans_type_col and trans_type_col in item['statement_data']:
+                        stmt_type = str(item['statement_data'][trans_type_col]).strip()
+                        # Apply transaction type mapping
+                        trans_type = trans_type_mappings.get(stmt_type, stmt_type)
                 
                 row_data = {
                     'Create': True,
@@ -4585,7 +4593,12 @@ def show_import_results(statement_date, all_data):
                         if source_col and source_col in item['statement_data']:
                             # Skip fields we've already added above
                             if db_field not in ['Customer', 'Policy Number', 'Transaction Type', 'Effective Date']:
-                                row_data[db_field] = item['statement_data'][source_col]
+                                # Apply transaction type mapping if this is a transaction type field
+                                if db_field == 'Transaction Type' and trans_type_mappings:
+                                    raw_value = str(item['statement_data'][source_col]).strip()
+                                    row_data[db_field] = trans_type_mappings.get(raw_value, raw_value)
+                                else:
+                                    row_data[db_field] = item['statement_data'][source_col]
                 
                 # Always include amount fields
                 row_data['Agent Paid Amount (STMT)'] = item['amount']
