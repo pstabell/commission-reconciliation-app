@@ -11198,11 +11198,21 @@ def main():
                                             if customer_col:
                                                 st.write(f"\n**Customer column mapped to:** '{customer_col}'")
                                                 
+                                                # Debug: Show what's in the last few rows
+                                                st.write("\n**DEBUG: Last 3 rows of data:**")
+                                                for idx in range(max(0, len(df)-3), len(df)):
+                                                    if idx < len(df):
+                                                        customer_val = df.iloc[idx][customer_col]
+                                                        amount_val = all_amounts.iloc[idx]
+                                                        st.write(f"Row {idx}: Customer='{customer_val}' (type: {type(customer_val).__name__}, repr: {repr(customer_val)}), Amount={amount_val}")
+                                                
                                                 # Find rows that look like totals (to exclude them)
                                                 totals_mask = df[customer_col].astype(str).str.lower().str.contains('total|totals|subtotal|sub-total|grand total|sum', na=False)
                                                 # Also check for empty customer names which might be totals rows
                                                 empty_customer_mask = df[customer_col].astype(str).str.strip() == ''
-                                                exclude_mask = totals_mask | empty_customer_mask
+                                                # Also check for NaN values
+                                                nan_mask = pd.isna(df[customer_col])
+                                                exclude_mask = totals_mask | empty_customer_mask | nan_mask
                                                 
                                                 # Show which rows are being excluded
                                                 if exclude_mask.any():
@@ -11228,6 +11238,17 @@ def main():
                                                 excluded_count = exclude_mask.sum()
                                                 if excluded_count > 0:
                                                     st.info(f"📊 Excluded {excluded_count} total/summary row(s) from statement total calculation")
+                                                else:
+                                                    # No rows excluded - check if last row might be a total
+                                                    st.write("\n**No rows excluded - checking if last row is a total:**")
+                                                    if len(all_amounts) > 1:
+                                                        last_row_amount = all_amounts.iloc[-1]
+                                                        sum_without_last = all_amounts.iloc[:-1].sum()
+                                                        st.write(f"Last row amount: ${last_row_amount:,.2f}")
+                                                        st.write(f"Sum of all other rows: ${sum_without_last:,.2f}")
+                                                        if abs(last_row_amount - sum_without_last) < 0.01:
+                                                            st.success(f"✅ Last row (${last_row_amount:,.2f}) equals sum of other rows - using it as statement total")
+                                                            statement_total_amount = last_row_amount
                                             else:
                                                 # No customer column mapped, just sum all
                                                 st.write("\n**No customer column mapped - summing all amounts**")
