@@ -3726,28 +3726,10 @@ def show_import_results(statement_date, all_data):
             remaining_unmatched = total_unmatched  # All items in the list are unprocessed now
             
             if remaining_unmatched > 0:
-                # Add an anchor for scrolling
-                st.markdown('<div id="unmatched-top"></div>', unsafe_allow_html=True)
-                
                 # Show success message if it exists
                 if 'reconciliation_success_message' in st.session_state:
                     st.success(st.session_state['reconciliation_success_message'])
                     del st.session_state['reconciliation_success_message']
-                    
-                    # Add auto-scroll JavaScript
-                    if st.session_state.get('scroll_to_top', False):
-                        st.markdown('''
-                        <script>
-                        // Scroll to top of unmatched section
-                        window.scrollTo({top: 0, behavior: 'smooth'});
-                        // Alternative: scroll to specific element
-                        const element = document.getElementById('unmatched-top');
-                        if (element) {
-                            element.scrollIntoView({behavior: 'smooth', block: 'start'});
-                        }
-                        </script>
-                        ''', unsafe_allow_html=True)
-                        del st.session_state['scroll_to_top']
                 
                 st.warning(f"These transactions need manual review ({remaining_unmatched} remaining)")
                 st.info("💡 Click 'Use' to select customers, then 'Confirm Match' or check 'Create new transaction'.")
@@ -4333,7 +4315,6 @@ def show_import_results(statement_date, all_data):
                     # Set a flag to show success message after rerun
                     remaining_after = len(st.session_state[unmatched_key]) - len(indices_to_remove)
                     st.session_state['reconciliation_success_message'] = f"✅ Applied {len(indices_to_remove)} manual match(es)! {remaining_after} items remaining."
-                    st.session_state['scroll_to_top'] = True
                     
                     st.rerun()
             
