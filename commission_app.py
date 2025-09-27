@@ -4251,13 +4251,10 @@ def show_import_results(statement_date, all_data):
                     remaining_count = len(st.session_state[unmatched_key])
                     st.metric("Remaining Unmatched", remaining_count)
                 
-                # Add progress info near the button
+                # Show completion message if all items will be processed
                 current_view_mode = st.session_state.get("unmatched_display_mode", "Show one at a time")
                 if current_view_mode == "Show one at a time" and st.session_state[unmatched_key]:
-                    next_item = min(2, remaining_count - manual_match_count)
-                    if next_item > 0:
-                        st.info(f"📍 After applying, the page will scroll up to show item {next_item} of {remaining_count - manual_match_count}")
-                    else:
+                    if remaining_count - manual_match_count <= 0:
                         st.info(f"📍 After applying, all items will be processed!")
                 
                 if st.button("Apply Manual Matches", type="primary", use_container_width=True):
