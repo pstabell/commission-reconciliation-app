@@ -1140,8 +1140,19 @@ def add_policy_type(new_type_name):
 
 def get_transaction_type_codes():
     """Get list of active transaction type codes for dropdowns."""
-    active_types = user_transaction_types.get_active_types()
-    return list(active_types.keys())
+    try:
+        active_types = user_transaction_types.get_active_types()
+        codes = list(active_types.keys())
+        
+        # Ensure we always have at least the basic types
+        if not codes:
+            codes = ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "XLC"]
+        
+        return codes
+    except Exception as e:
+        print(f"Error getting transaction types: {e}")
+        # Return default types on error
+        return ["NEW", "RWL", "END", "CAN", "PMT", "XCL", "XLC"]
 
 def apply_formula_display(df, show_formulas=True):
     """
@@ -4081,10 +4092,31 @@ def show_import_results(statement_date, all_data):
                                 # Show transaction type selector
                                 transaction_types = get_transaction_type_codes()
                                 
+                                # DEBUG: Show what's happening with transaction types
+                                with st.expander("🔍 DEBUG: Transaction Types"):
+                                    st.write("Available transaction types:", transaction_types)
+                                    # Also check the user_transaction_types directly
+                                    active_types = user_transaction_types.get_active_types()
+                                    st.write("Active types from config:", active_types)
+                                    # Check if it's a user-specific issue
+                                    st.write("Current user:", st.session_state.get('user_email', 'Not set'))
+                                    
+                                    # Check the statement transaction type
+                                    if 'statement_data' in item and 'Transaction Type' in item['statement_data']:
+                                        stmt_type = str(item['statement_data'].get('Transaction Type', '')).strip()
+                                        st.write(f"Statement transaction type: '{stmt_type}'")
+                                        
+                                        # Check mappings
+                                        trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+                                        st.write("Transaction type mappings:", trans_type_mappings)
+                                        mapped_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
+                                        st.write(f"Mapped type: '{mapped_type}'")
+                                
                                 # Ensure we have at least one transaction type
                                 if not transaction_types:
                                     st.error("No active transaction types found. Please configure transaction types in Admin Panel.")
-                                    transaction_types = ["NEW"]  # Fallback to prevent errors
+                                    # Use default transaction types as fallback
+                                    transaction_types = ["NEW", "RWL", "END", "CAN", "PMT"]
                                 
                                 # Set default type, ensuring it exists in the list
                                 default_type = "NEW" if "NEW" in transaction_types else transaction_types[0]
