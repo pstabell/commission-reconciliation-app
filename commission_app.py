@@ -15409,8 +15409,8 @@ CL12349,CAN001,AUTO,Bob Johnson,AUTO-2024-002,CAN,08/01/2024,-800.00,15,-120.00,
                                         progress = (idx + 1) / len(update_df)
                                         progress_bar.progress(progress)
                                         status_text.text(f"Updating {idx+1}/{len(update_df)}: {transaction_id}")
-                                            
-                                            try:
+                                        
+                                        try:
                                             # Prepare update data (exclude Transaction ID from updates)
                                             update_data = {}
                                             for col in update_df.columns:
