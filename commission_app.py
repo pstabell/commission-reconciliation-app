@@ -4163,23 +4163,23 @@ def show_import_results(statement_date, all_data):
                                     help="Select the policy duration"
                                 )
                             
-                            # Create a separate section for offset transaction option
-                            if selected_type != 'NEW':
-                                st.divider()
-                                st.markdown("**🔄 Offset Transaction Option**")
-                                st.caption("Some agencies require a NEW transaction to pair with cancellations, endorsements, or renewals")
-                                
-                                create_offset = st.checkbox(
-                                    f"Also create an offset NEW transaction to pair with this {selected_type}",
-                                    value=False,  # Default unchecked
-                                    key=f"create_offset_{idx}",
-                                    help="This will create a NEW transaction with $0 agent paid amount to maintain transaction history"
-                                )
-                                
-                                if create_offset:
-                                    st.info(f"✅ An additional NEW transaction with $0 agent paid amount will be created to pair with the {selected_type} transaction")
-                            else:
-                                create_offset = False
+                                # Create a separate section for offset transaction option
+                                if selected_type != 'NEW':
+                                    st.divider()
+                                    st.markdown("**🔄 Offset Transaction Option**")
+                                    st.caption("Some agencies require a NEW transaction to pair with cancellations, endorsements, or renewals")
+                                    
+                                    create_offset = st.checkbox(
+                                        f"Also create an offset NEW transaction to pair with this {selected_type}",
+                                        value=False,  # Default unchecked
+                                        key=f"create_offset_{idx}",
+                                        help="This will create a NEW transaction with $0 agent paid amount to maintain transaction history"
+                                    )
+                                    
+                                    if create_offset:
+                                        st.info(f"✅ An additional NEW transaction with $0 agent paid amount will be created to pair with the {selected_type} transaction")
+                                else:
+                                    create_offset = False
                             
                                 st.session_state[manual_key][idx] = {
                                     'statement_item': item,
@@ -4206,7 +4206,7 @@ def show_import_results(statement_date, all_data):
                                     st.info(f"📋 **Summary**: Will create 2 transactions - one {selected_type} and one offset NEW with $0 agent paid")
                                 else:
                                     st.info(f"📋 **Summary**: Will create 1 transaction - {selected_type}")
-                            st.caption("*(Use for new policies or endorsements not yet in system)*")
+                                st.caption("*(Use for new policies or endorsements not yet in system)*")
                     
                         with col2:
                             # Option to match existing transaction
