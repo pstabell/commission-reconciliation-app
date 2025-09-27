@@ -10959,11 +10959,17 @@ def main():
                     st.session_state[to_create_key] = []
                 
                 # Step 1: File Upload
-                uploaded_file = st.file_uploader(
-                    "Choose a CSV or Excel file",
-                    type=['csv', 'xlsx', 'xls'],
-                    help="Upload your commission statement file"
-                )
+                try:
+                    uploaded_file = st.file_uploader(
+                        "Choose a CSV or Excel file",
+                        type=['csv', 'xlsx', 'xls'],
+                        help="Upload your commission statement file",
+                        key="reconciliation_file_uploader"
+                    )
+                except Exception as e:
+                    st.error(f"❌ Error with file upload widget: {str(e)}")
+                    st.info("💡 Try refreshing the page or using a different browser")
+                    uploaded_file = None
                 
                 if uploaded_file is not None:
                     # Check file size first (Streamlit has a default 200MB limit)
@@ -10976,10 +10982,19 @@ def main():
                     
                     # Parse file
                     try:
+                        # Reset file position to beginning
+                        uploaded_file.seek(0)
+                        
                         if uploaded_file.name.endswith('.csv'):
-                            df = pd.read_csv(uploaded_file)
+                            df = pd.read_csv(uploaded_file, on_bad_lines='warn')
                         else:
-                            df = pd.read_excel(uploaded_file)
+                            # For Excel files, try to read with error handling
+                            try:
+                                df = pd.read_excel(uploaded_file, engine='openpyxl')
+                            except:
+                                # Fallback to xlrd for older Excel files
+                                uploaded_file.seek(0)
+                                df = pd.read_excel(uploaded_file, engine='xlrd')
                         
                         # Check if dataframe is empty
                         if df.empty:
