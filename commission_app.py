@@ -3726,6 +3726,29 @@ def show_import_results(statement_date, all_data):
             remaining_unmatched = total_unmatched  # All items in the list are unprocessed now
             
             if remaining_unmatched > 0:
+                # Add an anchor for scrolling
+                st.markdown('<div id="unmatched-top"></div>', unsafe_allow_html=True)
+                
+                # Show success message if it exists
+                if 'reconciliation_success_message' in st.session_state:
+                    st.success(st.session_state['reconciliation_success_message'])
+                    del st.session_state['reconciliation_success_message']
+                    
+                    # Add auto-scroll JavaScript
+                    if st.session_state.get('scroll_to_top', False):
+                        st.markdown('''
+                        <script>
+                        // Scroll to top of unmatched section
+                        window.scrollTo({top: 0, behavior: 'smooth'});
+                        // Alternative: scroll to specific element
+                        const element = document.getElementById('unmatched-top');
+                        if (element) {
+                            element.scrollIntoView({behavior: 'smooth', block: 'start'});
+                        }
+                        </script>
+                        ''', unsafe_allow_html=True)
+                        del st.session_state['scroll_to_top']
+                
                 st.warning(f"These transactions need manual review ({remaining_unmatched} remaining)")
                 st.info("💡 Click 'Use' to select customers, then 'Confirm Match' or check 'Create new transaction'.")
             
@@ -3773,7 +3796,9 @@ def show_import_results(statement_date, all_data):
                                 st.rerun()
                     
                     with col_current:
-                        st.info(f"Item {current_idx + 1} of {total_unmatched}")
+                        progress = (current_idx + 1) / total_unmatched
+                        st.progress(progress)
+                        st.markdown(f"<h4 style='text-align: center; margin: 0;'>Item {current_idx + 1} of {total_unmatched}</h4>", unsafe_allow_html=True)
                     
                     with col_next:
                         if current_idx < total_unmatched - 1:
@@ -4219,9 +4244,23 @@ def show_import_results(statement_date, all_data):
                 st.markdown("### ✅ Confirmed Manual Matches")
                 
                 manual_match_count = len(st.session_state[manual_key])
-                st.metric("Manual Matches", manual_match_count)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Manual Matches", manual_match_count)
+                with col2:
+                    remaining_count = len(st.session_state[unmatched_key])
+                    st.metric("Remaining Unmatched", remaining_count)
                 
-                if st.button("Apply Manual Matches", type="primary"):
+                # Add progress info near the button
+                current_view_mode = st.session_state.get("unmatched_display_mode", "Show one at a time")
+                if current_view_mode == "Show one at a time" and st.session_state[unmatched_key]:
+                    next_item = min(2, remaining_count - manual_match_count)
+                    if next_item > 0:
+                        st.info(f"📍 After applying, the page will scroll up to show item {next_item} of {remaining_count - manual_match_count}")
+                    else:
+                        st.info(f"📍 After applying, all items will be processed!")
+                
+                if st.button("Apply Manual Matches", type="primary", use_container_width=True):
                     # Move manually matched items to appropriate lists
                     for idx, match_info in st.session_state[manual_key].items():
                         if 'create_new' in match_info and match_info['create_new']:
@@ -4293,7 +4332,12 @@ def show_import_results(statement_date, all_data):
                     
                     # Clear manual matches
                     st.session_state[manual_key] = {}
-                    st.success("Manual matches applied!")
+                    
+                    # Set a flag to show success message after rerun
+                    remaining_after = len(st.session_state[unmatched_key]) - len(indices_to_remove)
+                    st.session_state['reconciliation_success_message'] = f"✅ Applied {len(indices_to_remove)} manual match(es)! {remaining_after} items remaining."
+                    st.session_state['scroll_to_top'] = True
+                    
                     st.rerun()
             
             else:  # Show all at once mode
