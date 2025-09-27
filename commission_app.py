@@ -4151,14 +4151,31 @@ def show_import_results(statement_date, all_data):
                                     orig_type = str(item['statement_data'][trans_type_col]).strip()
                                     if orig_type in trans_type_mappings and trans_type_mappings[orig_type] != orig_type:
                                         st.caption(f"ℹ️ Mapped from statement type '{orig_type}' → '{trans_type_mappings[orig_type]}'")
+                                
+                                # Add Policy Term dropdown
+                                policy_terms = [6, 12, "Custom"]
+                                selected_term = st.selectbox(
+                                    "Policy Term",
+                                    options=policy_terms,
+                                    format_func=lambda x: f"{x} months" if x != "Custom" else "Custom",
+                                    index=1,  # Default to 12 months
+                                    key=f"policy_term_{idx}",
+                                    help="Select the policy duration"
+                                )
+                                
+                                # Show warning if creating non-NEW transaction
+                                if selected_type != 'NEW':
+                                    st.info(f"ℹ️ A NEW transaction with $0 agent paid amount will be created automatically to pair with this {selected_type} transaction")
                             
                                 st.session_state[manual_key][idx] = {
                                     'statement_item': item,
                                     'create_new': True,
                                     'transaction_type': selected_type,
+                                    'policy_term': selected_term,
                                     'client_action': client_action,
                                     'client_id': client_id,
-                                    'client_name': client_name
+                                    'client_name': client_name,
+                                    'needs_offset': selected_type != 'NEW'
                                 }
                             
                                 # Check if we have a manually confirmed customer
@@ -4736,9 +4753,11 @@ def show_import_results(statement_date, all_data):
                             # Add to create list with client info
                             item_to_create = match_info['statement_item'].copy()
                             item_to_create['selected_transaction_type'] = match_info.get('transaction_type', 'NEW')
+                            item_to_create['policy_term'] = match_info.get('policy_term', 12)
                             item_to_create['client_action'] = match_info.get('client_action', 'new')
                             item_to_create['client_id'] = match_info.get('client_id')
                             item_to_create['client_name'] = match_info.get('client_name')
+                            item_to_create['needs_offset'] = match_info.get('needs_offset', False)
                             st.session_state[to_create_key].append(item_to_create)
                 
                 # Step 1: Create missing transactions if selected
@@ -4814,6 +4833,7 @@ def show_import_results(statement_date, all_data):
                                 'Policy Number': item['policy_number'],
                                 'Effective Date': item['effective_date'],
                                 'Transaction Type': final_trans_type,
+                                'Policy Term': item.get('policy_term', 12),  # Add policy term from selection
                                 'Total Agent Comm': item['amount'],  # Use statement amount as placeholder
                                 'NOTES': f"Created from statement import {batch_id} - Review policy paperwork to calculate accurate premium, taxes, fees and commission"
                             }
@@ -4871,6 +4891,23 @@ def show_import_results(statement_date, all_data):
                             # Queue operation instead of immediate execution
                             all_operations.append(('insert', 'policies', cleaned_trans))
                             created_count += 1
+                            
+                            # Create offset NEW transaction if this is not a NEW transaction
+                            if item.get('needs_offset', False) and final_trans_type != 'NEW':
+                                # Generate another transaction ID for the offset
+                                offset_trans_id = generate_transaction_id(suffix=import_suffix)
+                                
+                                # Create offset NEW transaction with same data but $0 agent paid amount
+                                offset_trans = new_trans.copy()
+                                offset_trans['Transaction ID'] = offset_trans_id
+                                offset_trans['Transaction Type'] = 'NEW'
+                                offset_trans['Total Agent Comm'] = 0  # $0 agent commission
+                                offset_trans['NOTES'] = f"Offset NEW transaction for {final_trans_type} - Created from import {batch_id} - Update premium and commission amounts"
+                                
+                                # Clean and queue the offset transaction
+                                cleaned_offset = clean_data_for_database(offset_trans)
+                                all_operations.append(('insert', 'policies', cleaned_offset))
+                                created_count += 1
                             
                             # Add to matched transactions for reconciliation
                             # Use the new transaction data as the match
@@ -4997,12 +5034,24 @@ def show_import_results(statement_date, all_data):
                 if view_pref_key in st.session_state:
                     del st.session_state[view_pref_key]
                 
-                st.success(f"""
+                # Count offset transactions
+                offset_count = sum(1 for item in st.session_state.get(to_create_key, []) 
+                                 if item.get('needs_offset', False) and 
+                                 item.get('selected_transaction_type', 'NEW') != 'NEW')
+                
+                success_msg = f"""
                 ✅ Import completed successfully!
-                - Created {created_count} new transactions
+                - Created {created_count} new transactions"""
+                
+                if offset_count > 0:
+                    success_msg += f" (including {offset_count} offset NEW transactions)"
+                
+                success_msg += f"""
                 - Reconciled {reconciled_count} transactions
                 - Batch ID: {batch_id}
-                """)
+                """
+                
+                st.success(success_msg)
                 
                 # Clear cache and refresh
                 st.cache_data.clear()
