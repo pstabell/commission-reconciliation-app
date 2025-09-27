@@ -4212,8 +4212,6 @@ def show_import_results(statement_date, all_data):
                             # Option to match existing transaction
                             # Note: This section is currently just a placeholder
                             st.info("Manual transaction matching available above")
-            
-            # Show confirmed matches
             if st.session_state[manual_key]:
                 st.divider()
                 st.markdown("### ✅ Confirmed Manual Matches")
@@ -4297,26 +4295,121 @@ def show_import_results(statement_date, all_data):
                     st.rerun()
             
             else:  # Show all at once mode
-                # Show all unmatched items
+                st.info("📊 Review all unmatched transactions in a table view for efficient batch processing")
+                
+                # Create a dataframe for all unmatched items
+                unmatched_data = []
+                trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+                
                 for idx, item in enumerate(st.session_state[unmatched_key]):
+                    # Get transaction type from statement if available
+                    trans_type = 'NEW'  # Default
+                    if 'statement_data' in item and column_mapping_key in st.session_state:
+                        trans_type_col = st.session_state[column_mapping_key].get('Transaction Type', '')
+                        if trans_type_col and trans_type_col in item['statement_data']:
+                            stmt_type = str(item['statement_data'][trans_type_col]).strip()
+                            # Apply mapping
+                            trans_type = trans_type_mappings.get(stmt_type, stmt_type).upper()
                     
-                    # Show in "all at once" mode
-                    with st.expander(f"🔍 {item.get('customer', 'Unknown')} - ${item.get('amount', 0):,.2f}", expanded=False):
-                        # Create a unique identifier for this item
-                        item_id = f"{item.get('customer', 'Unknown')}_{item.get('policy_number', '')}_{item.get('amount', 0)}_{idx}"
-                        
-                        # Just copy the exact same interface from "Show one at a time" mode
-                        col1, col2 = st.columns([2, 1])
-                        
-                        with col1:
-                            # PHASE 1: Statement Details (moved to top)
-                            st.markdown(f"**Statement Details:**")
-                            st.text(f"Customer: {item.get('customer', 'Unknown')}")
-                            st.text(f"Policy: {item.get('policy_number', '')}")
-                            st.text(f"Effective Date: {item.get('effective_date', '')}")
-                            st.text(f"Amount: ${item.get('amount', 0):,.2f}")
+                    row = {
+                        'Index': idx,
+                        'Create Transaction': True,  # Default checked
+                        'Customer': item.get('customer', 'Unknown'),
+                        'Policy Number': item.get('policy_number', ''),
+                        'Amount': item.get('amount', 0),
+                        'Effective Date': item.get('effective_date', ''),
+                        'Transaction Type': trans_type,
+                        'Create Offset NEW': False if trans_type == 'NEW' else False,  # Default unchecked
+                        '_item': item  # Store the full item for processing
+                    }
+                    unmatched_data.append(row)
+                
+                if unmatched_data:
+                    df = pd.DataFrame(unmatched_data)
+                    
+                    # Configure columns
+                    column_config = {
+                        "Index": None,  # Hide index column
+                        "Create Transaction": st.column_config.CheckboxColumn(
+                            "Create", 
+                            help="Check to create this transaction"
+                        ),
+                        "Customer": st.column_config.TextColumn("Customer", disabled=True),
+                        "Policy Number": st.column_config.TextColumn("Policy", disabled=True),
+                        "Amount": st.column_config.NumberColumn("Amount", format="$%.2f", disabled=True),
+                        "Effective Date": st.column_config.TextColumn("Eff Date", disabled=True),
+                        "Transaction Type": st.column_config.SelectboxColumn(
+                            "Type",
+                            options=get_transaction_type_codes(),
+                            help="Select transaction type"
+                        ),
+                        "Create Offset NEW": st.column_config.CheckboxColumn(
+                            "Offset NEW", 
+                            help="Create offset NEW transaction with $0"
+                        ),
+                        "_item": None  # Hide the full item data
+                    }
+                    
+                    # Create editable dataframe
+                    edited_df = st.data_editor(
+                        df,
+                        column_config=column_config,
+                        use_container_width=True,
+                        hide_index=True,
+                        key="unmatched_batch_editor"
+                    )
+                    
+                    # Add batch action buttons
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        if st.button("✅ Check All", key="check_all_create"):
+                            # This would need to trigger a rerun with all checkboxes checked
+                            st.info("Use the checkboxes in the table to select items")
+                    
+                    with col2:
+                        if st.button("❌ Uncheck All", key="uncheck_all_create"):
+                            # This would need to trigger a rerun with all checkboxes unchecked
+                            st.info("Use the checkboxes in the table to deselect items")
+                    
+                    with col3:
+                        checked_count = edited_df['Create Transaction'].sum()
+                        st.metric("Selected", f"{checked_count} of {len(edited_df)}")
+                    
+                    with col4:
+                        if st.button("💾 Apply Batch Settings", type="primary", key="apply_batch"):
+                            # Process all checked items
+                            for idx, row in edited_df.iterrows():
+                                if row['Create Transaction']:
+                                    original_idx = row['Index']
+                                    item = row['_item']
+                                    
+                                    # Add to manual matches with selected settings
+                                    st.session_state[manual_key][original_idx] = {
+                                        'statement_item': item,
+                                        'create_new': True,
+                                        'transaction_type': row['Transaction Type'],
+                                        'policy_term': 12,  # Default to 12 months
+                                        'client_action': 'new',  # Default to new client
+                                        'client_id': None,
+                                        'client_name': row['Customer'],
+                                        'needs_offset': row['Create Offset NEW']
+                                    }
                             
-                            # Show additional statement details if available
+                            st.success(f"✅ Batch settings applied to {checked_count} transactions!")
+                            st.info("Click 'Apply Manual Matches' above to finalize")
+                    
+                    # Show summary of offset transactions
+                    offset_count = edited_df[(edited_df['Create Transaction']) & 
+                                           (edited_df['Transaction Type'] != 'NEW') & 
+                                           (edited_df['Create Offset NEW'])]['Create Offset NEW'].sum()
+                    if offset_count > 0:
+                        st.info(f"ℹ️ {offset_count} offset NEW transactions will be created")
+                
+                else:
+                    st.info("No unmatched transactions to display")
+            
+            # Show confirmed matches
                             if 'statement_data' in item:
                                 stmt_data = item['statement_data']
                                 # Track if we found a direct Rate column
