@@ -2800,7 +2800,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     can_create = []
     
     # DEBUG: Show raw input data
-    with st.expander("🔍 DEBUG: Raw statement data and mapping", expanded=True):
+    with st.expander("🔍 DEBUG: Raw statement data and mapping", expanded=False):
         st.markdown("**Column Mapping:**")
         st.json(column_mapping)
         
@@ -3041,7 +3041,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         
         # Show debug for first 3 rows to understand the data
         if debug_matches['total_rows'] <= 3:
-            with st.expander(f"🔍 DEBUG: Processing row {idx} - BEFORE extraction", expanded=True):
+            with st.expander(f"🔍 DEBUG: Processing row {idx} - BEFORE extraction", expanded=False):
                 st.markdown("**Raw row data:**")
                 st.json(row.to_dict())
                 st.markdown("**Column mapping:**")
@@ -3209,7 +3209,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
         if not customer and not policy_num and amount == 0:
             debug_matches['skipped_empty'] += 1
             # Log ALL skipped rows for debugging (not just first 3)
-            with st.expander(f"⚠️ DEBUG: Skipped empty row {idx} (#{debug_matches['skipped_empty']})", expanded=True):
+            with st.expander(f"⚠️ DEBUG: Skipped empty row {idx} (#{debug_matches['skipped_empty']})", expanded=False):
                 st.markdown("**Raw row data:**")
                 st.json(row.to_dict())
                 
@@ -3525,7 +3525,7 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
     debug_matches['matched'] = len(matched)
     
     # DEBUG: Show matching summary
-    with st.expander("🔍 DEBUG: Matching Summary", expanded=True):
+    with st.expander("🔍 DEBUG: Matching Summary", expanded=False):
         st.markdown("**Statement Processing:**")
         st.markdown(f"- Total rows processed: {debug_matches['total_rows']}")
         st.markdown(f"- Skipped (totals): {debug_matches['skipped_totals']}")
@@ -3794,53 +3794,49 @@ def show_import_results(statement_date, all_data):
                         col1, col2 = st.columns([2, 1])
                         
                         with col1:
-                            st.markdown(f"**Statement Details:**")
-                            st.text(f"Policy: {item.get('policy_number', '')}")
-                            st.text(f"Effective Date: {item.get('effective_date', '')}")
-                            st.text(f"Amount: ${item.get('amount', 0):,.2f}")
-                        
-                            # Show additional statement details if available
-                            if 'statement_data' in item:
-                                stmt_data = item['statement_data']
-                                # Track if we found a direct Rate column
-                                found_rate = False
+                            st.markdown(f"**Mapped Statement Details:**")
                             
-                                # Try to show LOB/Chg, Tran, and Rate from the statement
-                                for col_name in ['LOB/Chg', 'LOB', ' Tran', 'Tran', 'Transaction', 'Rate', ' Rate']:
-                                    if col_name in stmt_data:
-                                        value = stmt_data[col_name]
+                            # Load transaction type mappings
+                            trans_type_mappings = user_mappings.get_user_transaction_type_mappings()
+                            
+                            # Show all mapped fields with their database column names
+                            if 'statement_data' in item and column_mapping_key in st.session_state:
+                                stmt_data = item['statement_data']
+                                column_mapping = st.session_state[column_mapping_key]
+                                
+                                # Display mapped fields in order
+                                for db_field, source_col in column_mapping.items():
+                                    if source_col and source_col in stmt_data:
+                                        value = stmt_data[source_col]
                                         if pd.notna(value) and str(value).strip():
-                                            # Clean up the column name for display
-                                            display_name = col_name.strip()
-                                            if display_name == 'LOB/Chg' or display_name == 'LOB':
-                                                st.text(f"LOB/Chg: {value}")
-                                            elif display_name in ['Tran', 'Transaction']:
-                                                st.text(f"Transaction: {value}")
-                                            elif display_name == 'Rate':
-                                                found_rate = True
-                                                # Format rate as percentage if it's a number
+                                            # Format based on field type
+                                            if 'Date' in db_field:
+                                                st.text(f"{db_field}: {value}")
+                                            elif db_field == 'Transaction Type' and trans_type_mappings:
+                                                # Apply mapping
+                                                mapped_value = trans_type_mappings.get(str(value).strip(), str(value).strip())
+                                                st.text(f"{db_field}: {mapped_value}")
+                                            elif 'Amount' in db_field or 'Premium' in db_field or 'Comm' in db_field or 'Fee' in db_field:
+                                                try:
+                                                    st.text(f"{db_field}: ${float(value):,.2f}")
+                                                except:
+                                                    st.text(f"{db_field}: {value}")
+                                            elif 'Rate' in db_field or '%' in db_field:
                                                 try:
                                                     rate_val = float(value)
                                                     if rate_val < 1:  # Decimal format
-                                                        st.text(f"Rate: {rate_val:.2%}")
+                                                        st.text(f"{db_field}: {rate_val:.2%}")
                                                     else:  # Already percentage
-                                                        st.text(f"Rate: {rate_val}%")
+                                                        st.text(f"{db_field}: {rate_val}%")
                                                 except:
-                                                    st.text(f"Rate: {value}")
-                            
-                                # Only show mapped Rate field if we didn't find a direct Rate column
-                                # or if the mapped column is different from 'Rate'
-                                if 'Rate' in st.session_state[column_mapping_key]:
-                                    rate_col = st.session_state[column_mapping_key]['Rate']
-                                    if rate_col != 'Rate' and rate_col in stmt_data and pd.notna(stmt_data[rate_col]):
-                                        try:
-                                            rate_val = float(stmt_data[rate_col])
-                                            if rate_val < 1:  # Decimal format
-                                                st.text(f"Rate: {rate_val:.2%}")
-                                            else:  # Already percentage
-                                                st.text(f"Rate: {rate_val}%")
-                                        except:
-                                            st.text(f"Rate: {stmt_data[rate_col]}")
+                                                    st.text(f"{db_field}: {value}")
+                                            else:
+                                                st.text(f"{db_field}: {value}")
+                            else:
+                                # Fallback to basic fields if mapping not available
+                                st.text(f"Policy Number: {item.get('policy_number', '')}")
+                                st.text(f"Effective Date: {item.get('effective_date', '')}")
+                                st.text(f"Agent Paid Amount (STMT): ${item.get('amount', 0):,.2f}")
                     
                         with col2:
                             # Check if we have potential customers
