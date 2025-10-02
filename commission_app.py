@@ -10933,6 +10933,21 @@ def main():
                                                 st.warning("✓ Already in batch")
                                             else:
                                                 if st.button("➕ Add to Batch", type="primary", key="add_to_batch"):
+                                                    # Ensure Client ID is not empty - backfill from other transactions if needed
+                                                    if not client_id or str(client_id).strip() == '' or str(client_id).strip().lower() == 'none':
+                                                        # Try to get Client ID from other transactions for this policy
+                                                        policy_num = selected_policy_number
+                                                        if policy_num and not all_data.empty and 'Client ID' in all_data.columns:
+                                                            existing_client_ids = all_data[
+                                                                (all_data['Policy Number'].astype(str).str.strip() == str(policy_num).strip()) &
+                                                                (all_data['Client ID'].notna()) &
+                                                                (all_data['Client ID'] != '') &
+                                                                (all_data['Client ID'] != 'None')
+                                                            ]['Client ID']
+                                                            if not existing_client_ids.empty:
+                                                                # Use the most common Client ID for this policy
+                                                                client_id = existing_client_ids.mode().iloc[0] if not existing_client_ids.mode().empty else existing_client_ids.iloc[0]
+
                                                     # Add to reconciliation batch
                                                     batch_item = {
                                                         '_id': transaction['_id'],
