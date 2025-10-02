@@ -326,9 +326,13 @@ def calculate_months_between(start_date, end_date):
     
     # Convert to datetime if needed
     if isinstance(start_date, str):
-        start_date = pd.to_datetime(start_date)
+        start_date = pd.to_datetime(start_date, errors='coerce')
+        if pd.isna(start_date):
+            return 0
     if isinstance(end_date, str):
-        end_date = pd.to_datetime(end_date)
+        end_date = pd.to_datetime(end_date, errors='coerce')
+        if pd.isna(end_date):
+            return 0
     
     # Calculate months (partial months count as full)
     months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
@@ -789,6 +793,9 @@ def calculate_dashboard_metrics(df):
         
         # Calculate active vs cancelled policies
         if not df.empty and 'Transaction Type' in df.columns:
+            # Strip whitespace from Policy Number to avoid duplicate policy counts
+            if 'Policy Number' in df.columns:
+                df['Policy Number'] = df['Policy Number'].astype(str).str.strip()
             # Get latest transaction for each policy
             latest_trans = df.sort_values('Effective Date').groupby('Policy Number').last()
             metrics['active_policies'] = len(latest_trans[~latest_trans['Transaction Type'].isin(['CAN', 'XCL'])])
@@ -2259,9 +2266,12 @@ def validate_excel_import(uploaded_file):
         # Validate data types and formats
         if 'Effective Date' in df.columns:
             try:
-                pd.to_datetime(df['Effective Date'])
-            except:
-                validation_errors.append("Invalid date format in Effective Date column")
+                parsed_dates = pd.to_datetime(df['Effective Date'], errors='coerce')
+                failed_dates = parsed_dates.isna().sum()
+                if failed_dates > 0:
+                    validation_errors.append(f"Invalid date format in Effective Date column ({failed_dates} rows)")
+            except Exception as e:
+                validation_errors.append(f"Error validating Effective Date column: {str(e)}")
         
         # Check for duplicate Transaction_IDs
         if 'Transaction ID' in df.columns:
@@ -2725,9 +2735,11 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
         
         # Get all STMT and VOID entries for this specific policy and date
         # Include -VOID- entries since they have negative amounts that reduce the debit
+        # Strip whitespace from policy numbers to ensure matching
+        policy_num_stripped = str(policy_num).strip()
         if pd.notna(effective_date_normalized):
             recon_entries = all_data_normalized[
-                (all_data_normalized['Policy Number'] == policy_num) &
+                (all_data_normalized['Policy Number'].astype(str).str.strip() == policy_num_stripped) &
                 (all_data_normalized['_normalized_date'] == effective_date_normalized) &
                 (safe_str_contains(all_data, 'Transaction ID', '-STMT-|-VOID-', na=False))
             ]
@@ -2735,7 +2747,7 @@ def calculate_transaction_balances(all_data, show_all_for_reconciliation=False):
             # Fallback to string comparison if date parsing failed
             effective_date = row['Effective Date']
             recon_entries = all_data[
-                (all_data['Policy Number'] == policy_num) &
+                (all_data['Policy Number'].astype(str).str.strip() == policy_num_stripped) &
                 (all_data['Effective Date'] == effective_date) &
                 (safe_str_contains(all_data, 'Transaction ID', '-STMT-|-VOID-', na=False))
             ]
@@ -3416,11 +3428,14 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                 if customer_key in customer_trans_lookup:
                     customer_trans = customer_trans_lookup[customer_key]
                     # Check for amount match among transactions WITH policy verification
+                    # Strip whitespace from policy numbers for comparison
+                    policy_num_stripped = str(policy_num).strip() if policy_num else ""
                     amount_matched = False
                     for trans in customer_trans:
                         if amount > 0 and abs(trans['balance'] - amount) / amount <= 0.05:  # 5% tolerance
                             # Also verify policy number matches
-                            if trans.get('Policy Number') == policy_num and policy_num:
+                            trans_policy = str(trans.get('Policy Number', '')).strip()
+                            if trans_policy == policy_num_stripped and policy_num_stripped:
                                 match_result['match'] = trans
                                 match_result['confidence'] = 90
                                 match_result['match_type'] = f'{potential_customers[0][1]} + Policy + Amount'
@@ -3428,12 +3443,13 @@ def match_statement_transactions(statement_df, column_mapping, existing_data, st
                                 matched.append(match_result)
                                 amount_matched = True
                                 break
-                    
+
                     if not amount_matched:
                         # Check if any transaction matches the policy number
                         policy_matched = False
                         for trans in customer_trans:
-                            if trans.get('Policy Number') == policy_num and policy_num:
+                            trans_policy = str(trans.get('Policy Number', '')).strip()
+                            if trans_policy == policy_num_stripped and policy_num_stripped:
                                 # Policy number matches!
                                 match_result['match'] = trans
                                 match_result['confidence'] = 95
@@ -10740,7 +10756,7 @@ def main():
                             policy_num = row['Policy Number']
                             
                             # Calculate credits (commission owed)
-                            credit = float(row.get('Agent Estimated Comm $', 0) or 0)
+                            credit = float(row.get('Total Agent Comm', 0) or 0)
                             
                             # Calculate debits (total paid for this transaction)
                             # Find all -STMT- entries for this original transaction
@@ -10808,7 +10824,7 @@ def main():
                                         st.success(f"✅ Found Transaction: {transaction_id}")
                                         
                                         # Calculate outstanding balance
-                                        credit = float(transaction.get('Agent Estimated Comm $', 0) or 0)
+                                        credit = float(transaction.get('Total Agent Comm', 0) or 0)
                                         balance = float(transaction.get('_balance', credit))
                                         
                                         # Show transaction summary with balance
@@ -11919,8 +11935,9 @@ def main():
                                     # Get the date from the batch transactions
                                     void_transactions = filtered_recon[filtered_recon['reconciliation_id'] == batch_id]
                                     if not void_transactions.empty and 'As of Date' in void_transactions.columns:
-                                        void_date = pd.to_datetime(void_transactions['As of Date'].iloc[0])
-                                        batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
+                                        void_date = pd.to_datetime(void_transactions['As of Date'].iloc[0], errors='coerce')
+                                        if pd.notna(void_date):
+                                            batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
                                 else:
                                     # Check if there's a corresponding void batch
                                     void_batch_id = f"VOID-{batch_id}"
@@ -11934,8 +11951,9 @@ def main():
                                         batch_summary.at[idx, 'Void ID'] = void_batch_id
                                         # Get void date
                                         if 'As of Date' in void_exists.columns:
-                                            void_date = pd.to_datetime(void_exists['As of Date'].iloc[0])
-                                            batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
+                                            void_date = pd.to_datetime(void_exists['As of Date'].iloc[0], errors='coerce')
+                                            if pd.notna(void_date):
+                                                batch_summary.at[idx, 'Void Date'] = void_date.strftime('%m/%d/%Y')
                                 
                                 # Also check reconciliation_status if available
                                 if 'reconciliation_status' in batch_summary.columns:
@@ -17116,11 +17134,12 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                     ]
                     
                     if not term_transactions.empty:
-                        term_eff_date = pd.to_datetime(term_transactions.iloc[0]["Effective Date"])
-                        term_x_date = pd.to_datetime(selected_xdate)
-                        
-                        with term_col2:
-                            st.info(f"📆 Term: {term_eff_date.strftime('%Y-%m-%d')} to {term_x_date.strftime('%Y-%m-%d')}")
+                        term_eff_date = pd.to_datetime(term_transactions.iloc[0]["Effective Date"], errors='coerce')
+                        term_x_date = pd.to_datetime(selected_xdate, errors='coerce')
+
+                        if pd.notna(term_eff_date) and pd.notna(term_x_date):
+                            with term_col2:
+                                st.info(f"📆 Term: {term_eff_date.strftime('%Y-%m-%d')} to {term_x_date.strftime('%Y-%m-%d')}")
                         
                         # Filter policy_rows to include:
                         # 1. NEW/RWL transaction with this X-DATE
@@ -19421,7 +19440,11 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                     for field in percentage_fields:
                         if field in working_data.columns and field not in agg_dict:
                             agg_dict[field] = 'first'
-                    
+
+                    # Strip whitespace from Policy Number before grouping to avoid duplicates
+                    if 'Policy Number' in working_data.columns:
+                        working_data['Policy Number'] = working_data['Policy Number'].astype(str).str.strip()
+
                     # Group by Policy Number and aggregate
                     working_data = working_data.groupby('Policy Number', as_index=False).agg(agg_dict)
                     
@@ -20114,7 +20137,11 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                                     for field in percentage_fields:
                                         if field in reviewed_df.columns and field not in agg_dict:
                                             agg_dict[field] = 'first'
-                                    
+
+                                    # Strip whitespace from Policy Number before grouping to avoid duplicates
+                                    if 'Policy Number' in reviewed_df.columns:
+                                        reviewed_df['Policy Number'] = reviewed_df['Policy Number'].astype(str).str.strip()
+
                                     # Group by Policy Number
                                     reviewed_df = reviewed_df.groupby('Policy Number', as_index=False).agg(agg_dict)
                                     
@@ -20589,8 +20616,12 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                                         
                                         # Process each term
                                         for term_idx, (_, term_row) in enumerate(term_defining.iterrows()):
-                                            term_eff_date = pd.to_datetime(term_row['Effective Date'])
-                                            term_x_date = pd.to_datetime(term_row['X-DATE'])
+                                            term_eff_date = pd.to_datetime(term_row['Effective Date'], errors='coerce')
+                                            term_x_date = pd.to_datetime(term_row['X-DATE'], errors='coerce')
+
+                                            if pd.isna(term_eff_date) or pd.isna(term_x_date):
+                                                continue  # Skip invalid dates
+
                                             term_name = f"{policy_num} - Term {term_idx + 1}"
                                             term_dates = f"{term_eff_date.strftime('%m/%d/%Y')} to {term_x_date.strftime('%m/%d/%Y')}"
                                             
