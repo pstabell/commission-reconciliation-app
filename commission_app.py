@@ -1772,13 +1772,60 @@ def generate_unique_client_id():
 def generate_reconciliation_transaction_id(transaction_type="STMT", date=None):
     """Generate a reconciliation transaction ID with format: XXXXXXX-TYPE-YYYYMMDD"""
     base_id = generate_transaction_id()
-    
+
     if date is None:
         date = datetime.datetime.now()
-    
+
     date_str = date.strftime("%Y%m%d")
-    
+
     return f"{base_id}-{transaction_type}-{date_str}"
+
+def generate_unique_transaction_id(suffix=None):
+    """Generate a unique Transaction ID by checking against existing IDs in database.
+
+    Args:
+        suffix: Optional suffix to append (e.g., '-IMPORT-20250102')
+
+    Returns:
+        A unique transaction ID string
+    """
+    try:
+        supabase = get_supabase_client()
+
+        # Try up to 10 times to generate a unique ID
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            # Generate base ID
+            base_id = generate_transaction_id()
+
+            # Add suffix if provided
+            if suffix:
+                transaction_id = f"{base_id}{suffix}"
+            else:
+                transaction_id = base_id
+
+            # Check if ID exists in database
+            existing = supabase.table('policies').select('"Transaction ID"').eq('"Transaction ID"', transaction_id).execute()
+
+            if not existing.data:
+                # ID is unique, return it
+                return transaction_id
+
+        # If all attempts failed, fall back to timestamp-based ID (guaranteed unique)
+        timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')[:17]  # YYYYMMDDHHMMSSmmm (17 chars)
+        if suffix:
+            return f"TXN{timestamp}{suffix}"
+        else:
+            return f"TXN{timestamp}"
+
+    except Exception as e:
+        # If there's an error checking database, fall back to basic generation
+        # This ensures the app doesn't break if DB is unavailable
+        print(f"Warning: Could not check for duplicate Transaction ID: {e}")
+        if suffix:
+            return f"{generate_transaction_id()}{suffix}"
+        else:
+            return generate_transaction_id()
 
 # --- Commission Rule Functions ---
 def lookup_commission_rule(carrier_id, mga_id=None, policy_type=None, transaction_type="NEW", effective_date=None):
@@ -4874,7 +4921,7 @@ def show_import_results(statement_date, all_data):
                         if should_create:
                             # Generate new transaction ID with -IMPORT-YYYYMMDD suffix
                             import_suffix = f"-IMPORT-{statement_date.strftime('%Y%m%d')}"
-                            new_trans_id = generate_transaction_id(suffix=import_suffix)
+                            new_trans_id = generate_unique_transaction_id(suffix=import_suffix)
                             
                             # Check if offset should be created based on edited dataframe
                             create_offset_for_item = False
@@ -5009,7 +5056,7 @@ def show_import_results(statement_date, all_data):
                             # Create offset NEW transaction if checkbox is checked and this is not a NEW transaction
                             if create_offset_for_item and final_trans_type != 'NEW':
                                 # Generate another transaction ID for the offset
-                                offset_trans_id = generate_transaction_id(suffix=import_suffix)
+                                offset_trans_id = generate_unique_transaction_id(suffix=import_suffix)
                                 
                                 # Create offset NEW transaction with same data but $0 agent paid amount
                                 offset_trans = new_trans.copy()
@@ -8537,7 +8584,7 @@ def main():
                                         # Set default values
                                         new_row['Select'] = False
                                         if transaction_id_col:
-                                            new_row[transaction_id_col] = generate_transaction_id()
+                                            new_row[transaction_id_col] = generate_unique_transaction_id()
                                         if client_id_col and existing_client_id:
                                             new_row[client_id_col] = existing_client_id
                                         elif client_id_col:
@@ -8587,7 +8634,7 @@ def main():
                                             
                                             # Generate new Transaction ID
                                             if transaction_id_col:
-                                                duplicate_data[transaction_id_col] = generate_transaction_id()
+                                                duplicate_data[transaction_id_col] = generate_unique_transaction_id()
                                             
                                             # Store as duplicate mode
                                             st.session_state[show_edit_modal_key] = True
@@ -8708,7 +8755,7 @@ def main():
                                     if is_new_row:
                                         # For new rows, generate unique IDs if they're missing
                                         if transaction_id_col and (pd.isna(transaction_id) or str(transaction_id).strip() == ''):
-                                            transaction_id = generate_transaction_id()
+                                            transaction_id = generate_unique_transaction_id()
                                             row[transaction_id_col] = transaction_id
                                         if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
                                             # Use existing client ID if searching for a specific client, otherwise generate new
@@ -9408,7 +9455,7 @@ def main():
                             if is_new_row:
                                 # For new rows, generate unique IDs if they're missing
                                 if transaction_id_col and (pd.isna(row[transaction_id_col]) or str(row[transaction_id_col]).strip() == ''):
-                                    row[transaction_id_col] = generate_transaction_id()
+                                    row[transaction_id_col] = generate_unique_transaction_id()
                                 if client_id_col and (pd.isna(row[client_id_col]) or str(row[client_id_col]).strip() == ''):
                                     row[client_id_col] = generate_client_id()
                             
@@ -9793,8 +9840,8 @@ def main():
                 else:
                     client_id = st.text_input("Client ID", value=generate_client_id())
             
-            # Hidden transaction ID
-            transaction_id = generate_transaction_id()
+            # Hidden transaction ID - use unique generation to prevent collisions
+            transaction_id = generate_unique_transaction_id()
             
             # Policy Information Section
             st.subheader("Policy Information")
@@ -22210,25 +22257,8 @@ CREATE TABLE IF NOT EXISTS deleted_policies (
                 st.markdown("---")
                 
                 # Generate new unique Transaction ID
-                # Try up to 10 times to generate a unique ID
-                unique_id_found = False
-                supabase = get_supabase_client()  # Get supabase client
-                for attempt in range(10):
-                    new_id = generate_transaction_id()
-                    # Check if this ID already exists
-                    try:
-                        existing = supabase.table('policies').select('"Transaction ID"').eq('"Transaction ID"', new_id).execute()
-                        if not existing.data:
-                            renewal_data['Transaction ID'] = new_id
-                            unique_id_found = True
-                            break
-                    except Exception as e:
-                        st.warning(f"Error checking Transaction ID uniqueness: {e}")
-                        break
-                
-                if not unique_id_found:
-                    # If we couldn't generate a unique ID after 10 attempts, use a timestamp-based ID
-                    renewal_data['Transaction ID'] = f"RWL{dt.now().strftime('%Y%m%d%H%M%S')}"
+                # Generate unique Transaction ID using centralized function
+                renewal_data['Transaction ID'] = generate_unique_transaction_id()
                 
                 # Pre-populate Prior Policy Number with the current policy number
                 renewal_data['Prior Policy Number'] = renewal_data.get('Policy Number', '')
