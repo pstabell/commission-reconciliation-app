@@ -9138,8 +9138,7 @@ def main():
                                                 del st.session_state['edit_policies_editor']
                                             if 'last_search_edit_policies_editor' in st.session_state:
                                                 del st.session_state['last_search_edit_policies_editor']
-                                            
-                                            time.sleep(1)
+
                                             st.rerun()
                                         else:
                                             st.error("❌ Operation failed - no response from database")
