@@ -6850,25 +6850,52 @@ def main():
         # If logo can't be loaded, show text header
         st.sidebar.header("Agent Commission Tracker")
     
+    # --- Demo Mode Toggle (Agency Platform Feature) ---
+    st.sidebar.divider()
+    demo_mode = st.sidebar.checkbox("🎭 Demo Mode", value=False, help="Enable to see agency platform demo with sample data")
+
+    # Store demo mode in session state and environment
+    if demo_mode:
+        st.session_state['demo_mode'] = True
+        os.environ['DEMO_MODE'] = 'true'
+        st.sidebar.caption("📊 Viewing sample agency data")
+    else:
+        st.session_state['demo_mode'] = False
+        os.environ['DEMO_MODE'] = 'false'
+
+    st.sidebar.divider()
+
     # --- Page Selection ---
+    # Add agency pages if in demo mode or if user is an agency
+    from utils.agency_utils import is_agency_account
+
+    navigation_pages = [
+        "Dashboard",
+        "Reports",
+        "All Policy Transactions",
+        "Edit Policy Transactions",
+        "Add New Policy Transaction",
+        "Search & Filter",
+        "Reconciliation",
+        "Admin Panel",
+        "Contacts",
+        "Tools",
+        "Policy Revenue Ledger",
+        "Policy Revenue Ledger Reports",
+        "Pending Policy Renewals",
+        "Account",
+        "Help"
+    ]
+
+    # Add agency pages if applicable
+    user_email = st.session_state.get('user_email', '')
+    if demo_mode or is_agency_account(user_email):
+        navigation_pages.insert(1, "🏢 Agency Dashboard")  # After Dashboard
+        navigation_pages.insert(2, "🔗 Integrations")  # After Agency Dashboard
+
     page = st.sidebar.radio(
-        "Navigation",        [
-            "Dashboard",
-            "Reports",
-            "All Policy Transactions",
-            "Edit Policy Transactions",
-            "Add New Policy Transaction",
-            "Search & Filter",
-            "Reconciliation",
-            "Admin Panel",
-            "Contacts",
-            "Tools",
-            "Policy Revenue Ledger",
-            "Policy Revenue Ledger Reports",
-            "Pending Policy Renewals",
-            "Account",
-            "Help"
-        ]
+        "Navigation",
+        navigation_pages
     )
     
     # User session info and logout button after navigation menu
@@ -7339,7 +7366,21 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
     
         display_app_footer()
-    
+
+    # --- Agency Dashboard ---
+    elif page == "🏢 Agency Dashboard":
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from pages.agency_dashboard import show_agency_dashboard
+        show_agency_dashboard()
+
+    # --- Integrations ---
+    elif page == "🔗 Integrations":
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from pages.integrations import show_integrations_page
+        show_integrations_page()
+
     # --- Reports ---
     elif page == "Reports":
         # Import pandas for Reports functionality
